@@ -2,6 +2,11 @@
   command = "node scripts/generate-bw-config.mjs"
   publish = "."
 
+[build.environment]
+  NODE_VERSION = "22"
+
+# Ensure Git-connected builds pick up netlify.toml from repo root.
+
 [[headers]]
   for = "/*"
   [headers.values]
