@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.netlify/
+.DS_Store
+.tools/
+_incoming/
+bluewater-intel_9_4_1_4.html
+bw-config.js

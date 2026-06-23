@@ -1,0 +1,24 @@
+{
+  "name": "bluewater-intel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed": "node supabase-m1/seed/load.mjs",
+    "integrity": "node scripts/integrity-check.mjs",
+    "config": "node scripts/generate-bw-config.mjs",
+    "setup:backend": "node scripts/setup-backend.mjs",
+    "patch:m3m4": "node scripts/apply-m3-m4-patches.mjs",
+    "test:freshness": "node tests/freshness.test.mjs",
+    "deploy:functions": "node scripts/deploy-m3-m4-functions.mjs",
+    "deploy": "node scripts/generate-bw-config.mjs && netlify deploy --prod --dir=."
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^23.0.0",
+    "supabase": "^2.20.0"
+  }
+}

@@ -1,0 +1,643 @@
+{"name":"Chocolatta Bay Boat Ramp","lat":30.6705,"lng":-88.0062}
+{"name":"McNally Park Boat Ramp","lat":30.6108,"lng":-88.0632}
+{"name":"Augustine Beach Boat Ramp","lat":39.50491,"lng":-75.58028}
+{"name":"Bowers Beach Public Boat Ramp","lat":39.05836,"lng":-75.39758}
+{"name":"Delaware City Boat Launch","lat":39.57523,"lng":-75.58844}
+{"name":"Indian River Marina State Boat Ramp","lat":38.61385,"lng":-75.07221}
+{"name":"Lewes Boat Ramp","lat":38.79087,"lng":-75.16566}
+{"name":"Black Point Park Marina Boat Ramp","lat":25.5394,"lng":-80.3298}
+{"name":"Fort De Soto Park Boat Ramp","lat":27.64562,"lng":-82.71698}
+{"name":"John Lloyd Beach State Park Boat Ramp (Mizell-Eula Johnson)","lat":26.0822,"lng":-80.1115}
+{"name":"John Pennekamp Coral Reef State Park Boat Launch","lat":25.12434,"lng":-80.40713}
+{"name":"Matheson Hammock Park Marina Boat Ramp","lat":25.67979,"lng":-80.25672}
+{"name":"Phil Foster Park Boat Ramp","lat":26.7846,"lng":-80.04182}
+{"name":"Sister's Creek Boat Ramp","lat":30.39568,"lng":-81.45911}
+{"name":"Bonnet Carre Spillway Boat Launch","lat":30.0078,"lng":-90.4395}
+{"name":"Calcasieu Point Landing Boat Launch","lat":30.1068,"lng":-93.2861}
+{"name":"Cashman Park Boat Ramp","lat":42.81801,"lng":-70.87918}
+{"name":"Falmouth Harbor Public Boat Launch","lat":41.55029,"lng":-70.60229}
+{"name":"New Bedford Gifford Street Boat Ramp","lat":41.61982,"lng":-70.91465}
+{"name":"Plymouth Harbor Public Boat Ramp","lat":41.9615,"lng":-70.6652}
+{"name":"Winthrop Boat Ramp","lat":42.36649,"lng":-70.97106}
+{"name":"Assateague State Park Boat Ramp","lat":38.24774,"lng":-75.1518}
+{"name":"Canton Waterfront Park Boat Ramp","lat":39.27685,"lng":-76.57264}
+{"name":"Crisfield Public Boat Ramp (Somers Cove)","lat":37.97463,"lng":-75.8601}
+{"name":"Matapeake State Park Boat Ramp","lat":38.95444,"lng":-76.35529}
+{"name":"Ocean City Public Boat Ramp (64th Street)","lat":38.38707,"lng":-75.06841}
+{"name":"Rocky Point Park Boat Ramp","lat":39.25276,"lng":-76.40682}
+{"name":"Sandy Point State Park Boat Ramp","lat":39.01268,"lng":-76.40053}
+{"name":"Cobscook Bay State Park Boat Launch","lat":44.8762,"lng":-67.1485}
+{"name":"Pass Christian Small Craft Harbor Boat Ramp","lat":30.31414,"lng":-89.24336}
+{"name":"Hammocks Beach State Park Boat Launch","lat":34.6712,"lng":-77.1415}
+{"name":"Oregon Inlet Fishing Center Boat Ramp","lat":35.7972,"lng":-75.5495}
+{"name":"Swansboro Public Boat Ramp","lat":34.6898,"lng":-77.1232}
+{"name":"Trails End Boat Ramp","lat":34.15605,"lng":-77.85715}
+{"name":"Pierce Island Boat Launch","lat":43.07454,"lng":-70.74825}
+{"name":"Spicers Creek Boat Access","lat":38.95093,"lng":-74.90995}
+{"name":"Shark River Municipal Boat Launch","lat":40.1795,"lng":-74.0322}
+{"name":"Captree State Park Boat Ramp","lat":40.64165,"lng":-73.25691}
+{"name":"Heckscher State Park Boat Ramp","lat":40.70652,"lng":-73.1748}
+{"name":"Colt State Park Boat Ramp","lat":41.68535,"lng":-71.29509}
+{"name":"Fort Adams State Park Boat Ramp","lat":41.47069,"lng":-71.33687}
+{"name":"Gano Street Boat Launch","lat":41.82207,"lng":-71.3888}
+{"name":"Remley's Point Boat Landing","lat":32.81344,"lng":-79.90731}
+{"name":"Wachesaw Landing","lat":33.5532,"lng":-79.0824}
+{"name":"Sabine Pass Battleground State Historic Site Boat Ramp","lat":29.7345,"lng":-93.8612}
+{"name":"Sylvan Beach Park Boat Ramp","lat":29.6534,"lng":-95.0089}
+{"name":"Chincoteague Town Dock Boat Ramp","lat":37.9324,"lng":-75.3788}
+{"name":"Huntington Park Boat Ramp","lat":37.01679,"lng":-76.45553}
+{"name":"Kiptopeke State Park Boat Ramp","lat":37.16726,"lng":-75.9874}
+{"name":"Lynnhaven Boat Ramp & Beach Facility","lat":36.90693,"lng":-76.09463}
+{"name":"Owls Creek Boat Ramp","lat":36.8228,"lng":-75.98124}
+{"name":"Wachapreague Town Boat Ramp","lat":37.60701,"lng":-75.68711}
+{"name":"Willoughby Boat Ramp","lat":36.96416,"lng":-76.28834}
+{"name":"Oyster Boat Ramp","lat":37.28876,"lng":-75.92365}
+{"name":"Red Bank Boat Ramp","lat":37.44587,"lng":-75.83982}
+{"name":"Curtis Merritt Harbor","lat":37.90256,"lng":-75.40492}
+{"name":"Chincoteague Boat Ramp","lat":37.91789,"lng":-75.37178}
+{"name":"Bree-Zee-Lee Yacht Basin","lat":38.95443,"lng":-74.88304}
+{"name":"Coles Point Marina","lat":38.14246,"lng":-76.61472}
+{"name":"Lewisetta Marina","lat":37.99688,"lng":-76.46434}
+{"name":"Coan River Marina","lat":37.98247,"lng":-76.47209}
+{"name":"Shell Landing Public Boat Ramp","lat":37.82444,"lng":-76.27162}
+{"name":"Windmill Point Public Boat Ramp","lat":37.61633,"lng":-76.28881}
+{"name":"Mill Creek Public Boat Ramp","lat":37.58412,"lng":-76.42444}
+{"name":"Gloucester Point Boat Ramp","lat":37.24583,"lng":-76.5047}
+{"name":"Pepper Langley Boat Launch","lat":38.32899,"lng":-76.46784}
+{"name":"Wise Point Boat Ramp","lat":37.12768,"lng":-75.95039}
+{"name":"Fox Hill Boat Ramp","lat":37.09618,"lng":-76.29457}
+{"name":"Colonial Beach Boat Ramp","lat":38.23229,"lng":-76.96121}
+{"name":"Piney Point Boat Launch","lat":38.13834,"lng":-76.50041}
+{"name":"Bayview Drive Boat Ramp","lat":39.19443,"lng":-74.66333}
+{"name":"Corsons Inlet Boat Ramp","lat":39.2164,"lng":-74.64667}
+{"name":"Kennedy Park Boat Ramp","lat":39.30639,"lng":-74.60762}
+{"name":"Ventnor Public Boat Ramp","lat":39.35316,"lng":-74.4875}
+{"name":"Atlantic City Municipal Boat Ramp","lat":39.35538,"lng":-74.45646}
+{"name":"Public Boat Ramp","lat":39.57086,"lng":-74.23823}
+{"name":"Ship Bottom Municipal Ramp","lat":39.65228,"lng":-74.18473}
+{"name":"Harvey Cedars Public Boat Ramp","lat":39.70466,"lng":-74.13694}
+{"name":"Barnegat Light Public Boat Ramp","lat":39.75773,"lng":-74.11139}
+{"name":"Barnegat Township Municipal Dock","lat":39.7487,"lng":-74.19307}
+{"name":"Oyster Creek Boat Ramp / BG Launch","lat":39.80861,"lng":-74.18468}
+{"name":"Gilford Park Yacht Club","lat":39.94344,"lng":-74.13144}
+{"name":"Pine Beach Boat Ramp","lat":39.93867,"lng":-74.17746}
+{"name":"Boat Ramp","lat":40.06622,"lng":-74.05129}
+{"name":"Traders Cove","lat":40.04259,"lng":-74.0598}
+{"name":"Rumson Municipal Boat Ramp","lat":40.37626,"lng":-74.00002}
+{"name":"Buchanan Park Boat Ramp","lat":40.47418,"lng":-74.35568}
+{"name":"Keyport Municipal Boat Ramp","lat":40.43906,"lng":-74.20226}
+{"name":"Captain Carlsen Park","lat":40.54549,"lng":-74.25425}
+{"name":"Moonbeam Gateway Marina","lat":40.58804,"lng":-73.89991}
+{"name":"West Marina","lat":40.59348,"lng":-73.59088}
+{"name":"Long Beach Municipal Boat Launch","lat":40.59365,"lng":-73.66591}
+{"name":"Freeport Boat Launching Facility","lat":40.64685,"lng":-73.56801}
+{"name":"Albany Avenue Boat Ramp","lat":40.64821,"lng":-73.56812}
+{"name":"Wantagh Park Boat Ramp","lat":40.64774,"lng":-73.51411}
+{"name":"Amityville Ramp","lat":40.65814,"lng":-73.40894}
+{"name":"Smith Point Marina Boat Ramp","lat":40.74068,"lng":-72.87341}
+{"name":"East Quogue Boat Ramp","lat":40.84075,"lng":-72.57138}
+{"name":"Old Ponquogue Bridge Boat Ramp","lat":40.84145,"lng":-72.49898}
+{"name":"New Suffolk Boat Ramp","lat":40.99068,"lng":-72.47135}
+{"name":"Branford River State Boat Launch","lat":41.26546,"lng":-72.81661}
+{"name":"Baldwin Bridge State Boat Launch","lat":41.31881,"lng":-72.352}
+{"name":"Great Island State Boat Launch","lat":41.28764,"lng":-72.32349}
+{"name":"Pleasure Beach Boat Ramp","lat":41.30867,"lng":-72.14795}
+{"name":"Thames River Boat Launch New London","lat":41.36336,"lng":-72.09099}
+{"name":"Barn Island Boat Launch","lat":41.33744,"lng":-71.87564}
+{"name":"Quonnie Boat Ramp","lat":41.33646,"lng":-71.72212}
+{"name":"Galilee Boat Launch","lat":41.38315,"lng":-71.50751}
+{"name":"Goddard State Park Boat Ramp","lat":41.65438,"lng":-71.44433}
+{"name":"Oakland Beach Boat Ramp","lat":41.685,"lng":-71.39332}
+{"name":"Sakonnet Bridge Boat Ramp","lat":41.63796,"lng":-71.21124}
+{"name":"Mount Hope Boat Ramp","lat":41.68795,"lng":-71.24252}
+{"name":"Weaver Cove Boat Ramp","lat":41.57382,"lng":-71.28765}
+{"name":"Massachusetts Boat Ramp","lat":41.7266,"lng":-71.22318}
+{"name":"Waquoit Public Landing","lat":41.56388,"lng":-70.50584}
+{"name":"Gary R Brown Boat Ramp","lat":41.65114,"lng":-70.27492}
+{"name":"Town Boat Ramp","lat":42.24621,"lng":-70.88595}
+{"name":"Little Mystic Boat Ramp","lat":42.38161,"lng":-71.05698}
+{"name":"Dunfudgin Public Boat Ramp","lat":42.61345,"lng":-70.67811}
+{"name":"Public Boat Launch","lat":42.8064,"lng":-70.85756}
+{"name":"Boat Ramp","lat":43.00195,"lng":-70.75172}
+{"name":"Odiorne Point Boat Launch","lat":43.04861,"lng":-70.72751}
+{"name":"Chicks Marina","lat":43.35541,"lng":-70.47325}
+{"name":"Portland Public Boat Ramp","lat":43.67067,"lng":-70.24181}
+{"name":"Marblehead Boat Launch","lat":43.47408,"lng":-70.40975}
+{"name":"Mere Point Boat Launch","lat":43.82813,"lng":-70.0168}
+{"name":"Sawyer Park Boat Launch","lat":43.90727,"lng":-69.87196}
+{"name":"Thomaston Boat Launch","lat":44.07175,"lng":-69.18238}
+{"name":"Rockport Public Boat Ramp","lat":44.18673,"lng":-69.0739}
+{"name":"Steuben Public Boat Ramp","lat":44.49152,"lng":-67.91164}
+{"name":"Boat Ramp","lat":44.92444,"lng":-67.12815}
+{"name":"Elizabeth River Park VDWR Boat Ramp","lat":36.80918,"lng":-76.28557}
+{"name":"City Park Boat Ramp","lat":36.83438,"lng":-76.37161}
+{"name":"Haven Creek Boat Ramp","lat":36.88414,"lng":-76.28392}
+{"name":"Peterson Yacht Basin Boat Ramp","lat":36.98375,"lng":-76.39757}
+{"name":"Jones Creek Boat Ramp","lat":36.97472,"lng":-76.56282}
+{"name":"Public Boat Ramp","lat":37.49251,"lng":-76.31002}
+{"name":"Town Point Landing","lat":37.41544,"lng":-76.3372}
+{"name":"Paul Ellis Landing","lat":38.25267,"lng":-76.78624}
+{"name":"Forest Landing","lat":38.35464,"lng":-76.5322}
+{"name":"North Beach Boat Ramp","lat":38.69145,"lng":-76.53683}
+{"name":"Shipping Creek Landing","lat":38.91343,"lng":-76.34662}
+{"name":"Truxtun Park Boat Ramp","lat":38.96859,"lng":-76.49835}
+{"name":"Thompson Creek Landing","lat":38.96689,"lng":-76.3118}
+{"name":"Kent Narrows Landing","lat":38.97159,"lng":-76.24893}
+{"name":"Marshall Hall Landing","lat":38.68534,"lng":-77.10128}
+{"name":"Widewater State Park","lat":38.43291,"lng":-77.32445}
+{"name":"Quantico boat ramp","lat":38.52774,"lng":-77.28664}
+{"name":"Mason Neck State Park Cartop Boat Launch","lat":38.64342,"lng":-77.1997}
+{"name":"Poplar Branch Public Boating Access","lat":36.28721,"lng":-75.88375}
+{"name":"Whalehead Club Boat Ramp","lat":36.37372,"lng":-75.83333}
+{"name":"Bob Perry Boat Ramp","lat":36.06448,"lng":-75.72226}
+{"name":"Crawford Boat Ramp","lat":36.01959,"lng":-75.72523}
+{"name":"Avalon Beach Boat Ramp","lat":36.03582,"lng":-75.68621}
+{"name":"Washington Baum Bridge Boating Access","lat":35.89376,"lng":-75.63777}
+{"name":"Manteo Waterfront Public Boat Ramp","lat":35.911,"lng":-75.66952}
+{"name":"Dare County Public Boat Ramp","lat":35.83964,"lng":-75.61985}
+{"name":"Teach's Lair Marina","lat":35.21041,"lng":-75.69951}
+{"name":"Ocracoke Boat Ramp","lat":35.11817,"lng":-75.98575}
+{"name":"Oyster Creek Boat Ramp","lat":34.81878,"lng":-76.45107}
+{"name":"Harkers Island Public Boat Ramp","lat":34.72195,"lng":-76.57522}
+{"name":"NC Wildlife Beaufort Boating Access","lat":34.71014,"lng":-76.63206}
+{"name":"Morehead City Boat Ramp","lat":34.7227,"lng":-76.75093}
+{"name":"South River Boat Ramp","lat":34.96155,"lng":-76.59121}
+{"name":"Oriental NC Boat Ramp","lat":35.02602,"lng":-76.70012}
+{"name":"EI Boat Ramp","lat":34.6713,"lng":-77.0058}
+{"name":"NC WRC Boating Access","lat":34.67795,"lng":-77.10849}
+{"name":"Shell Rock Landing","lat":34.65348,"lng":-77.16641}
+{"name":"Wildlife Public Boat Launch access","lat":34.49775,"lng":-77.42802}
+{"name":"Turkey Creek Boat Access Area","lat":34.49478,"lng":-77.46526}
+{"name":"Sneads Ferry Boating Access","lat":34.56437,"lng":-77.38222}
+{"name":"Jacksonville Landing","lat":34.75225,"lng":-77.43562}
+{"name":"Northeast Creek Park","lat":34.74631,"lng":-77.35637}
+{"name":"Federal Point Boat Launch","lat":33.95876,"lng":-77.94163}
+{"name":"Dutchman Creek Boat Ramp","lat":33.92273,"lng":-78.0613}
+{"name":"NE 55th St Municipal Boat Ramp","lat":33.92036,"lng":-78.10721}
+{"name":"Sunset Harbor Boat Ramp","lat":33.92272,"lng":-78.21274}
+{"name":"NC Wildlife Boat Ramp","lat":33.90519,"lng":-78.39359}
+{"name":"Cherry Grove Boat Landing","lat":33.84212,"lng":-78.61746}
+{"name":"Peter Vaught Sr Landing","lat":33.78968,"lng":-78.77504}
+{"name":"Sunset Beach Boat Ramp","lat":33.88241,"lng":-78.51104}
+{"name":"Public Boat Ramp","lat":33.55523,"lng":-79.03438}
+{"name":"3RD STREET BOAT RAMP","lat":33.43957,"lng":-79.11767}
+{"name":"Peachtree Landing","lat":33.69439,"lng":-79.04791}
+{"name":"Rosewood Landing","lat":33.69211,"lng":-78.99248}
+{"name":"Punch Bowl Landing","lat":33.75693,"lng":-79.21904}
+{"name":"Hagley Landing","lat":33.43631,"lng":-79.18205}
+{"name":"East Bay Public Ramp","lat":33.35655,"lng":-79.27995}
+{"name":"Carroll Ashmore Campbell Marine Complex","lat":33.35595,"lng":-79.29487}
+{"name":"McClellanville Landing","lat":33.08071,"lng":-79.45961}
+{"name":"Garris Landing Public Boat Ramp","lat":32.94017,"lng":-79.65813}
+{"name":"Shem Creek Boat Landing","lat":32.79304,"lng":-79.87672}
+{"name":"Folly River Boat Ramp","lat":32.65987,"lng":-79.94322}
+{"name":"Sol Legare Boat Landing","lat":32.66836,"lng":-79.9967}
+{"name":"W. O. Thomas","lat":32.83623,"lng":-80.02091}
+{"name":"Wappoo Cut Boat Landing","lat":32.76733,"lng":-79.9728}
+{"name":"Riverland Terrace Boat Landing","lat":32.7685,"lng":-79.99216}
+{"name":"Cherry Point Boat Landing","lat":32.5983,"lng":-80.18262}
+{"name":"Live Oak Boat Landing","lat":32.5023,"lng":-80.32329}
+{"name":"Port Royal Boat Landing (The Sands)","lat":32.37041,"lng":-80.68692}
+{"name":"Pigeon Point Boat Launch","lat":32.4515,"lng":-80.67054}
+{"name":"Brighton Beach Boat Landing","lat":32.21465,"lng":-80.84701}
+{"name":"Station Creek Landing","lat":32.32119,"lng":-80.60538}
+{"name":"Wallace Boat Landing","lat":32.38098,"lng":-80.60015}
+{"name":"Sams Point Boat Landing","lat":32.48439,"lng":-80.6005}
+{"name":"White Hall Boat Landing - Factory Creek","lat":32.4205,"lng":-80.66243}
+{"name":"Parris Island Boat Ramp","lat":32.37768,"lng":-80.71781}
+{"name":"Grays Hill Boat Landing","lat":32.50384,"lng":-80.78394}
+{"name":"Paradise Boat Landing","lat":32.91369,"lng":-79.7371}
+{"name":"Cross Island Boat Landing","lat":32.17698,"lng":-80.77015}
+{"name":"C.C. Haigh","lat":32.22876,"lng":-80.78777}
+{"name":"Lazaretto Creek Boat Ramp","lat":32.01562,"lng":-80.89098}
+{"name":"Turner Creek Boat Ramp","lat":32.02047,"lng":-80.99235}
+{"name":"Bell's Landing","lat":31.97325,"lng":-81.17165}
+{"name":"DNR - Fort McAllister Public Boat Ramp","lat":31.88863,"lng":-81.2033}
+{"name":"Barbour Landing","lat":31.62159,"lng":-81.26399}
+{"name":"Williamsburg Landing","lat":31.50839,"lng":-81.65922}
+{"name":"Sunbury Boat Ramp","lat":31.76397,"lng":-81.27884}
+{"name":"Rodney J. Hall Boat Ramp","lat":31.9473,"lng":-81.06732}
+{"name":"Thunderbolt Public Boat Ramp","lat":32.03657,"lng":-81.04472}
+{"name":"Belleville Boat Ramp","lat":31.53121,"lng":-81.35897}
+{"name":"Lanier Island Boat Ramp","lat":31.17054,"lng":-81.42335}
+{"name":"Jaycee's Landing","lat":31.66655,"lng":-81.84558}
+{"name":"Long County Landing","lat":31.7885,"lng":-81.95038}
+{"name":"Boat Ramp","lat":30.72031,"lng":-81.55072}
+{"name":"Joe Carlucci Sisters Creek Boat Ramp","lat":30.3917,"lng":-81.46444}
+{"name":"Mayport Boat Ramp Michael Scanlon","lat":30.39608,"lng":-81.42767}
+{"name":"Oak Harbor Boat Ramp","lat":30.3562,"lng":-81.42814}
+{"name":"Goodby's Creek Boat Ramp","lat":30.21553,"lng":-81.61643}
+{"name":"Bert maxwell boat ramp","lat":30.40356,"lng":-81.66342}
+{"name":"T.K. Stokes Boat Ramp","lat":30.39719,"lng":-81.68513}
+{"name":"Wilson Neck Boat Ramp","lat":30.57884,"lng":-81.58758}
+{"name":"Dee Dee Bartles Boat Ramp","lat":30.69587,"lng":-81.45968}
+{"name":"Fulton Landing Boat Ramp","lat":30.38922,"lng":-81.50776}
+{"name":"Hood Landing","lat":30.13474,"lng":-81.59601}
+{"name":"Six Mile Landing Public Boat Ramp","lat":30.11007,"lng":-81.34503}
+{"name":"Palm Valley East Boat Ramp","lat":30.13277,"lng":-81.3849}
+{"name":"Vilano Boat Ramp","lat":29.91222,"lng":-81.30906}
+{"name":"Lighthouse Park Boat Ramp","lat":29.88601,"lng":-81.28635}
+{"name":"Frank Butler West Boat Ramp","lat":29.78756,"lng":-81.26778}
+{"name":"Green Road Boat Ramp","lat":29.76244,"lng":-81.25325}
+{"name":"Boat Ramp","lat":29.75326,"lng":-81.24957}
+{"name":"Bings Landing Boat Ramp","lat":29.61585,"lng":-81.20393}
+{"name":"Herschel King Boat Ramp","lat":29.53132,"lng":-81.15741}
+{"name":"Moody Boat Ramp","lat":29.47732,"lng":-81.13569}
+{"name":"English Landing Marina","lat":29.88401,"lng":-81.32436}
+{"name":"Shore Drive Boat Ramp","lat":29.82907,"lng":-81.3139}
+{"name":"Browns Landing","lat":29.59747,"lng":-81.63814}
+{"name":"Halifax River Boat Ramp","lat":29.24738,"lng":-81.03629}
+{"name":"North Causeway Boat Ramp - New Symrna Beach","lat":29.03181,"lng":-80.91617}
+{"name":"River Breeze Boat ramp","lat":28.89859,"lng":-80.85175}
+{"name":"Scottsmoor Landing","lat":28.77083,"lng":-80.84492}
+{"name":"Swoop Site Boat Ramp","lat":29.06461,"lng":-80.93859}
+{"name":"Bairs Cove Boat Ramp","lat":28.7332,"lng":-80.75653}
+{"name":"Freddie Patrick Park Boat Ramp","lat":28.40829,"lng":-80.59502}
+{"name":"Port St. John Boat Ramp","lat":28.47508,"lng":-80.76727}
+{"name":"Eau Gallie Boat Ramp","lat":28.13579,"lng":-80.60591}
+{"name":"Pollak Park Boat Ramp","lat":28.03231,"lng":-80.58277}
+{"name":"Boat Ramp","lat":28.07929,"lng":-80.59992}
+{"name":"Goode Park Boat Ramp","lat":28.02983,"lng":-80.58262}
+{"name":"John Jorgensen's Landing","lat":27.93752,"lng":-80.52974}
+{"name":"Christenson's Landing","lat":27.93089,"lng":-80.52666}
+{"name":"Fisherman's Landing Park","lat":27.92123,"lng":-80.52006}
+{"name":"Sebastian Inlet Boat Ramp","lat":27.85044,"lng":-80.454}
+{"name":"Main Street Boat Ramp","lat":27.81714,"lng":-80.469}
+{"name":"Boat Ramp","lat":27.75654,"lng":-80.42246}
+{"name":"Oslo Road Boat Ramp","lat":27.58685,"lng":-80.36545}
+{"name":"Boat Ramp","lat":27.46113,"lng":-80.31398}
+{"name":"Black Pearl Boat Ramp","lat":27.45597,"lng":-80.32401}
+{"name":"Jensen Beach Boat Ramp","lat":27.25184,"lng":-80.22313}
+{"name":"Sandsprit Park Main Boat Ramp","lat":27.1626,"lng":-80.19389}
+{"name":"Boat Ramp (Indian Riverside Park)","lat":27.22924,"lng":-80.21707}
+{"name":"Owen K Murphy Memorial Boat Ramp","lat":27.14412,"lng":-80.1944}
+{"name":"Boat Ramp","lat":27.10391,"lng":-80.13944}
+{"name":"Jonathan Dickinson State Park Boat Ramp Facilities","lat":26.98813,"lng":-80.14273}
+{"name":"Grant's Landing","lat":26.98213,"lng":-80.0907}
+{"name":"St Lucie River North Fork Ramp","lat":27.27498,"lng":-80.3196}
+{"name":"Boynton Beach Boat Ramp","lat":26.54637,"lng":-80.05335}
+{"name":"Alsdorf Park Public Boat Launch","lat":26.25099,"lng":-80.09145}
+{"name":"Lantana Boat Ramp","lat":26.58389,"lng":-80.04744}
+{"name":"Boat Ramp in fort lauderdale","lat":26.10297,"lng":-80.12255}
+{"name":"Griffin Marine Park - Boat Ramp","lat":26.06731,"lng":-80.18193}
+{"name":"Rotary Park Boat Ramp","lat":26.02456,"lng":-80.16991}
+{"name":"Holland Park Boat Ramp","lat":26.02002,"lng":-80.11953}
+{"name":"Colohatchee Boat Ramp","lat":26.15384,"lng":-80.12873}
+{"name":"Haulover","lat":25.91685,"lng":-80.12364}
+{"name":"Pelican Harbor Boat Ramp","lat":25.84742,"lng":-80.16797}
+{"name":"Knowles Boat Ramp","lat":26.44695,"lng":-80.06594}
+{"name":"J. Dewey Hawkins Landing Boat Ramp and Kayak Launch","lat":26.16457,"lng":-80.13058}
+{"name":"Watson Boat Ramp","lat":25.78369,"lng":-80.17244}
+{"name":"Crandon Park Boat Ramp","lat":25.72374,"lng":-80.15503}
+{"name":"Miami River","lat":25.79047,"lng":-80.23386}
+{"name":"Seminole Boat Ramp","lat":25.72739,"lng":-80.23773}
+{"name":"Gables Waterway Access","lat":25.72358,"lng":-80.26638}
+{"name":"Snapper creek boat ramp","lat":25.69445,"lng":-80.35155}
+{"name":"Boat Landing","lat":25.28793,"lng":-80.4423}
+{"name":"Herbert Hoover Marina Boat Launch","lat":25.4626,"lng":-80.33828}
+{"name":"Boat ramp","lat":25.18294,"lng":-80.38637}
+{"name":"Garden Cove Marina","lat":25.17035,"lng":-80.37152}
+{"name":"Aviation Boulevard Boat Ramp","lat":24.7249,"lng":-81.05916}
+{"name":"Boat Ramp Oceanside Key Largo","lat":25.07561,"lng":-80.45775}
+{"name":"Founders Boat Ramp","lat":24.9649,"lng":-80.56887}
+{"name":"Upper Matecumbe Key Blackwood Dr Launch","lat":24.91991,"lng":-80.63492}
+{"name":"The Quay on Overseas Highway","lat":24.73327,"lng":-81.01808}
+{"name":"Marathon HiFee Public Boat Ramp","lat":24.71333,"lng":-81.09525}
+{"name":"Sea Bird Marina","lat":24.83788,"lng":-80.79895}
+{"name":"Bayside Marina & Boardwalk","lat":24.91522,"lng":-80.63975}
+{"name":"Safe Harbor Angler House","lat":24.90775,"lng":-80.64951}
+{"name":"Little Duck Key Wayside Park Public Boat Ramp","lat":24.68244,"lng":-81.22948}
+{"name":"Spanish Harbor Wayside","lat":24.64952,"lng":-81.31724}
+{"name":"Bahia Honda Park Public Boat Ramp","lat":24.65668,"lng":-81.27801}
+{"name":"Eden Pines Boat Ramp","lat":24.69516,"lng":-81.3778}
+{"name":"Boat Ramp","lat":24.67558,"lng":-81.39403}
+{"name":"Key Haven Boat Ramp","lat":24.575,"lng":-81.73224}
+{"name":"Sammy Creek Landing","lat":24.60362,"lng":-81.57013}
+{"name":"Boat Ramp","lat":24.60125,"lng":-81.6472}
+{"name":"Gulf View Park Boat Ramp","lat":24.60158,"lng":-81.66713}
+{"name":"11th Street Public Boat Ramp","lat":24.55925,"lng":-81.7684}
+{"name":"Garrison Bight Marina","lat":24.56085,"lng":-81.78914}
+{"name":"The Fishing Hole (Boat Ramp)","lat":25.81844,"lng":-81.35903}
+{"name":"Caxambas Boat Park","lat":25.91258,"lng":-81.71707}
+{"name":"Collier Boat Ramp","lat":25.98038,"lng":-81.70337}
+{"name":"Shell Island Boat Launch","lat":26.02353,"lng":-81.73404}
+{"name":"Bayview Boat Ramp","lat":26.10268,"lng":-81.78433}
+{"name":"Capri Paddlecraft Park","lat":25.98518,"lng":-81.70427}
+{"name":"Collier County Public Boat Ramp","lat":26.29369,"lng":-81.81886}
+{"name":"Imperial River Boat Ramp","lat":26.3384,"lng":-81.80476}
+{"name":"Golden Gate Main Canal boat and canoe ramp","lat":26.16865,"lng":-81.71279}
+{"name":"Delnor-Wiggins Pass Boat Ramp","lat":26.27786,"lng":-81.82518}
+{"name":"Lovers Key Boat Ramp","lat":26.394,"lng":-81.86667}
+{"name":"Sanibel Boat Ramp","lat":26.45351,"lng":-82.03594}
+{"name":"Horton Park & Boat Ramp","lat":26.60703,"lng":-81.914}
+{"name":"Burnt Store Boat Ramp","lat":26.6472,"lng":-82.04256}
+{"name":"Davis Boat Ramp","lat":26.71156,"lng":-81.75278}
+{"name":"Matlacha Boat Ramp","lat":26.62735,"lng":-82.06994}
+{"name":"Lavenders Landing","lat":26.69429,"lng":-82.14592}
+{"name":"Public Boat Ramp","lat":26.69976,"lng":-82.1494}
+{"name":"Ponce De Leon Boat Ramp","lat":26.90932,"lng":-82.09497}
+{"name":"Edgewater Public Boat Ramp","lat":26.97376,"lng":-82.12176}
+{"name":"Public Boat Ramp","lat":26.98868,"lng":-81.99526}
+{"name":"Boat Ramp","lat":27.03967,"lng":-82.42637}
+{"name":"Gulf Cove Private Park and Boat Ramp","lat":26.95613,"lng":-82.22442}
+{"name":"El Jobean Boat Ramp","lat":26.96836,"lng":-82.20953}
+{"name":"Englewood Boat Ramp","lat":26.95747,"lng":-82.36318}
+{"name":"Laishley Park Boat Ramp","lat":26.93882,"lng":-82.05172}
+{"name":"Ken Thompson Boat Ramp","lat":27.33369,"lng":-82.57467}
+{"name":"Don Roehr Boat Ramps","lat":27.34608,"lng":-82.54847}
+{"name":"Coquina North Boat Ramp","lat":27.45552,"lng":-82.69337}
+{"name":"Warner's Bayou Boat Ramp","lat":27.50975,"lng":-82.61817}
+{"name":"State Road 64 Boat Ramp","lat":27.4958,"lng":-82.52653}
+{"name":"Riverside Boat Ramp","lat":27.51205,"lng":-82.57394}
+{"name":"Cockroach Bay Boat Ramp","lat":27.68708,"lng":-82.52037}
+{"name":"Maximo Boat Ramp","lat":27.71161,"lng":-82.68265}
+{"name":"Bay Pines Boat Ramp","lat":27.81209,"lng":-82.76815}
+{"name":"Seminole Boat Ramp","lat":27.97423,"lng":-82.80249}
+{"name":"Demens Landing Boat Ramp","lat":27.77168,"lng":-82.62792}
+{"name":"Williams Park Boat Ramp","lat":27.86124,"lng":-82.38473}
+{"name":"Gandy Boat Ramp","lat":27.89236,"lng":-82.53301}
+{"name":"Causeway Boat Ramp","lat":27.97199,"lng":-82.61016}
+{"name":"Crisp Park Boat Ramp","lat":27.80381,"lng":-82.62739}
+{"name":"Belleair Causeway Boat Ramp","lat":27.91736,"lng":-82.82647}
+{"name":"Oldsmar Boat Ramp","lat":28.02794,"lng":-82.66128}
+{"name":"Sutherland Bayou Boat Ramp","lat":28.08654,"lng":-82.77053}
+{"name":"County of Pinellas Boat Ramp","lat":27.84244,"lng":-82.83916}
+{"name":"Anclote River Park Boat Ramp","lat":28.17623,"lng":-82.78864}
+{"name":"Sims Park Boat Ramp","lat":28.25057,"lng":-82.72325}
+{"name":"Hernando Beach Public Boat Ramp","lat":28.49965,"lng":-82.64992}
+{"name":"Bayport Park Boat Ramp","lat":28.53705,"lng":-82.64943}
+{"name":"Nick’s Park Boat Ramp","lat":28.27251,"lng":-82.7261}
+{"name":"Robert J Strickland Memorial Park Boat Ramp","lat":28.36151,"lng":-82.70834}
+{"name":"Jenkins Creek Boat Ramp","lat":28.523,"lng":-82.63777}
+{"name":"Mason Creek Public Boat Ramp","lat":28.76126,"lng":-82.63373}
+{"name":"Fort Island Trail Park Boat Ramp","lat":28.90351,"lng":-82.63475}
+{"name":"Bird Creek Boat Ramp","lat":29.00136,"lng":-82.76176}
+{"name":"Fort Island Trail Boat Ramp (W Fort Island Trail)","lat":28.91122,"lng":-82.69236}
+{"name":"Goldendale Boat Ramp","lat":29.04068,"lng":-82.50225}
+{"name":"N Florida Avenue Boat Ramp","lat":29.04641,"lng":-82.4646}
+{"name":"Ozello Park Boat Ramp","lat":28.86768,"lng":-82.66521}
+{"name":"Fishcreek Boat Ramp","lat":28.83704,"lng":-82.68199}
+{"name":"Homosassa Public Boat Ramp","lat":28.78498,"lng":-82.61854}
+{"name":"Manatee Springs Boat Ramp locally known as New Clay Landing","lat":29.51814,"lng":-82.97026}
+{"name":"Shell Mound Unpaved Boat Ramp","lat":29.20695,"lng":-83.06906}
+{"name":"Steinhatchee Boat Ramp","lat":29.67285,"lng":-83.39258}
+{"name":"Keaton Beach Boat Ramp","lat":29.82954,"lng":-83.59302}
+{"name":"Main St. Boat Ramp","lat":29.43741,"lng":-83.29145}
+{"name":"Log Landing Public Boat Ramp","lat":29.74685,"lng":-82.93748}
+{"name":"Aucilla boat ramp at Mandalay","lat":30.11671,"lng":-83.97933}
+{"name":"Boat Ramp","lat":30.15146,"lng":-84.20978}
+{"name":"Bottoms Road Boat Landing","lat":30.01623,"lng":-84.36836}
+{"name":"Mashes Sands $5 Boat Ramp","lat":29.97257,"lng":-84.34577}
+{"name":"Ochlockonee Bay Boat Ramp","lat":29.96111,"lng":-84.38487}
+{"name":"Levy Bay Boat Ramp","lat":30.0059,"lng":-84.38305}
+{"name":"Wakulla River Lower Bridge Boat Ramp","lat":30.17616,"lng":-84.24506}
+{"name":"St George Island Boat Ramp","lat":29.67267,"lng":-84.86833}
+{"name":"Ten Foot Hole Boat Ramp","lat":29.72366,"lng":-84.98173}
+{"name":"T. H. Stone Memorial St. Joseph Peninsula State Park - Boat Ramp and Kayak Access","lat":29.76424,"lng":-85.40278}
+{"name":"Quail boat ramp","lat":30.15524,"lng":-85.76433}
+{"name":"Richard Simpson Boat Ramp","lat":30.18684,"lng":-85.7309}
+{"name":"Pretty Bayou boat ramp","lat":30.19867,"lng":-85.70595}
+{"name":"B.V. Buchanan Park and Boat Ramp","lat":30.294,"lng":-85.85892}
+{"name":"Burnt Mill Creek Boat Ramp (County)","lat":30.31644,"lng":-85.76178}
+{"name":"Safari Boat Ramp","lat":30.15693,"lng":-85.76683}
+{"name":"Dolphin st boat ramp","lat":30.1509,"lng":-85.75769}
+{"name":"Choctawhatchee River Boat Ramp near Ebro","lat":30.4505,"lng":-85.89934}
+{"name":"Choctaw Beach Wayside Park Boat Ramp","lat":30.47685,"lng":-86.33084}
+{"name":"Highland View Boat Ramp","lat":29.83247,"lng":-85.31315}
+{"name":"Crooked Creek Boat Landing","lat":30.31524,"lng":-85.81423}
+{"name":"McKenzie Road Boat Ramp","lat":30.27268,"lng":-85.64968}
+{"name":"Ceader Creek Boat","lat":30.31729,"lng":-85.5776}
+{"name":"Boat Ramp","lat":30.14889,"lng":-85.62741}
+{"name":"Snug Harbor Public Boat Launch","lat":30.15585,"lng":-85.63587}
+{"name":"Callaway Boat Ramp","lat":30.13686,"lng":-85.5701}
+{"name":"White City Public Boat Ramp","lat":29.88103,"lng":-85.22114}
+{"name":"Marse Landing at Four Mile Creek","lat":30.48634,"lng":-86.13666}
+{"name":"393 Boat Ramp","lat":30.41931,"lng":-86.22791}
+{"name":"East Hewett Road Boat Ramp","lat":30.39842,"lng":-86.27969}
+{"name":"Legion Park Boat Ramp","lat":30.38634,"lng":-86.35897}
+{"name":"Alaqua Creek Park & Boat Ramp","lat":30.51258,"lng":-86.18675}
+{"name":"Joe's Bayou Boat Ramp","lat":30.41048,"lng":-86.49125}
+{"name":"Fort Walton Beach - Drop Off Boats","lat":30.42524,"lng":-86.60922}
+{"name":"Navarre Beach Boat Ramp","lat":30.38341,"lng":-86.86325}
+{"name":"Point Washington Landing","lat":30.37178,"lng":-86.11518}
+{"name":"Cessna Landing","lat":30.39842,"lng":-86.22977}
+{"name":"Florida Park Boat Ramp","lat":30.49675,"lng":-86.48726}
+{"name":"Boat Ramp with longer transit","lat":30.4003,"lng":-86.59263}
+{"name":"East River Boat Ramp","lat":30.44137,"lng":-86.86669}
+{"name":"Woodlawn Beach Boat Ramp","lat":30.38739,"lng":-86.99677}
+{"name":"Dickerson City Boat Ramp","lat":30.48086,"lng":-87.05835}
+{"name":"Oriole Beach Boat Ramp","lat":30.37392,"lng":-87.09184}
+{"name":"Bayou Texar Boat Ramp","lat":30.42602,"lng":-87.18569}
+{"name":"Navy Point Boat Ramp","lat":30.38087,"lng":-87.28207}
+{"name":"Archie Glover Boat Ramp","lat":30.53496,"lng":-87.12343}
+{"name":"Avalon Boat Ramp","lat":30.54868,"lng":-87.10495}
+{"name":"Floridatown Park Boat Ramp","lat":30.58108,"lng":-87.16154}
+{"name":"Galvez Landing","lat":30.31385,"lng":-87.44204}
+{"name":"Big Lagoon Boat Lauch","lat":30.31179,"lng":-87.42186}
+{"name":"Bill Dickson Boat Launch","lat":30.36343,"lng":-87.33629}
+{"name":"Lillian Boat Launch","lat":30.40608,"lng":-87.43728}
+{"name":"Mae Lane Boat Ramp","lat":30.58096,"lng":-86.98862}
+{"name":"Russell Harber Boat Ramp","lat":30.6272,"lng":-87.03321}
+{"name":"Mahogany Mill Public Boat Ramp","lat":30.39974,"lng":-87.24726}
+{"name":"Cotton Bayou Boat Launch","lat":30.27158,"lng":-87.58297}
+{"name":"Orange Beach Boat Ramp","lat":30.28406,"lng":-87.55522}
+{"name":"The Launch at ICW","lat":30.29719,"lng":-87.6361}
+{"name":"Seminole Boat Launch","lat":30.50821,"lng":-87.446}
+{"name":"Marlow Ferry at Farraguts Basin","lat":30.46174,"lng":-87.80107}
+{"name":"Perdido Bay Boat Ramp","lat":30.40823,"lng":-87.3738}
+{"name":"Mo's Landing","lat":30.25518,"lng":-87.71579}
+{"name":"Fort Morgan Public Boat Launch","lat":30.23151,"lng":-88.01762}
+{"name":"Public Boat Ramp","lat":30.51782,"lng":-87.91571}
+{"name":"Fowl River ramp","lat":30.44493,"lng":-88.11403}
+{"name":"Cliff's Landing Public Boat Ramp","lat":30.8636,"lng":-87.89523}
+{"name":"Ladnier Landing Boat Ramp","lat":30.25775,"lng":-88.11645}
+{"name":"Bartram Landing","lat":30.67427,"lng":-87.93346}
+{"name":"Cloverleaf Landing Boat Launch","lat":30.75427,"lng":-87.91593}
+{"name":"Bayou Heron Launch","lat":30.41266,"lng":-88.40295}
+{"name":"Pascagoula Boat Launch","lat":30.37137,"lng":-88.56094}
+{"name":"River Park Boat Launch","lat":30.37578,"lng":-88.56513}
+{"name":"Gautier City Park Boat Ramp","lat":30.39128,"lng":-88.62422}
+{"name":"Webb's Landing","lat":30.36276,"lng":-88.69467}
+{"name":"Simmons Bayou Boat Ramp","lat":30.37422,"lng":-88.75987}
+{"name":"Gulf Islands National Seashore Park Boat Ramp","lat":30.39562,"lng":-88.79363}
+{"name":"Pascagoula Boat Ramp","lat":30.34535,"lng":-88.56171}
+{"name":"Lake Mars Pier","lat":30.36077,"lng":-88.76418}
+{"name":"Popps Ferry Causeway Park Boat Ramp","lat":30.42003,"lng":-88.97869}
+{"name":"Wolf River Landing","lat":30.3782,"lng":-89.23169}
+{"name":"Gulfport Lake Boat Launch","lat":30.42406,"lng":-89.06043}
+{"name":"Public Boat Launch - Henderson Point","lat":30.31241,"lng":-89.29072}
+{"name":"Cedar Point Boat Launch","lat":30.33907,"lng":-89.35471}
+{"name":"Harold Hamrick Bayou Lacroix Public Boat Launch","lat":30.3292,"lng":-89.42357}
+{"name":"Waveland Ramp","lat":30.31484,"lng":-89.42927}
+{"name":"McLeod Park Boat Ramp","lat":30.38656,"lng":-89.46081}
+{"name":"Main Street Boat Launch","lat":30.30921,"lng":-89.92937}
+{"name":"Logtown Boat Launch","lat":30.28034,"lng":-89.63061}
+{"name":"Old Pearl River Launch","lat":30.37966,"lng":-89.73789}
+{"name":"Davis Landing Boat Ramp","lat":30.32552,"lng":-89.71014}
+{"name":"Crawford Landing Boat Ramp","lat":30.3027,"lng":-89.70701}
+{"name":"Bonnabel Boat Launch","lat":30.02038,"lng":-90.14255}
+{"name":"Menetre Park Public Boat Launch","lat":30.45606,"lng":-90.10506}
+{"name":"Riverside Launch","lat":29.36005,"lng":-89.53439}
+{"name":"Fourchon Boat Launch","lat":29.11513,"lng":-90.19116}
+{"name":"Catfish Lake Boat Launch","lat":29.39047,"lng":-90.27772}
+{"name":"Pips Boat Launch","lat":29.81401,"lng":-89.64316}
+{"name":"Serigne Boat Launch","lat":29.76458,"lng":-89.79171}
+{"name":"Seabrook Boat Launch","lat":30.03153,"lng":-90.03682}
+{"name":"Glisson Park Public Boat Launch","lat":29.76935,"lng":-90.08176}
+{"name":"Jean Lafitte Public Boat Launch","lat":29.76098,"lng":-90.10259}
+{"name":"Lou's Launch","lat":29.55801,"lng":-89.88587}
+{"name":"PORT SHIP West Bank 9mi Landing","lat":29.89793,"lng":-89.91313}
+{"name":"Frank's Place Boat Launch","lat":29.74789,"lng":-90.13728}
+{"name":"Cypremort Point","lat":29.73158,"lng":-91.84055}
+{"name":"Slumpy Bayou boat ramp","lat":29.83651,"lng":-91.79008}
+{"name":"Marshfield Boat Launch","lat":30.02479,"lng":-91.67309}
+{"name":"New Iberia City Park Boat Ramp","lat":30.00437,"lng":-91.81133}
+{"name":"Bayou Carlin Cove Boat Landing & Pavilion","lat":29.9416,"lng":-91.98255}
+{"name":"Bayou Benoit Boat Launch","lat":30.1015,"lng":-91.62734}
+{"name":"Butte La Rose Atchafalaya River Boat Ramp","lat":30.27978,"lng":-91.68602}
+{"name":"Jessie Fontenot Memoral Boat Landing","lat":29.66,"lng":-91.244}
+{"name":"Hebert Boat Landing","lat":29.74641,"lng":-92.325}
+{"name":"West Cove Boat Ramp","lat":29.86651,"lng":-93.45266}
+{"name":"Sabine Pass Public Boat Ramps","lat":29.73958,"lng":-93.89006}
+{"name":"Keith Lake Boat Ramp","lat":29.77228,"lng":-93.94997}
+{"name":"Port Neches River Boat Ramp","lat":29.99698,"lng":-93.95164}
+{"name":"Orange TX Boat RAMP","lat":30.09578,"lng":-93.7251}
+{"name":"Burned Out Bridge Boat Launch","lat":30.10207,"lng":-93.69325}
+{"name":"Public Boat Ramp","lat":30.23737,"lng":-93.23892}
+{"name":"TCD boat ramp","lat":29.36631,"lng":-94.8153}
+{"name":"Boat Ramp","lat":29.9212,"lng":-94.79935}
+{"name":"Public Boat Ramp Galveston","lat":29.30705,"lng":-94.90668}
+{"name":"CLS Boat Ramp","lat":29.55024,"lng":-95.02984}
+{"name":"Clear Lake Park Boat Ramp","lat":29.56372,"lng":-95.06973}
+{"name":"Buddy Mcbride Public Boat Ramp Park","lat":29.71302,"lng":-94.9932}
+{"name":"Surfside Beach Public Boat Ramp","lat":28.943,"lng":-95.3012}
+{"name":"Quintana Boat Ramp","lat":28.92241,"lng":-95.34311}
+{"name":"End of Levee Road Boat Ramp","lat":28.9016,"lng":-95.38439}
+{"name":"Brazos Boat Ramp","lat":28.95587,"lng":-95.36153}
+{"name":"San Bernard River Boat Launch","lat":28.86854,"lng":-95.44907}
+{"name":"Churchill/Sportsman's Span Boat Ramp","lat":28.95052,"lng":-95.55519}
+{"name":"FM 2004 Boat Ramp","lat":29.03118,"lng":-95.47674}
+{"name":"FM 521 Public Boat Ramp","lat":29.01082,"lng":-95.58749}
+{"name":"Swan Lake Boat Landing Freeport","lat":28.97965,"lng":-95.2684}
+{"name":"Boat Ramp Goose Island State Park","lat":28.12866,"lng":-96.98562}
+{"name":"Copano Bridge Boat Ramp","lat":28.11334,"lng":-97.02533}
+{"name":"Public Boat Ramp","lat":28.5785,"lng":-96.65006}
+{"name":"Waterfront Park Boat Ramp","lat":28.68124,"lng":-96.56302}
+{"name":"6 Mile Beach Boat Launch","lat":28.69375,"lng":-96.66258}
+{"name":"Breckenridge Boat Ramp","lat":28.93623,"lng":-96.54315}
+{"name":"Hoppers Landing","lat":28.346,"lng":-96.7952}
+{"name":"Aransas Pass Public Boat Ramp","lat":27.88891,"lng":-97.14663}
+{"name":"Chris Andrews Boat Launch Portland","lat":27.85822,"lng":-97.35245}
+{"name":"Packery Channel Boat Ramps","lat":27.61792,"lng":-97.21232}
+{"name":"Laguna Madre Boat Ramp","lat":27.6168,"lng":-97.29715}
+{"name":"Labonte Park Boat Ramp","lat":27.8954,"lng":-97.62871}
+{"name":"Bird Island Boat Ramp","lat":27.47322,"lng":-97.30945}
+{"name":"Outrig - Boat Launch","lat":27.65605,"lng":-97.27757}
+{"name":"Kaufer-Hubert Boat Ramp Public","lat":27.31935,"lng":-97.68258}
+{"name":"West Polaris Drive Boat Ramp","lat":26.12277,"lng":-97.17241}
+{"name":"Jaime J. Zapata Memorial Boat Ramp","lat":26.0022,"lng":-97.29851}
+{"name":"Port Mansfield Texas Public Boat Ramp","lat":26.55629,"lng":-97.42885}
+{"name":"Port Mansfield Boat Ramp","lat":26.53757,"lng":-97.42065}
+{"name":"DelRey Boat Ramp","lat":26.32516,"lng":-97.45607}
+{"name":"Rio Hondo Public Boat Ramp","lat":26.23926,"lng":-97.58567}
+{"name":"Rock Harbor Beach Orleans MA","lat":41.79996,"lng":-70.00872}
+{"name":"Marshfield Town Landing","lat":42.08295,"lng":-70.64548}
+{"name":"Wormley Creek Boat Landing","lat":37.20512,"lng":-76.47084}
+{"name":"Rodgers A. Smith Landing","lat":37.13403,"lng":-76.42973}
+{"name":"John’s Point Boat Landing and Beach","lat":37.33235,"lng":-76.44515}
+{"name":"Lawnes Creek Landing","lat":37.1393,"lng":-76.67604}
+{"name":"Ware House Landing Boat Ramp","lat":37.40346,"lng":-76.48975}
+{"name":"Mill Creek Landing Public Boat Ramp","lat":37.58394,"lng":-76.42473}
+{"name":"Cape Charles Boat Ramp","lat":37.2648,"lng":-76.01657}
+{"name":"Thomas Landing","lat":37.72299,"lng":-76.54462}
+{"name":"St. Inigoes Landing","lat":38.11155,"lng":-76.41556}
+{"name":"Clarke's Landing Boat Ramp","lat":38.34058,"lng":-76.50387}
+{"name":"Wicomico Shores Landing","lat":38.37989,"lng":-76.85603}
+{"name":"Friendship Landing","lat":38.45431,"lng":-77.1506}
+{"name":"Deal Island Boat Ramp","lat":38.16772,"lng":-75.9476}
+{"name":"Neavitt Landing","lat":38.72022,"lng":-76.27643}
+{"name":"Oak Creek Landing / Easton","lat":38.75339,"lng":-76.17564}
+{"name":"Old Ferry Landing","lat":38.20068,"lng":-75.16273}
+{"name":"Public Landing Boat Ramp","lat":38.15096,"lng":-75.28596}
+{"name":"Mason Landing","lat":38.23737,"lng":-75.25734}
+{"name":"West Ocean City Boat Ramp","lat":38.32765,"lng":-75.107}
+{"name":"Gum Point Landing","lat":38.35638,"lng":-75.16072}
+{"name":"Shell Mill Landing","lat":38.42415,"lng":-75.18774}
+{"name":"Mulberry Landing Boat Ramp","lat":38.48539,"lng":-75.07732}
+{"name":"Massey's Landing Public Boat Ramp","lat":38.62508,"lng":-75.10022}
+{"name":"Cedar Creek Public Boat Ramp","lat":38.93946,"lng":-75.32177}
+{"name":"Collins Landing","lat":39.38829,"lng":-75.52745}
+{"name":"Jakes Landing","lat":39.17946,"lng":-74.85107}
+{"name":"Mosquito Landing","lat":39.29537,"lng":-74.74028}
+{"name":"Corbin City Boat Ramp","lat":39.29873,"lng":-74.75335}
+{"name":"Absecon Creek Boat Ramp","lat":39.42632,"lng":-74.48634}
+{"name":"Dock Road Boat Ramp","lat":39.6438,"lng":-74.24609}
+{"name":"Boat Ramp at Great Bay Boulevard","lat":39.56317,"lng":-74.34206}
+{"name":"LONG BRANCH MUNICIPAL RAMP","lat":40.3112,"lng":-74.00287}
+{"name":"Dominick F. Santelle Park And Boat Ramp","lat":40.32352,"lng":-74.03392}
+{"name":"Blue Point Boat Ramp","lat":40.7451,"lng":-73.02785}
+{"name":"Great River Boat Ramp","lat":40.72335,"lng":-73.14996}
+{"name":"Town of Brookhaven Boat Ramp - Port Jefferson Harbor","lat":40.94558,"lng":-73.07318}
+{"name":"Wading River Boat Ramp","lat":40.96455,"lng":-72.86296}
+{"name":"Gagens Landing Boat Ramp","lat":41.04944,"lng":-72.42379}
+{"name":"Kirtland Landing","lat":41.28803,"lng":-72.49232}
+{"name":"Deep River Landing","lat":41.39527,"lng":-72.42662}
+{"name":"Gaffney Town Landing","lat":41.54862,"lng":-70.99818}
+{"name":"Pawtucket Town Landing","lat":41.87202,"lng":-71.38444}
+{"name":"Somerset Boat Ramp","lat":41.76952,"lng":-71.12533}
+{"name":"Osprey Landing","lat":41.79669,"lng":-71.12071}
+{"name":"Dan Mccarthy Landing","lat":41.63743,"lng":-70.3511}
+{"name":"Smugglers Beach & Boat Access","lat":41.64529,"lng":-70.19801}
+{"name":"Howland’s Landing Boat Launch Dock","lat":42.00987,"lng":-70.6849}
+{"name":"Weymouth Back River Ramp","lat":42.25196,"lng":-70.93637}
+{"name":"Public landing","lat":42.27167,"lng":-70.9503}
+{"name":"Kernwood Boat Ramp","lat":42.54025,"lng":-70.89929}
+{"name":"Pope's Landing Marine","lat":42.55647,"lng":-70.92226}
+{"name":"Ipswich Town Wharf","lat":42.68415,"lng":-70.82716}
+{"name":"Falmouth Town Landing","lat":43.73239,"lng":-70.2046}
+{"name":"Boat Launch","lat":43.55648,"lng":-70.34878}
+{"name":"Yarmouth Boat Landing Town Park","lat":43.79839,"lng":-70.17535}
+{"name":"Water Street Boat Landing","lat":43.92214,"lng":-69.95532}
+{"name":"Brooksville Town Landing","lat":44.37294,"lng":-68.75968}
+{"name":"Public Landing","lat":44.4287,"lng":-69.00406}
+{"name":"Verona Boat Landing","lat":44.56885,"lng":-68.79124}
+{"name":"Bradfords Point Town Boat Landing","lat":43.97039,"lng":-69.32755}
+{"name":"Rockland Public Landing","lat":44.10044,"lng":-69.10759}
+{"name":"Steamboat Landing","lat":44.20924,"lng":-69.05874}
+{"name":"Munden Point Park Boat Ramp","lat":36.58247,"lng":-76.03805}
+{"name":"Back Bay Landing Boat Ramp","lat":36.59026,"lng":-75.99214}
+{"name":"Mill Landing Boat Ramp","lat":36.63408,"lng":-75.99242}
+{"name":"Pungo Ferry Landing Boat Ramp","lat":36.6173,"lng":-76.04713}
+{"name":"Cahooque Creek Landing","lat":34.9175,"lng":-76.8532}
+{"name":"Lee's Landing Boating Access Area","lat":35.1068,"lng":-76.93367}
+{"name":"Willis Landing Boat Launch at Bear Creek","lat":34.64527,"lng":-77.21146}
+{"name":"Wrightsville Beach Boating Access","lat":34.21837,"lng":-77.81118}
+{"name":"Town of Fairhaven Boat Launch","lat":41.62012,"lng":-70.85585}
+{"name":"Monument Beach Boat Ramp","lat":41.71371,"lng":-70.61642}
+{"name":"Meeting Street Boat Ramp","lat":30.73317,"lng":-81.53904}
+{"name":"Boat Ramp","lat":30.03937,"lng":-81.70782}
+{"name":"Shell point boat ramp","lat":30.05929,"lng":-84.29304}
+{"name":"Rock Landing Boat Ramp","lat":30.02193,"lng":-84.38586}
+{"name":"Sunlit Cove Boat Ramp","lat":27.85208,"lng":-82.63363}
+{"name":"Highland Shores Boat Ramp","lat":27.51505,"lng":-82.53351}
+{"name":"Turtle Beach Public Boat Ramp","lat":27.2185,"lng":-82.51624}
+{"name":"Blackburn Point Park Boat Ramp","lat":27.17955,"lng":-82.49213}
+{"name":"Venice Marina Park Public Boat Ramp","lat":27.10216,"lng":-82.44126}
+{"name":"Higel Park Boat Ramp","lat":27.10825,"lng":-82.46192}
+{"name":"Nokomis Boat Ramp","lat":27.12836,"lng":-82.47037}
+{"name":"Public Boat Ramp","lat":26.70069,"lng":-82.14858}
+{"name":"BMX Park Boat Ramp","lat":26.62438,"lng":-81.99006}
+{"name":"Punta Rassa Boat Ramp","lat":26.48457,"lng":-82.01053}
+{"name":"Boat Ramp","lat":26.01426,"lng":-80.12154}
+{"name":"Cooley's Landing Marina","lat":26.11735,"lng":-80.14929}
+{"name":"Snook Creek Public Boat Ramp","lat":26.15633,"lng":-80.15469}
+{"name":"Pioneer Park","lat":26.32215,"lng":-80.09679}
+{"name":"Silver Palm Park","lat":26.34981,"lng":-80.0762}
+{"name":"Stub Canal Park Boat ramp","lat":26.68593,"lng":-80.07322}
+{"name":"Lake Mangonia Boat Ramp","lat":26.74093,"lng":-80.07}
+{"name":"Boat Ramp","lat":26.77777,"lng":-80.05236}
+{"name":"Freedom Beach Boat Club Ramp","lat":26.79333,"lng":-80.05283}
+{"name":"Waterway Park","lat":26.93275,"lng":-80.08511}
+{"name":"Burt Reynolds Park","lat":26.94178,"lng":-80.08377}
+{"name":"Burt Reynolds Public Boat Ramp","lat":26.94043,"lng":-80.08509}
+{"name":"C-24 Canal Park","lat":27.26289,"lng":-80.33657}
