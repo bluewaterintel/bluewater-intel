@@ -5194,8 +5194,11 @@ function getWindField(lat, lng, timeMs){
   const v = speedMs * Math.cos(toRad(dirTo));   // north component
   return { u, v, speedKts, dirDeg: dirFrom };
 }
-function windScore(lat, lng, speciesPrefs){
-  const windDir = synthWindDir();
+function windScore(lat, lng, speciesPrefs, windDir){
+  // windDir is the REAL wind direction (degrees FROM) from the nearest NDBC buoy,
+  // passed in from the ocean field. No real observation → neutral (we never
+  // synthesize a direction).
+  if(windDir == null || !isFinite(windDir)) return 0.5;
   // Onshore wind on the East Coast = wind FROM the east (~45° to 135°).
   // Offshore wind = FROM the west (~225° to 315°).
   const isOnshore = (windDir >= 45 && windDir <= 135);
@@ -5257,36 +5260,36 @@ const PREDICT_WEIGHTS = {
     moonPhase:     0.00,   // Not significant for pelagics (not light-sensitive at depth)
   },
   nearshore: {
-    temperature:   0.19,   // (+0.01 from wind redistribute)
-    depthStruct:   0.25,   // DOMINANT — find the wreck/ledge/reef first (+0.02 from wind)
-    chlorophyll:   0.08,
+    temperature:   0.18,
+    depthStruct:   0.23,   // DOMINANT — find the wreck/ledge/reef first
+    chlorophyll:   0.07,
     thermalBreak:  0.06,   // Less important than offshore but still relevant
     reports:       0.00,
-    aisDwell:      0.09,   // (+0.01 from wind redistribute)
+    aisDwell:      0.08,
     season:        0.05,
-    pressure:      0.11,   // (+0.01 from wind redistribute)
+    pressure:      0.10,
     solunar:       0.07,
     tide:          0.06,
-    wind:          0.00,   // Removed — captured indirectly via AIS dwell and weather change
+    wind:          0.06,   // Re-enabled with REAL buoy wind — onshore wind stacks bait on structure
     weatherChange: 0.04,
     moonPhase:     0.00,   // Minor for nearshore — kept at zero; could activate later
   },
   inshore: {
     temperature:   0.10,   // Reduced — inshore species care more about WHERE (depth/structure)
                            //   and WHEN (tide/solunar) than absolute SST
-    depthStruct:   0.21,   // Bumped — inshore fish hold tight to specific structure
+    depthStruct:   0.20,   // Bumped — inshore fish hold tight to specific structure
     chlorophyll:   0.00,   // Zeroed — satellite chlor is unreliable in shallow water
                            //   (bottom reflectance, sediment contamination)
     thermalBreak:  0.00,   // Inshore species want stable water, not breaks
     reports:       0.00,
-    aisDwell:      0.07,   // Bumped (was 0.05) — charter fleet location is meaningful signal
-    season:        0.08,
-    pressure:      0.11,
-    solunar:       0.11,   // Trimmed (was 0.13) to make room for moonPhase
-    tide:          0.24,   // DOMINANT — slight trim (was 0.26) to make room for moonPhase
-    wind:          0.00,
-    weatherChange: 0.04,   // Trimmed (was 0.06) — partly overlaps with pressure
-    moonPhase:     0.04,   // NEW — full/new moons trigger feeding via tidal range
+    aisDwell:      0.07,   // charter fleet location is meaningful signal
+    season:        0.07,
+    pressure:      0.10,
+    solunar:       0.11,
+    tide:          0.22,   // DOMINANT — real NOAA CO-OPS tide stage
+    wind:          0.05,   // Re-enabled with REAL buoy wind — offshore wind clears inshore water
+    weatherChange: 0.04,
+    moonPhase:     0.04,   // full/new moons trigger feeding via tidal range
                            //   amplification + nighttime light. Independent of solunar
                            //   (which is time-of-day) and tide (which is local water move).
   },
@@ -5450,6 +5453,7 @@ function scoreCell(lat, lng, speciesId){
   const chlorObj = ocean?.chlor ?? { value: null, observedAtMs: null };
   const windObj  = ocean?.wind  ?? { value: null, observedAtMs: null };
   const presObj  = ocean?.pressure ?? { value: null, observedAtMs: null };
+  const tideObj  = ocean?.tide  ?? { value: null, observedAtMs: null };
 
   const sst   = sstObj.value;
   const chlor = chlorObj.value;
@@ -5457,7 +5461,7 @@ function scoreCell(lat, lng, speciesId){
   const tBreak = thermalBreakReal(lat, lng);
   const pressureTrend = presObj.value;
   const solunar = solunarScore(lat, lng);
-  const tide = tideStage(lat, lng);
+  const tide = tideObj.value;          // real NOAA CO-OPS tide stage (0..1) or null
   const moon = moonPhase();
 
   // ── Factor 1: SST match (Gaussian-based for smooth continuous scoring) ──
@@ -5611,15 +5615,17 @@ function scoreCell(lat, lng, speciesId){
   // ── Factor 9: Solunar window ──
   const solunarScoreVal = solunar;
 
-  // ── Factor 10: Tide stage ──
+  // ── Factor 10: Tide stage (real NOAA CO-OPS predictions) ──
   // For inshore species: full tide influence (it's dominant for them).
   // For nearshore: moderate. For offshore: tide weight in W is 0, so this is irrelevant.
-  const tideScoreVal = speciesCat === "inshore"
-    ? (0.3 + 0.7 * tide)        // strong tide dependence
-    : (0.55 + 0.45 * tide);     // moderate
+  // No tide data for this point (no station within range) → neutral, not synthetic.
+  const tideScoreVal = tide == null ? 0.5
+    : speciesCat === "inshore"
+      ? (0.3 + 0.7 * tide)      // strong tide dependence
+      : (0.55 + 0.45 * tide);   // moderate
 
-  // ── Factor 11: Wind direction relative to structure ──
-  const windScoreVal = windScore(lat, lng, prefs);
+  // ── Factor 11: Wind direction relative to structure (real buoy wind) ──
+  const windScoreVal = windScore(lat, lng, prefs, windObj.dir);
 
   // ── Factor 12: Recent weather change ──
   const wxChangeScoreVal = 0.5;
@@ -5751,11 +5757,11 @@ function scoreCell(lat, lng, speciesId){
     {name:"Solunar window",     weight:W.solunar,       score:solunarScoreVal,  raw:solunar > 0.7 ? "MAJOR" : solunar > 0.4 ? "minor" : "off"},
     {name:"Thermal break",      weight:W.thermalBreak,  score:breakScore,       raw:`${tBreak.toFixed(1)}°F gradient`},
     {name:"AIS vessel dwell",   weight:W.aisDwell,      score:aisScore_,        raw:aisScore_ > 0.05 ? "active" : "—"},
-    {name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide > 0.7 ? "moving" : tide > 0.3 ? "easing" : "slack"},
+    {name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
     {name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw:wxLabel},
     {name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonScore > 0.66 ? "peak" : seasonScore > 0.33 ? "good" : "off"},
     {name:"Moon phase",         weight:W.moonPhase || 0,score:moonPhaseScoreVal,raw:moonName.toUpperCase()},
-    {name:"Wind direction",     weight:W.wind,          score:windScoreVal,     raw:`${Math.round(synthWindDir())}°`}]
+    {name:"Wind direction",     weight:W.wind,          score:windScoreVal,     raw:windObj.dir != null ? `${Math.round(windObj.dir)}°` : "—"}]
   // Drop factors that aren't applicable to this species category
   .filter(f => f.weight > 0)
   // Sort by contribution to final score
