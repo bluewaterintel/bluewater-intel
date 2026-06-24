@@ -2129,7 +2129,7 @@ body.nav-open #ruler-readout{
     <div class="layers-section">BATHYMETRY</div>
     <div style="font-size:11px;color:#cfe5ff;line-height:1.5;margin:2px 0 8px;padding:8px 10px;background:rgba(41,121,181,.10);border:1px solid rgba(41,121,181,.3);border-radius:7px">
       <div style="font-weight:600;color:#7dd3fc;margin-bottom:4px">📐 For depth contours</div>
-      <div>Switch the basemap to <b>NOAA Nautical Charts</b> — it includes the full set of recreational depth contours in feet (30ft, 60ft, 100ft, etc.) drawn directly on the chart.</div>
+      <div>Switch the basemap to <b>Ocean Bathymetric</b> — Esri's World Ocean Base (GEBCO / NOAA / NGA bathymetry) with shaded depth relief and contours.</div>
     </div>
 
     <hr class="layers-divider">
@@ -2342,10 +2342,6 @@ body.nav-open #ruler-readout{
         <input type="radio" name="base" value="osm" onchange="switchBase(this.value)">
         <span>⚓ Street + SeaMarks</span>
       </label>
-      <label class="layer-row">
-        <input type="radio" name="base" value="noaa" onchange="switchBase(this.value)">
-        <span>🗺 NOAA Nautical Charts</span>
-      </label>
     </div>
   </div>
 </div>
@@ -2380,7 +2376,6 @@ body.nav-open #ruler-readout{
         <option value="satellite">🛰 Satellite</option>
         <option value="ocean">🌊 Ocean Bathymetric</option>
         <option value="osm">⚓ Street + SeaMarks</option>
-        <option value="noaa">🗺 NOAA Nautical Charts</option>
       </select>
 
       <hr class="layers-divider">
@@ -3684,7 +3679,7 @@ let predictLayers=[], predictionData=null, predictionExplainer=null;
 // nearest-cell hit test on map click/mousemove. _predictHandlersBound ensures we
 // only attach the map-level handlers once.
 let _predictGrid = null, _predictSpecies = null, _predictTooltip = null, _predictHandlersBound = false, _predictZooming = false;
-let noaaLayer=null, osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null;
+let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null;
 // Satellite-imagery date control (SEPARATE from the prediction forecast slider).
 // Satellite layers (SST/chlor) are OBSERVED data — they only go backward. This
 // is days back from the most-recent expected image (GIBS lags ~2 days). The
@@ -3765,20 +3760,6 @@ async function initMap(){
       {maxZoom:19,minZoom:0,crossOrigin:'anonymous',attribution:'© OpenStreetMap contributors',subdomains:'abc'}),
     L.tileLayer("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
       {maxZoom:18,crossOrigin:'anonymous',attribution:'© OpenSeaMap',opacity:0.9})]);
-
-  // ── NOAA NAUTICAL CHARTS — coastal US only ──
-  noaaLayer=L.layerGroup([
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      {maxZoom:19,minZoom:0,attribution:'© OpenStreetMap',opacity:0.4,subdomains:'abc'}),
-    // NOAA retired the raster (RNC) seamless tile service (the old
-    // tileservice.charts.noaa.gov/tiles/50000_1 XYZ endpoint is gone), so charts
-    // are now published only as ENC data through the Maritime Chart Service WMS
-    // (bbox-based GetMap, no XYZ tiles). Use a WMS layer so the chart renders.
-    L.tileLayer.wms(
-      "https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/WMSServer",
-      {layers:"0,1,2,3,4,5,6", format:"image/png", transparent:true, version:"1.3.0",
-       minZoom:0, maxZoom:18, attribution:'© NOAA Office of Coast Survey (ENC)'}
-    )]);
 
   bathyLayer=esriOceanLayer; // alias for backward compat
 
@@ -3903,8 +3884,8 @@ async function initMap(){
   //   • GEBCO WMS (https://wms.gebco.net/) — WMS not WMTS, more complex
   //   • EMODnet bathymetry WMTS (Europe-only)
   // For now, users who want depth contours should switch the basemap to
-  // "NOAA Nautical Charts" — full set of recreational depth contours in feet
-  // are drawn directly on those tiles.
+  // "Ocean Bathymetric" — Esri's World Ocean Base (GEBCO/NOAA/NGA) shows shaded
+  // depth relief and contours.
 
   L.control.zoom({position:"topleft"}).addTo(MAP);
   MAP.on("click",onMapClick);
@@ -4175,10 +4156,6 @@ async function prefetchCurrentView(){
     osm: (z,x,y) => [
       `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`,
       `https://tiles.openseamap.org/seamark/${z}/${x}/${y}.png`],
-    // NOAA charts are now a WMS (bbox) layer, not XYZ tiles, so they can't be
-    // prefetched/cached by z/x/y — prefetch the OSM underlay only.
-    noaa: (z,x,y) => [
-      `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`],
   };
   const buildUrls = urlBuilders[activeBase] || urlBuilders.satellite;
 
@@ -9881,7 +9858,7 @@ function rulerRedraw(){
 
 function switchBase(val){
   // Remove all base layers
-  [satelliteLayer,satelliteLabelsLayer,noaaLayer,osmLayer,esriOceanLayer].forEach(l=>{
+  [satelliteLayer,satelliteLabelsLayer,osmLayer,esriOceanLayer].forEach(l=>{
     if(l && MAP.hasLayer(l)) MAP.removeLayer(l);
   });
   // Add the selected one
@@ -9890,8 +9867,6 @@ function switchBase(val){
     satelliteLabelsLayer.addTo(MAP);
   } else if(val==="ocean") {
     esriOceanLayer.addTo(MAP);
-  } else if(val==="noaa") {
-    noaaLayer.addTo(MAP);
   } else {
     osmLayer.addTo(MAP);
   }
@@ -16601,7 +16576,7 @@ function ocRenderCharts(){
       <div class="tut-step-body">
         <div class="tut-step-title">Use the right-side icon column</div>
         <div class="tut-step-desc" style="line-height:1.7">
-          <div style="margin:6px 0"><span class="tut-icon">🗺</span> <b>Base Map</b> — switch between Satellite, Ocean (Esri bathymetric), Street, or <b>NOAA Nautical Charts</b>. The NOAA Charts basemap shows depth contours in feet (30 ft, 60 ft, 100 ft, etc.) directly on the chart — that's the right basemap for nearshore depth reference.</div>
+          <div style="margin:6px 0"><span class="tut-icon">🗺</span> <b>Base Map</b> — switch between Satellite, <b>Ocean Bathymetric</b>, or Street + SeaMarks. The Ocean Bathymetric basemap (Esri World Ocean Base, from GEBCO/NOAA/NGA) shows shaded depth relief and contours — the right basemap for depth reference.</div>
           <div style="margin:6px 0"><span class="tut-icon">◆</span> <b>Layers</b> — iOS-style toggles grouped into Predictions, Map Markers, Ocean Data, and an Advanced section. Toggle the predictive heat map, <b>Major Fishing Areas</b> (canyons, wrecks, reefs, lumps and ledges — the 15 closest to your port), ports, your catches, satellite <b>SST &amp; Chlorophyll</b>, and the new animated <b>Wind</b> layer. Closures, Active Fishing Areas, and LORAN-C live under Advanced.</div>
           <div style="margin:6px 0"><span class="tut-icon">📏</span> <b>Ruler</b> — tap to measure distance in nautical miles. Drop multiple points to plot a route.</div>
           <div style="margin:6px 0"><span class="tut-icon">⚙</span> <b>Settings</b> — set defaults like home port, species, base map, and account preferences.</div>
@@ -16663,7 +16638,7 @@ function ocRenderCharts(){
       <div class="tut-feature-icon">📐</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Real-feature bathymetry under the hood</div>
-        <div class="tut-feature-desc">Depth-driven habitat scoring is now anchored to 201 real-world reference points — canyon heads, named banks (Stellwagen, Cashes, Charleston Bump), shelf-edge stations, the Mississippi/Desoto canyons, East Breaks, Loop Current center, Sigsbee Deep. The algorithm blends these references with the regional shelf model so depth is correct around real features instead of just averaged. To <em>see</em> depth lines visually, switch the basemap to NOAA Nautical Charts.</div>
+        <div class="tut-feature-desc">Depth-driven habitat scoring is now anchored to 201 real-world reference points — canyon heads, named banks (Stellwagen, Cashes, Charleston Bump), shelf-edge stations, the Mississippi/Desoto canyons, East Breaks, Loop Current center, Sigsbee Deep. The algorithm blends these references with the regional shelf model so depth is correct around real features instead of just averaged. To <em>see</em> depth lines visually, switch the basemap to Ocean Bathymetric.</div>
       </div>
     </div>
 
