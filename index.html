@@ -3770,10 +3770,14 @@ async function initMap(){
   noaaLayer=L.layerGroup([
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
       {maxZoom:19,minZoom:0,attribution:'© OpenStreetMap',opacity:0.4,subdomains:'abc'}),
-    L.tileLayer(
-      "https://tileservice.charts.noaa.gov/tiles/50000_1/{z}/{x}/{y}.png",
-      {minZoom:0,maxZoom:13,attribution:'© NOAA Office of Coast Survey',
-       errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
+    // NOAA retired the raster (RNC) seamless tile service (the old
+    // tileservice.charts.noaa.gov/tiles/50000_1 XYZ endpoint is gone), so charts
+    // are now published only as ENC data through the Maritime Chart Service WMS
+    // (bbox-based GetMap, no XYZ tiles). Use a WMS layer so the chart renders.
+    L.tileLayer.wms(
+      "https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/WMSServer",
+      {layers:"0,1,2,3,4,5,6", format:"image/png", transparent:true, version:"1.3.0",
+       minZoom:0, maxZoom:18, attribution:'© NOAA Office of Coast Survey (ENC)'}
     )]);
 
   bathyLayer=esriOceanLayer; // alias for backward compat
@@ -4030,8 +4034,7 @@ const TILE_CACHE_NAME = "bwi-tiles-v1";
 const TILE_HOSTS = [
   "server.arcgisonline.com",
   "tile.openstreetmap.org",
-  "tiles.openseamap.org",
-  "tileservice.charts.noaa.gov"];
+  "tiles.openseamap.org"];
 
 // The Service Worker is created as a Blob URL at runtime so the entire app
 // stays in a single HTML file. The SW intercepts fetch events for tile hosts
@@ -4172,9 +4175,10 @@ async function prefetchCurrentView(){
     osm: (z,x,y) => [
       `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`,
       `https://tiles.openseamap.org/seamark/${z}/${x}/${y}.png`],
+    // NOAA charts are now a WMS (bbox) layer, not XYZ tiles, so they can't be
+    // prefetched/cached by z/x/y — prefetch the OSM underlay only.
     noaa: (z,x,y) => [
-      `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`,
-      `https://tileservice.charts.noaa.gov/tiles/50000_1/${z}/${x}/${y}.png`],
+      `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`],
   };
   const buildUrls = urlBuilders[activeBase] || urlBuilders.satellite;
 
