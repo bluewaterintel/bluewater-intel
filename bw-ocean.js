@@ -7,10 +7,41 @@
   const TTL = 20 * 60 * 1000;
   const keyOf = (lat, lng) => `${lat.toFixed(2)},${lng.toFixed(2)}`;
 
+  // ── Last-known-good (best available REAL data) ─────────────────────────────
+  // GOVERNING PRINCIPLE: real data or an honest absence — never synthetic. The
+  // backend already returns the most recent cloud-free observation per pixel, but
+  // a field can still come back null (a transient request failure, or a pixel that
+  // has been clouded for the whole lookback window). Rather than let the algorithm
+  // drop that variable to zero, we remember the last REAL value we ever received
+  // for each point+field and reuse it when the current response has none. The value
+  // keeps its ORIGINAL observedAt, so the freshness model ages/labels it honestly
+  // and confidence reflects the staleness. We never invent a number; we only ever
+  // reuse one that was actually measured.
+  const FIELDS = ["sst", "chlor", "wind", "waves", "waterTemp", "pressure"];
+  const lastGood = new Map(); // key -> { field: {value, observedAtMs, ...} }
+
+  function mergeBestAvailable(k, payload) {
+    if (!payload) return payload;
+    const store = lastGood.get(k) || {};
+    let usedFallback = false;
+    for (const f of FIELDS) {
+      const cur = payload[f];
+      if (cur && cur.value != null) {
+        store[f] = { ...cur };                 // remember this real observation
+      } else if (store[f] && store[f].value != null) {
+        payload[f] = { ...store[f], _stale: true }; // reuse last real value (honestly aged)
+        usedFallback = true;
+      }
+    }
+    lastGood.set(k, store);
+    if (usedFallback && !payload._cache) payload._cache = "last-known-good";
+    return payload;
+  }
+
   async function fetchOcean(lat, lng) {
     const k = keyOf(lat, lng);
     const hit = cache.get(k);
-    if (hit && Date.now() - hit.atMs < TTL) return { ...hit.payload, _cache: "fresh-cache" };
+    if (hit && Date.now() - hit.atMs < TTL) return mergeBestAvailable(k, { ...hit.payload, _cache: "fresh-cache" });
     try {
       const res = await fetch(`${BASE}/functions/v1/ocean?lat=${lat}&lng=${lng}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
@@ -19,10 +50,10 @@
       if (!res.ok) throw new Error(`ocean ${res.status}`);
       const payload = await res.json();
       cache.set(k, { payload, atMs: Date.now() });
-      return payload;
+      return mergeBestAvailable(k, payload);
     } catch (e) {
-      if (hit) return { ...hit.payload, _cache: "stale-cache" };
-      return {
+      if (hit) return mergeBestAvailable(k, { ...hit.payload, _cache: "stale-cache" });
+      return mergeBestAvailable(k, {
         point: { lat, lng }, fetchedAtMs: Date.now(),
         sst: { value: null, observedAtMs: null },
         chlor: { value: null, observedAtMs: null },
@@ -31,7 +62,7 @@
         waterTemp: { value: null, observedAtMs: null },
         pressure: { value: null, observedAtMs: null },
         sources: {}, _cache: "unavailable",
-      };
+      });
     }
   }
 
