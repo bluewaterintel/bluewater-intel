@@ -34,9 +34,12 @@ const json = (body: unknown, status = 200) =>
 
 // ── Config (VERIFY dataset IDs against live ERDDAP before production) ─────────
 const ERDDAP = "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
-// SST: NOAA Geo-Polar Blended SST, daily, global 5km — good coverage, ~1-day latency.
-// If you prefer MUR (jplMURSST41) swap the id + var name. Verify on deploy.
-const SST_DATASET = Deno.env.get("SST_DATASET") ?? "nesdisGeoPolarSSTN5SQNRT";
+// SST: JPL MUR, daily, global ~1km — reliable coverage, ~1-day latency.
+// (The previous default, nesdisGeoPolarSSTN5SQNRT, has been retired from CoastWatch
+// ERDDAP and now 404s, which returned null SST for every point and left the heat
+// map empty.) Override with the SST_DATASET/SST_VAR secrets if you prefer another
+// product; verify the dataset id + var name on the ERDDAP dataset page on deploy.
+const SST_DATASET = Deno.env.get("SST_DATASET") ?? "jplMURSST41";
 const SST_VAR = Deno.env.get("SST_VAR") ?? "analysed_sst"; // verify exact var name on the dataset page
 // Chlorophyll: VIIRS NRT daily, global 4km.
 const CHL_DATASET = Deno.env.get("CHL_DATASET") ?? "noaacwNPPVIIRSchlaDaily";

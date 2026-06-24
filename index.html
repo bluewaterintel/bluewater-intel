@@ -5408,8 +5408,22 @@ async function buildOceanField(latMin, latMax, lngMin, lngMax){
     for(let ln = lngMin; ln <= lngMax; ln += stepDeg)
       if(isFishableWater(la, ln)) pts.push([la, ln]);
   const capped = pts.length > 60 ? decimateOceanPts(pts, 60) : pts;
-  const results = await Promise.all(capped.map(([la, ln]) =>
-    BW_OCEAN.fetchOcean(la, ln).then(p => ({ la, ln, p }))));
+  // Throttle the prefetch: firing all ~60 requests at once overwhelms the upstream
+  // ocean feed (ERDDAP/NDBC), which rate-limits the burst and returns null for most
+  // points — leaving every cell below the heat-map draw threshold. A small
+  // concurrency pool keeps each request reliable while still prefetching the grid.
+  const CONCURRENCY = 8;
+  const results = new Array(capped.length);
+  let next = 0;
+  async function worker(){
+    while(next < capped.length){
+      const i = next++;
+      const [la, ln] = capped[i];
+      const p = await BW_OCEAN.fetchOcean(la, ln);
+      results[i] = { la, ln, p };
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, capped.length) }, worker));
   OCEAN_FIELD = { samples: results, builtAtMs: Date.now() };
 }
 
@@ -5739,10 +5753,10 @@ function scoreCell(lat, lng, speciesId){
   const moonName = moon < 0.08 || moon > 0.92 ? "new" :
                    Math.abs(moon - 0.5) < 0.08 ? "full" :
                    moon < 0.5 ? "waxing" : "waning";
-  const wxLabel = wxChange.shiftIntensity < 0.3 ? "steady" :
-                  wxChange.hoursSinceShift < 12 ? "shifting now" :
-                  wxChange.hoursSinceShift < 24 ? "post-shift" :
-                  wxChange.hoursSinceShift < 72 ? "PEAK window" : "settled";
+  // Weather-change factor is held neutral in the production path (synthetic
+  // weather data was removed and no real weather-shift feed is wired yet), so the
+  // label is a fixed neutral value rather than reading the removed wxChange object.
+  const wxLabel = "steady";
 
   const allFactors = [
     {name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw:sst != null ? `${sst.toFixed(1)}°F` : "—"},
