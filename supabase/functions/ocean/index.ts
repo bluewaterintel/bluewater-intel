@@ -33,14 +33,33 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
 // ── Config (VERIFY dataset IDs against live ERDDAP before production) ─────────
-const ERDDAP = "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
-// SST: NOAA Geo-Polar Blended SST, daily, global 5km — good coverage, ~1-day latency.
-// If you prefer MUR (jplMURSST41) swap the id + var name. Verify on deploy.
-const SST_DATASET = Deno.env.get("SST_DATASET") ?? "nesdisGeoPolarSSTN5SQNRT";
+// Per-dataset ERDDAP base URLs: NOAA hosts these products on different ERDDAP
+// servers, and the old coastwatch.pfeg.noaa.gov entries now 302-redirect to
+// coastwatch.noaa.gov for some products. Point each dataset at its canonical host
+// directly so we don't depend on redirects.
+const SST_ERDDAP = Deno.env.get("SST_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
+const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? "https://coastwatch.noaa.gov/erddap/griddap";
+// A conventional User-Agent — some NOAA hosts 403 the default Deno UA.
+const ERDDAP_HEADERS = { "User-Agent": "BluewaterIntel/1.0 (+https://bluewaterintel.com; ocean data proxy)" };
+// SST: JPL MUR, daily, global ~1km — reliable coverage, ~1-day latency.
+// (The previous default, nesdisGeoPolarSSTN5SQNRT, has been retired from CoastWatch
+// ERDDAP and now 404s, which returned null SST for every point and left the heat
+// map empty.) Override with the SST_DATASET/SST_VAR secrets if you prefer another
+// product; verify the dataset id + var name on the ERDDAP dataset page on deploy.
+const SST_DATASET = Deno.env.get("SST_DATASET") ?? "jplMURSST41";
 const SST_VAR = Deno.env.get("SST_VAR") ?? "analysed_sst"; // verify exact var name on the dataset page
-// Chlorophyll: VIIRS NRT daily, global 4km.
-const CHL_DATASET = Deno.env.get("CHL_DATASET") ?? "noaacwNPPVIIRSchlaDaily";
+// MUR SST is gridded by [time][lat][lng] — no altitude dimension.
+const SST_HAS_ALTITUDE = (Deno.env.get("SST_HAS_ALTITUDE") ?? "false") === "true";
+// Chlorophyll: NOAA CoastWatch VIIRS SNPP science-quality daily, real observed
+// chlor_a. (The previous default, noaacwNPPVIIRSchlaDaily, has been retired from
+// ERDDAP and now 404s, so chlorophyll came back null and contributed nothing to
+// scoring.) This product is gridded by [time][altitude][lat][lng], so the point
+// query MUST include an altitude index. Cloud-gap pixels return null and are
+// covered by the client's last-known-good fallback (best available REAL value —
+// never synthetic). Override via the CHL_DATASET/CHL_VAR/CHL_HAS_ALTITUDE secrets.
+const CHL_DATASET = Deno.env.get("CHL_DATASET") ?? "noaacwNPPVIIRSSQchlaDaily";
 const CHL_VAR = Deno.env.get("CHL_VAR") ?? "chlor_a";
+const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true";
 
 const num = (v: unknown): number | null => {
   const n = typeof v === "string" ? parseFloat(v) : (v as number);
@@ -78,7 +97,7 @@ async function fetchBuoy(lat: number, lng: number) {
   const sorted = [...BUOYS].sort((a, b) => nmBetween(lat, lng, a.lat, a.lng) - nmBetween(lat, lng, b.lat, b.lng));
   for (const b of sorted.slice(0, 3)) { // try the 3 nearest; some may be offline
     try {
-      const r = await fetch(`https://www.ndbc.noaa.gov/data/realtime2/${b.id}.txt`, { signal: AbortSignal.timeout(8000) });
+      const r = await fetch(`https://www.ndbc.noaa.gov/data/realtime2/${b.id}.txt`, { signal: AbortSignal.timeout(8000), headers: ERDDAP_HEADERS });
       if (!r.ok) continue;
       const text = await r.text();
       const lines = text.split("\n").filter((l) => l && !l.startsWith("#"));
@@ -109,21 +128,50 @@ async function fetchBuoy(lat: number, lng: number) {
 // ── ERDDAP: latest gridded value at a point ──────────────────────────────────
 // griddap lets you ask for the most recent time slice nearest a lat/lng. We use
 // the "last" time index and the nearest grid cell, returning value + the time.
-async function fetchGridPoint(dataset: string, varName: string, lat: number, lng: number) {
-  // Query the most recent time, nearest cell. .json returns {table:{columnNames,rows}}
-  // Example: <ERDDAP>/<dataset>.json?<var>[(last)][(lat)][(lng)]
-  const url = `${ERDDAP}/${dataset}.json?${varName}%5B(last)%5D%5B(${lat})%5D%5B(${lng})%5D`;
+async function fetchGridPoint(
+  base: string,
+  dataset: string,
+  varName: string,
+  lat: number,
+  lng: number,
+  hasAltitude = false,
+  lookbackSteps = 0,
+) {
+  // Query the nearest cell. .json returns {table:{columnNames,rows}}.
+  // Time index:
+  //   • lookbackSteps === 0 → just the latest slice:  <var>[(last)]...
+  //   • lookbackSteps  >  0 → the last N+1 slices:     <var>[last-N:last]...
+  // We then walk newest→oldest and return the most recent NON-NULL real
+  // observation. This is the "best available real data" rule: satellite pixels
+  // are frequently cloud-gapped (null) on any single day, so for slow-changing
+  // variables (SST, chlorophyll) we fall back to the most recent cloud-free
+  // observation at that pixel instead of dropping the variable. The returned
+  // observedAt is the REAL time of that observation, so the freshness model can
+  // age/label it correctly. Nothing is invented — only real measurements are used.
+  //
+  // Altitude: surface-layer datasets (e.g. VIIRS chlorophyll) carry an altitude
+  // dimension that must be indexed or ERDDAP errors with "wrong number of dimensions".
+  const altIdx = hasAltitude ? "%5B(0.0)%5D" : "";
+  const timeIdx = lookbackSteps > 0 ? `%5Blast-${lookbackSteps}:last%5D` : "%5B(last)%5D";
+  const url = `${base}/${dataset}.json?${varName}${timeIdx}${altIdx}%5B(${lat})%5D%5B(${lng})%5D`;
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(9000) });
+    // Some NOAA ERDDAP hosts (e.g. coastwatch.noaa.gov) reject requests that lack
+    // a conventional User-Agent (the default Deno UA gets a 403), so set one.
+    const r = await fetch(url, { signal: AbortSignal.timeout(9000), headers: ERDDAP_HEADERS });
     if (!r.ok) return { value: null, observedAtMs: null };
     const d = await r.json();
     const cols: string[] = d?.table?.columnNames ?? [];
-    const row: unknown[] = d?.table?.rows?.[0] ?? [];
+    const rows: unknown[][] = d?.table?.rows ?? [];
     const ti = cols.indexOf("time");
     const vi = cols.indexOf(varName);
-    const value = num(row[vi]);
-    const observedAtMs = ti >= 0 && typeof row[ti] === "string" ? Date.parse(row[ti] as string) : null;
-    return { value, observedAtMs };
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const value = num(rows[i][vi]);
+      if (value != null) {
+        const observedAtMs = ti >= 0 && typeof rows[i][ti] === "string" ? Date.parse(rows[i][ti] as string) : null;
+        return { value, observedAtMs };
+      }
+    }
+    return { value: null, observedAtMs: null };
   } catch {
     return { value: null, observedAtMs: null };
   }
@@ -137,10 +185,14 @@ Deno.serve(async (req) => {
   if (lat == null || lng == null) return json({ error: "lat and lng required" }, 400);
 
   // Fetch all sources in parallel. Each returns real value+observedAt or nulls.
+  // Lookback windows: SST (MUR) is gap-filled so a short window is just safety;
+  // chlorophyll is frequently cloud-gapped so scan ~2 weeks for the last clear pixel.
+  const SST_LOOKBACK = Number(Deno.env.get("SST_LOOKBACK") ?? "3");
+  const CHL_LOOKBACK = Number(Deno.env.get("CHL_LOOKBACK") ?? "14");
   const [buoy, sst, chlorRaw] = await Promise.all([
     fetchBuoy(lat, lng),
-    fetchGridPoint(SST_DATASET, SST_VAR, lat, lng),
-    fetchGridPoint(CHL_DATASET, CHL_VAR, lat, lng),
+    fetchGridPoint(SST_ERDDAP, SST_DATASET, SST_VAR, lat, lng, SST_HAS_ALTITUDE, SST_LOOKBACK),
+    fetchGridPoint(CHL_ERDDAP, CHL_DATASET, CHL_VAR, lat, lng, CHL_HAS_ALTITUDE, CHL_LOOKBACK),
   ]);
 
   // SST: prefer gridded (spatial coverage); buoy water temp is a separate field.
