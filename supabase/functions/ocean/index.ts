@@ -76,6 +76,7 @@ const BUOYS: { id: string; lat: number; lng: number }[] = [
   { id: "44025", lat: 40.25, lng: -73.16 }, // Long Island
   { id: "44065", lat: 40.37, lng: -73.70 }, // NY Harbor entrance
   { id: "44009", lat: 38.46, lng: -74.70 }, // Delaware Bay
+  { id: "44100", lat: 36.26, lng: -75.59 }, // Duck, NC (Outer Banks)
   { id: "44014", lat: 36.61, lng: -74.84 }, // Virginia Beach
   { id: "41001", lat: 34.72, lng: -72.32 }, // E of Cape Hatteras
   { id: "41002", lat: 31.76, lng: -74.84 }, // S Hatteras
@@ -86,6 +87,30 @@ const BUOYS: { id: string; lat: number; lng: number }[] = [
   { id: "42013", lat: 27.17, lng: -82.92 }, // Tampa/Venice nearshore
 ];
 
+// Parse one NDBC realtime feed into a per-field record (fields null if "MM").
+async function fetchOneBuoy(b: { id: string; lat: number; lng: number }, lat: number, lng: number) {
+  try {
+    const r = await fetch(`https://www.ndbc.noaa.gov/data/realtime2/${b.id}.txt`, { signal: AbortSignal.timeout(8000), headers: ERDDAP_HEADERS });
+    if (!r.ok) return null;
+    const text = await r.text();
+    const lines = text.split("\n").filter((l) => l && !l.startsWith("#"));
+    if (!lines.length) return null;
+    const c = lines[0].trim().split(/\s+/);
+    const [YY, MM, DD, hh, mm] = [c[0], c[1], c[2], c[3], c[4]].map((x) => parseInt(x, 10));
+    const observedAtMs = Date.UTC(YY, MM - 1, DD, hh, mm);
+    const mps = num(c[6]), wvhtM = num(c[8]), dpd = num(c[9]), pres = num(c[12]), wtmpC = num(c[14]), wdir = num(c[5]);
+    return {
+      id: b.id, nm: nmBetween(lat, lng, b.lat, b.lng), observedAtMs,
+      wind: mps != null ? { value: Math.round(mps * 1.943844 * 10) / 10, dir: wdir, observedAtMs } : { value: null, dir: null, observedAtMs: null }, // kt
+      waves: wvhtM != null ? { value: Math.round(wvhtM * 3.28084 * 10) / 10, periodS: dpd, observedAtMs } : { value: null, observedAtMs: null }, // ft
+      waterTemp: wtmpC != null ? { value: Math.round((wtmpC * 9 / 5 + 32) * 10) / 10, observedAtMs } : { value: null, observedAtMs: null }, // F
+      pressure: pres != null ? { value: pres, observedAtMs } : { value: null, observedAtMs: null },
+    };
+  } catch {
+    return null;
+  }
+}
+
 function nmBetween(la1: number, lo1: number, la2: number, lo2: number) {
   const R = 3440.065, toR = (d: number) => (d * Math.PI) / 180;
   const dLa = toR(la2 - la1), dLo = toR(lo2 - lo1);
@@ -94,35 +119,30 @@ function nmBetween(la1: number, lo1: number, la2: number, lo2: number) {
 }
 
 async function fetchBuoy(lat: number, lng: number) {
+  // Pull the nearest few buoys in parallel, then take EACH field (wind, waves,
+  // water temp, pressure) from the nearest buoy that actually reports it. A single
+  // buoy often has a dead sensor (e.g. anemometer down → WDIR/WSPD "MM"), so the
+  // old "first responding buoy" approach lost wind whenever the closest buoy's
+  // anemometer was out. Merging per-field keeps every value REAL and maximizes
+  // coverage without inventing anything.
   const sorted = [...BUOYS].sort((a, b) => nmBetween(lat, lng, a.lat, a.lng) - nmBetween(lat, lng, b.lat, b.lng));
-  for (const b of sorted.slice(0, 3)) { // try the 3 nearest; some may be offline
-    try {
-      const r = await fetch(`https://www.ndbc.noaa.gov/data/realtime2/${b.id}.txt`, { signal: AbortSignal.timeout(8000), headers: ERDDAP_HEADERS });
-      if (!r.ok) continue;
-      const text = await r.text();
-      const lines = text.split("\n").filter((l) => l && !l.startsWith("#"));
-      if (!lines.length) continue;
-      const c = lines[0].trim().split(/\s+/);
-      // indices per stdmet header
-      const [YY, MM, DD, hh, mm] = [c[0], c[1], c[2], c[3], c[4]].map((x) => parseInt(x, 10));
-      const observedAtMs = Date.UTC(YY, MM - 1, DD, hh, mm);
-      const mps = num(c[6]); // WSPD m/s
-      const wvhtM = num(c[8]); // WVHT m
-      const dpd = num(c[9]); // dominant period s
-      const pres = num(c[12]); // hPa
-      const wtmpC = num(c[14]); // water temp C
-      const wdir = num(c[5]); // wind dir deg
-      return {
-        buoyId: b.id, buoyNm: Math.round(nmBetween(lat, lng, b.lat, b.lng)),
-        observedAtMs,
-        wind: mps != null ? { value: Math.round(mps * 1.943844 * 10) / 10, dir: wdir, observedAtMs } : { value: null, observedAtMs: null }, // kt
-        waves: wvhtM != null ? { value: Math.round(wvhtM * 3.28084 * 10) / 10, periodS: dpd, observedAtMs } : { value: null, observedAtMs: null }, // ft
-        waterTemp: wtmpC != null ? { value: Math.round((wtmpC * 9 / 5 + 32) * 10) / 10, observedAtMs } : { value: null, observedAtMs: null }, // F
-        pressure: pres != null ? { value: pres, observedAtMs } : { value: null, observedAtMs: null },
-      };
-    } catch { /* try next buoy */ }
-  }
-  return null;
+  const recs = (await Promise.all(sorted.slice(0, 5).map((b) => fetchOneBuoy(b, lat, lng))))
+    .filter((r): r is NonNullable<typeof r> => r != null)
+    .sort((a, b) => a.nm - b.nm); // nearest first
+  if (!recs.length) return null;
+  const pick = <T extends { value: number | null }>(get: (r: typeof recs[number]) => T): T | null => {
+    for (const r of recs) { const f = get(r); if (f && f.value != null) return f; }
+    return null;
+  };
+  const nullField = { value: null as number | null, observedAtMs: null as number | null };
+  return {
+    buoyId: recs[0].id, buoyNm: Math.round(recs[0].nm),
+    observedAtMs: recs[0].observedAtMs,
+    wind: pick((r) => r.wind) ?? { value: null, dir: null, observedAtMs: null },
+    waves: pick((r) => r.waves) ?? nullField,
+    waterTemp: pick((r) => r.waterTemp) ?? nullField,
+    pressure: pick((r) => r.pressure) ?? nullField,
+  };
 }
 
 // ── ERDDAP: latest gridded value at a point ──────────────────────────────────
