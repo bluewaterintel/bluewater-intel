@@ -274,6 +274,23 @@ if (html.includes("const wxChangeScoreVal = weatherChangeScore();")) {
   );
 }
 
+// ── M4: wxLabel neutral ──────────────────────────────────────────────────────
+// The "ocean field helpers" patch removes `const wxChange = synthWeatherChange();`
+// from scoreCell, so the explainer label must no longer reference that object or
+// scoreCell throws ReferenceError and the heatmap fails to render.
+if (html.includes("wxChange.shiftIntensity")) {
+  mustReplace(
+    "M4 wxLabel neutral",
+    `  const wxLabel = wxChange.shiftIntensity < 0.3 ? "steady" :
+                  wxChange.hoursSinceShift < 12 ? "shifting now" :
+                  wxChange.hoursSinceShift < 24 ? "post-shift" :
+                  wxChange.hoursSinceShift < 72 ? "PEAK window" : "settled";`,
+    `  // Weather-change factor is held neutral in the production path, so the label
+  // is a fixed neutral value rather than reading the removed wxChange object.
+  const wxLabel = "steady";`
+  );
+}
+
 // ── M4: freshness confidence block ───────────────────────────────────────────
 if (html.includes("const strongFactors = allScores.filter")) {
   mustReplace(

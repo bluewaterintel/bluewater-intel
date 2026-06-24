@@ -5739,10 +5739,10 @@ function scoreCell(lat, lng, speciesId){
   const moonName = moon < 0.08 || moon > 0.92 ? "new" :
                    Math.abs(moon - 0.5) < 0.08 ? "full" :
                    moon < 0.5 ? "waxing" : "waning";
-  const wxLabel = wxChange.shiftIntensity < 0.3 ? "steady" :
-                  wxChange.hoursSinceShift < 12 ? "shifting now" :
-                  wxChange.hoursSinceShift < 24 ? "post-shift" :
-                  wxChange.hoursSinceShift < 72 ? "PEAK window" : "settled";
+  // Weather-change factor is held neutral in the production path (synthetic
+  // weather data was removed and no real weather-shift feed is wired yet), so the
+  // label is a fixed neutral value rather than reading the removed wxChange object.
+  const wxLabel = "steady";
 
   const allFactors = [
     {name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw:sst != null ? `${sst.toFixed(1)}°F` : "—"},
