@@ -46,7 +46,7 @@
     return vectorFromObservation(sample.wind || sample.p?.wind);
   }
 
-  function interpolateWind(samples, lat, lng, maxNm = 220) {
+  function interpolateWind(samples, lat, lng, maxNm = 600) {
     if (!Array.isArray(samples) || !samples.length) return null;
     let sumW = 0;
     let sumU = 0;

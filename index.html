@@ -4818,8 +4818,8 @@ let WIND_FIELD = { samples: [], builtAtMs: 0, status: "idle", seq: 0, boundsKey:
 
 function windStatusLabel(){
   if(WIND_FIELD.status === "loading") return "loading real wind...";
-  if(WIND_FIELD.status === "live") return `${WIND_FIELD.samples.length} real samples`;
-  if(WIND_FIELD.status === "cached") return `${WIND_FIELD.samples.length} cached real samples`;
+  if(WIND_FIELD.status === "live") return `NOAA live · ${WIND_FIELD.samples.length} samples`;
+  if(WIND_FIELD.status === "cached") return `cached NOAA · ${WIND_FIELD.samples.length} samples`;
   if(WIND_FIELD.status === "unavailable") return "real wind unavailable";
   return "real wind";
 }
@@ -7110,7 +7110,7 @@ const WindParticleLayer = L.Layer.extend({
       speedScale: 0.006,    // map-units (px) per m/s per frame factor
       lineWidth: 1.7,
       trailFade: 0.90,      // 0-1; higher = longer trails
-      shadeCellPx: 24,
+      shadeCellPx: 8,
     }, options || {});
     this._particles = [];
     this._anim = null;
