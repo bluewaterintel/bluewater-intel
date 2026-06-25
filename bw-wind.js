@@ -23,6 +23,7 @@
 
   function vectorFromObservation(wind) {
     if (!wind) return null;
+    if (wind.value == null || wind.dir == null) return null;
     const speedKts = Number(wind.value);
     const dirDeg = Number(wind.dir);
     if (!finite(speedKts) || speedKts < 0 || !finite(dirDeg)) return null;
