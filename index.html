@@ -5337,7 +5337,30 @@ function scoreCell(lat, lng, speciesId){
   // Note: 'reports' is NOT in this weighted sum. Lack of a report is not
   // a negative signal — anglers just may not be posting. Reports are instead
   // applied as a pure additive bonus below.
-  let finalScore = (
+  //
+  // Use BW_FRESHNESS.combine when available so missing real feeds (SST/chlor/etc.)
+  // are excluded and their weights are redistributed to surviving factors. That
+  // keeps a map visible from depth/season/structure while confidence tells the
+  // truth about unavailable feeds.
+  const now = forecastTimeMs();
+  const scoreFactors = [
+    { key:"temp",   variable:"sst",      baseWeight:W.temperature,   score:tempScore,        observedAtMs:sstObj.observedAtMs },
+    { key:"chlor",  variable:"chlor",    baseWeight:W.chlorophyll,   score:chlorScore,       observedAtMs:chlorObj.observedAtMs },
+    { key:"wind",   variable:"wind",     baseWeight:W.wind,          score:windScoreVal,     observedAtMs:windObj.observedAtMs },
+    { key:"pres",   variable:"pressure", baseWeight:W.pressure,      score:pressureScore,    observedAtMs:presObj.observedAtMs },
+    { key:"depth",  variable:"depth",    baseWeight:W.depthStruct,   score:depthScore,       observedAtMs:now },
+    { key:"break",  variable:"sst",      baseWeight:W.thermalBreak,  score:breakScore,       observedAtMs:sstObj.observedAtMs },
+    { key:"ais",     variable:null,       baseWeight:W.aisDwell,      score:aisScore_ },
+    { key:"solunar", variable:null,       baseWeight:W.solunar,       score:solunarScoreVal },
+    { key:"tide",    variable:null,       baseWeight:W.tide,          score:tideScoreVal },
+    { key:"season",  variable:null,       baseWeight:W.season,        score:seasonScore },
+    { key:"weather", variable:null,       baseWeight:W.weatherChange, score:wxChangeScoreVal },
+    { key:"moon",    variable:null,       baseWeight:W.moonPhase||0,  score:moonPhaseScoreVal },
+  ];
+  const fr = (typeof BW_FRESHNESS !== "undefined" && BW_FRESHNESS.combine)
+    ? BW_FRESHNESS.combine(scoreFactors, now)
+    : null;
+  let finalScore = fr && typeof fr.finalScore === "number" ? fr.finalScore : (
     tempScore         * W.temperature   +
     chlorScore        * W.chlorophyll   +
     depthScore        * W.depthStruct   +
@@ -5380,7 +5403,7 @@ function scoreCell(lat, lng, speciesId){
                        : speciesCat === "nearshore" ? 0.42
                        : 0.30;                                // offshore = firm
   const _tempGateExp   = speciesCat === "inshore"  ? 0.85 : 0.70;
-  const tempGate = _tempGateFloor + (1 - _tempGateFloor) * Math.pow(tempScore, _tempGateExp);
+  const tempGate = sst == null ? 1 : _tempGateFloor + (1 - _tempGateFloor) * Math.pow(tempScore, _tempGateExp);
   finalScore = finalScore * tempGate;
 
   // ── DEPTH GATE ──
@@ -5413,23 +5436,10 @@ function scoreCell(lat, lng, speciesId){
   // we're only stretching contrast, not reordering hotspots.
   finalScore = normalizeScore(finalScore);
 
-  const now = forecastTimeMs();
-  const fr = (typeof BW_FRESHNESS !== "undefined" && BW_FRESHNESS.combine)
-    ? BW_FRESHNESS.combine([
-        { key:"temp",   variable:"sst",      baseWeight:W.temperature,   score:tempScore,        observedAtMs:sstObj.observedAtMs },
-        { key:"chlor",  variable:"chlor",    baseWeight:W.chlorophyll,   score:chlorScore,       observedAtMs:chlorObj.observedAtMs },
-        { key:"wind",   variable:"wind",     baseWeight:W.wind,         score:windScoreVal,     observedAtMs:windObj.observedAtMs },
-        { key:"pres",   variable:"pressure", baseWeight:W.pressure,     score:pressureScore,    observedAtMs:presObj.observedAtMs },
-        { key:"depth",  variable:"depth",    baseWeight:W.depthStruct,   score:depthScore,       observedAtMs:now },
-        { key:"break",  variable:"sst",      baseWeight:W.thermalBreak,  score:breakScore,       observedAtMs:sstObj.observedAtMs },
-        { key:"solunar", variable:null, baseWeight:W.solunar,      score:solunarScoreVal },
-        { key:"tide",    variable:null, baseWeight:W.tide,         score:tideScoreVal },
-        { key:"season",  variable:null, baseWeight:W.season,       score:seasonScore },
-        { key:"moon",    variable:null, baseWeight:W.moonPhase||0, score:moonPhaseScoreVal },
-      ], now)
-    : { confidence: Math.min(95, 25 + [tempScore, chlorScore, depthScore, breakScore].filter(s => s > 0.7).length * 5), annotations: [] };
-  const confidence = fr.confidence;
-  const freshnessAnnotations = fr.annotations || [];
+  const confidenceFallback = { confidence: Math.min(95, 25 + [tempScore, chlorScore, depthScore, breakScore].filter(s => s > 0.7).length * 5), annotations: [] };
+  const frSummary = fr || confidenceFallback;
+  const confidence = frSummary.confidence;
+  const freshnessAnnotations = frSummary.annotations || [];
 
   // ── Build factor contributions for the explainer panel ──
   // Skip factors with zero weight (they don't apply to this species category)
@@ -11312,13 +11322,15 @@ function updateHeaderConditions(){
   wind.textContent  = `${wx.windKt}kt`;
 }
 
-// The predictive heat map now defaults OFF and is opt-in via the layer toggle
-// (it's the heaviest layer to compute, so we don't force it on). This is kept as
-// a no-op hook so the existing call sites stay valid; it intentionally does NOT
-// flip layerVis.predict on. If the user has already enabled predict, drawPrediction
-// (called separately by selectPort/selectSpecies) will refresh it.
+// Turn the predictive heat map on once the user has picked both required inputs.
+// The layer still stays off during the initial empty state, but selecting a home
+// port + target species should immediately show the fishing-spots heat map.
 function ensurePredictLayerOn(){
-  // no-op: respect the user's layer choice. (Was: force predict on.)
+  if(!activePort || !activeSpId || activeSpId === "all") return;
+  layerVis.predict = true;
+  const chk = document.getElementById("chk-predict");
+  if(chk) chk.checked = true;
+  updateBiteBanner();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
