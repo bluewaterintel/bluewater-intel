@@ -6517,6 +6517,14 @@ const MAX_PORT_RANGE_NM_GULF = 120;
 const PREDICT_HEAT_SCORE_MIN = 0.01;
 const PREDICT_HOTSPOT_SCORE_MIN = 0.30;
 
+function heatDisplayIntensity(score){
+  // Visual-only contrast stretch: keeps ranking/click targets unchanged while
+  // making low-but-real offshore prediction fields visible over dark basemaps.
+  const s = Math.max(0, Math.min(1, Number(score) || 0));
+  if(s <= 0) return 0;
+  return Math.max(PREDICT_HEAT_SCORE_MIN, Math.pow(s, 0.60));
+}
+
 // Determines the fishing radius based on which coast the port is on.
 // Gulf-coast ports get the wider 150nm radius.
 function maxRangeForPort(portObj){
@@ -7428,12 +7436,12 @@ function renderPrediction(grid, species, final, heatGridOverride){
   _predictSpecies = species;
 
   // ── Canvas heat layer (continuous gradient) — created once, then updated ──
-  const heatPoints = heatGrid.map(cell => ({ lat: cell.lat, lng: cell.lng, intensity: cell.score }));
+  const heatPoints = heatGrid.map(cell => ({ lat: cell.lat, lng: cell.lng, intensity: heatDisplayIntensity(cell.score) }));
   if(_heatLayer && MAP.hasLayer(_heatLayer)){
     _heatLayer._opts.speciesId = activeSpId;  // mask follows the active species
     _heatLayer.setPoints(heatPoints);          // cheap data swap + one redraw
   } else {
-    _heatLayer = heatCanvasLayer(heatPoints, {radiusPx: 55, minOpacity: 0.35, speciesId: activeSpId});
+    _heatLayer = heatCanvasLayer(heatPoints, {radiusPx: 55, minOpacity: 0.48, speciesId: activeSpId});
     _heatLayer.addTo(MAP);
   }
   predictLayers.push(_heatLayer);
