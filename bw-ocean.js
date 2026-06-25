@@ -17,7 +17,7 @@
   // keeps its ORIGINAL observedAt, so the freshness model ages/labels it honestly
   // and confidence reflects the staleness. We never invent a number; we only ever
   // reuse one that was actually measured.
-  const FIELDS = ["sst", "chlor", "wind", "waves", "waterTemp", "pressure"];
+  const FIELDS = ["sst", "chlor", "wind", "waves", "waterTemp", "pressure", "tide"];
   const lastGood = new Map(); // key -> { field: {value, observedAtMs, ...} }
 
   function mergeBestAvailable(k, payload) {

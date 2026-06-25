@@ -76,6 +76,7 @@ const BUOYS: { id: string; lat: number; lng: number }[] = [
   { id: "44025", lat: 40.25, lng: -73.16 }, // Long Island
   { id: "44065", lat: 40.37, lng: -73.70 }, // NY Harbor entrance
   { id: "44009", lat: 38.46, lng: -74.70 }, // Delaware Bay
+  { id: "44100", lat: 36.26, lng: -75.59 }, // Duck, NC (Outer Banks)
   { id: "44014", lat: 36.61, lng: -74.84 }, // Virginia Beach
   { id: "41001", lat: 34.72, lng: -72.32 }, // E of Cape Hatteras
   { id: "41002", lat: 31.76, lng: -74.84 }, // S Hatteras
@@ -86,6 +87,52 @@ const BUOYS: { id: string; lat: number; lng: number }[] = [
   { id: "42013", lat: 27.17, lng: -82.92 }, // Tampa/Venice nearshore
 ];
 
+// Parse one NDBC realtime feed into a per-field record (fields null if "MM").
+// Station-keyed (no point distance here) so the result can be cached and shared.
+type BuoyRec = {
+  id: string; observedAtMs: number;
+  wind: { value: number | null; dir: number | null; observedAtMs: number | null };
+  waves: { value: number | null; periodS?: number | null; observedAtMs: number | null };
+  waterTemp: { value: number | null; observedAtMs: number | null };
+  pressure: { value: number | null; observedAtMs: number | null };
+};
+async function fetchBuoyRaw(id: string): Promise<BuoyRec | null> {
+  try {
+    const r = await fetch(`https://www.ndbc.noaa.gov/data/realtime2/${id}.txt`, { signal: AbortSignal.timeout(8000), headers: ERDDAP_HEADERS });
+    if (!r.ok) return null;
+    const text = await r.text();
+    const lines = text.split("\n").filter((l) => l && !l.startsWith("#"));
+    if (!lines.length) return null;
+    const c = lines[0].trim().split(/\s+/);
+    const [YY, MM, DD, hh, mm] = [c[0], c[1], c[2], c[3], c[4]].map((x) => parseInt(x, 10));
+    const observedAtMs = Date.UTC(YY, MM - 1, DD, hh, mm);
+    const mps = num(c[6]), wvhtM = num(c[8]), dpd = num(c[9]), pres = num(c[12]), wtmpC = num(c[14]), wdir = num(c[5]);
+    return {
+      id, observedAtMs,
+      wind: mps != null ? { value: Math.round(mps * 1.943844 * 10) / 10, dir: wdir, observedAtMs } : { value: null, dir: null, observedAtMs: null }, // kt
+      waves: wvhtM != null ? { value: Math.round(wvhtM * 3.28084 * 10) / 10, periodS: dpd, observedAtMs } : { value: null, observedAtMs: null }, // ft
+      waterTemp: wtmpC != null ? { value: Math.round((wtmpC * 9 / 5 + 32) * 10) / 10, observedAtMs } : { value: null, observedAtMs: null }, // F
+      pressure: pres != null ? { value: pres, observedAtMs } : { value: null, observedAtMs: null },
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Per-station buoy cache (10 min). The heat map fans out ~60 ocean calls, each
+// needing the nearest buoys; without caching that's hundreds of NDBC requests in a
+// burst and the feed rate-limits us (wind/waves come back empty on the first
+// render). Promise-keyed so concurrent cold-start calls share ONE fetch per station.
+const buoyCache = new Map<string, { atMs: number; p: Promise<BuoyRec | null> }>();
+function getBuoyCached(id: string): Promise<BuoyRec | null> {
+  const now = Date.now();
+  const hit = buoyCache.get(id);
+  if (hit && now - hit.atMs < 10 * 60 * 1000) return hit.p;
+  const p = fetchBuoyRaw(id);
+  buoyCache.set(id, { atMs: now, p });
+  return p;
+}
+
 function nmBetween(la1: number, lo1: number, la2: number, lo2: number) {
   const R = 3440.065, toR = (d: number) => (d * Math.PI) / 180;
   const dLa = toR(la2 - la1), dLo = toR(lo2 - lo1);
@@ -94,35 +141,39 @@ function nmBetween(la1: number, lo1: number, la2: number, lo2: number) {
 }
 
 async function fetchBuoy(lat: number, lng: number) {
-  const sorted = [...BUOYS].sort((a, b) => nmBetween(lat, lng, a.lat, a.lng) - nmBetween(lat, lng, b.lat, b.lng));
-  for (const b of sorted.slice(0, 3)) { // try the 3 nearest; some may be offline
-    try {
-      const r = await fetch(`https://www.ndbc.noaa.gov/data/realtime2/${b.id}.txt`, { signal: AbortSignal.timeout(8000), headers: ERDDAP_HEADERS });
-      if (!r.ok) continue;
-      const text = await r.text();
-      const lines = text.split("\n").filter((l) => l && !l.startsWith("#"));
-      if (!lines.length) continue;
-      const c = lines[0].trim().split(/\s+/);
-      // indices per stdmet header
-      const [YY, MM, DD, hh, mm] = [c[0], c[1], c[2], c[3], c[4]].map((x) => parseInt(x, 10));
-      const observedAtMs = Date.UTC(YY, MM - 1, DD, hh, mm);
-      const mps = num(c[6]); // WSPD m/s
-      const wvhtM = num(c[8]); // WVHT m
-      const dpd = num(c[9]); // dominant period s
-      const pres = num(c[12]); // hPa
-      const wtmpC = num(c[14]); // water temp C
-      const wdir = num(c[5]); // wind dir deg
-      return {
-        buoyId: b.id, buoyNm: Math.round(nmBetween(lat, lng, b.lat, b.lng)),
-        observedAtMs,
-        wind: mps != null ? { value: Math.round(mps * 1.943844 * 10) / 10, dir: wdir, observedAtMs } : { value: null, observedAtMs: null }, // kt
-        waves: wvhtM != null ? { value: Math.round(wvhtM * 3.28084 * 10) / 10, periodS: dpd, observedAtMs } : { value: null, observedAtMs: null }, // ft
-        waterTemp: wtmpC != null ? { value: Math.round((wtmpC * 9 / 5 + 32) * 10) / 10, observedAtMs } : { value: null, observedAtMs: null }, // F
-        pressure: pres != null ? { value: pres, observedAtMs } : { value: null, observedAtMs: null },
-      };
-    } catch { /* try next buoy */ }
-  }
-  return null;
+  // Pull the nearest few buoys in parallel, then take EACH field (wind, waves,
+  // water temp, pressure) from the nearest buoy that actually reports it. A single
+  // buoy often has a dead sensor (e.g. anemometer down → WDIR/WSPD "MM"), so the
+  // old "first responding buoy" approach lost wind whenever the closest buoy's
+  // anemometer was out. Merging per-field keeps every value REAL and maximizes
+  // coverage without inventing anything.
+  const sorted = [...BUOYS]
+    .sort((a, b) => nmBetween(lat, lng, a.lat, a.lng) - nmBetween(lat, lng, b.lat, b.lng))
+    .slice(0, 5);
+  const recs = (await Promise.all(sorted.map(async (b) => {
+    const rec = await getBuoyCached(b.id);
+    return rec ? { rec, nm: nmBetween(lat, lng, b.lat, b.lng) } : null;
+  })))
+    .filter((x): x is { rec: BuoyRec; nm: number } => x != null)
+    .sort((a, b) => a.nm - b.nm); // nearest first
+  if (!recs.length) return null;
+  const nullField = { value: null as number | null, observedAtMs: null as number | null };
+  // Wind: take the nearest buoy that has a DIRECTION (that's what scoring/display use).
+  let wind: BuoyRec["wind"] | null = null;
+  for (const { rec } of recs) { if (rec.wind && rec.wind.dir != null) { wind = rec.wind; break; } }
+  // Other fields: nearest buoy reporting a value.
+  const pick = (sel: (r: BuoyRec) => { value: number | null }) => {
+    for (const { rec } of recs) { const f = sel(rec); if (f && f.value != null) return f; }
+    return null;
+  };
+  return {
+    buoyId: recs[0].rec.id, buoyNm: Math.round(recs[0].nm),
+    observedAtMs: recs[0].rec.observedAtMs,
+    wind: wind ?? { value: null, dir: null, observedAtMs: null },
+    waves: pick((r) => r.waves) ?? nullField,
+    waterTemp: pick((r) => r.waterTemp) ?? nullField,
+    pressure: pick((r) => r.pressure) ?? nullField,
+  };
 }
 
 // ── ERDDAP: latest gridded value at a point ──────────────────────────────────
@@ -177,6 +228,95 @@ async function fetchGridPoint(
   }
 }
 
+// ── NOAA CO-OPS tide (real harmonic predictions) ─────────────────────────────
+// Tide "stage" = how hard the water is moving (0 = slack, 1 = peak flood/ebb),
+// which is what drives the inshore/nearshore bite. We derive it from the rate of
+// change of the official NOAA water-level PREDICTION curve at the nearest tide
+// station: find the nearest station, pull a few hours of 6-minute predictions
+// around now, and take |dWater/dt| normalised by the window's peak slope. These
+// are real, published astronomical predictions — nothing synthetic.
+const COOPS_MD = "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=tidepredictions";
+const COOPS_PRED = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter";
+// Singleton promise so concurrent cold-start requests share ONE stations fetch.
+let _stationsPromise: Promise<{ id: string; lat: number; lng: number }[]> | null = null;
+function ensureTideStations() {
+  if (!_stationsPromise) {
+    _stationsPromise = (async () => {
+      try {
+        const r = await fetch(COOPS_MD, { signal: AbortSignal.timeout(9000), headers: ERDDAP_HEADERS });
+        if (!r.ok) return [];
+        const d = await r.json();
+        return (d?.stations ?? [])
+          // Only REFERENCE stations (type "R") return harmonic predictions via the
+          // datagetter; subordinate stations ("S") return "No Predictions data".
+          .filter((s: Record<string, unknown>) => String(s.type) === "R")
+          .map((s: Record<string, unknown>) => ({ id: String(s.id), lat: Number(s.lat), lng: Number(s.lng) }))
+          // Keep US East + Gulf coast to keep the nearest-search small.
+          .filter((s: { id: string; lat: number; lng: number }) =>
+            isFinite(s.lat) && isFinite(s.lng) && s.lat > 22 && s.lat < 47 && s.lng > -98 && s.lng < -64);
+      } catch {
+        return [];
+      }
+    })();
+  }
+  return _stationsPromise;
+}
+// Per-station prediction cache (15 min) keyed by station id.
+const tideCache = new Map<string, { atMs: number; value: number | null; state: string | null }>();
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const coopsDate = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+};
+
+async function fetchTide(lat: number, lng: number) {
+  const none = { value: null as number | null, state: null as string | null, station: null as string | null, observedAtMs: null as number | null };
+  const stations = await ensureTideStations();
+  if (!stations.length) return none;
+  let best: { id: string; lat: number; lng: number } | null = null;
+  let bestNm = Infinity;
+  for (const s of stations) {
+    const d = nmBetween(lat, lng, s.lat, s.lng);
+    if (d < bestNm) { bestNm = d; best = s; }
+  }
+  // No reference station within ~90 nm → no honest tide signal for this point.
+  if (!best || bestNm > 90) return none;
+  const now = Date.now();
+  const hit = tideCache.get(best.id);
+  if (hit && now - hit.atMs < 15 * 60 * 1000) return { value: hit.value, state: hit.state, station: best.id, observedAtMs: now };
+  const url = `${COOPS_PRED}?product=predictions&application=bluewaterintel`
+    + `&begin_date=${encodeURIComponent(coopsDate(now - 3 * 3600 * 1000))}`
+    + `&end_date=${encodeURIComponent(coopsDate(now + 3 * 3600 * 1000))}`
+    + `&datum=MLLW&station=${best.id}&time_zone=gmt&units=english&interval=6&format=json`;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(9000), headers: ERDDAP_HEADERS });
+    if (!r.ok) return none;
+    const d = await r.json();
+    const preds = (d?.predictions ?? [])
+      .map((p: { t: string; v: string }) => ({ t: Date.parse(p.t.replace(" ", "T") + "Z"), v: Number(p.v) }))
+      .filter((p: { t: number; v: number }) => isFinite(p.t) && isFinite(p.v));
+    if (preds.length < 3) return none;
+    let maxSlope = 0;
+    const slopes: { tMid: number; s: number }[] = [];
+    for (let i = 1; i < preds.length; i++) {
+      const dtH = (preds[i].t - preds[i - 1].t) / 3600000;
+      if (dtH <= 0) continue;
+      const s = (preds[i].v - preds[i - 1].v) / dtH; // ft/hr
+      slopes.push({ tMid: (preds[i].t + preds[i - 1].t) / 2, s });
+      if (Math.abs(s) > maxSlope) maxSlope = Math.abs(s);
+    }
+    if (!slopes.length || maxSlope <= 0) return none;
+    let cur = slopes[0], bd = Infinity;
+    for (const sl of slopes) { const dd = Math.abs(sl.tMid - now); if (dd < bd) { bd = dd; cur = sl; } }
+    const value = Math.min(1, Math.abs(cur.s) / maxSlope);
+    const state = cur.s > maxSlope * 0.1 ? "rising" : cur.s < -maxSlope * 0.1 ? "falling" : "slack";
+    tideCache.set(best.id, { atMs: now, value, state });
+    return { value, state, station: best.id, observedAtMs: now };
+  } catch {
+    return none;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const u = new URL(req.url);
@@ -189,10 +329,11 @@ Deno.serve(async (req) => {
   // chlorophyll is frequently cloud-gapped so scan ~2 weeks for the last clear pixel.
   const SST_LOOKBACK = Number(Deno.env.get("SST_LOOKBACK") ?? "3");
   const CHL_LOOKBACK = Number(Deno.env.get("CHL_LOOKBACK") ?? "14");
-  const [buoy, sst, chlorRaw] = await Promise.all([
+  const [buoy, sst, chlorRaw, tide] = await Promise.all([
     fetchBuoy(lat, lng),
     fetchGridPoint(SST_ERDDAP, SST_DATASET, SST_VAR, lat, lng, SST_HAS_ALTITUDE, SST_LOOKBACK),
     fetchGridPoint(CHL_ERDDAP, CHL_DATASET, CHL_VAR, lat, lng, CHL_HAS_ALTITUDE, CHL_LOOKBACK),
+    fetchTide(lat, lng),
   ]);
 
   // SST: prefer gridded (spatial coverage); buoy water temp is a separate field.
@@ -214,9 +355,12 @@ Deno.serve(async (req) => {
     waves: buoy?.waves ?? { value: null, observedAtMs: null },
     waterTemp: buoy?.waterTemp ?? { value: null, observedAtMs: null },
     pressure: buoy?.pressure ?? { value: null, observedAtMs: null },
+    // tide stage 0..1 (0 = slack, 1 = peak flood/ebb) from NOAA CO-OPS predictions.
+    tide: { value: tide.value, state: tide.state, observedAtMs: tide.observedAtMs },
     sources: {
       sst: SST_DATASET, chlor: CHL_DATASET,
       buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
+      tide: tide.station,
     },
   };
 

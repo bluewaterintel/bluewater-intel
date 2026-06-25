@@ -3305,365 +3305,70 @@ if(typeof window !== "undefined"){
   window.addEventListener("offline", () => { BWI.online = false; BWI._emitConn(); BWI.track("conn_offline"); });
 }
 
-// Update the LIVE pill based on backend status
-// Demo reports — replaced by backend /api/social when live
-// Covers all ports of call: Montauk, Cape May, Ocean City, Chincoteague,
-// Virginia Beach, Oregon Inlet, Hatteras, Morehead City, Beaufort, Oak Island,
-// Myrtle Beach, Charleston. Sources: The Hull Truth, Facebook, Reddit, charter
-// reports, and regional forums.
-const SOCIAL=[
-  // ── PORTSMOUTH NH / MAINE BORDER ───────────────────────────────────────
-  {src:"THT",srcName:"The Hull Truth",  snippet:"Big bluefin on Jeffrey\'s Ledge — 400-800lb class. Live mackerel and herring.",
-   species:["bluefin"], area:"Jeffrey\'s Ledge", port:"Portsmouth, NH", hoursAgo:3},
-  {src:"FORUM",srcName:"On The Water NE",snippet:"Cod and haddock limit on Tillies Bank. Clams and squid working.",
-   species:["cod","haddock"], area:"Tillies Bank", port:"Portsmouth, NH", hoursAgo:9},
-  {src:"FB", srcName:"Portsmouth NH Fishing",snippet:"Striper blitz at the river mouth — topwater and live eels.",
-   species:["striper"], area:"Piscataqua River", port:"Portsmouth, NH", hoursAgo:5},
-
-  // ── GLOUCESTER / NORTH SHORE MA ────────────────────────────────────────
-  {src:"FB", srcName:"Gloucester Sportfishing",snippet:"Giant bluefin at Cape Ann — 600lb fish reported, fleet anchored up.",
-   species:["bluefin"], area:"Cape Ann", port:"Gloucester, MA", hoursAgo:2},
-  {src:"REDDIT",srcName:"r/Tuna",snippet:"BFT trolling spreader bars working off Stellwagen. 200-400lb class.",
-   species:["bluefin"], area:"Stellwagen Bank", port:"Gloucester, MA", hoursAgo:11},
-
-  // ── BOSTON / STELLWAGEN BANK ───────────────────────────────────────────
-  {src:"CHARTER",srcName:"Boston Charter Fleet",snippet:"Cod limit on inshore wrecks. 5-15lb fish, jigs and bait both producing.",
-   species:["cod","haddock"], area:"Stellwagen", port:"Boston, MA", hoursAgo:8},
-  {src:"THT",srcName:"The Hull Truth",snippet:"Stripers in the harbor, big blues on the outside. Live mackerel deadly.",
-   species:["striper","bluefish"], area:"Boston Harbor", port:"Boston, MA", hoursAgo:6},
-
-  // ── CAPE COD / NANTUCKET ───────────────────────────────────────────────
-  {src:"FB", srcName:"Cape Cod Sportfishing",snippet:"Yellowfin and BFT mixed at the Tails of the Bank. 100+ miles offshore.",
-   species:["yellowfin","bluefin"], area:"Tails of the Bank", port:"Cape Cod, MA", hoursAgo:14},
-  {src:"FORUM",srcName:"OnTheWater NE",snippet:"Striper bite firing off Chatham — bunker schools moving south.",
-   species:["striper","bluefish"], area:"Chatham", port:"Cape Cod, MA", hoursAgo:4},
-  {src:"CHARTER",srcName:"Nantucket Charter",snippet:"Bigeye bite on at Atlantis Canyon overnight. 200lb class.",
-   species:["bigeye","yellowfin"], area:"Atlantis Canyon", port:"Cape Cod, MA", hoursAgo:18},
-
-  // ── BLOCK ISLAND / POINT JUDITH RI ─────────────────────────────────────
-  {src:"FB", srcName:"Block Island Fishing",snippet:"Striper blitz at the southwest ledge. Topwater plugs at first light.",
-   species:["striper","bluefish","bonito"], area:"SW Ledge", port:"Point Judith, RI", hoursAgo:7},
-  {src:"REDDIT",srcName:"r/northeastfishing",snippet:"Bonito and bluefish at the Race. Metal lipped swimmers working.",
-   species:["bonito","bluefish"], area:"The Race", port:"Point Judith, RI", hoursAgo:10},
-  {src:"THT",srcName:"The Hull Truth",snippet:"Yellowfin showing 25nm S of Block. Fleet trolling spreader bars.",
-   species:["yellowfin","mahi"], area:"Block South", port:"Point Judith, RI", hoursAgo:12},
-
-  // ── MONTAUK / LONG ISLAND ──────────────────────────────────────────────
-  {src:"THT",srcName:"The Hull Truth",  snippet:"Tautog and BSB limit at the Montauk wreck. Green crab best.",
-   species:["tautog","blackseabass"], area:"Montauk", port:"Montauk, NY", hoursAgo:4},
-  {src:"FB", srcName:"Montauk Sportfishing", snippet:"BFT 80-200 lbs off Block Island. Live bunker is the play.",
-   species:["bluefin"], area:"Block Island", port:"Montauk, NY", hoursAgo:8},
-  {src:"REDDIT",srcName:"r/northeastfishing", snippet:"YFT picking up at the Butterfish Hole, lots of pods working bait.",
-   species:["yellowfin"], area:"Butterfish Hole", port:"Montauk, NY", hoursAgo:14},
-
-  // ── CAPE MAY / NEW JERSEY ──────────────────────────────────────────────
-  {src:"THT",srcName:"The Hull Truth", snippet:"Bigeye at Spencer Canyon overnight — 200lb fish on the deep drop.",
-   species:["bluefin","yellowfin"], area:"Spencer Canyon", port:"Cape May, NJ", hoursAgo:6},
-  {src:"FB", srcName:"NJ Offshore Fishing", snippet:"Mahi limits at the Lobster Claw. Weed lines holding bait.",
-   species:["mahi"], area:"Lobster Claw", port:"Cape May, NJ", hoursAgo:12},
-  {src:"FORUM",srcName:"NJFishing.com", snippet:"Tilefish bite on the Hudson — 30+ goldens in 8 drops at 600ft.",
-   species:["tilefish"], area:"Hudson Canyon", port:"Cape May, NJ", hoursAgo:20},
-
-  // ── OCEAN CITY MD ──────────────────────────────────────────────────────
-  {src:"THT",srcName:"The Hull Truth", snippet:"White marlin crazy at The Fingers — 15 releases today!",
-   species:["whitemarlin"], area:"The Fingers", port:"Ocean City, MD", hoursAgo:3},
-  {src:"FB", srcName:"OC MD Fishing", snippet:"3 blue marlin at Baltimore Canyon. 79° water and a clean break.",
-   species:["bluemarlin","whitemarlin"], area:"Baltimore Canyon", port:"Ocean City, MD", hoursAgo:7},
-  {src:"CHARTER",srcName:"OC Fishing Center", snippet:"YFT chunked up nicely at Washington Canyon. 60-80lb class.",
-   species:["yellowfin"], area:"Washington Canyon", port:"Ocean City, MD", hoursAgo:18},
-
-  // ── CHINCOTEAGUE / VA ESHORE ───────────────────────────────────────────
-  {src:"FB", srcName:"Chincoteague Fishing", snippet:"Flounder limit on the bay mouth — pinkies and Gulp mullet.",
-   species:["flounder"], area:"Chincoteague Inlet", port:"Chincoteague, VA", hoursAgo:5},
-  {src:"FORUM",srcName:"Eastern Shore Anglers", snippet:"Bluefin in close — 25nm off Wachapreague, fish 50-80lbs.",
-   species:["bluefin"], area:"Wachapreague Offshore", port:"Chincoteague, VA", hoursAgo:9},
-
-  // ── VIRGINIA BEACH ─────────────────────────────────────────────────────
-  {src:"FB", srcName:"Va Beach Sportfishing", snippet:"3 blue marlin at Norfolk Canyon. Mahi on color change 58nm.",
-   species:["bluemarlin","mahi"], area:"Norfolk Canyon", port:"Virginia Beach, VA", hoursAgo:2},
-  {src:"THT",srcName:"The Hull Truth", snippet:"Cobia on nearshore ledges. BSB limit on the 30-mile wreck.",
-   species:["cobia","blackseabass"], area:"Va Beach Nearshore", port:"Virginia Beach, VA", hoursAgo:5},
-  {src:"REDDIT",srcName:"r/FishingNorthCarolina", snippet:"Tilefish bite is on at Washington Canyon walls, 400-500ft.",
-   species:["tilefish"], area:"Washington Canyon", port:"Virginia Beach, VA", hoursAgo:11},
-
-  // ── OREGON INLET ───────────────────────────────────────────────────────
-  {src:"THT",srcName:"The Hull Truth", snippet:"Doubles on BFT + YFT — 38nm SE Oregon Inlet. Fleet staying tomorrow.",
-   species:["bluefin","yellowfin"], area:"Oregon Inlet Offshore", port:"Oregon Inlet, NC", hoursAgo:1},
-  {src:"FB", srcName:"OBX Offshore", snippet:"Wahoo limits at the 100 line SE Oregon Inlet. Pink/white lures, fast troll.",
-   species:["wahoo","yellowfin"], area:"100-fathom line", port:"Oregon Inlet, NC", hoursAgo:4},
-  {src:"CHARTER",srcName:"Pirates Cove Marina", snippet:"Fleet release report: 4 blue marlin, 12 whites, hundreds of mahi.",
-   species:["bluemarlin","whitemarlin","mahi"], area:"Oregon Inlet Offshore", port:"Oregon Inlet, NC", hoursAgo:13},
-  {src:"FORUM",srcName:"Hull Truth NC", snippet:"Sailfish raising lots of fish on the south side of The Point.",
-   species:["sailfish","mahi"], area:"The Point", port:"Oregon Inlet, NC", hoursAgo:22},
-
-  // ── HATTERAS ───────────────────────────────────────────────────────────
-  {src:"FB", srcName:"Hatteras Island Fishing", snippet:"Night sword — 2 bills in 3 drops at Hatteras Hole, 350ft deep.",
-   species:["swordfish"], area:"Hatteras Hole", port:"Hatteras, NC", hoursAgo:2},
-  {src:"THT",srcName:"The Hull Truth", snippet:"Winter BFT close in — boats limiting out 12 miles off Hatteras.",
-   species:["bluefin"], area:"Hatteras Nearshore", port:"Hatteras, NC", hoursAgo:6},
-  {src:"CHARTER",srcName:"Hatteras Harbor Marina", snippet:"YFT bite is on — 40-80lb class at 30-40 fathoms.",
-   species:["yellowfin","blackfin"], area:"Hatteras Shelf", port:"Hatteras, NC", hoursAgo:16},
-
-  // ── MOREHEAD CITY / BIG ROCK ───────────────────────────────────────────
-  {src:"THT",srcName:"The Hull Truth", snippet:"Big Rock bite is ON — 3 blues in the spread this morning!",
-   species:["bluemarlin","whitemarlin"], area:"The Big Rock", port:"Morehead City, NC", hoursAgo:3},
-  {src:"FB", srcName:"Morehead City Sportfishing", snippet:"Cape Lookout grounds producing 50-80lb yellowfin. Pink/white skirts.",
-   species:["yellowfin","mahi"], area:"Cape Lookout", port:"Morehead City, NC", hoursAgo:9},
-  {src:"CHARTER",srcName:"Big Rock Landing", snippet:"Tournament prep: blue marlin moving in with the warm push. 78°F.",
-   species:["bluemarlin","sailfish"], area:"The Big Rock", port:"Morehead City, NC", hoursAgo:24},
-
-  // ── BEAUFORT NC ────────────────────────────────────────────────────────
-  {src:"FB", srcName:"Beaufort NC Fishing", snippet:"Cobia run is on — sight casting in 15-25ft. Live eels are gold.",
-   species:["cobia"], area:"Beaufort Inlet", port:"Morehead City, NC", hoursAgo:7},
-  {src:"REDDIT",srcName:"r/FishingNorthCarolina", snippet:"Sheepshead and BSB on the nearshore reefs. Fiddlers working.",
-   species:["sheepshead","blackseabass"], area:"Beaufort Nearshore", port:"Morehead City, NC", hoursAgo:15},
-
-  // ── OAK ISLAND / SOUTHPORT ─────────────────────────────────────────────
-  {src:"FB", srcName:"Oak Island Fishing", snippet:"Mahi schools 30nm out. Weedlines holding fish 5-20lb class.",
-   species:["mahi","blackfin"], area:"Frying Pan Tower", port:"Oak Island, NC", hoursAgo:6},
-  {src:"FORUM",srcName:"Southport Reports", snippet:"King mackerel on the artificial reefs. Live menhaden.",
-   species:["mahi","king"], area:"AR-410", port:"Oak Island, NC", hoursAgo:11},
-
-  // ── MYRTLE BEACH / MURRELLS INLET SC ───────────────────────────────────
-  {src:"FB", srcName:"Murrells Inlet Reports", snippet:"Redfish slot limit on the inlets. Topwater at first light.",
-   species:["redfish","flounder"], area:"Murrells Inlet", port:"Murrells Inlet, SC", hoursAgo:8},
-  {src:"CHARTER",srcName:"MI Charter Fleet", snippet:"Spanish mackerel and king mackerel just off the jetty rocks. Live bait on planers.",
-   species:["spanishmack","kingmack"], area:"Murrells Inlet Jetty", port:"Murrells Inlet, SC", hoursAgo:5},
-  {src:"CHARTER",srcName:"MB Charter Fleet", snippet:"BSB and triggerfish limit on the 90-foot bottom. Squid working.",
-   species:["blackseabass"], area:"MB Nearshore", port:"Myrtle Beach, SC", hoursAgo:18},
-
-  // ── CHARLESTON SC ──────────────────────────────────────────────────────
-  {src:"THT",srcName:"The Hull Truth", snippet:"Charleston Bump producing wahoo and blackfin. Trolling 12kt.",
-   species:["wahoo","blackfin"], area:"Charleston Bump", port:"Charleston, SC", hoursAgo:5},
-  {src:"FB", srcName:"Charleston Sportfishing", snippet:"Sailfish raising at Edisto. 78° water close in.",
-   species:["sailfish","mahi"], area:"Edisto Offshore", port:"Charleston, SC", hoursAgo:10},
-  {src:"REDDIT",srcName:"r/SouthCarolina_Fishing", snippet:"Sheepshead on the jetties. Fiddler crabs at low tide.",
-   species:["sheepshead","redfish"], area:"Charleston Jetties", port:"Charleston, SC", hoursAgo:20},
-
-  // ── SAVANNAH GA / GEORGIA COAST ────────────────────────────────────────
-  {src:"FB", srcName:"Savannah Saltwater", snippet:"Tripletail floating the channel markers. Sight-fishing with shrimp.",
-   species:["tripletail","redfish"], area:"Wassaw Sound", port:"Savannah, GA", hoursAgo:6},
-  {src:"CHARTER",srcName:"GA Coast Charters", snippet:"Kings and Spanish on the artificial reefs. Greenies on the dredge.",
-   species:["kingmack","spanishmack"], area:"GA Artificial Reef", port:"Savannah, GA", hoursAgo:11},
-
-  // ── JACKSONVILLE FL ────────────────────────────────────────────────────
-  {src:"FB", srcName:"Jax Offshore", snippet:"Kingfish blitz at 21 Fathom. Cigar minnows on planers.",
-   species:["kingmack","spanishmack"], area:"21 Fathom Ledge", port:"Jacksonville, FL", hoursAgo:4},
-  {src:"REDDIT",srcName:"r/JaxFishing", snippet:"Redfish on the jetties at incoming tide. Cut mullet doing work.",
-   species:["redfish","flounder"], area:"Jax Jetties", port:"Jacksonville, FL", hoursAgo:9},
-
-  // ── ST. AUGUSTINE FL ───────────────────────────────────────────────────
-  {src:"CHARTER",srcName:"St. Aug Charter", snippet:"Bottom dropping limit of mangroves and lanes. 100ft to 140ft.",
-   species:["snapper","muttonsnap","lanesnap"], area:"St. Aug Ledges", port:"St. Augustine, FL", hoursAgo:7},
-  {src:"FB", srcName:"NE FL Anglers", snippet:"Sheepshead loaded on the bridge pilings. Fiddler crabs only.",
-   species:["sheepshead"], area:"Vilano Bridge", port:"St. Augustine, FL", hoursAgo:14},
-
-  // ── DAYTONA BEACH FL ───────────────────────────────────────────────────
-  {src:"FB", srcName:"Daytona Surfcasting", snippet:"Pompano and whiting in the suds. Sand fleas the ticket.",
-   species:["pompano"], area:"Daytona Surf", port:"Daytona Beach, FL", hoursAgo:5},
-  {src:"CHARTER",srcName:"Daytona Charter", snippet:"Cobia following rays inshore. Pitching jigs to the boils.",
-   species:["cobia"], area:"Ponce Inlet", port:"Daytona Beach, FL", hoursAgo:9},
-
-  // ── PORT CANAVERAL FL ──────────────────────────────────────────────────
-  {src:"CHARTER",srcName:"Canaveral Charter Fleet", snippet:"Mahi schools at the Pelican Flats. Live pilchards and bonita strips.",
-   species:["mahi","wahoo"], area:"Pelican Flats", port:"Port Canaveral, FL", hoursAgo:3},
-  {src:"FB", srcName:"Indian River Anglers", snippet:"Snook tearing up the docklights at night. Live shrimp on jigheads.",
-   species:["snook","redfish"], area:"Indian River Lagoon", port:"Port Canaveral, FL", hoursAgo:6},
-  {src:"THT",srcName:"The Hull Truth", snippet:"Sailfish flagged up at 8A. Trolling ballyhoo with dredges.",
-   species:["sailfish"], area:"8A Reef", port:"Port Canaveral, FL", hoursAgo:12},
-
-  // ── STUART FL / TREASURE COAST ─────────────────────────────────────────
-  {src:"CHARTER",srcName:"Stuart Sailfish Charter", snippet:"Sailfish capital living up to the name. 5-8 release days this week.",
-   species:["sailfish","mahi"], area:"Push Button Hill", port:"Stuart, FL", hoursAgo:4},
-  {src:"FB", srcName:"Treasure Coast Inshore", snippet:"Snook stacked at the St. Lucie spillway. Topwater at first light.",
-   species:["snook","tarpon"], area:"St. Lucie Inlet", port:"Stuart, FL", hoursAgo:8},
-
-  // ── PALM BEACH FL ──────────────────────────────────────────────────────
-  {src:"CHARTER",srcName:"PB Charter Fleet", snippet:"Sailfish kite-fishing on the lobster grounds. Live goggles tipping rods.",
-   species:["sailfish","mahi"], area:"Lobster Grounds", port:"Palm Beach, FL", hoursAgo:5},
-  {src:"FB", srcName:"Palm Beach Inshore", snippet:"Tarpon migration in full swing on the beach. Live mullet schools all over.",
-   species:["tarpon","snook"], area:"PB Beach Migration", port:"Palm Beach, FL", hoursAgo:10},
-
-  // ── FORT LAUDERDALE FL ─────────────────────────────────────────────────
-  {src:"CHARTER",srcName:"Fort Lauderdale Charter", snippet:"Wahoo high-speed trolling on the Outer Edge. 50-60lb fish coming in.",
-   species:["wahoo","mahi"], area:"Outer Edge Wall", port:"Fort Lauderdale, FL", hoursAgo:6},
-  {src:"FB", srcName:"Lauderdale Snook Club", snippet:"Big snook at Hillsboro Inlet on outgoing. Live croakers.",
-   species:["snook","tarpon"], area:"Hillsboro Inlet", port:"Fort Lauderdale, FL", hoursAgo:11},
-
-  // ── MIAMI FL ───────────────────────────────────────────────────────────
-  {src:"CHARTER",srcName:"Miami Charter Fleet", snippet:"Sailfish kite-fishing on the Cliff. Goggle eyes and threadfins.",
-   species:["sailfish","mahi","kingmack"], area:"The Cliff", port:"Miami, FL", hoursAgo:5},
-  {src:"FB", srcName:"Miami Inshore Anglers", snippet:"Tarpon on the flats at Government Cut. Live mullet at first light.",
-   species:["tarpon","snook"], area:"Government Cut", port:"Miami, FL", hoursAgo:8},
-  {src:"THT",srcName:"The Hull Truth", snippet:"Yellowtail and mutton snappers on the patch reefs. Chum slick and live shrimp.",
-   species:["yellowtail","muttonsnap"], area:"Miami Patch Reefs", port:"Miami, FL", hoursAgo:15},
-
-  // ── FLORIDA KEYS — ISLAMORADA / MARATHON / KEY WEST ────────────────────
-  {src:"CHARTER",srcName:"Islamorada Backcountry", snippet:"Bonefish on the flats at first light. Sight-fishing with crab patterns.",
-   species:["bonefish","permit"], area:"Islamorada Flats", port:"Islamorada, FL", hoursAgo:4},
-  {src:"FB", srcName:"Keys Sportfishing", snippet:"Tarpon migration thick at Channel 2. Live crabs on outgoing tide.",
-   species:["tarpon","permit"], area:"Channel 2 Bridge", port:"Islamorada, FL", hoursAgo:7},
-  {src:"CHARTER",srcName:"Marathon Charter", snippet:"Yellowtail snapper limit on the humps. Chum and live shrimp.",
-   species:["yellowtail","muttonsnap","ceromack"], area:"The Humps", port:"Marathon, FL", hoursAgo:6},
-  {src:"FB", srcName:"Middle Keys Anglers", snippet:"Permit tailing on the flats north of Marathon. 25lb class fish.",
-   species:["permit","bonefish"], area:"Bahia Honda Flats", port:"Marathon, FL", hoursAgo:9},
-  {src:"CHARTER",srcName:"Key West Sportfishing", snippet:"Sailfish and mahi on the wall. Live pilchards and ballyhoo combo.",
-   species:["sailfish","mahi","ceromack"], area:"Key West Wall", port:"Key West, FL", hoursAgo:3},
-  {src:"FB", srcName:"KW Flats Fishing", snippet:"Bonefish and permit at the Marquesas. Sight casting all morning.",
-   species:["bonefish","permit","tarpon"], area:"Marquesas Flats", port:"Key West, FL", hoursAgo:12},
-
-  // ── FLORIDA GULF — NAPLES / FORT MYERS / SARASOTA ──────────────────────
-  {src:"FB", srcName:"Naples Inshore", snippet:"Snook stacked at the passes. Live pinfish on outgoing tide.",
-   species:["snook","redfish"], area:"Wiggins Pass", port:"Naples, FL", hoursAgo:5},
-  {src:"CHARTER",srcName:"Naples Charter", snippet:"Mangrove snapper and gag grouper on the artificial reefs. 60ft of water.",
-   species:["snapper","gaggrouper"], area:"Naples Nearshore Reefs", port:"Naples, FL", hoursAgo:10},
-  {src:"FB", srcName:"Fort Myers Inshore", snippet:"Tarpon rolling in Boca Grande Pass. Crabs on outgoing tide.",
-   species:["tarpon","snook"], area:"Boca Grande Pass", port:"Fort Myers, FL", hoursAgo:4},
-  {src:"CHARTER",srcName:"FM Charter Fleet", snippet:"Redfish and snook in the mangroves. Cut bait and topwater.",
-   species:["redfish","snook"], area:"Pine Island Sound", port:"Fort Myers, FL", hoursAgo:8},
-  {src:"FB", srcName:"Sarasota Inshore", snippet:"Tarpon migration on Lido Key beach. Crabs and ladyfish.",
-   species:["tarpon","snook"], area:"Lido Key Beach", port:"Sarasota, FL", hoursAgo:6},
-  {src:"REDDIT",srcName:"r/SarasotaFishing", snippet:"Spanish mackerel blitz on Big Pass. Gotcha plugs.",
-   species:["spanishmack","kingmack"], area:"Big Pass", port:"Sarasota, FL", hoursAgo:11},
-
-  // ── TAMPA BAY FL ───────────────────────────────────────────────────────
-  {src:"FB", srcName:"Tampa Bay Snook", snippet:"Snook lit up on the docklights. Live shrimp on jigheads.",
-   species:["snook","redfish"], area:"Tampa Bay Docks", port:"Tampa Bay, FL", hoursAgo:3},
-  {src:"CHARTER",srcName:"TB Charter", snippet:"Tarpon rolling at Skyway Bridge pilings. Threadfin herring on circle hooks.",
-   species:["tarpon"], area:"Skyway Pilings", port:"Tampa Bay, FL", hoursAgo:7},
-
-  // ── CRYSTAL RIVER / STEINHATCHEE / CEDAR KEY FL ────────────────────────
-  {src:"FB", srcName:"Big Bend Anglers", snippet:"Redfish and trout on the flats. Topwater at sunrise, jigs after.",
-   species:["redfish"], area:"Crystal River Flats", port:"Crystal River, FL", hoursAgo:5},
-  {src:"FB", srcName:"Steinhatchee Fishing", snippet:"Gag grouper opening day limits. Live pinfish on the rockpiles.",
-   species:["gaggrouper","snapper"], area:"Steinhatchee Reefs", port:"Steinhatchee, FL", hoursAgo:8},
-  {src:"CHARTER",srcName:"Cedar Key Charter", snippet:"Tripletail floating crab traps. Sight-cast and toss a shrimp.",
-   species:["tripletail","redfish"], area:"Cedar Key Crab Traps", port:"Cedar Key, FL", hoursAgo:10},
-
-  // ── APALACHICOLA / PANAMA CITY / DESTIN / PENSACOLA FL PANHANDLE ───────
-  {src:"FB", srcName:"Apalach Anglers", snippet:"Pompano on the beach. Sand fleas and Fishbites.",
-   species:["pompano"], area:"Cape San Blas", port:"Apalachicola, FL", hoursAgo:6},
-  {src:"CHARTER",srcName:"PC Charter Fleet", snippet:"Red snapper limits on the Liberty Ship. Squid and cigars working.",
-   species:["snapper","gaggrouper"], area:"Liberty Ship Wreck", port:"Panama City, FL", hoursAgo:4},
-  {src:"THT",srcName:"The Hull Truth", snippet:"Cobia migration on the beach. Sight-fishing from towers.",
-   species:["cobia"], area:"PC Beach", port:"Panama City, FL", hoursAgo:9},
-  {src:"CHARTER",srcName:"Destin Charter", snippet:"Mahi and blackfin at the Edge. 100lb wahoo released today.",
-   species:["mahi","wahoo","blackfin"], area:"The Edge", port:"Destin, FL", hoursAgo:5},
-  {src:"FB", srcName:"Destin Offshore", snippet:"Bluefin reports from Desoto Canyon. Giants on the topo lines.",
-   species:["bluefin","yellowfin"], area:"Desoto Canyon", port:"Destin, FL", hoursAgo:12},
-  {src:"CHARTER",srcName:"Pensacola Sportfishing", snippet:"Wahoo and mahi at the 131. High-speed trolling.",
-   species:["wahoo","mahi"], area:"131 Hole", port:"Pensacola, FL", hoursAgo:6},
-  {src:"FB", srcName:"P-Cola Inshore", snippet:"Spanish mackerel and bluefish at the Bob Sikes Bridge. Gotchas.",
-   species:["spanishmack","bluefish"], area:"Bob Sikes Bridge", port:"Pensacola, FL", hoursAgo:11},
-
-  // ── ALABAMA / DAUPHIN ISLAND ───────────────────────────────────────────
-  {src:"FB", srcName:"Dauphin Anglers", snippet:"Speckled trout and redfish in the marsh. Live shrimp under corks.",
-   species:["redfish"], area:"Mobile Bay Marsh", port:"Dauphin Island, AL", hoursAgo:5},
-  {src:"CHARTER",srcName:"AL Gulf Charter", snippet:"Red snapper and gag grouper limits on the rigs. 90-130ft.",
-   species:["snapper","gaggrouper","amberjack"], area:"AL Rigs", port:"Dauphin Island, AL", hoursAgo:8},
-
-  // ── MISSISSIPPI / BILOXI ───────────────────────────────────────────────
-  {src:"FB", srcName:"MS Coast Anglers", snippet:"Speckled trout and reds in Biloxi Bay. Live shrimp at first light.",
-   species:["redfish"], area:"Biloxi Bay", port:"Biloxi, MS", hoursAgo:6},
-  {src:"CHARTER",srcName:"Biloxi Charter", snippet:"Cobia and king mackerel at the Chandeleur Islands. Live menhaden.",
-   species:["cobia","kingmack"], area:"Chandeleur Islands", port:"Biloxi, MS", hoursAgo:11},
-
-  // ── LOUISIANA — VENICE / GRAND ISLE / HOUMA / CAMERON ──────────────────
-  {src:"THT",srcName:"The Hull Truth", snippet:"Yellowfin at the Midnight Lump. Slow trolling Spanish sardines.",
-   species:["yellowfin","blackfin","mahi"], area:"Midnight Lump", port:"Venice, LA", hoursAgo:3},
-  {src:"CHARTER",srcName:"Venice Charter", snippet:"Giant bluefin reports from the canyon. Live bonita and skipjack.",
-   species:["bluefin","yellowfin"], area:"Mississippi Canyon", port:"Venice, LA", hoursAgo:7},
-  {src:"FB", srcName:"Grand Isle Inshore", snippet:"Bull reds and big trout in the marsh. Topwater on the points.",
-   species:["redfish"], area:"GI Marsh", port:"Grand Isle, LA", hoursAgo:5},
-  {src:"CHARTER",srcName:"Grand Isle Charter", snippet:"Tuna at the rigs. Live hardtails and chunking working.",
-   species:["yellowfin","blackfin"], area:"Grand Isle Rigs", port:"Grand Isle, LA", hoursAgo:9},
-  {src:"FB", srcName:"Houma Outdoors", snippet:"Redfish stacked in the bayous. Gold spoons and soft plastics.",
-   species:["redfish"], area:"Terrebonne Bayou", port:"Houma, LA", hoursAgo:8},
-  {src:"FB", srcName:"Cameron Fishing", snippet:"Cobia and kings on the Texas-Louisiana rigs. Live menhaden.",
-   species:["cobia","kingmack","redfish"], area:"Cameron Rigs", port:"Cameron, LA", hoursAgo:14},
-  {src:"FB", srcName:"Lake Charles Anglers", snippet:"Trout and reds on the Calcasieu jetties. Live shrimp.",
-   species:["redfish"], area:"Calcasieu Jetties", port:"Lake Charles, LA", hoursAgo:10},
-
-  // ── TEXAS GULF — SABINE PASS / GALVESTON / FREEPORT / MATAGORDA ────────
-  {src:"FB", srcName:"Sabine Lake Fishing", snippet:"Trout and reds on the Texas-LA border. Soft plastics on jigheads.",
-   species:["redfish"], area:"Sabine Pass", port:"Sabine Pass, TX", hoursAgo:6},
-  {src:"CHARTER",srcName:"Galveston Charter Fleet", snippet:"Red snapper limit at the V.A. Fogg wreck. Squid and cigars.",
-   species:["snapper","gaggrouper","amberjack"], area:"V.A. Fogg Wreck", port:"Galveston, TX", hoursAgo:5},
-  {src:"THT",srcName:"The Hull Truth", snippet:"Bluefin reports from East Breaks. Big bait on the offshore current.",
-   species:["bluefin","yellowfin","wahoo"], area:"East Breaks", port:"Galveston, TX", hoursAgo:10},
-  {src:"FB", srcName:"Freeport Anglers", snippet:"Tarpon migration on the beach. Live mullet and big topwaters.",
-   species:["tarpon","kingmack"], area:"Freeport Beach", port:"Freeport, TX", hoursAgo:7},
-  {src:"FB", srcName:"Matagorda Bay Anglers", snippet:"Trout limits on the East Bay reefs. Topwater at sunrise.",
-   species:["redfish"], area:"East Matagorda Bay", port:"Matagorda, TX", hoursAgo:9},
-
-  // ── PORT O'CONNOR / PORT ARANSAS TX ────────────────────────────────────
-  {src:"FB", srcName:"Port O'Connor Inshore", snippet:"Redfish tailing on the flats. Sight-casting with topwaters.",
-   species:["redfish"], area:"POC Flats", port:"Port O'Connor, TX", hoursAgo:5},
-  {src:"CHARTER",srcName:"PA Charter", snippet:"Kings and ling at the jetties. Live menhaden under floats.",
-   species:["kingmack","cobia"], area:"Aransas Pass Jetties", port:"Port Aransas, TX", hoursAgo:8},
-  {src:"THT",srcName:"The Hull Truth", snippet:"Yellowfin tuna at the Lighthouse Lumps. 50-150lb class.",
-   species:["yellowfin","mahi","wahoo"], area:"Lighthouse Lumps", port:"Port Aransas, TX", hoursAgo:13},
-  // ── LONG ISLAND SOUTH SHORE (Long Beach / Freeport, NY) ───────────────
-  {src:"FORUM",srcName:"NY Angler",     snippet:"Sea bass and porgy stacked on Cholera Bank. Clams and squid strips doing work.",
-   species:["blackseabass","bluefish"], area:"Cholera Bank", port:"Long Beach, NY", hoursAgo:6},
-  {src:"FB",   srcName:"Long Beach Surf & Boat",snippet:"Fluke bite picking up on the Mud Hole drift. Bucktail and squid.",
-   species:["flounder"], area:"The Mud Hole", port:"Long Beach, NY", hoursAgo:11},
-  {src:"REDDIT",srcName:"r/SaltwaterFishing",snippet:"Bass blitz inside Jones Inlet at first light — bunker schools getting crushed.",
-   species:["striper","bluefish"], area:"Jones Inlet", port:"Long Beach, NY", hoursAgo:4},
-  {src:"THT", srcName:"The Hull Truth", snippet:"Tog and sea bass holding tight on the Atlantic Beach Reef. Green crabs.",
-   species:["tautog","blackseabass"], area:"Atlantic Beach Reef", port:"Freeport, NY", hoursAgo:7},
-  {src:"FB",  srcName:"Freeport Fishing",snippet:"Bonito and albies showing off Jones on the troll — Deadly Dicks and small spoons.",
-   species:["bonito","falsealbacore","bluefish"], area:"South Shore", port:"Freeport, NY", hoursAgo:5},
-  // ── CENTRAL NJ (Toms River / Barnegat) ────────────────────────────────
-  {src:"FORUM",srcName:"NJ Fishing",    snippet:"Albies and bonito blowing up on Barnegat Ridge. Epoxy jigs and small metals.",
-   species:["bonito","falsealbacore","bluefish"], area:"Barnegat Ridge", port:"Toms River, NJ", hoursAgo:3},
-  {src:"FB",   srcName:"Barnegat Bay Anglers",snippet:"Tog limit on the Garden State North Reef. Whitelegger crabs.",
-   species:["tautog","blackseabass"], area:"Garden State North Reef", port:"Toms River, NJ", hoursAgo:9},
-  {src:"THT",  srcName:"The Hull Truth", snippet:"Cod showing on the Triple Wrecks off Barnegat. Clams on the high-lows.",
-   species:["cod","blackseabass"], area:"Barnegat Triple Wrecks", port:"Toms River, NJ", hoursAgo:14},
-  // ── ATLANTIC CITY, NJ ─────────────────────────────────────────────────
-  {src:"FB",   srcName:"Atlantic City Fishing",snippet:"Sea bass wide open on the AC Reef. Limits of keepers, plenty of throwbacks.",
-   species:["blackseabass","tautog"], area:"Atlantic City Reef", port:"Atlantic City, NJ", hoursAgo:5},
-  {src:"FORUM",srcName:"NJ Saltwater",  snippet:"Fluke and sea bass on the Little Egg Reef edges. Gulp and squid.",
-   species:["flounder","blackseabass"], area:"Little Egg Reef", port:"Atlantic City, NJ", hoursAgo:10},
-  {src:"THT",  srcName:"The Hull Truth", snippet:"Bluefin chunking on the Lobster Claw — 50-80in fish on the troll first, then bait.",
-   species:["bluefin","yellowfin"], area:"Lobster Claw", port:"Atlantic City, NJ", hoursAgo:8},
-  // ── BRUNSWICK, GA ─────────────────────────────────────────────────────
-  {src:"FORUM",srcName:"GA Bottom Bouncers",snippet:"Red snapper and B-liners thick on the 40 Mile Bottom. Cut bait and jigs.",
-   species:["snapper","vermilion","gaggrouper"], area:"Brunswick Snapper Banks", port:"Brunswick, GA", hoursAgo:6},
-  {src:"FB",   srcName:"Golden Isles Fishing",snippet:"Big AJ and gag on the deeper live bottom. Live pinfish getting bit.",
-   species:["amberjack","gaggrouper"], area:"40 Mile Bottom", port:"Brunswick, GA", hoursAgo:12},
-  {src:"REDDIT",srcName:"r/GeorgiaFishing",snippet:"Wahoo and mahi on the trolling edge way out east. High-speed lures.",
-   species:["wahoo","mahi","blackfin"], area:"SE Georgia Edge", port:"Brunswick, GA", hoursAgo:9},
-  // ── MELBOURNE, FL ─────────────────────────────────────────────────────
-  {src:"FB",   srcName:"Space Coast Fishing",snippet:"Cobia cruising the nearshore reefs off Melbourne. Sight-casting bucktails.",
-   species:["cobia","snapper"], area:"Pelican Flats", port:"Melbourne, FL", hoursAgo:4},
-  {src:"FORUM",srcName:"FL Sportsman",  snippet:"Mutton and mangrove snapper on the 21-fathom ledge. Live bait on the bottom.",
-   species:["muttonsnap","snapper","gaggrouper"], area:"21-Fathom Ledge", port:"Melbourne, FL", hoursAgo:8},
-  {src:"THT",  srcName:"The Hull Truth", snippet:"Sailfish and mahi out on the troll east of the Space Coast. Ballyhoo spreads.",
-   species:["sailfish","mahi","blackfin"], area:"Offshore Troll", port:"Melbourne, FL", hoursAgo:7},
-  // ── VERO BEACH, FL ────────────────────────────────────────────────────
-  {src:"FB",   srcName:"Treasure Coast Fishing",snippet:"Snapper and sheepshead loaded on the 8A reef off Sebastian. Shrimp and crabs.",
-   species:["snapper","sheepshead","flounder"], area:"8A Reef", port:"Vero Beach, FL", hoursAgo:5},
-  {src:"FORUM",srcName:"FL Sportsman",  snippet:"Kings and Spanish thick over Bethel Shoal. Slow-trolled ribbonfish.",
-   species:["kingmack","spanishmack","cobia"], area:"Bethel Shoal", port:"Vero Beach, FL", hoursAgo:9},
-  {src:"REDDIT",srcName:"r/FloridaFishing",snippet:"Sails free-jumping on the troll out of Fort Pierce/Vero. Kite baits getting eaten.",
-   species:["sailfish","mahi","wahoo"], area:"Offshore Troll", port:"Vero Beach, FL", hoursAgo:6},
-  // ── CLEARWATER, FL ────────────────────────────────────────────────────
-  {src:"FB",   srcName:"Tampa Bay Fishing",snippet:"Gags and mangroves on the nearshore hardbottom off Clearwater. Threadfins.",
-   species:["gaggrouper","snapper","hogfish"], area:"Clearwater Hardbottom", port:"Clearwater, FL", hoursAgo:5},
-  {src:"FORUM",srcName:"Florida Sportsman West",snippet:"Hogfish and lane snapper biting on the deeper ledges. Live shrimp.",
-   species:["hogfish","snapper","gaggrouper"], area:"Clearwater Ledges", port:"Clearwater, FL", hoursAgo:10},
-  {src:"THT",  srcName:"The Hull Truth", snippet:"Long run to the Elbow paid off — gag and red grouper plus AJ on the deep rock.",
-   species:["gaggrouper","amberjack","vermilion"], area:"The Elbow", port:"Clearwater, FL", hoursAgo:16},
-  // ── VENICE, FL ────────────────────────────────────────────────────────
-  {src:"FB",   srcName:"Venice FL Fishing",snippet:"Mangrove snapper and Spanish on the nearshore reefs off Venice Inlet. Sardines.",
-   species:["snapper","spanishmack","cobia"], area:"Venice Nearshore Reefs", port:"Venice, FL", hoursAgo:4},
-  {src:"FORUM",srcName:"SW FL Anglers", snippet:"Red and gag grouper on the offshore live bottom. Slow-pitch jigs working.",
-   species:["gaggrouper","snapper","amberjack"], area:"Venice Live Bottom", port:"Venice, FL", hoursAgo:11},
-  {src:"REDDIT",srcName:"r/FloridaFishing",snippet:"Cobia behind the rays along the Venice beaches. Sight-fishing jigs.",
-   species:["cobia","kingmack"], area:"Venice Beaches", port:"Venice, FL", hoursAgo:7}
+// ════════════════════════════════════════════════════════════════════════════
+// COMMUNITY FISHING REPORTS (first-party forum)
+// ────────────────────────────────────────────────────────────────────────────
+// REAL user-posted reports only — the old scraped/synthetic feed is gone. Reports
+// are loaded DE-IDENTIFIED from Supabase (BW_AUTH.fetchReports → the public view:
+// no user_id/PII, hashed handle, coords rounded ~6nm) into SOCIAL, in a shape the
+// rest of the app already understands. The reports factor (reportsBoost) reads the
+// real lat/lng + recency + species from these.
+// ════════════════════════════════════════════════════════════════════════════
+const REGIONS = [
+  { id: "new_england", label: "New England" },
+  { id: "mid_atlantic", label: "Mid-Atlantic" },
+  { id: "southeast",    label: "Southeast" },
+  { id: "gulf",         label: "Gulf" },
 ];
+const REGION_LABELS = Object.fromEntries(REGIONS.map(r => [r.id, r.label]));
+
+// Coarse US East + Gulf region from coordinates (defaults the post region).
+function regionFor(lat, lng){
+  if(lat == null || lng == null || !isFinite(lat) || !isFinite(lng)) return null;
+  if(lng < -81.5 && lat < 31) return "gulf";     // FL Gulf coast, AL, MS, LA, TX
+  if(lat >= 40.5) return "new_england";           // ~NY/CT through ME
+  if(lat >= 36.5) return "mid_atlantic";          // NJ, DE, MD, VA
+  return "southeast";                             // NC, SC, GA, FL Atlantic
+}
+
+// Live community reports (empty until users post; populated from the backend).
+let SOCIAL = [];
+
+// Map a de-identified public report row into the app's internal report shape.
+function mapReport(r){
+  return {
+    id: r.id,
+    region: r.region,
+    species: r.species ? [r.species] : [],
+    area: REGION_LABELS[r.region] || r.region,
+    port: null,
+    lat: (r.lat == null ? null : r.lat),
+    lng: (r.lng == null ? null : r.lng),
+    hoursAgo: r.created_at ? Math.max(0, (Date.now() - new Date(r.created_at).getTime()) / 3600000) : 999,
+    src: "USER",
+    srcName: r.handle || "Angler",
+    snippet: r.body || "",
+    createdAt: r.created_at,
+  };
+}
+
+// Load recent community reports (de-identified) into SOCIAL; refresh dependent UI.
+let _reportsLoading = false;
+async function loadReports(){
+  if(_reportsLoading) return;
+  if(typeof window === "undefined" || !window.BW_AUTH || !window.BW_AUTH.fetchReports) return;
+  _reportsLoading = true;
+  try {
+    const rows = await window.BW_AUTH.fetchReports({ sinceDays: 21, limit: 400 });
+    SOCIAL = (rows || []).map(mapReport);
+    const ov = document.getElementById("rp-overlay");
+    if(typeof rpRender === "function" && ov && ov.style.display === "block") rpRender();
+    if(typeof drawPrediction === "function" && typeof activeSpId !== "undefined" && activeSpId && activeSpId !== "all" && typeof activePort !== "undefined" && activePort){
+      drawPrediction();
+    }
+  } catch(e){ console.warn("loadReports failed", e); }
+  finally { _reportsLoading = false; }
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // STATE
@@ -4902,79 +4607,28 @@ function thermalBreak(lat, lng){
 
 // Reports proximity boost — looks at SOCIAL feed if recent posts mention nearby canyons/spots
 function reportsBoost(lat, lng, speciesId){
-  if(typeof SOCIAL === "undefined") return 0;
+  // Real first-party community reports only (SOCIAL is loaded de-identified from
+  // the backend). Only reports that include an approximate location move the score;
+  // region-only forum chatter shows in the forum but carries no spatial signal.
+  if(!Array.isArray(SOCIAL) || !SOCIAL.length) return 0;
   let boost = 0;
-  const recentPosts = SOCIAL.slice(0, 20);
-
-  // Better-than-port-resolution lookup. When a report mentions a specific
-  // canyon or bank, we know the fish were 50-100nm offshore from the port,
-  // not at the dock. So canyon names give us a much more accurate location
-  // than just using the port's lat/lng. If the area isn't recognized, we
-  // fall back to the port location.
-  const knownAreas = {
-    // Mid-Atlantic canyons
-    "Hudson Canyon":     {lat:39.66, lng:-72.47},
-    "Wilmington Canyon": {lat:38.51, lng:-73.50},
-    "Baltimore Canyon":  {lat:38.16, lng:-73.84},
-    "Norfolk Canyon":    {lat:37.09, lng:-74.69},
-    "Hatteras Canyon":   {lat:35.35, lng:-74.92},
-    "The Big Rock":      {lat:34.25, lng:-76.00},
-    // New England structure
-    "Jeffrey's Ledge":   {lat:42.92, lng:-70.20},
-    "Stellwagen Bank":   {lat:42.30, lng:-70.30},
-    "Stellwagen":        {lat:42.30, lng:-70.30},
-    "Cape Ann":          {lat:42.65, lng:-70.55},
-    "Block Island":      {lat:41.10, lng:-71.55},
-    "The Mud Hole":      {lat:40.10, lng:-73.55},
-    "Tillies Bank":      {lat:43.00, lng:-69.85},
-    // Mid-Atlantic inshore
-    "CBBT":              {lat:36.95, lng:-76.05},
-    "Chesapeake Bay":    {lat:37.50, lng:-76.20},
-    "Piscataqua River":  {lat:43.07, lng:-70.74},
-    // Southeast
-    "The Steeples":      {lat:32.20, lng:-79.50},
-    "Charleston Bump":   {lat:31.50, lng:-79.50},
-    // Gulf canyons
-    "Mississippi Canyon": {lat:28.50, lng:-88.50},
-    "Desoto Canyon":     {lat:29.00, lng:-86.30},
-    "East Breaks":       {lat:27.50, lng:-94.50},
-    "Midnight Lump":     {lat:28.85, lng:-89.65},
-  };
-
-  recentPosts.forEach(p => {
-    if(!p.species || !p.species.includes(speciesId)) return;
-    // Resolve a location: prefer specific area name (more accurate), fall
-    // back to the report's port (always works, less precise).
-    let refLat, refLng;
-    const area = p.area ? knownAreas[p.area] : null;
-    if(area){
-      refLat = area.lat;
-      refLng = area.lng;
-    } else if(p.port && typeof PORTS !== "undefined" && PORTS[p.port]){
-      refLat = PORTS[p.port].lat;
-      refLng = PORTS[p.port].lng;
-    } else {
-      return;  // Can't resolve location → can't contribute
-    }
-    // ── Recency decay ──
-    // Exponential decay with ~8.3hr half-life. A 2-hr-old report carries full
-    // weight; a 12-hr-old report drops to ~37%; a 24-hr-old report to ~14%.
-    // Yesterday's bite is much less actionable than this morning's for a
-    // same-day fishing decision.
-    const hoursAgo = (typeof p.hoursAgo === "number") ? p.hoursAgo : 12;
+  for(const p of SOCIAL){
+    if(p.lat == null || p.lng == null) continue;
+    // Species match when the post specifies a species; species-less posts apply to all.
+    if(p.species && p.species.length && speciesId && !p.species.includes(speciesId)) continue;
+    // ── Recency decay (~8.3hr half-life): 2h ≈ full, 12h ≈ 37%, 24h ≈ 14%. ──
+    const hoursAgo = (typeof p.hoursAgo === "number") ? p.hoursAgo : 999;
+    if(hoursAgo > 72) continue;  // older than 3 days: no longer actionable
     const recency = Math.exp(-hoursAgo / 12);
-    // Proper great-circle distance in nautical miles (was raw degree distance
-    // before — degrees of longitude shrink with latitude so the old math was
-    // wrong, especially in New England).
     const distNm = (typeof nmBetween === "function")
-      ? nmBetween(lat, lng, refLat, refLng)
-      : Math.sqrt((refLat-lat)**2 + (refLng-lng)**2) * 60;  // fallback ~nm
+      ? nmBetween(lat, lng, p.lat, p.lng)
+      : Math.sqrt((p.lat-lat)**2 + (p.lng-lng)**2) * 60;  // fallback ~nm
     let contribution = 0;
-    if(distNm < 24) contribution = 0.20;       // ~0.4° at most latitudes
-    else if(distNm < 48) contribution = 0.10;  // ~0.8°
-    else if(distNm < 90) contribution = 0.05;  // ~1.5°
+    if(distNm < 24) contribution = 0.20;
+    else if(distNm < 48) contribution = 0.10;
+    else if(distNm < 90) contribution = 0.05;
     boost += contribution * recency;
-  });
+  }
   return Math.min(boost, 0.35);
 }
 
@@ -5194,8 +4848,11 @@ function getWindField(lat, lng, timeMs){
   const v = speedMs * Math.cos(toRad(dirTo));   // north component
   return { u, v, speedKts, dirDeg: dirFrom };
 }
-function windScore(lat, lng, speciesPrefs){
-  const windDir = synthWindDir();
+function windScore(lat, lng, speciesPrefs, windDir){
+  // windDir is the REAL wind direction (degrees FROM) from the nearest NDBC buoy,
+  // passed in from the ocean field. No real observation → neutral (we never
+  // synthesize a direction).
+  if(windDir == null || !isFinite(windDir)) return 0.5;
   // Onshore wind on the East Coast = wind FROM the east (~45° to 135°).
   // Offshore wind = FROM the west (~225° to 315°).
   const isOnshore = (windDir >= 45 && windDir <= 135);
@@ -5257,36 +4914,36 @@ const PREDICT_WEIGHTS = {
     moonPhase:     0.00,   // Not significant for pelagics (not light-sensitive at depth)
   },
   nearshore: {
-    temperature:   0.19,   // (+0.01 from wind redistribute)
-    depthStruct:   0.25,   // DOMINANT — find the wreck/ledge/reef first (+0.02 from wind)
-    chlorophyll:   0.08,
+    temperature:   0.18,
+    depthStruct:   0.23,   // DOMINANT — find the wreck/ledge/reef first
+    chlorophyll:   0.07,
     thermalBreak:  0.06,   // Less important than offshore but still relevant
     reports:       0.00,
-    aisDwell:      0.09,   // (+0.01 from wind redistribute)
+    aisDwell:      0.08,
     season:        0.05,
-    pressure:      0.11,   // (+0.01 from wind redistribute)
+    pressure:      0.10,
     solunar:       0.07,
     tide:          0.06,
-    wind:          0.00,   // Removed — captured indirectly via AIS dwell and weather change
+    wind:          0.06,   // Re-enabled with REAL buoy wind — onshore wind stacks bait on structure
     weatherChange: 0.04,
     moonPhase:     0.00,   // Minor for nearshore — kept at zero; could activate later
   },
   inshore: {
     temperature:   0.10,   // Reduced — inshore species care more about WHERE (depth/structure)
                            //   and WHEN (tide/solunar) than absolute SST
-    depthStruct:   0.21,   // Bumped — inshore fish hold tight to specific structure
+    depthStruct:   0.20,   // Bumped — inshore fish hold tight to specific structure
     chlorophyll:   0.00,   // Zeroed — satellite chlor is unreliable in shallow water
                            //   (bottom reflectance, sediment contamination)
     thermalBreak:  0.00,   // Inshore species want stable water, not breaks
     reports:       0.00,
-    aisDwell:      0.07,   // Bumped (was 0.05) — charter fleet location is meaningful signal
-    season:        0.08,
-    pressure:      0.11,
-    solunar:       0.11,   // Trimmed (was 0.13) to make room for moonPhase
-    tide:          0.24,   // DOMINANT — slight trim (was 0.26) to make room for moonPhase
-    wind:          0.00,
-    weatherChange: 0.04,   // Trimmed (was 0.06) — partly overlaps with pressure
-    moonPhase:     0.04,   // NEW — full/new moons trigger feeding via tidal range
+    aisDwell:      0.07,   // charter fleet location is meaningful signal
+    season:        0.07,
+    pressure:      0.10,
+    solunar:       0.11,
+    tide:          0.22,   // DOMINANT — real NOAA CO-OPS tide stage
+    wind:          0.05,   // Re-enabled with REAL buoy wind — offshore wind clears inshore water
+    weatherChange: 0.04,
+    moonPhase:     0.04,   // full/new moons trigger feeding via tidal range
                            //   amplification + nighttime light. Independent of solunar
                            //   (which is time-of-day) and tide (which is local water move).
   },
@@ -5448,8 +5105,9 @@ function scoreCell(lat, lng, speciesId){
   const ocean = nearestSample(lat, lng);
   const sstObj   = ocean?.sst   ?? { value: null, observedAtMs: null };
   const chlorObj = ocean?.chlor ?? { value: null, observedAtMs: null };
-  const windObj  = ocean?.wind  ?? { value: null, observedAtMs: null };
+  const windObj  = ocean?.wind  ?? { value: null, dir: null, observedAtMs: null };
   const presObj  = ocean?.pressure ?? { value: null, observedAtMs: null };
+  const tideObj  = ocean?.tide  ?? { value: null, observedAtMs: null };
 
   const sst   = sstObj.value;
   const chlor = chlorObj.value;
@@ -5457,7 +5115,7 @@ function scoreCell(lat, lng, speciesId){
   const tBreak = thermalBreakReal(lat, lng);
   const pressureTrend = presObj.value;
   const solunar = solunarScore(lat, lng);
-  const tide = tideStage(lat, lng);
+  const tide = tideObj.value;          // real NOAA CO-OPS tide stage (0..1) or null
   const moon = moonPhase();
 
   // ── Factor 1: SST match (Gaussian-based for smooth continuous scoring) ──
@@ -5611,15 +5269,17 @@ function scoreCell(lat, lng, speciesId){
   // ── Factor 9: Solunar window ──
   const solunarScoreVal = solunar;
 
-  // ── Factor 10: Tide stage ──
+  // ── Factor 10: Tide stage (real NOAA CO-OPS predictions) ──
   // For inshore species: full tide influence (it's dominant for them).
   // For nearshore: moderate. For offshore: tide weight in W is 0, so this is irrelevant.
-  const tideScoreVal = speciesCat === "inshore"
-    ? (0.3 + 0.7 * tide)        // strong tide dependence
-    : (0.55 + 0.45 * tide);     // moderate
+  // No tide data for this point (no station within range) → neutral, not synthetic.
+  const tideScoreVal = tide == null ? 0.5
+    : speciesCat === "inshore"
+      ? (0.3 + 0.7 * tide)      // strong tide dependence
+      : (0.55 + 0.45 * tide);   // moderate
 
-  // ── Factor 11: Wind direction relative to structure ──
-  const windScoreVal = windScore(lat, lng, prefs);
+  // ── Factor 11: Wind direction relative to structure (real buoy wind) ──
+  const windScoreVal = windScore(lat, lng, prefs, windObj.dir);
 
   // ── Factor 12: Recent weather change ──
   const wxChangeScoreVal = 0.5;
@@ -5751,11 +5411,11 @@ function scoreCell(lat, lng, speciesId){
     {name:"Solunar window",     weight:W.solunar,       score:solunarScoreVal,  raw:solunar > 0.7 ? "MAJOR" : solunar > 0.4 ? "minor" : "off"},
     {name:"Thermal break",      weight:W.thermalBreak,  score:breakScore,       raw:`${tBreak.toFixed(1)}°F gradient`},
     {name:"AIS vessel dwell",   weight:W.aisDwell,      score:aisScore_,        raw:aisScore_ > 0.05 ? "active" : "—"},
-    {name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide > 0.7 ? "moving" : tide > 0.3 ? "easing" : "slack"},
+    {name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
     {name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw:wxLabel},
     {name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonScore > 0.66 ? "peak" : seasonScore > 0.33 ? "good" : "off"},
     {name:"Moon phase",         weight:W.moonPhase || 0,score:moonPhaseScoreVal,raw:moonName.toUpperCase()},
-    {name:"Wind direction",     weight:W.wind,          score:windScoreVal,     raw:`${Math.round(synthWindDir())}°`}]
+    {name:"Wind direction",     weight:W.wind,          score:windScoreVal,     raw:windObj.dir != null ? `${Math.round(windObj.dir)}°` : "—"}]
   // Drop factors that aren't applicable to this species category
   .filter(f => f.weight > 0)
   // Sort by contribution to final score
@@ -9509,33 +9169,46 @@ function catchAnalytics(speciesFilter){
 }
 
 
-// The user remains anonymous (no name/email leaked). Algorithm picks it up
-// just like any other report and applies the recency decay.
-function catchShareAsReport(entry){
-  if(typeof SOCIAL === "undefined") return;
-  const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === entry.species) : null;
-  const spName = sp ? sp.name : entry.species;
-  const sizeText = entry.weight ? ` ${entry.weight}lb` : entry.length ? ` ${entry.length}"` : "";
-  const noteText = entry.notes ? ` ${entry.notes.slice(0, 80)}` : "";
-  const hoursAgo = Math.max(0, (Date.now() - new Date(entry.timestamp).getTime()) / 3600000);
-  const report = {
-    src: "USER",
-    srcName: "Bluewater Intel User",
-    snippet: `Caught${sizeText} ${spName} near ${(entry.port || "the coast").split(",")[0]}.${noteText}`.trim(),
-    species: [entry.species],
-    area: entry.port,  // for fallback path in reportsBoost
-    port: entry.port,
-    hoursAgo,
-    _userCatchId: entry.id,  // back-reference so we can unshare/delete cleanly
-  };
-  SOCIAL.unshift(report);
+// Share a logged catch to the community forum as a REAL first-party report.
+// De-identified by the backend (public view shows only a hashed handle + rounded
+// coords). The author keeps the report id on the catch so it can be un-shared.
+async function catchShareAsReport(entry){
+  try {
+    if(!(window.BW_AUTH && window.BW_AUTH.postReport)) return;
+    const region = (typeof regionFor === "function") ? regionFor(entry.lat, entry.lng) : null;
+    if(!region) return;  // can't place it on the coast → don't post a region-less report
+    const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === entry.species) : null;
+    const spName = sp ? sp.name : entry.species;
+    const sizeText = entry.weight ? ` ${entry.weight} lb` : entry.length ? ` ${entry.length}"` : "";
+    const noteText = entry.notes ? ` ${entry.notes.slice(0, 160)}` : "";
+    const body = `Caught${sizeText} ${spName}.${noteText}`.trim();
+    const res = await window.BW_AUTH.postReport({
+      region, species: entry.species || null,
+      lat: (entry.lat == null ? null : entry.lat),
+      lng: (entry.lng == null ? null : entry.lng),
+      body,
+    });
+    if(res && res.id){
+      entry._reportId = res.id;
+      const c = (typeof USER_CATCHES !== "undefined") ? USER_CATCHES.find(x => x.id === entry.id) : null;
+      if(c){ c._reportId = res.id; if(typeof catchPersist === "function") catchPersist();
+        if(window.BW_AUTH && window.BW_AUTH.saveCatch) window.BW_AUTH.saveCatch(c).catch(()=>{}); }
+    }
+    if(typeof loadReports === "function") loadReports();
+  } catch(e){ console.warn("share catch as report", e); }
 }
 
-// Reverse the share — remove a catch from the reports feed.
-function catchUnshare(catchId){
-  if(typeof SOCIAL === "undefined") return;
-  const idx = SOCIAL.findIndex(r => r._userCatchId === catchId);
-  if(idx >= 0) SOCIAL.splice(idx, 1);
+// Reverse the share — delete the community report this catch created.
+async function catchUnshare(catchId){
+  try {
+    const c = (typeof USER_CATCHES !== "undefined") ? USER_CATCHES.find(x => x.id === catchId) : null;
+    if(c && c._reportId && window.BW_AUTH && window.BW_AUTH.deleteReport){
+      await window.BW_AUTH.deleteReport(c._reportId);
+      c._reportId = null;
+      if(typeof catchPersist === "function") catchPersist();
+      if(typeof loadReports === "function") loadReports();
+    }
+  } catch(e){ console.warn("unshare catch", e); }
 }
 
 // Downscale a photo file to a reasonable size for in-memory storage.
@@ -11677,6 +11350,9 @@ window.bwOnSignedIn = async function (user) {
 
     CM_state.log = await window.BW_AUTH.fetchLog("catch_meter");
     TB_state.favorites = await window.BW_AUTH.fetchLog("tide_favorites");
+
+    // Load community fishing reports (de-identified) for the forum + reports factor.
+    if (typeof loadReports === "function") loadReports();
   } catch (e) {
     console.error("Account hydrate failed", e);
     WP_state.userPoints = wpLoadUser();
@@ -16918,44 +16594,41 @@ function ocRenderCharts(){
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📰 Fishing Reports</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Live Feed · All Ports · Multiple Sources</div>
+      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Community forum · post &amp; read by region</div>
     </div>
     <div id="rp-status-pill" style="
       font-size:9px;font-weight:700;letter-spacing:.08em;
       padding:4px 10px;border-radius:10px;display:flex;align-items:center;gap:5px;
-      background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#fbbf24;
-    "><span style="width:6px;height:6px;border-radius:50%;background:#f59e0b"></span><span>DEMO DATA</span></div>
+      background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#34d399;
+    "><span style="width:6px;height:6px;border-radius:50%;background:#10b981"></span><span>COMMUNITY</span></div>
   </div>
 
-  <!-- Filter bar -->
+  <!-- Filter / action bar -->
   <div style="padding:14px 20px;border-bottom:1px solid rgba(107,191,234,.08);background:rgba(0,0,0,.18)">
-    <input id="rp-search" type="text" placeholder="Search reports — keyword, area, species..."
-      oninput="rpRender()" style="
-      width:100%;background:rgba(255,255,255,.05);
-      border:1px solid rgba(107,191,234,.2);color:#f0f6ff;
-      padding:11px 14px;border-radius:10px;font-size:14px;
-      font-family:inherit;outline:none;margin-bottom:12px;
-    "/>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input id="rp-search" type="text" placeholder="Search reports — keyword, species, angler..."
+        oninput="rpRender()" style="
+        flex:1;background:rgba(255,255,255,.05);
+        border:1px solid rgba(107,191,234,.2);color:#f0f6ff;
+        padding:11px 14px;border-radius:10px;font-size:14px;
+        font-family:inherit;outline:none;
+      "/>
+      <button type="button" onclick="rpOpenPost()" style="
+        flex-shrink:0;background:#2979b5;border:none;color:#fff;font-weight:700;
+        padding:0 16px;border-radius:10px;font-size:13px;cursor:pointer;font-family:inherit;
+      ">✏️ Post</button>
+    </div>
+    <!-- Region tabs -->
+    <div id="rp-region-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <select class="rp-filter" id="rp-port" onchange="rpRender()">
-        <option value="all">All Ports</option>
-      </select>
       <select class="rp-filter" id="rp-species" onchange="rpRender()">
         <option value="all">All Species</option>
       </select>
-      <select class="rp-filter" id="rp-source" onchange="rpRender()">
-        <option value="all">All Sources</option>
-        <option value="THT">The Hull Truth</option>
-        <option value="FB">Facebook Groups</option>
-        <option value="REDDIT">Reddit</option>
-        <option value="CHARTER">Charter Reports</option>
-        <option value="FORUM">Other Forums</option>
-      </select>
       <select class="rp-filter" id="rp-time" onchange="rpRender()">
         <option value="all">Any Time</option>
+        <option value="168">Last 7 days</option>
+        <option value="48">Last 48 hours</option>
         <option value="24">Last 24 hours</option>
-        <option value="12">Last 12 hours</option>
-        <option value="6">Last 6 hours</option>
       </select>
     </div>
   </div>
@@ -16967,6 +16640,39 @@ function ocRenderCharts(){
   <div id="rp-list" style="padding:14px 20px;max-width:900px;margin:0 auto"></div>
 </div>
 
+<!-- ── POST A REPORT (modal) ── -->
+<div id="rp-post-overlay" style="display:none;position:fixed;inset:0;z-index:5100;background:rgba(5,12,22,.72);align-items:center;justify-content:center;padding:18px;font-family:'Segoe UI',Arial,sans-serif">
+  <div style="width:100%;max-width:440px;max-height:90vh;overflow-y:auto;background:#0f2444;border:1px solid rgba(107,191,234,.25);border-radius:16px;padding:20px 20px 18px;box-shadow:0 24px 70px rgba(0,0,0,.55)">
+    <div style="display:flex;align-items:center;margin-bottom:14px">
+      <div style="font-size:16px;font-weight:800;color:#f0f6ff;flex:1">✏️ Post a Fishing Report</div>
+      <button type="button" onclick="rpClosePost()" aria-label="Close" style="width:32px;height:32px;background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);color:#cfe5ff;border-radius:9px;cursor:pointer;font-size:16px">✕</button>
+    </div>
+    <div id="rp-post-msg" style="display:none;font-size:12px;margin-bottom:10px;padding:8px 10px;border-radius:8px"></div>
+
+    <label class="rp-post-label">Region</label>
+    <select id="rp-post-region" class="rp-post-input"></select>
+
+    <label class="rp-post-label">Target species <span style="opacity:.6">(optional)</span></label>
+    <select id="rp-post-species" class="rp-post-input"><option value="">— none —</option></select>
+
+    <label class="rp-post-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input id="rp-post-useloc" type="checkbox" style="width:15px;height:15px"/>
+      <span>Include approximate location (helps the heat map) — uses current map center</span>
+    </label>
+    <div id="rp-post-loc-note" style="font-size:10px;color:#6bbfea;margin:-2px 0 8px">Your exact spot is never published — coordinates are rounded to ~6 nm.</div>
+
+    <label class="rp-post-label">Report</label>
+    <textarea id="rp-post-body" class="rp-post-input" rows="4" maxlength="2000" placeholder="What's biting? Conditions, technique, what worked…"></textarea>
+
+    <div style="font-size:10px;color:#9ec5e8;margin:2px 0 12px;line-height:1.5">Posts are public to the community under an anonymous handle. No name or email is shown.</div>
+
+    <div style="display:flex;gap:8px">
+      <button type="button" onclick="rpClosePost()" style="flex:1;background:transparent;border:1px solid rgba(107,191,234,.3);color:#cfe5ff;padding:11px;border-radius:9px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+      <button type="button" id="rp-post-submit" onclick="rpSubmitPost()" style="flex:2;background:#2979b5;border:none;color:#fff;font-weight:700;padding:11px;border-radius:9px;font-size:13px;cursor:pointer;font-family:inherit">Post Report</button>
+    </div>
+  </div>
+</div>
+
 <style>
 .rp-filter{
   flex:1;min-width:130px;
@@ -16976,6 +16682,15 @@ function ocRenderCharts(){
 }
 .rp-filter option{background:#0f2444;color:#f0f6ff}
 .rp-filter:focus{border-color:rgba(107,191,234,.5)}
+
+.rp-post-label{display:block;font-size:11px;font-weight:600;color:#9ec5e8;margin:10px 0 4px}
+.rp-post-input{width:100%;box-sizing:border-box;background:#0a1628;border:1px solid rgba(107,191,234,.28);color:#f0f6ff;padding:10px 12px;border-radius:9px;font-size:14px;font-family:inherit;outline:none}
+.rp-post-input:focus{border-color:rgba(107,191,234,.55)}
+.rp-post-input option{background:#0f2444}
+textarea.rp-post-input{resize:vertical;min-height:80px}
+.rp-region-tab{font-size:11px;font-weight:600;padding:6px 12px;border-radius:18px;cursor:pointer;border:1px solid rgba(107,191,234,.25);background:rgba(255,255,255,.04);color:#9ec5e8;font-family:inherit}
+.rp-region-tab.active{background:#2979b5;border-color:#2979b5;color:#fff}
+.rp-handle{font-size:9px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:8px;white-space:nowrap;background:rgba(41,121,181,.15);color:#7dd3fc;border:1px solid rgba(41,121,181,.35)}
 
 .rp-card{
   background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
@@ -17568,63 +17283,58 @@ function renderRegulations(){
   `;
 }
 
+let rpRegion = "all";  // active region tab in the forum
 function openReports(){
   document.getElementById("rp-overlay").style.display = "block";
   document.body.style.overflow = "hidden";
-  // Populate filter dropdowns
   rpPopulateFilters();
-  // Update LIVE status if backend is connected
-  rpUpdateStatus();
   rpRender();
+  // Pull the latest community reports, then re-render.
+  if(typeof loadReports === "function") loadReports().then(() => { rpPopulateFilters(); rpRender(); });
 }
 function closeReports(){
   document.getElementById("rp-overlay").style.display = "none";
   document.body.style.overflow = "";
 }
-function rpUpdateStatus(){
-  const pill = document.getElementById("rp-status-pill");
-  if(!pill) return;
-  if(typeof API !== "undefined" && API.available){
-    pill.style.background = "rgba(16,185,129,.12)";
-    pill.style.borderColor = "rgba(16,185,129,.3)";
-    pill.style.color = "#34d399";
-    pill.querySelector("span:first-child").style.background = "#10b981";
-    pill.querySelector("span:last-child").textContent = "LIVE FEED";
-  }
-}
 function rpPopulateFilters(){
-  // Build port dropdown from unique ports
-  const ports = [...new Set(SOCIAL.map(r => r.port).filter(Boolean))].sort();
-  const portSel = document.getElementById("rp-port");
-  portSel.innerHTML = '<option value="all">All Ports</option>' +
-    ports.map(p => `<option value="${p}">${p}</option>`).join("");
-  // Build species dropdown
+  // Region tabs (All + the four coverage regions)
+  const tabs = document.getElementById("rp-region-tabs");
+  if(tabs){
+    const all = [{id:"all",label:"All Regions"}].concat(REGIONS);
+    tabs.innerHTML = all.map(r =>
+      `<button type="button" class="rp-region-tab${rpRegion===r.id?" active":""}" onclick="rpSetRegion('${r.id}')">${r.label}</button>`
+    ).join("");
+  }
+  // Species filter (from whatever species appear in current reports)
   const allSp = [...new Set(SOCIAL.flatMap(r => r.species || []))].sort();
   const spSel = document.getElementById("rp-species");
-  spSel.innerHTML = '<option value="all">All Species</option>' +
-    allSp.map(s => {
-      const sp = SPECIES.find(x => x.id === s);
-      return `<option value="${s}">${sp ? sp.name : s}</option>`;
-    }).join("");
+  if(spSel){
+    const cur = spSel.value || "all";
+    spSel.innerHTML = '<option value="all">All Species</option>' +
+      allSp.map(s => { const sp = SPECIES.find(x => x.id === s); return `<option value="${s}">${sp ? sp.name : s}</option>`; }).join("");
+    spSel.value = [...spSel.options].some(o=>o.value===cur) ? cur : "all";
+  }
 }
+function rpSetRegion(id){
+  rpRegion = id;
+  rpPopulateFilters();
+  rpRender();
+}
+function rpEsc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function rpRender(){
   const q = (document.getElementById("rp-search").value || "").toLowerCase().trim();
-  const portFilter = document.getElementById("rp-port").value;
   const spFilter   = document.getElementById("rp-species").value;
-  const srcFilter  = document.getElementById("rp-source").value;
   const timeFilter = document.getElementById("rp-time").value;
 
   let list = SOCIAL.slice();
 
+  if(rpRegion !== "all") list = list.filter(r => r.region === rpRegion);
   if(q) list = list.filter(r =>
-    r.snippet.toLowerCase().includes(q) ||
+    (r.snippet||"").toLowerCase().includes(q) ||
     (r.area || "").toLowerCase().includes(q) ||
-    (r.port || "").toLowerCase().includes(q) ||
     (r.srcName || "").toLowerCase().includes(q)
   );
-  if(portFilter !== "all") list = list.filter(r => r.port === portFilter);
   if(spFilter !== "all")   list = list.filter(r => (r.species || []).includes(spFilter));
-  if(srcFilter !== "all")  list = list.filter(r => r.src === srcFilter);
   if(timeFilter !== "all"){
     const limit = parseInt(timeFilter);
     list = list.filter(r => (r.hoursAgo || 0) <= limit);
@@ -17635,15 +17345,11 @@ function rpRender(){
 
   // Stats
   const stats = document.getElementById("rp-stats");
-  const byPort = {};
-  list.forEach(r => byPort[r.port || "Unknown"] = (byPort[r.port || "Unknown"] || 0) + 1);
-  const sourcesCount = [...new Set(list.map(r => r.src))].length;
+  const regions = new Set(list.map(r => r.region));
   stats.innerHTML = `
     <span><b style="color:#7dd3fc;font-size:14px">${list.length}</b> report${list.length===1?"":"s"}</span>
     <span style="color:#5d96c4">·</span>
-    <span><b style="color:#7dd3fc;font-size:14px">${Object.keys(byPort).length}</b> port${Object.keys(byPort).length===1?"":"s"}</span>
-    <span style="color:#5d96c4">·</span>
-    <span><b style="color:#7dd3fc;font-size:14px">${sourcesCount}</b> source${sourcesCount===1?"":"s"}</span>
+    <span><b style="color:#7dd3fc;font-size:14px">${regions.size}</b> region${regions.size===1?"":"s"}</span>
     ${list.length > 0 ? `<span style="color:#5d96c4">·</span><span>Most recent: <b style="color:#34d399">${rpFmtTime(list[0].hoursAgo || 0)}</b></span>` : ""}
   `;
 
@@ -17653,8 +17359,8 @@ function rpRender(){
     container.innerHTML = `
       <div id="rp-empty">
         <div style="font-size:48px;margin-bottom:12px">🎣</div>
-        <div style="font-size:14px;font-weight:600;color:#9ec5e8;margin-bottom:6px">No reports match your filters</div>
-        <div style="font-size:11px">Try widening your search criteria.</div>
+        <div style="font-size:14px;font-weight:600;color:#9ec5e8;margin-bottom:6px">No reports yet${rpRegion!=="all"?" for "+(REGION_LABELS[rpRegion]||rpRegion):""}</div>
+        <div style="font-size:11px">Be the first — tap <b>✏️ Post</b> to share what's biting.</div>
       </div>`;
     return;
   }
@@ -17666,20 +17372,72 @@ function rpRender(){
       return `<span class="rp-sp-pill" style="background:${sp.color}18;color:${sp.color};border-color:${sp.color}44">${sp.name}</span>`;
     }).join("");
     return `
-      <div class="rp-card" onclick="rpFocusArea('${r.area || ""}','${r.port || ""}')">
+      <div class="rp-card">
         <div class="rp-card-head">
-          <span class="rp-src-pill rp-src-${r.src}">${r.srcName}</span>
+          <span class="rp-handle">${rpEsc(r.srcName)}</span>
           <div>
-            <div class="rp-area">📍 ${r.area || "—"}</div>
-            <div class="rp-port">${r.port || ""}</div>
+            <div class="rp-area">📍 ${rpEsc(r.area || "—")}${r.lat!=null?` · ~${r.lat.toFixed(1)}, ${r.lng.toFixed(1)}`:""}</div>
           </div>
           <span class="rp-time">${rpFmtTime(r.hoursAgo || 0)}</span>
         </div>
-        <div class="rp-snippet">${r.snippet}</div>
+        <div class="rp-snippet">${rpEsc(r.snippet)}</div>
         <div class="rp-species">${spChips}</div>
       </div>
     `;
   }).join("");
+}
+// ── Post a report ──
+function rpOpenPost(){
+  if(!(window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser())){
+    alert("Please sign in to post a report.");
+    return;
+  }
+  const regSel = document.getElementById("rp-post-region");
+  regSel.innerHTML = REGIONS.map(r => `<option value="${r.id}">${r.label}</option>`).join("");
+  // Default region: active tab, else derived from the current map center.
+  let def = (rpRegion !== "all") ? rpRegion : null;
+  if(!def && typeof MAP !== "undefined" && MAP){ try { const c = MAP.getCenter(); def = regionFor(c.lat, c.lng); } catch(e){} }
+  if(def) regSel.value = def;
+  const spSel = document.getElementById("rp-post-species");
+  spSel.innerHTML = '<option value="">— none —</option>' +
+    SPECIES.map(s => `<option value="${s.id}"${activeSpId===s.id?" selected":""}>${s.name}</option>`).join("");
+  document.getElementById("rp-post-body").value = "";
+  document.getElementById("rp-post-useloc").checked = false;
+  const msg = document.getElementById("rp-post-msg"); msg.style.display = "none";
+  document.getElementById("rp-post-overlay").style.display = "flex";
+}
+function rpClosePost(){ document.getElementById("rp-post-overlay").style.display = "none"; }
+async function rpSubmitPost(){
+  const msg = document.getElementById("rp-post-msg");
+  const showMsg = (t, ok) => { msg.textContent = t; msg.style.display = "block";
+    msg.style.background = ok ? "rgba(16,185,129,.12)" : "rgba(220,38,38,.12)";
+    msg.style.color = ok ? "#34d399" : "#fca5a5"; };
+  const region = document.getElementById("rp-post-region").value;
+  const species = document.getElementById("rp-post-species").value || null;
+  const body = (document.getElementById("rp-post-body").value || "").trim();
+  if(!region){ showMsg("Pick a region.", false); return; }
+  if(!body){ showMsg("Write a short report.", false); return; }
+  let lat = null, lng = null;
+  if(document.getElementById("rp-post-useloc").checked){
+    let c = null;
+    if(pinLL) c = pinLL;
+    else if(typeof MAP !== "undefined" && MAP){ try { c = MAP.getCenter(); } catch(e){} }
+    if(c){ lat = +c.lat.toFixed(3); lng = +c.lng.toFixed(3); }
+  }
+  const btn = document.getElementById("rp-post-submit");
+  btn.disabled = true; btn.textContent = "Posting…";
+  try {
+    await window.BW_AUTH.postReport({ region, species, lat, lng, body });
+    rpClosePost();
+    rpRegion = region;
+    if(typeof loadReports === "function") await loadReports();
+    rpPopulateFilters();
+    rpRender();
+  } catch(e){
+    showMsg((e && e.message) ? e.message : "Could not post — try again.", false);
+  } finally {
+    btn.disabled = false; btn.textContent = "Post Report";
+  }
 }
 function rpFmtTime(hours){
   if(hours < 1) return "Just now";

@@ -135,6 +135,37 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     if (error) throw error;
   }
 
+  // ── Community fishing reports (first-party forum) ──────────────────────────
+  async function postReport({ region, species, lat, lng, body }) {
+    const user = await requireUser();
+    const { data, error } = await client.from("fishing_reports").insert({
+      user_id: user.id,
+      region,
+      species: species || null,
+      lat: (lat == null ? null : lat),
+      lng: (lng == null ? null : lng),
+      body,
+    }).select("id").single();
+    if (error) throw error;
+    return data;
+  }
+
+  // Reads the DE-IDENTIFIED public view (no user_id/PII; coords rounded; hashed handle).
+  async function fetchReports({ region = null, sinceDays = 21, limit = 400 } = {}) {
+    let q = client.from("fishing_reports_public").select("*").order("created_at", { ascending: false }).limit(limit);
+    if (region && region !== "all") q = q.eq("region", region);
+    if (sinceDays) q = q.gte("created_at", new Date(Date.now() - sinceDays * 86400000).toISOString());
+    const { data, error } = await q;
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function deleteReport(id) {
+    const user = await requireUser();
+    const { error } = await client.from("fishing_reports").delete().eq("user_id", user.id).eq("id", id);
+    if (error) throw error;
+  }
+
   async function callBrief(payload) {
     const { data: { session } } = await client.auth.getSession();
     if (!session) throw new Error("Sign in required.");
@@ -184,6 +215,9 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     deleteCatch,
     fetchLog,
     saveLog,
+    postReport,
+    fetchReports,
+    deleteReport,
     callBrief,
     onAuthChange,
     getUser,
