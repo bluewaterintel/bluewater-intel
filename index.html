@@ -5451,7 +5451,7 @@ function scoreCell(lat, lng, speciesId){
   const ocean = nearestSample(lat, lng);
   const sstObj   = ocean?.sst   ?? { value: null, observedAtMs: null };
   const chlorObj = ocean?.chlor ?? { value: null, observedAtMs: null };
-  const windObj  = ocean?.wind  ?? { value: null, observedAtMs: null };
+  const windObj  = ocean?.wind  ?? { value: null, dir: null, observedAtMs: null };
   const presObj  = ocean?.pressure ?? { value: null, observedAtMs: null };
   const tideObj  = ocean?.tide  ?? { value: null, observedAtMs: null };
 
