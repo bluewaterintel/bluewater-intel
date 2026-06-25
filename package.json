@@ -10,6 +10,7 @@
     "setup:backend": "node scripts/setup-backend.mjs",
     "patch:m3m4": "node scripts/apply-m3-m4-patches.mjs",
     "test:freshness": "node tests/freshness.test.mjs",
+    "test:wind": "node tests/wind.test.mjs",
     "deploy:functions": "node scripts/deploy-m3-m4-functions.mjs",
     "deploy": "node scripts/generate-bw-config.mjs && netlify deploy --prod --dir=."
   },

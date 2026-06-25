@@ -17,6 +17,7 @@
 <script src="bw-auth.js"></script>
 <script src="bw-freshness.js"></script>
 <script src="bw-ocean.js"></script>
+<script src="bw-wind.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Master fishing-waypoint dataset (~23k points), loaded as a companion file so the
      main app stays lean. Defines window.BW_WAYPOINTS = {version, types, count, wp:[[name,lat,lng,typecode],…]}.
@@ -2083,12 +2084,12 @@ body.nav-open #ruler-readout{
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="Animated wind field — streaks show wind direction and are colored by speed. Illustrative preview only (not live observations); real GFS/HRRR wind is coming in a future update.">      <input type="checkbox" id="chk-wind" onchange="toggleLayer('wind')">
+    <label class="layer-row" title="Real animated wind field — white streaks show direction from current ocean-feed wind observations; shaded color shows stronger wind speed areas.">      <input type="checkbox" id="chk-wind" onchange="toggleLayer('wind')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8 h11 a2.5 2.5 0 1 0 -2.5 -2.5"></path><path d="M3 13 h15 a2.5 2.5 0 1 1 -2.5 2.5"></path><path d="M3 18 h8 a2 2 0 1 1 -2 2"></path></svg>
         </span>
-        <span>Wind (animated) <span style="font-size:8px;color:#fbbf24;opacity:.85">(PREVIEW)</span></span>
+        <span>Wind (live) <span style="font-size:8px;color:#7dd3fc;opacity:.85">(NOAA/NDBC)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -4807,46 +4808,87 @@ function synthWindDir(){
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// WIND FIELD — single source of truth for the animated wind layer.
+// REAL WIND FIELD — single source of truth for the animated wind layer.
 //
-// Returns {u, v, speedKts, dirDeg} at a given location & time.
-//   u = eastward wind component (m/s, +=toward east)
-//   v = northward wind component (m/s, +=toward north)
-//   dirDeg = direction wind is coming FROM (meteorological convention)
-//
-// ⚠ SYNTHETIC for now — a smoothly-varying prevailing field with a mild
-// spatial gradient and coastal sea-breeze bend. To make this REAL, replace
-// the body with a sample from a NOAA GFS U/V grid (fetched by a backend and
-// served as compact JSON). The animation layer consumes ONLY this function,
-// so that swap is the entire integration.
+// Returns {u, v, speedKts, dirDeg} at a given location from REAL ocean-feed
+// wind observations sampled across the visible map. No synthetic fallback:
+// if the feed has no speed+direction, the layer stays empty and labels that.
 // ════════════════════════════════════════════════════════════════════════════
-function getWindField(lat, lng, timeMs){
-  const t = (timeMs != null ? timeMs : forecastTimeMs());
-  const hours = t / 3600000;
-  // Base prevailing direction (deg FROM), slowly rotating like a passing system
-  const baseDir = (Math.sin(hours / 36) * 160 + 180) % 360;
-  // Spatial variation: a large-scale wave across lat/lng so the field isn't
-  // uniform (gives the animation visible structure — convergence/divergence).
-  const spatial = Math.sin(lat * 0.6 + hours / 18) * 22
-                + Math.cos(lng * 0.5 - hours / 24) * 18;
-  let dirFrom = (baseDir + spatial + 360) % 360;
-  // Coastal bend: nearshore winds tend to bend toward a sea-breeze pattern
-  // in the afternoon. Mild effect, keeps it lively near the beach.
-  const hourOfDay = new Date(t).getHours();
-  const seaBreeze = (hourOfDay >= 11 && hourOfDay <= 19) ? 18 : 0;
-  dirFrom = (dirFrom + seaBreeze) % 360;
-  // Speed: synoptic base + spatial gusts. Range ~4-22 kts.
-  const speedKts = Math.max(2,
-    11 + Math.sin(hours / 20) * 5
-       + Math.sin(lat * 0.9 + lng * 0.4 + hours / 12) * 4);
-  // Convert "from" direction to u/v "toward" vector (m/s). 1 kt = 0.514 m/s.
-  const speedMs = speedKts * 0.514;
-  const toRad = (d) => d * Math.PI / 180;
-  // Meteorological: dir is where wind comes FROM, so the vector points opposite.
-  const dirTo = (dirFrom + 180) % 360;
-  const u = speedMs * Math.sin(toRad(dirTo));   // east component
-  const v = speedMs * Math.cos(toRad(dirTo));   // north component
-  return { u, v, speedKts, dirDeg: dirFrom };
+let WIND_FIELD = { samples: [], builtAtMs: 0, status: "idle", seq: 0, boundsKey: "" };
+
+function windStatusLabel(){
+  if(WIND_FIELD.status === "loading") return "loading real wind...";
+  if(WIND_FIELD.status === "live") return `${WIND_FIELD.samples.length} real samples`;
+  if(WIND_FIELD.status === "cached") return `${WIND_FIELD.samples.length} cached real samples`;
+  if(WIND_FIELD.status === "unavailable") return "real wind unavailable";
+  return "real wind";
+}
+
+function getWindField(lat, lng){
+  if(!window.BW_WIND) return null;
+  return window.BW_WIND.interpolateWind(WIND_FIELD.samples, lat, lng);
+}
+
+function windSampleGridForMap(){
+  if(!MAP) return [];
+  const b = MAP.getBounds().pad(0.18);
+  const rows = 6, cols = 7;
+  const pts = [];
+  for(let r = 0; r < rows; r++){
+    const lat = b.getSouth() + (b.getNorth() - b.getSouth()) * (r / Math.max(1, rows - 1));
+    for(let c = 0; c < cols; c++){
+      const lng = b.getWest() + (b.getEast() - b.getWest()) * (c / Math.max(1, cols - 1));
+      if(typeof isFishableWater === "function" && !isFishableWater(lat, lng)) continue;
+      pts.push([lat, lng]);
+    }
+  }
+  return pts;
+}
+
+async function buildWindFieldForMap(){
+  const seq = ++WIND_FIELD.seq;
+  if(typeof BW_OCEAN === "undefined" || !window.BW_WIND || !MAP){
+    WIND_FIELD = { samples: [], builtAtMs: Date.now(), status: "unavailable", seq, boundsKey: "" };
+    updateOceanLegend();
+    return WIND_FIELD;
+  }
+
+  WIND_FIELD.status = "loading";
+  updateOceanLegend();
+  const pts = windSampleGridForMap();
+  const CONCURRENCY = 6;
+  const samples = [];
+  let next = 0;
+
+  async function worker(){
+    while(next < pts.length){
+      const i = next++;
+      const [lat, lng] = pts[i];
+      const p = await BW_OCEAN.fetchOcean(lat, lng);
+      const vector = window.BW_WIND.vectorFromObservation(p?.wind);
+      if(vector){
+        samples.push({
+          lat, lng, vector,
+          wind: p.wind,
+          source: p.sources?.buoy || null,
+          cache: p._cache || null,
+        });
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pts.length) }, worker));
+  if(seq !== WIND_FIELD.seq) return WIND_FIELD;
+  const usedCached = samples.some(s => s.cache && s.cache !== "fresh-cache");
+  WIND_FIELD = {
+    samples,
+    builtAtMs: Date.now(),
+    status: samples.length ? (usedCached ? "cached" : "live") : "unavailable",
+    seq,
+    boundsKey: MAP.getBounds().toBBoxString(),
+  };
+  updateOceanLegend();
+  return WIND_FIELD;
 }
 function windScore(lat, lng, speciesPrefs, windDir){
   // windDir is the REAL wind direction (degrees FROM) from the nearest NDBC buoy,
@@ -7057,10 +7099,8 @@ function heatCanvasLayer(points, options){
 
 // ════════════════════════════════════════════════════════════════════════════
 // ANIMATED WIND LAYER — Windy-style flowing particle field.
-// Particles drift along the wind vectors from getWindField(), leaving fading
-// streaks. Colored by wind speed (calm green → strong red). Pure canvas +
-// requestAnimationFrame; no external libs. Swap getWindField to NOAA GFS for
-// real data — this layer needs no other change.
+// Shaded raster shows wind speed; white particles drift along real wind vectors.
+// Pure canvas + requestAnimationFrame; no external libs.
 // ════════════════════════════════════════════════════════════════════════════
 const WindParticleLayer = L.Layer.extend({
   initialize: function(options){
@@ -7068,47 +7108,43 @@ const WindParticleLayer = L.Layer.extend({
       particleCount: 900,   // scaled by viewport in _seed
       maxAgeFrames: 90,     // lifespan before respawn
       speedScale: 0.006,    // map-units (px) per m/s per frame factor
-      lineWidth: 1.4,
-      trailFade: 0.92,      // 0-1; higher = longer trails
+      lineWidth: 1.7,
+      trailFade: 0.90,      // 0-1; higher = longer trails
+      shadeCellPx: 24,
     }, options || {});
     this._particles = [];
     this._anim = null;
+    this._dataReq = 0;
   },
   // Wind speed (kts) → streak color
   _speedColor: function(kts){
-    // calm→breezy→strong: teal, green, yellow, orange, red
-    const stops = [
-      [0,   [120, 220, 200]],
-      [8,   [120, 220, 120]],
-      [14,  [230, 220, 90]],
-      [20,  [240, 150, 60]],
-      [28,  [225, 70, 60]],
-      [40,  [180, 40, 90]],
-    ];
-    let lo = stops[0], hi = stops[stops.length-1];
-    for(let i=0;i<stops.length-1;i++){
-      if(kts >= stops[i][0] && kts <= stops[i+1][0]){ lo=stops[i]; hi=stops[i+1]; break; }
-    }
-    const span = (hi[0]-lo[0])||1;
-    const f = Math.max(0, Math.min(1, (kts-lo[0])/span));
-    const c = lo[1].map((v,i)=> Math.round(v + (hi[1][i]-v)*f));
-    return `rgba(${c[0]},${c[1]},${c[2]},0.85)`;
+    const alpha = Math.max(0.55, Math.min(0.95, 0.55 + (kts / 45) * 0.4));
+    return `rgba(255,255,255,${alpha.toFixed(3)})`;
   },
   onAdd: function(map){
     this._map = map;
+    if(!this._shadeCanvas){
+      this._shadeCanvas = L.DomUtil.create('canvas', 'wind-shade-canvas');
+      this._shadeCanvas.style.position = 'absolute';
+      this._shadeCanvas.style.pointerEvents = 'none';
+      this._shadeCanvas.style.zIndex = '444';
+    }
     if(!this._canvas){
       this._canvas = L.DomUtil.create('canvas', 'wind-particle-canvas');
       this._canvas.style.position = 'absolute';
       this._canvas.style.pointerEvents = 'none';
       this._canvas.style.zIndex = '445';  // just below the heat map (450)
     }
+    map.getPanes().overlayPane.appendChild(this._shadeCanvas);
     map.getPanes().overlayPane.appendChild(this._canvas);
     map.on('moveend zoomend viewreset resize', this._reset, this);
     map.on('movestart zoomstart', this._pause, this);
     this._reset();
   },
   onRemove: function(map){
+    this._dataReq++;
     this._stop();
+    if(this._shadeCanvas && this._shadeCanvas.parentNode) this._shadeCanvas.parentNode.removeChild(this._shadeCanvas);
     if(this._canvas && this._canvas.parentNode) this._canvas.parentNode.removeChild(this._canvas);
     map.off('moveend zoomend viewreset resize', this._reset, this);
     map.off('movestart zoomstart', this._pause, this);
@@ -7118,11 +7154,51 @@ const WindParticleLayer = L.Layer.extend({
     if(!this._map) return;
     const size = this._map.getSize();
     const topLeft = this._map.containerPointToLayerPoint([0,0]);
+    L.DomUtil.setPosition(this._shadeCanvas, topLeft);
     L.DomUtil.setPosition(this._canvas, topLeft);
+    this._shadeCanvas.width = size.x;
+    this._shadeCanvas.height = size.y;
     this._canvas.width = size.x;
     this._canvas.height = size.y;
     this._seed();
+    this._drawShade();
+    this._requestData();
     this._start();
+  },
+  _requestData: function(){
+    if(!layerVis.wind || typeof buildWindFieldForMap !== "function") return;
+    const req = ++this._dataReq;
+    buildWindFieldForMap().then(() => {
+      if(req !== this._dataReq || !this._map) return;
+      this._seed();
+      this._drawShade();
+    }).catch(() => {
+      if(req === this._dataReq){
+        WIND_FIELD.status = "unavailable";
+        WIND_FIELD.samples = [];
+        updateOceanLegend();
+        this._drawShade();
+      }
+    });
+  },
+  _drawShade: function(){
+    if(!this._shadeCanvas) return;
+    const ctx = this._shadeCanvas.getContext('2d');
+    const w = this._shadeCanvas.width, h = this._shadeCanvas.height;
+    ctx.clearRect(0,0,w,h);
+    if(!WIND_FIELD.samples.length || !window.BW_WIND || !this._map) return;
+    const cell = this._opts.shadeCellPx;
+    for(let y = 0; y < h; y += cell){
+      for(let x = 0; x < w; x += cell){
+        const ll = this._map.containerPointToLatLng([x + cell/2, y + cell/2]);
+        const wind = getWindField(ll.lat, ll.lng);
+        if(!wind) continue;
+        const fill = window.BW_WIND.colorForSpeed(wind.speedKts);
+        if(fill === "rgba(0,0,0,0)") continue;
+        ctx.fillStyle = fill;
+        ctx.fillRect(x, y, cell + 1, cell + 1);
+      }
+    }
   },
   _seed: function(){
     const w = this._canvas.width, h = this._canvas.height;
@@ -7156,16 +7232,21 @@ const WindParticleLayer = L.Layer.extend({
     ctx.fillRect(0,0,w,h);
     ctx.globalCompositeOperation = 'source-over';
 
+    if(!WIND_FIELD.samples.length) return;
     const map = this._map;
     const zoom = map.getZoom();
     // px per m/s scaled by zoom so motion looks consistent across scales
     const scale = this._opts.speedScale * Math.pow(2, (zoom-6));
     ctx.lineWidth = this._opts.lineWidth;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(255,255,255,.28)';
+    ctx.shadowBlur = 2;
 
     for(const p of this._particles){
       // Convert this pixel to lat/lng, sample wind there
       const ll = map.containerPointToLatLng([p.x, p.y]);
       const wind = getWindField(ll.lat, ll.lng);
+      if(!wind){ Object.assign(p, this._spawn()); continue; }
       // u=east(+x), v=north(-y in screen space)
       const dx = wind.u * scale;
       const dy = -wind.v * scale;
@@ -7183,6 +7264,7 @@ const WindParticleLayer = L.Layer.extend({
         p.age = 0;
       }
     }
+    ctx.shadowBlur = 0;
   },
 });
 function windParticleLayer(options){ return new WindParticleLayer(options); }
@@ -9294,6 +9376,7 @@ function updateOceanLegend(){
         <div style="display:flex;justify-content:space-between;font-size:10px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>0</span><span>10</span><span>15</span><span>20</span><span>30</span><span>40+</span>
         </div>
+        <div style="font-size:9px;color:#9ec5e8;margin-top:4px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
       </div>`);
   }
   if(layerVis.radar){
