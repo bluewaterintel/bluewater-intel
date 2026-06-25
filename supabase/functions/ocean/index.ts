@@ -88,9 +88,17 @@ const BUOYS: { id: string; lat: number; lng: number }[] = [
 ];
 
 // Parse one NDBC realtime feed into a per-field record (fields null if "MM").
-async function fetchOneBuoy(b: { id: string; lat: number; lng: number }, lat: number, lng: number) {
+// Station-keyed (no point distance here) so the result can be cached and shared.
+type BuoyRec = {
+  id: string; observedAtMs: number;
+  wind: { value: number | null; dir: number | null; observedAtMs: number | null };
+  waves: { value: number | null; periodS?: number | null; observedAtMs: number | null };
+  waterTemp: { value: number | null; observedAtMs: number | null };
+  pressure: { value: number | null; observedAtMs: number | null };
+};
+async function fetchBuoyRaw(id: string): Promise<BuoyRec | null> {
   try {
-    const r = await fetch(`https://www.ndbc.noaa.gov/data/realtime2/${b.id}.txt`, { signal: AbortSignal.timeout(8000), headers: ERDDAP_HEADERS });
+    const r = await fetch(`https://www.ndbc.noaa.gov/data/realtime2/${id}.txt`, { signal: AbortSignal.timeout(8000), headers: ERDDAP_HEADERS });
     if (!r.ok) return null;
     const text = await r.text();
     const lines = text.split("\n").filter((l) => l && !l.startsWith("#"));
@@ -100,7 +108,7 @@ async function fetchOneBuoy(b: { id: string; lat: number; lng: number }, lat: nu
     const observedAtMs = Date.UTC(YY, MM - 1, DD, hh, mm);
     const mps = num(c[6]), wvhtM = num(c[8]), dpd = num(c[9]), pres = num(c[12]), wtmpC = num(c[14]), wdir = num(c[5]);
     return {
-      id: b.id, nm: nmBetween(lat, lng, b.lat, b.lng), observedAtMs,
+      id, observedAtMs,
       wind: mps != null ? { value: Math.round(mps * 1.943844 * 10) / 10, dir: wdir, observedAtMs } : { value: null, dir: null, observedAtMs: null }, // kt
       waves: wvhtM != null ? { value: Math.round(wvhtM * 3.28084 * 10) / 10, periodS: dpd, observedAtMs } : { value: null, observedAtMs: null }, // ft
       waterTemp: wtmpC != null ? { value: Math.round((wtmpC * 9 / 5 + 32) * 10) / 10, observedAtMs } : { value: null, observedAtMs: null }, // F
@@ -109,6 +117,20 @@ async function fetchOneBuoy(b: { id: string; lat: number; lng: number }, lat: nu
   } catch {
     return null;
   }
+}
+
+// Per-station buoy cache (10 min). The heat map fans out ~60 ocean calls, each
+// needing the nearest buoys; without caching that's hundreds of NDBC requests in a
+// burst and the feed rate-limits us (wind/waves come back empty on the first
+// render). Promise-keyed so concurrent cold-start calls share ONE fetch per station.
+const buoyCache = new Map<string, { atMs: number; p: Promise<BuoyRec | null> }>();
+function getBuoyCached(id: string): Promise<BuoyRec | null> {
+  const now = Date.now();
+  const hit = buoyCache.get(id);
+  if (hit && now - hit.atMs < 10 * 60 * 1000) return hit.p;
+  const p = fetchBuoyRaw(id);
+  buoyCache.set(id, { atMs: now, p });
+  return p;
 }
 
 function nmBetween(la1: number, lo1: number, la2: number, lo2: number) {
@@ -125,20 +147,29 @@ async function fetchBuoy(lat: number, lng: number) {
   // old "first responding buoy" approach lost wind whenever the closest buoy's
   // anemometer was out. Merging per-field keeps every value REAL and maximizes
   // coverage without inventing anything.
-  const sorted = [...BUOYS].sort((a, b) => nmBetween(lat, lng, a.lat, a.lng) - nmBetween(lat, lng, b.lat, b.lng));
-  const recs = (await Promise.all(sorted.slice(0, 5).map((b) => fetchOneBuoy(b, lat, lng))))
-    .filter((r): r is NonNullable<typeof r> => r != null)
+  const sorted = [...BUOYS]
+    .sort((a, b) => nmBetween(lat, lng, a.lat, a.lng) - nmBetween(lat, lng, b.lat, b.lng))
+    .slice(0, 5);
+  const recs = (await Promise.all(sorted.map(async (b) => {
+    const rec = await getBuoyCached(b.id);
+    return rec ? { rec, nm: nmBetween(lat, lng, b.lat, b.lng) } : null;
+  })))
+    .filter((x): x is { rec: BuoyRec; nm: number } => x != null)
     .sort((a, b) => a.nm - b.nm); // nearest first
   if (!recs.length) return null;
-  const pick = <T extends { value: number | null }>(get: (r: typeof recs[number]) => T): T | null => {
-    for (const r of recs) { const f = get(r); if (f && f.value != null) return f; }
+  const nullField = { value: null as number | null, observedAtMs: null as number | null };
+  // Wind: take the nearest buoy that has a DIRECTION (that's what scoring/display use).
+  let wind: BuoyRec["wind"] | null = null;
+  for (const { rec } of recs) { if (rec.wind && rec.wind.dir != null) { wind = rec.wind; break; } }
+  // Other fields: nearest buoy reporting a value.
+  const pick = (sel: (r: BuoyRec) => { value: number | null }) => {
+    for (const { rec } of recs) { const f = sel(rec); if (f && f.value != null) return f; }
     return null;
   };
-  const nullField = { value: null as number | null, observedAtMs: null as number | null };
   return {
-    buoyId: recs[0].id, buoyNm: Math.round(recs[0].nm),
-    observedAtMs: recs[0].observedAtMs,
-    wind: pick((r) => r.wind) ?? { value: null, dir: null, observedAtMs: null },
+    buoyId: recs[0].rec.id, buoyNm: Math.round(recs[0].nm),
+    observedAtMs: recs[0].rec.observedAtMs,
+    wind: wind ?? { value: null, dir: null, observedAtMs: null },
     waves: pick((r) => r.waves) ?? nullField,
     waterTemp: pick((r) => r.waterTemp) ?? nullField,
     pressure: pick((r) => r.pressure) ?? nullField,
