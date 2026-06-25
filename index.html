@@ -1362,6 +1362,9 @@ body.nav-open #ruler-readout{
     <button id="bw-auth-signin" type="button" style="
       width:100%;padding:12px;border:none;border-radius:9px;background:#2979b5;color:#fff;font-weight:700;font-size:14px;
       cursor:pointer;font-family:inherit;margin-bottom:10px">Sign In</button>
+    <div style="text-align:center;margin-top:0;margin-bottom:10px">
+      <a id="bw-auth-forgot" href="#" style="color:#7dd3fc;font-size:12.5px;text-decoration:none">Forgot password?</a>
+    </div>
     <button id="bw-auth-signup" type="button" style="
       width:100%;padding:11px;border:1px solid rgba(107,191,234,.35);border-radius:9px;background:transparent;color:#6bbfea;
       font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">Create Account</button>
@@ -1373,6 +1376,7 @@ body.nav-open #ruler-readout{
   const msg = document.getElementById("bw-auth-msg");
   const emailEl = document.getElementById("bw-auth-email");
   const passEl = document.getElementById("bw-auth-password");
+  const forgotEl = document.getElementById("bw-auth-forgot");
 
   function showErr(t){ msg.textContent=t; msg.style.display="block"; }
   function hideGate(){ if(gate) gate.style.display="none"; }
@@ -1407,6 +1411,16 @@ body.nav-open #ruler-readout{
     try {
       await window.BW_AUTH.signIn(emailEl.value.trim(), passEl.value);
     } catch(e){ showErr(e.message || "Sign in failed"); }
+  });
+  forgotEl.addEventListener("click", async (e) => {
+    e.preventDefault();
+    msg.style.display="none";
+    const em = emailEl.value.trim();
+    if(!em) return showErr("Enter your email above first, then tap Forgot password.");
+    try {
+      await window.BW_AUTH.resetPassword(em);
+      showErr("Password reset email sent. Check your inbox.");
+    } catch(err){ showErr(err?.message || "Could not send reset email."); }
   });
   document.getElementById("bw-auth-signup").addEventListener("click", async () => {
     msg.style.display="none";
@@ -11301,6 +11315,10 @@ function closePortDd(){
 
 function selectPort(name){
   activePort=name;
+  // Persist the choice to the account so it restores on next sign-in.
+  if(window.BW_AUTH && window.BW_AUTH.isSignedIn && window.BW_AUTH.isSignedIn()){
+    window.BW_AUTH.saveProfile({ home_port: activePort }).catch(e => console.error("save port", e));
+  }
   const lbl=document.getElementById("port-name");
   lbl.textContent=name;
   lbl.style.opacity="1";
@@ -11462,6 +11480,13 @@ window.bwOnSignedIn = async function (user) {
     setTimeout(() => window.bwOnSignedIn(user), 0);
     return;
   }
+  try {
+    const profile = await window.BW_AUTH.fetchProfile();
+    if(profile && profile.home_port && typeof selectPort === "function"){
+      // Restore the saved port as the active port.
+      selectPort(profile.home_port);
+    }
+  } catch(e){ console.error("profile load failed", e); }
   try {
     WP_state.userPoints = await window.BW_AUTH.fetchWaypoints();
     if (typeof drawUserWaypoints === "function") drawUserWaypoints();
@@ -13686,9 +13711,9 @@ function cmRenderHelp(){
     <div class="cm-step">
       <h3>📡 Offline & Privacy</h3>
       <div style="font-size:13px;color:#c8d8e8;line-height:1.8">
-        <b>Everything runs on your device.</b> Photos, measurements, and your catch log never leave your phone. No internet required after the app loads. Your data is stored only in your browser.
+        <b>Your data syncs to your account.</b> Your catch log, measurements, photos, and waypoints are saved to your Bluewater Intel account — sign in on any device (phone, tablet, or computer) and your data is there. Recent data is also cached on the device so the app keeps working offline once loaded.
         <br><br>
-        Catch log persists across sessions. Clear browser data to delete it permanently.
+        Your data is private to your account and is never shared with other users. <b>Your GPS location is never shared.</b>
       </div>
     </div>
   `;
@@ -19778,7 +19803,7 @@ function wpRenderMine(){
     ${wpSourceFilterBar()}
     ${wpStatsBar(list, "of " + WP_state.userPoints.length + " saved waypoints")}
     <div class="wp-info-box">
-      <b>⭐ Your waypoint database</b> — Everything here is yours to manage: points you add by hand, ones you save from public POIs or import from GPX, and any purchased port packs. They live on your device and never leave it unless you export them. Add, show on the map, edit, or delete any of them.
+      <b>⭐ Your waypoint database</b> — Everything here is yours to manage: points you add by hand, ones you save from public POIs or import from GPX, and any purchased port packs. They are saved to your account and sync across your own devices, and stay private to you. Export them to GPX anytime. Add, show on the map, edit, or delete any of them.
     </div>
     ${wpPackManageBar()}
     <div class="wp-list">

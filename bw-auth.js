@@ -31,6 +31,30 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     return user;
   }
 
+  function isSignedIn() {
+    return !!_user;
+  }
+
+  async function fetchProfile() {
+    const user = await requireUser();
+    const { data, error } = await client
+      .from("profiles")
+      .select("display_name, home_port, units")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (error) throw error;
+    return data || null;
+  }
+
+  async function saveProfile(patch) {
+    const user = await requireUser();
+    const { error } = await client.from("profiles").upsert(
+      { id: user.id, ...patch },
+      { onConflict: "id" },
+    );
+    if (error) throw error;
+  }
+
   async function signIn(email, password) {
     const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) throw error;
@@ -49,6 +73,18 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     const { error } = await client.auth.signOut();
     if (error) throw error;
     emit(null);
+  }
+
+  async function resetPassword(email) {
+    const { error } = await client.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+    if (error) throw error;
+  }
+
+  async function updatePassword(newPassword) {
+    const { error } = await client.auth.updateUser({ password: newPassword });
+    if (error) throw error;
   }
 
   async function fetchWaypoints() {
@@ -194,8 +230,19 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     return _user;
   }
 
-  client.auth.onAuthStateChange((_event, session) => {
+  client.auth.onAuthStateChange(async (event, session) => {
     emit(session ? session.user : null);
+    if (event === "PASSWORD_RECOVERY") {
+      const pw = prompt("Enter a new password (min 6 characters):");
+      if (pw && pw.length >= 6) {
+        try {
+          await updatePassword(pw);
+          alert("Password updated. You're signed in.");
+        } catch (e) {
+          alert("Could not update password: " + (e.message || e));
+        }
+      }
+    }
   });
 
   client.auth.getSession().then(({ data: { session } }) => {
@@ -203,9 +250,15 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   });
 
   window.BW_AUTH = {
+    _sb: client,
     signIn,
     signUp,
     signOut,
+    isSignedIn,
+    fetchProfile,
+    saveProfile,
+    resetPassword,
+    updatePassword,
     fetchWaypoints,
     saveWaypoint,
     saveWaypointsBulk,
