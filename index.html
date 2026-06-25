@@ -6514,6 +6514,8 @@ function speciesAllowedAtLat(speciesId, lat, lng){
 // East Breaks from Galveston is ~120nm; Pulley Ridge from Naples is ~140nm).
 const MAX_PORT_RANGE_NM_ATLANTIC = 90;
 const MAX_PORT_RANGE_NM_GULF = 120;
+const PREDICT_HEAT_SCORE_MIN = 0.01;
+const PREDICT_HOTSPOT_SCORE_MIN = 0.30;
 
 // Determines the fishing radius based on which coast the port is on.
 // Gulf-coast ports get the wider 150nm radius.
@@ -6595,7 +6597,8 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   // Rows of latitude scored per frame. ~6 rows × ~116 lng ≈ 700 cells/frame,
   // which keeps each frame well under the ~16ms budget on typical hardware.
   const ROWS_PER_FRAME = 6;
-  const grid = [];
+  const heatGrid = [];
+  const hotspotGrid = [];
   let lat = LAT_MIN;
 
   function step_frame(){
@@ -6614,21 +6617,30 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
           if(distNm > maxRange) continue;
         }
         const result = scoreCell(lat, lng, speciesId);
-        if(!result || result.score < 0.30) continue;
+        if(!result) continue;
         const penaltyStart = maxRange / 3;
         if(port && distNm > penaltyStart){
           const penalty = ((distNm - penaltyStart) / (maxRange - penaltyStart)) * 0.15;
           result.score = result.score * (1 - penalty);
         }
-        grid.push({lat, lng, distNm: Math.round(distNm), ...result});
+        if(result.score < PREDICT_HEAT_SCORE_MIN) continue;
+        const cell = {lat, lng, distNm: Math.round(distNm), ...result};
+        heatGrid.push(cell);
+        if(result.score >= PREDICT_HOTSPOT_SCORE_MIN) hotspotGrid.push(cell);
       }
     }
     if(lat <= LAT_MAX){
       // More rows remain — paint what we have so far, then continue next frame.
-      onProgress && onProgress(grid.slice().sort((a,b)=>b.score-a.score), myGen);
+      onProgress && onProgress({
+        heatGrid: heatGrid.slice().sort((a,b)=>b.score-a.score),
+        hotspots: hotspotGrid.slice().sort((a,b)=>b.score-a.score),
+      }, myGen);
       requestAnimationFrame(step_frame);
     } else {
-      onDone && onDone(grid.sort((a,b)=>b.score-a.score), myGen);
+      onDone && onDone({
+        heatGrid: heatGrid.sort((a,b)=>b.score-a.score),
+        hotspots: hotspotGrid.sort((a,b)=>b.score-a.score),
+      }, myGen);
     }
   }
   (async () => {
@@ -7053,7 +7065,7 @@ const HeatCanvasLayer = L.Layer.extend({
         const sHi = s10 + (s11 - s10) * fLng;  // interp along lng at high lat
         const score = sLo + (sHi - sLo) * fLat;  // interp along lat
 
-        if(score < 0.02){
+        if(score < PREDICT_HEAT_SCORE_MIN){
           this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
           continue;
         }
@@ -7390,9 +7402,11 @@ function drawPrediction(){
     activeSpId,
     null,   // no progressive repaint
     (full /*, gen */) => {
-      if(!full || full.length === 0){ _predictGrid = null; updateForecastSliderVisibility(); return; }
-      predictionData = full;
-      renderPrediction(full, species, true);
+      const heatGrid = Array.isArray(full) ? full : (full && full.heatGrid) || [];
+      const hotspots = Array.isArray(full) ? full : (full && full.hotspots) || [];
+      if(!heatGrid.length){ _predictGrid = null; updateForecastSliderVisibility(); return; }
+      predictionData = hotspots;
+      renderPrediction(hotspots, species, true, heatGrid);
     }
   );
 }
@@ -7401,18 +7415,20 @@ function drawPrediction(){
 // layer instance across calls (via setPoints) so re-rendering doesn't churn
 // Leaflet panes. `final` controls whether the badges are drawn.
 let _heatLayer = null;
-function renderPrediction(grid, species, final){
-  if(!grid || grid.length === 0) return;
+function renderPrediction(grid, species, final, heatGridOverride){
+  const hotspots = grid || [];
+  const heatGrid = heatGridOverride || hotspots;
+  if(!heatGrid || heatGrid.length === 0) return;
   // Remove only the badge markers (not the heat layer — we reuse it).
   predictLayers.forEach(l => { if(l !== _heatLayer) MAP.removeLayer(l); });
   predictLayers = [];
 
-  // Stash for the marker-free hit-test interaction.
-  _predictGrid = grid;
+  // Stash only actionable hotspots for marker-free hit testing.
+  _predictGrid = hotspots;
   _predictSpecies = species;
 
   // ── Canvas heat layer (continuous gradient) — created once, then updated ──
-  const heatPoints = grid.map(cell => ({ lat: cell.lat, lng: cell.lng, intensity: cell.score }));
+  const heatPoints = heatGrid.map(cell => ({ lat: cell.lat, lng: cell.lng, intensity: cell.score }));
   if(_heatLayer && MAP.hasLayer(_heatLayer)){
     _heatLayer._opts.speciesId = activeSpId;  // mask follows the active species
     _heatLayer.setPoints(heatPoints);          // cheap data swap + one redraw
@@ -7425,7 +7441,7 @@ function renderPrediction(grid, species, final){
   if(!final) return;
 
   // ── Top 3 hotspot badges (final paint only) ──
-  grid.slice(0, 3).forEach((cell, i) => {
+  hotspots.slice(0, 3).forEach((cell, i) => {
     const badge = L.marker([cell.lat, cell.lng], {
       icon: L.divIcon({
         className: "predict-badge",
@@ -11434,6 +11450,10 @@ async function signOut(){
 }
 
 window.bwOnSignedIn = async function (user) {
+  if(!window.WP_state || !Array.isArray(window.WP_state.userPoints)){
+    setTimeout(() => window.bwOnSignedIn(user), 0);
+    return;
+  }
   try {
     WP_state.userPoints = await window.BW_AUTH.fetchWaypoints();
     if (typeof drawUserWaypoints === "function") drawUserWaypoints();
@@ -19379,7 +19399,7 @@ function wpTypeIconHTML(key){
 // STATE
 // ════════════════════════════════════════════════════════════════════════════
 const WP_USER_KEY = "bwi_user_waypoints_v1";
-let WP_state = {
+var WP_state = {
   tab: "public",
   search: "",
   typeFilter: "all",
