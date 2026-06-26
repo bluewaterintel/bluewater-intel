@@ -1014,20 +1014,18 @@ body.nav-open #ruler-readout{
 #forecast-slider-input:focus{outline:none}
 #forecast-slider-input:focus::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(125,211,252,.35),0 2px 6px rgba(0,0,0,.5)}
 #wind-forecast-slider{touch-action:none}
-#wind-forecast-input{touch-action:none}
-#wind-forecast-input::-webkit-slider-thumb{
-  -webkit-appearance:none;appearance:none;
-  width:22px;height:22px;border-radius:50%;
-  background:#fff;border:2px solid #38bdf8;
-  box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;
+.wind-step-btn{
+  background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);
+  color:#dff6ff;border-radius:10px;min-width:42px;height:38px;
+  font-size:18px;font-weight:800;font-family:inherit;cursor:pointer;
 }
-#wind-forecast-input::-webkit-slider-thumb:active{cursor:grabbing;background:#e0f2fe}
-#wind-forecast-input::-moz-range-thumb{
-  width:22px;height:22px;border-radius:50%;
-  background:#fff;border:2px solid #38bdf8;
-  box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;
+.wind-step-btn:disabled{opacity:.35;cursor:not-allowed}
+.wind-time-chip{
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);
+  color:#9ec5e8;border-radius:8px;padding:6px 7px;font-size:10px;font-weight:700;
+  font-family:inherit;cursor:pointer;min-width:48px;
 }
-#wind-forecast-input:focus{outline:none}
+.wind-time-chip.active{background:rgba(56,189,248,.20);border-color:rgba(56,189,248,.55);color:#7dd3fc}
 .fc-mark{
   background:none;border:none;color:#9ec5e8;
   font-size:9px;font-weight:600;letter-spacing:.04em;
@@ -1795,8 +1793,8 @@ body.nav-open #ruler-readout{
     </div>
   </div>
 
-  <!-- WIND FORECAST SLIDER — shown only when the live/model wind layer is on.
-       Drives the wind layer from current conditions through the next 4 days. -->
+  <!-- WIND FORECAST STEPPER — shown only when the live/model wind layer is on.
+       Advances in 3-hour forecast steps from current conditions through 4 days. -->
   <div id="wind-forecast-slider" style="
     display:none;position:absolute;
     bottom:60px;left:50%;transform:translateX(-50%);z-index:500;
@@ -1813,24 +1811,20 @@ body.nav-open #ruler-readout{
       <div style="font-size:9px;color:#38bdf8;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Wind Forecast</div>
       <div id="wind-forecast-display" style="font-size:11px;color:#cfe5ff;font-weight:700">Now</div>
     </div>
-    <input id="wind-forecast-input" type="range" min="0" max="96" step="3" value="0" style="
-      width:100%;
-      -webkit-appearance:none;
-      appearance:none;
-      height:6px;
-      border-radius:3px;
-      background:linear-gradient(90deg,#1c3a5e 0%,#38bdf8 45%,#fbbf24 100%);
-      outline:none;
-      margin:4px 0 2px;
-    "
-      oninput="onWindForecastInput(this.value)"
-      onchange="onWindForecastChange(this.value)">
-    <div style="display:flex;justify-content:space-between;font-size:9px;color:#9ec5e8;margin-top:2px">
-      <button onclick="setWindForecastHour(0)"  type="button" class="fc-mark wind-mark">Now</button>
-      <button onclick="setWindForecastHour(24)" type="button" class="fc-mark wind-mark">+24h</button>
-      <button onclick="setWindForecastHour(48)" type="button" class="fc-mark wind-mark">+48h</button>
-      <button onclick="setWindForecastHour(72)" type="button" class="fc-mark wind-mark">+72h</button>
-      <button onclick="setWindForecastHour(96)" type="button" class="fc-mark wind-mark">+96h</button>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button id="wind-prev-btn" onclick="stepWindForecast(-3)" type="button" class="wind-step-btn" aria-label="Previous 3 hours">‹</button>
+      <div style="flex:1;min-width:0;text-align:center;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.10);border-radius:11px;padding:7px 10px">
+        <div id="wind-forecast-date" style="font-size:13px;color:#f0f6ff;font-weight:800;line-height:1.2">Current</div>
+        <div id="wind-forecast-time" style="font-size:10px;color:#9ec5e8;font-weight:700;letter-spacing:.04em;margin-top:2px">Current</div>
+      </div>
+      <button id="wind-next-btn" onclick="stepWindForecast(3)" type="button" class="wind-step-btn" aria-label="Next 3 hours">›</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;gap:5px;font-size:9px;color:#9ec5e8;margin-top:7px">
+      <button onclick="setWindForecastHour(0)"  type="button" class="wind-time-chip wind-mark">Current</button>
+      <button onclick="setWindForecastHour(24)" type="button" class="wind-time-chip wind-mark">+24h</button>
+      <button onclick="setWindForecastHour(48)" type="button" class="wind-time-chip wind-mark">+48h</button>
+      <button onclick="setWindForecastHour(72)" type="button" class="wind-time-chip wind-mark">+72h</button>
+      <button onclick="setWindForecastHour(96)" type="button" class="wind-time-chip wind-mark">+96h</button>
     </div>
   </div>
 
@@ -4916,24 +4910,38 @@ function windStatusLabel(){
 
 function windForecastLabel(hours){
   const h = Math.max(0, Math.min(96, Math.round(Number(hours)||0)));
-  if(h === 0) return "Now";
-  const d = Math.floor(h / 24), rem = h % 24;
-  if(rem === 0) return `+${d} day${d === 1 ? "" : "s"}`;
+  if(h === 0) return "Current";
   return `+${h}h`;
+}
+
+function windForecastDateParts(hours){
+  const h = Math.max(0, Math.min(96, Math.round(Number(hours)||0)));
+  if(h === 0) return { date: "Current", time: "Current observations" };
+  const d = new Date(Date.now() + h * 3600000);
+  return {
+    date: d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" }),
+    time: d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" }),
+  };
 }
 
 function updateWindForecastDisplay(){
   const label = document.getElementById("wind-forecast-display");
   if(label) label.textContent = windForecastLabel(WIND_FORECAST_HOUR);
-  const input = document.getElementById("wind-forecast-input");
-  if(input && String(input.value) !== String(WIND_FORECAST_HOUR)) input.value = WIND_FORECAST_HOUR;
+  const parts = windForecastDateParts(WIND_FORECAST_HOUR);
+  const dateEl = document.getElementById("wind-forecast-date");
+  const timeEl = document.getElementById("wind-forecast-time");
+  if(dateEl) dateEl.textContent = parts.date;
+  if(timeEl) timeEl.textContent = parts.time;
+  const prev = document.getElementById("wind-prev-btn");
+  const next = document.getElementById("wind-next-btn");
+  if(prev) prev.disabled = WIND_FORECAST_HOUR <= 0;
+  if(next) next.disabled = WIND_FORECAST_HOUR >= 96;
   const exact = [0, 24, 48, 72, 96];
   const box = document.getElementById("wind-forecast-slider");
   if(box){
     box.querySelectorAll(".wind-mark").forEach((btn, idx) => {
       const active = exact[idx] === WIND_FORECAST_HOUR;
-      btn.style.color = active ? "#38bdf8" : "#9ec5e8";
-      btn.style.fontWeight = active ? "800" : "600";
+      btn.classList.toggle("active", active);
     });
   }
 }
@@ -4947,18 +4955,14 @@ function updateWindForecastSliderVisibility(){
 }
 
 function setWindForecastHour(hours){
-  WIND_FORECAST_HOUR = Math.max(0, Math.min(96, Math.round(Number(hours)||0)));
+  WIND_FORECAST_HOUR = Math.max(0, Math.min(96, Math.round((Number(hours)||0) / 3) * 3));
   updateWindForecastDisplay();
   if(windLayer && layerVis.wind && typeof windLayer.refreshForecast === "function"){
     windLayer.refreshForecast();
   }
 }
 
-function onWindForecastInput(v){
-  WIND_FORECAST_HOUR = Math.max(0, Math.min(96, Math.round(Number(v)||0)));
-  updateWindForecastDisplay();
-}
-function onWindForecastChange(v){ setWindForecastHour(v); }
+function stepWindForecast(delta){ setWindForecastHour(WIND_FORECAST_HOUR + delta); }
 
 function getWindField(lat, lng){
   if(!window.BW_WIND) return null;
@@ -7339,6 +7343,7 @@ const WindParticleLayer = L.Layer.extend({
       if(req !== this._dataReq || !this._map) return;
       this._seed();
       this._drawShade();
+      if(!this._anim) setTimeout(() => { if(this._map && layerVis.wind && !this._anim) this._start(); }, 280);
     }).catch(() => {
       if(req === this._dataReq){
         WIND_FIELD.status = "unavailable";
@@ -7350,8 +7355,11 @@ const WindParticleLayer = L.Layer.extend({
   },
   refreshForecast: function(){
     this._dataReq++;
-    this._seed();
-    this._drawShade();
+    this._stop();
+    if(this._canvas) this._canvas.getContext('2d').clearRect(0,0,this._canvas.width,this._canvas.height);
+    if(this._shadeCanvas) this._shadeCanvas.getContext('2d').clearRect(0,0,this._shadeCanvas.width,this._shadeCanvas.height);
+    WIND_FIELD = { samples: [], builtAtMs: Date.now(), status: "loading", seq: WIND_FIELD.seq, boundsKey: "", forecastHour: WIND_FORECAST_HOUR };
+    updateOceanLegend();
     this._requestData();
   },
   _drawShade: function(){
@@ -7361,17 +7369,26 @@ const WindParticleLayer = L.Layer.extend({
     ctx.clearRect(0,0,w,h);
     if(!WIND_FIELD.samples.length || !window.BW_WIND || !this._map) return;
     const cell = this._opts.shadeCellPx;
-    for(let y = 0; y < h; y += cell){
-      for(let x = 0; x < w; x += cell){
-        const ll = this._map.containerPointToLatLng([x + cell/2, y + cell/2]);
+    const sw = Math.max(1, Math.ceil(w / cell));
+    const sh = Math.max(1, Math.ceil(h / cell));
+    const off = document.createElement("canvas");
+    off.width = sw; off.height = sh;
+    const octx = off.getContext("2d");
+    for(let gy = 0; gy < sh; gy++){
+      for(let gx = 0; gx < sw; gx++){
+        const ll = this._map.containerPointToLatLng([(gx + 0.5) * cell, (gy + 0.5) * cell]);
         const wind = getWindField(ll.lat, ll.lng);
         if(!wind) continue;
         const fill = window.BW_WIND.colorForSpeed(wind.speedKts);
         if(fill === "rgba(0,0,0,0)") continue;
-        ctx.fillStyle = fill;
-        ctx.fillRect(x, y, cell + 1, cell + 1);
+        octx.fillStyle = fill;
+        octx.fillRect(gx, gy, 1, 1);
       }
     }
+    ctx.imageSmoothingEnabled = true;
+    ctx.filter = "blur(10px)";
+    ctx.drawImage(off, -cell, -cell, w + cell * 2, h + cell * 2);
+    ctx.filter = "none";
   },
   _seed: function(){
     const w = this._canvas.width, h = this._canvas.height;
