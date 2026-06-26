@@ -139,8 +139,10 @@
   function legendGradient(maxKt) {
     const mx = maxKt || 40;
     const stops = [];
-    for (let k = 0; k <= mx; k += 2) {
-      stops.push(`${legendColor(k)} ${((k / mx) * 100).toFixed(1)}%`);
+    // Sample at 1-kt resolution so each hue holds across its band and only the
+    // intended ~1-kt cross-fades (e.g. blue→green right at 10 kt) show blending.
+    for (let k = 0; k <= mx; k += 1) {
+      stops.push(`${legendColor(k)} ${((k / mx) * 100).toFixed(2)}%`);
     }
     return `linear-gradient(90deg, ${stops.join(",")})`;
   }
