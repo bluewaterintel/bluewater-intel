@@ -9910,9 +9910,9 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:12px;font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:5px">WIND (kt)</div>
-        <div style="height:18px;border-radius:4px;background:linear-gradient(90deg,#2870d2 0%,#96cdf5 25%,#147832 26%,#82e178 37.5%,#ebe650 40%,#c8b219 57.5%,#f8b95f 60%,#e46e19 75%,#cd3728 76%,#be1a26 87.5%,#e65fb0 88%,#f05ab4 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="height:18px;border-radius:4px;background:${(window.BW_WIND && window.BW_WIND.legendGradient) ? window.BW_WIND.legendGradient(40) : 'linear-gradient(90deg,#2870d2,#82e178,#ebe650,#e46e19,#be1a26,#f05ab4)'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:10px;color:#cfe5ff;margin-top:3px;font-weight:600">
-          <span>0</span><span>10</span><span>15</span><span>20</span><span>25</span><span>30</span><span>35+</span>
+          <span>0</span><span>5</span><span>10</span><span>15</span><span>20</span><span>25</span><span>30</span><span>35</span><span>40+</span>
         </div>
         <div style="font-size:9px;color:#9ec5e8;margin-top:4px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
       </div>`);

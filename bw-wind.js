@@ -87,36 +87,65 @@
     return a + (b - a) * t;
   }
 
-  // Wind-speed color bands (kt). Each band shades light→dark (or dark→light)
-  // within ONE hue family per the marine scale:
-  //   0-10  none → blue → light blue
-  //   10-15 dark green → light green
-  //   15-23 yellow → darker yellow
-  //   23-30 light orange → dark orange
-  //   30-35 red
-  //   35+   pink
-  const WIND_BANDS = [
-    { min: 0,  max: 10, lo: [ 40, 110, 210], hi: [150, 205, 245] }, // blue → light blue
-    { min: 10, max: 15, lo: [ 20, 120,  50], hi: [130, 225, 120] }, // dark green → light green
-    { min: 15, max: 23, lo: [235, 230,  80], hi: [200, 175,  25] }, // yellow → darker yellow
-    { min: 23, max: 30, lo: [248, 185,  95], hi: [228, 110,  25] }, // light orange → dark orange
-    { min: 30, max: 35, lo: [225,  55,  40], hi: [190,  25,  30] }, // red
-    { min: 35, max: 55, lo: [240,  95, 175], hi: [228,  40, 140] }, // pink
+  // Continuous wind-speed color ramp (kt → rgb). One smooth stop list so colors
+  // blend cleanly across the whole range. Each hue holds across its band and then
+  // cross-fades to the next over ~1 kt (the paired stops 1 kt apart):
+  //   0-10 blue → light blue · 10 dark green · 15 light green · 16 yellow
+  //   23 dark yellow · 24 light orange · 30 dark orange · 31-35 red · 36+ pink
+  const WIND_STOPS = [
+    [0,  [ 40, 110, 210]], // blue
+    [9,  [150, 205, 245]], // light blue
+    [10, [ 20, 120,  50]], // dark green (green starts at 10 kt)
+    [15, [130, 225, 120]], // light green
+    [16, [235, 230,  80]], // yellow
+    [23, [200, 175,  25]], // darker yellow
+    [24, [248, 185,  95]], // light orange
+    [30, [228, 110,  25]], // dark orange
+    [31, [220,  50,  40]], // red
+    [35, [185,  25,  30]], // deep red
+    [36, [240,  95, 175]], // pink
+    [45, [228,  40, 140]], // deep pink
   ];
+
+  function windRGB(kts) {
+    const s = WIND_STOPS;
+    if (kts <= s[0][0]) return s[0][1].slice();
+    for (let i = 0; i < s.length - 1; i++) {
+      if (kts >= s[i][0] && kts <= s[i + 1][0]) {
+        const t = (kts - s[i][0]) / ((s[i + 1][0] - s[i][0]) || 1);
+        return s[i][1].map((v, k) => Math.round(lerp(v, s[i + 1][1][k], t)));
+      }
+    }
+    return s[s.length - 1][1].slice();
+  }
 
   function colorForSpeed(kts, alphaScale = 1) {
     // Truly calm (<2 kt) shows no color.
     if (!finite(kts) || kts < 2) return "rgba(0,0,0,0)";
-    let b = WIND_BANDS[WIND_BANDS.length - 1];
-    for (const cand of WIND_BANDS) { if (kts >= cand.min && kts < cand.max) { b = cand; break; } }
-    const t = Math.max(0, Math.min(1, (kts - b.min) / ((b.max - b.min) || 1)));
-    const c = b.lo.map((v, i) => Math.round(lerp(v, b.hi[i], t)));
-    // Faint for light wind, ramping bold for strong wind so the band reads clearly.
+    const c = windRGB(kts);
+    // Faint for light wind, ramping bold for strong wind so the speed reads clearly.
     const a = Math.max(0, Math.min(0.95, (0.16 + (kts / 35) * 0.8) * alphaScale));
     return `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`;
   }
 
-  const api = { KTS_TO_MPS, nmBetween, vectorFromObservation, interpolateWind, colorForSpeed };
+  // Solid (opaque) ramp color for the legend bar, so the legend always matches
+  // the map colors exactly.
+  function legendColor(kts) {
+    const c = windRGB(kts);
+    return `rgb(${c[0]},${c[1]},${c[2]})`;
+  }
+
+  // CSS linear-gradient string for a 0..maxKt legend, sampled from the same ramp.
+  function legendGradient(maxKt) {
+    const mx = maxKt || 40;
+    const stops = [];
+    for (let k = 0; k <= mx; k += 2) {
+      stops.push(`${legendColor(k)} ${((k / mx) * 100).toFixed(1)}%`);
+    }
+    return `linear-gradient(90deg, ${stops.join(",")})`;
+  }
+
+  const api = { KTS_TO_MPS, nmBetween, vectorFromObservation, interpolateWind, colorForSpeed, legendColor, legendGradient };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.BW_WIND = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
