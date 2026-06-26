@@ -444,6 +444,12 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     right:10px !important;
     transform:none !important;
   }
+  #wind-forecast-slider{
+    width:calc(100vw - 20px) !important;
+    left:10px !important;
+    right:10px !important;
+    transform:none !important;
+  }
   /* Distance scale bar — its bottom is set dynamically by restackBottomControls()
      so it always rides just above whatever stack of bars is showing. No
      !important here so the JS inline value wins; this is just a pre-JS fallback. */
@@ -1007,6 +1013,21 @@ body.nav-open #ruler-readout{
 }
 #forecast-slider-input:focus{outline:none}
 #forecast-slider-input:focus::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(125,211,252,.35),0 2px 6px rgba(0,0,0,.5)}
+#wind-forecast-slider{touch-action:none}
+#wind-forecast-input{touch-action:none}
+#wind-forecast-input::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:22px;height:22px;border-radius:50%;
+  background:#fff;border:2px solid #38bdf8;
+  box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;
+}
+#wind-forecast-input::-webkit-slider-thumb:active{cursor:grabbing;background:#e0f2fe}
+#wind-forecast-input::-moz-range-thumb{
+  width:22px;height:22px;border-radius:50%;
+  background:#fff;border:2px solid #38bdf8;
+  box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;
+}
+#wind-forecast-input:focus{outline:none}
 .fc-mark{
   background:none;border:none;color:#9ec5e8;
   font-size:9px;font-weight:600;letter-spacing:.04em;
@@ -1771,6 +1792,45 @@ body.nav-open #ruler-readout{
       <button onclick="setForecastHour(24)" type="button" class="fc-mark">+24h</button>
       <button onclick="setForecastHour(48)" type="button" class="fc-mark">+48h</button>
       <button onclick="setForecastHour(72)" type="button" class="fc-mark">+72h</button>
+    </div>
+  </div>
+
+  <!-- WIND FORECAST SLIDER — shown only when the live/model wind layer is on.
+       Drives the wind layer from current conditions through the next 4 days. -->
+  <div id="wind-forecast-slider" style="
+    display:none;position:absolute;
+    bottom:60px;left:50%;transform:translateX(-50%);z-index:500;
+    background:rgba(10,22,40,.94);
+    border:1px solid rgba(56,189,248,.35);
+    border-radius:14px;
+    padding:10px 16px 8px;
+    font-family:'Segoe UI',Arial,sans-serif;
+    color:#e8f4ff;
+    box-shadow:0 4px 14px rgba(0,0,0,.55);
+    width:min(520px, calc(100vw - 32px));
+  ">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px">
+      <div style="font-size:9px;color:#38bdf8;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Wind Forecast</div>
+      <div id="wind-forecast-display" style="font-size:11px;color:#cfe5ff;font-weight:700">Now</div>
+    </div>
+    <input id="wind-forecast-input" type="range" min="0" max="96" step="3" value="0" style="
+      width:100%;
+      -webkit-appearance:none;
+      appearance:none;
+      height:6px;
+      border-radius:3px;
+      background:linear-gradient(90deg,#1c3a5e 0%,#38bdf8 45%,#fbbf24 100%);
+      outline:none;
+      margin:4px 0 2px;
+    "
+      oninput="onWindForecastInput(this.value)"
+      onchange="onWindForecastChange(this.value)">
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:#9ec5e8;margin-top:2px">
+      <button onclick="setWindForecastHour(0)"  type="button" class="fc-mark wind-mark">Now</button>
+      <button onclick="setWindForecastHour(24)" type="button" class="fc-mark wind-mark">+24h</button>
+      <button onclick="setWindForecastHour(48)" type="button" class="fc-mark wind-mark">+48h</button>
+      <button onclick="setWindForecastHour(72)" type="button" class="fc-mark wind-mark">+72h</button>
+      <button onclick="setWindForecastHour(96)" type="button" class="fc-mark wind-mark">+96h</button>
     </div>
   </div>
 
@@ -3654,6 +3714,18 @@ async function initMap(){
     satEl.addEventListener("mousedown",    stopAllSat);
     satEl.addEventListener("mousemove",    stopAllSat);
   }
+  const windCtl = document.getElementById("wind-forecast-slider");
+  if(windCtl && typeof L !== "undefined" && L.DomEvent){
+    L.DomEvent.disableClickPropagation(windCtl);
+    L.DomEvent.disableScrollPropagation(windCtl);
+    const stopAllWind = e => { e.stopPropagation(); };
+    windCtl.addEventListener("pointerdown", stopAllWind);
+    windCtl.addEventListener("pointermove", stopAllWind);
+    windCtl.addEventListener("touchstart",  stopAllWind, {passive: true});
+    windCtl.addEventListener("touchmove",   stopAllWind, {passive: true});
+    windCtl.addEventListener("mousedown",   stopAllWind);
+    windCtl.addEventListener("mousemove",   stopAllWind);
+  }
   const radarCtl = document.getElementById("radar-loop-control");
   if(radarCtl && typeof L !== "undefined" && L.DomEvent){
     L.DomEvent.disableClickPropagation(radarCtl);
@@ -4830,15 +4902,63 @@ function synthWindDir(){
 // wind observations sampled across the visible map. No synthetic fallback:
 // if the feed has no speed+direction, the layer stays empty and labels that.
 // ════════════════════════════════════════════════════════════════════════════
-let WIND_FIELD = { samples: [], builtAtMs: 0, status: "idle", seq: 0, boundsKey: "" };
+let WIND_FIELD = { samples: [], builtAtMs: 0, status: "idle", seq: 0, boundsKey: "", forecastHour: 0 };
+let WIND_FORECAST_HOUR = 0;
 
 function windStatusLabel(){
   if(WIND_FIELD.status === "loading") return "loading real wind...";
-  if(WIND_FIELD.status === "live") return `NOAA live · ${WIND_FIELD.samples.length} samples`;
-  if(WIND_FIELD.status === "cached") return `cached NOAA · ${WIND_FIELD.samples.length} samples`;
+  const t = WIND_FIELD.forecastHour ? `+${WIND_FIELD.forecastHour}h` : "now";
+  if(WIND_FIELD.status === "live") return `forecast model · ${t}`;
+  if(WIND_FIELD.status === "cached") return `cached forecast · ${t}`;
   if(WIND_FIELD.status === "unavailable") return "real wind unavailable";
   return "real wind";
 }
+
+function windForecastLabel(hours){
+  const h = Math.max(0, Math.min(96, Math.round(Number(hours)||0)));
+  if(h === 0) return "Now";
+  const d = Math.floor(h / 24), rem = h % 24;
+  if(rem === 0) return `+${d} day${d === 1 ? "" : "s"}`;
+  return `+${h}h`;
+}
+
+function updateWindForecastDisplay(){
+  const label = document.getElementById("wind-forecast-display");
+  if(label) label.textContent = windForecastLabel(WIND_FORECAST_HOUR);
+  const input = document.getElementById("wind-forecast-input");
+  if(input && String(input.value) !== String(WIND_FORECAST_HOUR)) input.value = WIND_FORECAST_HOUR;
+  const exact = [0, 24, 48, 72, 96];
+  const box = document.getElementById("wind-forecast-slider");
+  if(box){
+    box.querySelectorAll(".wind-mark").forEach((btn, idx) => {
+      const active = exact[idx] === WIND_FORECAST_HOUR;
+      btn.style.color = active ? "#38bdf8" : "#9ec5e8";
+      btn.style.fontWeight = active ? "800" : "600";
+    });
+  }
+}
+
+function updateWindForecastSliderVisibility(){
+  const box = document.getElementById("wind-forecast-slider");
+  if(!box) return;
+  box.style.display = layerVis.wind ? "block" : "none";
+  if(layerVis.wind) updateWindForecastDisplay();
+  restackBottomControls();
+}
+
+function setWindForecastHour(hours){
+  WIND_FORECAST_HOUR = Math.max(0, Math.min(96, Math.round(Number(hours)||0)));
+  updateWindForecastDisplay();
+  if(windLayer && layerVis.wind && typeof windLayer.refreshForecast === "function"){
+    windLayer.refreshForecast();
+  }
+}
+
+function onWindForecastInput(v){
+  WIND_FORECAST_HOUR = Math.max(0, Math.min(96, Math.round(Number(v)||0)));
+  updateWindForecastDisplay();
+}
+function onWindForecastChange(v){ setWindForecastHour(v); }
 
 function getWindField(lat, lng){
   if(!window.BW_WIND) return null;
@@ -4848,7 +4968,7 @@ function getWindField(lat, lng){
 function windSampleGridForMap(){
   if(!MAP) return [];
   const b = MAP.getBounds().pad(0.18);
-  const rows = 6, cols = 7;
+  const rows = 5, cols = 6;
   const pts = [];
   for(let r = 0; r < rows; r++){
     const lat = b.getSouth() + (b.getNorth() - b.getSouth()) * (r / Math.max(1, rows - 1));
@@ -4864,7 +4984,7 @@ function windSampleGridForMap(){
 async function buildWindFieldForMap(){
   const seq = ++WIND_FIELD.seq;
   if(typeof BW_OCEAN === "undefined" || !window.BW_WIND || !MAP){
-    WIND_FIELD = { samples: [], builtAtMs: Date.now(), status: "unavailable", seq, boundsKey: "" };
+    WIND_FIELD = { samples: [], builtAtMs: Date.now(), status: "unavailable", seq, boundsKey: "", forecastHour: WIND_FORECAST_HOUR };
     updateOceanLegend();
     return WIND_FIELD;
   }
@@ -4880,7 +5000,7 @@ async function buildWindFieldForMap(){
     while(next < pts.length){
       const i = next++;
       const [lat, lng] = pts[i];
-      const p = await BW_OCEAN.fetchOcean(lat, lng);
+      const p = await BW_OCEAN.fetchOcean(lat, lng, { mode: "wind", hours: WIND_FORECAST_HOUR });
       const vector = window.BW_WIND.vectorFromObservation(p?.wind);
       if(vector){
         samples.push({
@@ -4900,6 +5020,7 @@ async function buildWindFieldForMap(){
     samples,
     builtAtMs: Date.now(),
     status: samples.length ? (usedCached ? "cached" : "live") : "unavailable",
+    forecastHour: WIND_FORECAST_HOUR,
     seq,
     boundsKey: MAP.getBounds().toBBoxString(),
   };
@@ -7152,11 +7273,11 @@ const WindParticleLayer = L.Layer.extend({
   initialize: function(options){
     this._opts = Object.assign({
       particleCount: 900,   // scaled by viewport in _seed
-      maxAgeFrames: 90,     // lifespan before respawn
-      speedScale: 0.006,    // map-units (px) per m/s per frame factor
-      lineWidth: 1.7,
-      trailFade: 0.90,      // 0-1; higher = longer trails
-      shadeCellPx: 8,
+      maxAgeFrames: 48,     // lifespan before respawn
+      speedScale: 0.010,    // map-units (px) per m/s per frame factor
+      lineWidth: 1.15,
+      trailFade: 0.80,      // 0-1; higher = longer trails
+      shadeCellPx: 14,
     }, options || {});
     this._particles = [];
     this._anim = null;
@@ -7164,7 +7285,7 @@ const WindParticleLayer = L.Layer.extend({
   },
   // Wind speed (kts) → streak color
   _speedColor: function(kts){
-    const alpha = Math.max(0.55, Math.min(0.95, 0.55 + (kts / 45) * 0.4));
+    const alpha = Math.max(0.42, Math.min(0.78, 0.42 + (kts / 45) * 0.32));
     return `rgba(255,255,255,${alpha.toFixed(3)})`;
   },
   onAdd: function(map){
@@ -7227,6 +7348,12 @@ const WindParticleLayer = L.Layer.extend({
       }
     });
   },
+  refreshForecast: function(){
+    this._dataReq++;
+    this._seed();
+    this._drawShade();
+    this._requestData();
+  },
   _drawShade: function(){
     if(!this._shadeCanvas) return;
     const ctx = this._shadeCanvas.getContext('2d');
@@ -7249,7 +7376,7 @@ const WindParticleLayer = L.Layer.extend({
   _seed: function(){
     const w = this._canvas.width, h = this._canvas.height;
     const area = w*h;
-    const n = Math.max(250, Math.min(1400, Math.round(area/1400)));
+    const n = Math.max(80, Math.min(420, Math.round(area/5200)));
     this._particles = [];
     for(let i=0;i<n;i++) this._particles.push(this._spawn());
   },
@@ -7285,8 +7412,6 @@ const WindParticleLayer = L.Layer.extend({
     const scale = this._opts.speedScale * Math.pow(2, (zoom-6));
     ctx.lineWidth = this._opts.lineWidth;
     ctx.lineCap = 'round';
-    ctx.shadowColor = 'rgba(255,255,255,.28)';
-    ctx.shadowBlur = 2;
 
     for(const p of this._particles){
       // Convert this pixel to lat/lng, sample wind there
@@ -7294,8 +7419,12 @@ const WindParticleLayer = L.Layer.extend({
       const wind = getWindField(ll.lat, ll.lng);
       if(!wind){ Object.assign(p, this._spawn()); continue; }
       // u=east(+x), v=north(-y in screen space)
-      const dx = wind.u * scale;
-      const dy = -wind.v * scale;
+      let dx = wind.u * scale;
+      let dy = -wind.v * scale;
+      const mag = Math.hypot(dx, dy) || 1;
+      const dashLen = Math.max(1.8, Math.min(6.5, 1.6 + wind.speedKts * 0.13));
+      dx = (dx / mag) * dashLen;
+      dy = (dy / mag) * dashLen;
       const nx = p.x + dx, ny = p.y + dy;
       ctx.strokeStyle = this._speedColor(wind.speedKts);
       ctx.beginPath();
@@ -7310,7 +7439,6 @@ const WindParticleLayer = L.Layer.extend({
         p.age = 0;
       }
     }
-    ctx.shadowBlur = 0;
   },
 });
 function windParticleLayer(options){ return new WindParticleLayer(options); }
@@ -8121,7 +8249,7 @@ function updateSatDateControlVisibility(){
 // nearest the thumb-friendly bottom edge. Called by every visibility updater.
 // The distance scale bar is then lifted to sit just above the top of the stack
 // so it never overlaps the bars or the Leaflet attribution line.
-const BOTTOM_STACK_ORDER = ["waypoint-control", "sat-date-control", "radar-loop-control", "forecast-slider"];
+const BOTTOM_STACK_ORDER = ["waypoint-control", "sat-date-control", "radar-loop-control", "wind-forecast-slider", "forecast-slider"];
 const BOTTOM_STACK_GAP  = 8;    // px gap between stacked bars
 function restackBottomControls(){
   // On phones the Leaflet attribution/credit line sits along the very bottom,
@@ -9824,6 +9952,7 @@ function drawWind(){
   } else {
     if(windLayer && MAP && MAP.hasLayer(windLayer)) MAP.removeLayer(windLayer);
   }
+  updateWindForecastSliderVisibility();
   updateOceanLegend();   // show/hide the wind-speed scale in the top legend
 }
 

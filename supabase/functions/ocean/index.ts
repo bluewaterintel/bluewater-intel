@@ -60,11 +60,14 @@ const SST_HAS_ALTITUDE = (Deno.env.get("SST_HAS_ALTITUDE") ?? "false") === "true
 const CHL_DATASET = Deno.env.get("CHL_DATASET") ?? "noaacwNPPVIIRSSQchlaDaily";
 const CHL_VAR = Deno.env.get("CHL_VAR") ?? "chlor_a";
 const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true";
+const OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast";
 
 const num = (v: unknown): number | null => {
   const n = typeof v === "string" ? parseFloat(v) : (v as number);
   return typeof n === "number" && isFinite(n) ? n : null;
 };
+
+const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
 // ── NDBC: nearest active buoy point observation ──────────────────────────────
 // Real-time per-station feed: https://www.ndbc.noaa.gov/data/realtime2/<ID>.txt
@@ -164,6 +167,68 @@ function nmBetween(la1: number, lo1: number, la2: number, lo2: number) {
   const dLa = toR(la2 - la1), dLo = toR(lo2 - lo1);
   const a = Math.sin(dLa / 2) ** 2 + Math.cos(toR(la1)) * Math.cos(toR(la2)) * Math.sin(dLo / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+type ModelWindRec = {
+  observedAtMs: number | null;
+  wind: { value: number | null; dir: number | null; observedAtMs: number | null };
+  airTemp: { value: number | null; observedAtMs: number | null };
+  pressure: { value: number | null; observedAtMs: number | null };
+  source: string;
+};
+const modelWindCache = new Map<string, { atMs: number; p: Promise<ModelWindRec> }>();
+function nearestHourlyIndex(times: string[], targetMs: number) {
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < times.length; i++) {
+    const ms = Date.parse(times[i] + (times[i].endsWith("Z") ? "" : "Z"));
+    const d = Math.abs(ms - targetMs);
+    if (isFinite(ms) && d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+async function fetchModelWind(lat: number, lng: number, hoursAhead = 0): Promise<ModelWindRec> {
+  const hour = Math.round(clamp(hoursAhead, 0, 96) / 3) * 3;
+  const k = `${lat.toFixed(2)},${lng.toFixed(2)},${hour}`;
+  const now = Date.now();
+  const hit = modelWindCache.get(k);
+  if (hit && now - hit.atMs < 20 * 60 * 1000) return hit.p;
+  const p = (async () => {
+    const url = `${OPEN_METEO_FORECAST}?latitude=${lat}&longitude=${lng}`
+      + "&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,surface_pressure"
+      + "&wind_speed_unit=kn&temperature_unit=fahrenheit&timezone=UTC&forecast_days=5";
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(7000), headers: ERDDAP_HEADERS });
+      if (!r.ok) throw new Error(`open-meteo ${r.status}`);
+      const d = await r.json();
+      const times: string[] = d?.hourly?.time ?? [];
+      const targetMs = Date.now() + hour * 3600000;
+      const idx = times.length ? nearestHourlyIndex(times, targetMs) : -1;
+      const observedAtMs = idx >= 0 ? Date.parse(times[idx] + "Z") : null;
+      const speed = idx >= 0 ? num(d?.hourly?.wind_speed_10m?.[idx]) : null;
+      const dir = idx >= 0 ? num(d?.hourly?.wind_direction_10m?.[idx]) : null;
+      const air = idx >= 0 ? num(d?.hourly?.temperature_2m?.[idx]) : null;
+      const pres = idx >= 0 ? num(d?.hourly?.surface_pressure?.[idx]) : null;
+      return {
+        observedAtMs,
+        wind: speed != null && dir != null ? { value: Math.round(speed * 10) / 10, dir, observedAtMs } : { value: null, dir: null, observedAtMs: null },
+        airTemp: air != null ? { value: Math.round(air * 10) / 10, observedAtMs } : { value: null, observedAtMs: null },
+        // Model surface pressure is absolute hPa, not a trend. The full ocean mode
+        // still uses NDBC for true pressure trend where available.
+        pressure: pres != null ? { value: Math.round(pres * 10) / 10, observedAtMs } : { value: null, observedAtMs: null },
+        source: "open-meteo-gfs",
+      };
+    } catch {
+      return {
+        observedAtMs: null,
+        wind: { value: null, dir: null, observedAtMs: null },
+        airTemp: { value: null, observedAtMs: null },
+        pressure: { value: null, observedAtMs: null },
+        source: "open-meteo-gfs",
+      };
+    }
+  })();
+  modelWindCache.set(k, { atMs: now, p });
+  return p;
 }
 
 async function fetchBuoy(lat: number, lng: number) {
@@ -351,6 +416,29 @@ Deno.serve(async (req) => {
   const lat = num(u.searchParams.get("lat"));
   const lng = num(u.searchParams.get("lng"));
   if (lat == null || lng == null) return json({ error: "lat and lng required" }, 400);
+  const mode = u.searchParams.get("mode") || "ocean";
+  const hoursAhead = num(u.searchParams.get("hours")) ?? 0;
+
+  if (mode === "wind") {
+    const model = await fetchModelWind(lat, lng, hoursAhead);
+    return new Response(JSON.stringify({
+      point: { lat, lng },
+      fetchedAtMs: Date.now(),
+      forecastHour: Math.round(clamp(hoursAhead, 0, 96) / 3) * 3,
+      wind: model.wind,
+      airTemp: model.airTemp,
+      pressure: model.pressure,
+      sst: { value: null, observedAtMs: null },
+      chlor: { value: null, observedAtMs: null },
+      waves: { value: null, observedAtMs: null },
+      waterTemp: { value: null, observedAtMs: null },
+      barometer: { value: null, observedAtMs: null },
+      tide: { value: null, state: null, observedAtMs: null },
+      sources: { wind: model.source },
+    }), {
+      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=900" },
+    });
+  }
 
   // Fetch all sources in parallel. Each returns real value+observedAt or nulls.
   // Lookback windows: SST (MUR) is gap-filled so a short window is just safety;

@@ -9,7 +9,7 @@
   const ANON = cfg.supabaseAnonKey || cfg.anonKey || "";
   const cache = new Map();
   const TTL = 20 * 60 * 1000;
-  const keyOf = (lat, lng) => `${lat.toFixed(2)},${lng.toFixed(2)}`;
+  const keyOf = (lat, lng, opts = {}) => `${lat.toFixed(2)},${lng.toFixed(2)},${opts.mode || "ocean"},${opts.hours ?? 0}`;
 
   // ── Last-known-good (best available REAL data) ─────────────────────────────
   // GOVERNING PRINCIPLE: real data or an honest absence — never synthetic. The
@@ -42,12 +42,15 @@
     return payload;
   }
 
-  async function fetchOcean(lat, lng) {
-    const k = keyOf(lat, lng);
+  async function fetchOcean(lat, lng, opts = {}) {
+    const k = keyOf(lat, lng, opts);
     const hit = cache.get(k);
     if (hit && Date.now() - hit.atMs < TTL) return mergeBestAvailable(k, { ...hit.payload, _cache: "fresh-cache" });
     try {
-      const res = await fetch(`${BASE}/functions/v1/ocean?lat=${lat}&lng=${lng}`, {
+      const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
+      if (opts.mode) params.set("mode", opts.mode);
+      if (opts.hours != null) params.set("hours", String(opts.hours));
+      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: AbortSignal.timeout(12000),
       });
