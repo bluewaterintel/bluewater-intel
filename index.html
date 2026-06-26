@@ -5422,6 +5422,26 @@ function scoreCell(lat, lng, speciesId){
   // explicit floor avoids passing tiny epsilon values into downstream math).
   if(tempScore < 0.01) tempScore = 0;
 
+  // ── Pelagic warm-water bias (offshore species) ──
+  // Tuna/billfish/wahoo relate to the warm Gulf Stream surface even though they
+  // drop into cooler water a couple degrees below the SST skin. So for offshore
+  // pelagics we (a) do NOT penalize SST above the ideal max until it nears the
+  // lethal working edge — warm water is GOOD, the fish just go deeper — and
+  // (b) add a warm-side bias so the bite concentrates toward the warmest fishable
+  // SST (the Stream edge, e.g. The Point) rather than the cool inshore side.
+  if(speciesCat === "offshore" && sst != null){
+    const warmEdge = prefs.tempWorking[1];
+    if(sst >= prefs.tempIdeal[1]){
+      // Warm side: full credit through the ideal/working band; only fall off once
+      // past the working max (genuinely too hot at the surface).
+      tempScore = sst <= warmEdge ? 1.0 : Math.max(0, 1 - (sst - warmEdge) / 4);
+    }
+    // Warm-side bias: 0 at the cool edge of ideal → 1 at the warm working edge.
+    const span = Math.max(1, warmEdge - prefs.tempIdeal[0]);
+    const warmBias = Math.max(0, Math.min(1, (sst - prefs.tempIdeal[0]) / span));
+    tempScore = Math.min(1, tempScore * (0.7 + 0.4 * warmBias));
+  }
+
   // ── Factor 2: Chlorophyll preference ──
   let chlorScore = 0;
   if(chlor != null){
@@ -7648,6 +7668,26 @@ function bindPredictInteractionHandlers(){
   });
 }
 
+// When the user explicitly turns the heat map OFF, auto-enable (ensurePredictLayerOn)
+// must not silently turn it back on. This is the "uncheck = hard stop" contract.
+let _predictUserOff = false;
+
+// On-map loading indicator shown while the heat map computes (it fetches real
+// bathymetry + ocean data, which can take a few seconds).
+let _predictLoadingEl = null;
+function showPredictLoading(){
+  if(!MAP) return;
+  if(!_predictLoadingEl){
+    _predictLoadingEl = document.createElement("div");
+    _predictLoadingEl.id = "predict-loading";
+    _predictLoadingEl.style.cssText = "position:absolute;top:64px;left:50%;transform:translateX(-50%);z-index:600;background:rgba(10,22,40,.92);border:1px solid rgba(125,211,252,.35);color:#e8f4ff;font:600 12px 'Segoe UI',Arial,sans-serif;padding:8px 14px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,.5);display:flex;align-items:center;gap:8px;pointer-events:none";
+    _predictLoadingEl.innerHTML = '<span style="width:14px;height:14px;border:2px solid rgba(125,211,252,.3);border-top-color:#7dd3fc;border-radius:50%;display:inline-block;animation:bwspin .8s linear infinite"></span><span>Generating heat map…</span><style>@keyframes bwspin{to{transform:rotate(360deg)}}</style>';
+    MAP.getContainer().appendChild(_predictLoadingEl);
+  }
+  _predictLoadingEl.style.display = "flex";
+}
+function hidePredictLoading(){ if(_predictLoadingEl) _predictLoadingEl.style.display = "none"; }
+
 // ── DRAW PREDICTION LAYER ────────────────────────────────────────────────────
 // Renders a TRUE canvas-based heat map. No third-party plugins, no circles.
 // Each cell is a radial gaussian; overlapping gaussians blend smoothly via
@@ -7658,9 +7698,9 @@ function drawPrediction(){
   // Bump the generation token so any in-flight async compute is abandoned and
   // won't paint stale results after we've torn down (prevents flicker/races).
   _predictGen++;
-  if(!layerVis.predict){ if(_heatLayer){ MAP.removeLayer(_heatLayer); _heatLayer=null; } _predictGrid = null; if(_predictTooltip) MAP.closeTooltip(_predictTooltip); updateForecastSliderVisibility(); return; }
+  if(!layerVis.predict){ hidePredictLoading(); if(_heatLayer){ MAP.removeLayer(_heatLayer); _heatLayer=null; } _predictGrid = null; if(_predictTooltip) MAP.closeTooltip(_predictTooltip); updateForecastSliderVisibility(); return; }
   // No species selected → silently render nothing (empty-state overlay handles UX)
-  if(!activeSpId || activeSpId === "all"){ if(_heatLayer){ MAP.removeLayer(_heatLayer); _heatLayer=null; } _predictGrid = null; if(_predictTooltip) MAP.closeTooltip(_predictTooltip); updateForecastSliderVisibility(); return; }
+  if(!activeSpId || activeSpId === "all"){ hidePredictLoading(); if(_heatLayer){ MAP.removeLayer(_heatLayer); _heatLayer=null; } _predictGrid = null; if(_predictTooltip) MAP.closeTooltip(_predictTooltip); updateForecastSliderVisibility(); return; }
 
   const species = SPECIES.find(s => s.id === activeSpId);
   _predictSpecies = species;
@@ -7670,6 +7710,8 @@ function drawPrediction(){
   }
   // Slider becomes visible: prediction is rendering
   updateForecastSliderVisibility();
+  showPredictLoading();
+  const _runGen = _predictGen;
 
   // Compute the grid asynchronously, painting progressively as latitude bands
   // finish so the UI never freezes. onProgress repaints the partial field;
@@ -7685,7 +7727,11 @@ function drawPrediction(){
   computePredictionGridAsync(
     activeSpId,
     null,   // no progressive repaint
-    (full /*, gen */) => {
+    (full, gen) => {
+      hidePredictLoading();
+      // HARD STOP: ignore any result from a run the user has since cancelled
+      // (heat map unchecked) or superseded (species/port changed).
+      if(gen !== _predictGen || !layerVis.predict){ return; }
       const heatGrid = Array.isArray(full) ? full : (full && full.heatGrid) || [];
       const hotspots = Array.isArray(full) ? full : (full && full.hotspots) || [];
       if(!heatGrid.length){ _predictGrid = null; updateForecastSliderVisibility(); return; }
@@ -8245,7 +8291,7 @@ function toggleLayer(key){
   if(chk)chk.checked=layerVis[key];
   if(key==="canyons")drawCanyons();
   else if(key==="spots")drawCanyons();  // unified structure layer (canyons+wrecks+reefs+lumps)
-  else if(key==="predict"){drawPrediction(); updateOceanLegend();}
+  else if(key==="predict"){ _predictUserOff = !layerVis.predict; drawPrediction(); updateOceanLegend();}
   else if(key==="zones")drawVesselZones();
   else if(key==="ports")drawPortMarkers();
   else if(key==="loran")drawLoranLines();
@@ -11475,6 +11521,8 @@ function isPortOutOfSpeciesRange(portName, speciesId){
 
 function selectSp(id){
   activeSpId=id;
+  // Picking a species is explicit intent to see predictions — clear any prior opt-out.
+  _predictUserOff = false;
   const sp=SPECIES.find(s=>s.id===id);
   const dot=document.getElementById("sp-dot");
   const name=document.getElementById("sp-name");
@@ -11655,6 +11703,8 @@ function updateHeaderConditions(){
 // port + target species should immediately show the fishing-spots heat map.
 function ensurePredictLayerOn(){
   if(!activePort || !activeSpId || activeSpId === "all") return;
+  // Respect an explicit user opt-out — don't silently re-check the box.
+  if(_predictUserOff) return;
   layerVis.predict = true;
   const chk = document.getElementById("chk-predict");
   if(chk) chk.checked = true;
@@ -11703,7 +11753,24 @@ function navBack(closeFn){
 function renderAccountSection(){
   const el = document.getElementById('nav-account');
   if(!el) return;
-  const acct = (typeof USER_PREFS !== 'undefined') ? USER_PREFS.account : null;
+  let acct = (typeof USER_PREFS !== 'undefined') ? USER_PREFS.account : null;
+  // Source of truth for "logged in" is the live Supabase session, not just the
+  // in-memory USER_PREFS.account (which can be empty if the menu renders before
+  // the persisted session finishes restoring on a fresh page load). If we have a
+  // session user, reflect it — and backfill USER_PREFS.account so the rest of the
+  // app sees a consistent signed-in state.
+  if((!acct || !acct.name) && window.BW_AUTH && typeof window.BW_AUTH.getUser === "function"){
+    const user = window.BW_AUTH.getUser();
+    if(user){
+      acct = {
+        name: (user.user_metadata && user.user_metadata.full_name)
+          || (user.email ? user.email.split("@")[0] : "Captain"),
+        email: user.email || "",
+        id: user.id,
+      };
+      if(typeof USER_PREFS !== 'undefined') USER_PREFS.account = acct;
+    }
+  }
   if(acct && acct.name){
     // Logged in
     const initial = (acct.name[0] || '?').toUpperCase();
