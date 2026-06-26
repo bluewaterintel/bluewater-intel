@@ -444,7 +444,7 @@ Deno.serve(async (req) => {
   // Lookback windows: SST (MUR) is gap-filled so a short window is just safety;
   // chlorophyll is frequently cloud-gapped so scan ~2 weeks for the last clear pixel.
   const SST_LOOKBACK = Number(Deno.env.get("SST_LOOKBACK") ?? "3");
-  const CHL_LOOKBACK = Number(Deno.env.get("CHL_LOOKBACK") ?? "14");
+  const CHL_LOOKBACK = Number(Deno.env.get("CHL_LOOKBACK") ?? "21");
   const [buoy, sst, chlorRaw, tide] = await Promise.all([
     fetchBuoy(lat, lng),
     fetchGridPoint(SST_ERDDAP, SST_DATASET, SST_VAR, lat, lng, SST_HAS_ALTITUDE, SST_LOOKBACK),

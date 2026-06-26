@@ -5083,26 +5083,26 @@ const PREDICT_WEIGHTS = {
   offshore: {
     temperature:   0.26,   // Slightly reduced — pelagics often hold at the EDGE rather than
                            //   in the warmest water; trim shifts emphasis to thermalBreak.
-    depthStruct:   0.13,
+    depthStruct:   0.18,   // Picked up part of the removed AIS weight — structure is real.
     chlorophyll:   0.16,   // Color breaks = bite edges
-    thermalBreak:  0.15,   // Bumped — temperature gradient is where pelagics actively hunt
+    thermalBreak:  0.21,   // Bumped — the Gulf Stream temperature break is where pelagics hunt.
     reports:       0.00,   // Moved out of weighted sum — pure additive bonus
-    aisDwell:      0.11,   // Fleet location is strong signal
+    aisDwell:      0.00,   // REMOVED — no real AIS feed; the old value was synthetic.
     season:        0.04,
     pressure:      0.08,
     solunar:       0.05,
     tide:          0.00,   // Tide irrelevant in deep blue water
-    wind:          0.00,   // Removed — captured indirectly via AIS dwell and weather change
+    wind:          0.00,   // Removed — captured indirectly via weather change
     weatherChange: 0.02,
     moonPhase:     0.00,   // Not significant for pelagics (not light-sensitive at depth)
   },
   nearshore: {
     temperature:   0.18,
-    depthStruct:   0.23,   // DOMINANT — find the wreck/ledge/reef first
+    depthStruct:   0.31,   // DOMINANT — find the wreck/ledge/reef first (absorbed AIS weight).
     chlorophyll:   0.07,
     thermalBreak:  0.06,   // Less important than offshore but still relevant
     reports:       0.00,
-    aisDwell:      0.08,
+    aisDwell:      0.00,   // REMOVED — no real AIS feed.
     season:        0.05,
     pressure:      0.10,
     solunar:       0.07,
@@ -5114,12 +5114,12 @@ const PREDICT_WEIGHTS = {
   inshore: {
     temperature:   0.10,   // Reduced — inshore species care more about WHERE (depth/structure)
                            //   and WHEN (tide/solunar) than absolute SST
-    depthStruct:   0.20,   // Bumped — inshore fish hold tight to specific structure
+    depthStruct:   0.27,   // Bumped — inshore fish hold tight to specific structure (absorbed AIS).
     chlorophyll:   0.00,   // Zeroed — satellite chlor is unreliable in shallow water
                            //   (bottom reflectance, sediment contamination)
     thermalBreak:  0.00,   // Inshore species want stable water, not breaks
     reports:       0.00,
-    aisDwell:      0.07,   // charter fleet location is meaningful signal
+    aisDwell:      0.00,   // REMOVED — no real AIS feed.
     season:        0.07,
     pressure:      0.10,
     solunar:       0.11,
@@ -5221,31 +5221,49 @@ function decimateOceanPts(pts, max){
   return out;
 }
 
-async function buildOceanField(latMin, latMax, lngMin, lngMax){
-  if(typeof BW_OCEAN === "undefined"){ OCEAN_FIELD = { samples: [], builtAtMs: Date.now() }; return; }
-  const stepDeg = 12 / 60;
-  const pts = [];
-  for(let la = latMin; la <= latMax; la += stepDeg)
-    for(let ln = lngMin; ln <= lngMax; ln += stepDeg)
-      if(isFishableWater(la, ln)) pts.push([la, ln]);
-  const capped = pts.length > 60 ? decimateOceanPts(pts, 60) : pts;
-  // Throttle the prefetch: firing all ~60 requests at once overwhelms the upstream
-  // ocean feed (ERDDAP/NDBC), which rate-limits the burst and returns null for most
-  // points — leaving every cell below the heat-map draw threshold. A small
-  // concurrency pool keeps each request reliable while still prefetching the grid.
+async function buildOceanField(latMin, latMax, lngMin, lngMax, opts){
+  if(typeof BW_OCEAN === "undefined"){ OCEAN_FIELD = { samples: [], builtAtMs: Date.now(), spacingNm: 0 }; return; }
+  const o = opts || {};
+  const maxPoints = o.maxPoints || 90;
+  // Choose a grid spacing that fills the requested box up to maxPoints water
+  // cells. A tighter box (one port's fishing area) yields ~8-15nm spacing —
+  // dense enough that SST/chlorophyll come from genuinely nearby pixels and a
+  // real temperature break (SST gradient) can be measured per cell. (The old
+  // version sampled the WHOLE coast and decimated to 60 points ≈ 150nm apart,
+  // so SST was coarse, chlorophyll often null/far, and thermal break was always
+  // zero — exactly the "missing inputs" the heat map showed.)
+  const midLat = (latMin + latMax) / 2;
+  const latNm = Math.max(1, (latMax - latMin) * 60);
+  const lngNm = Math.max(1, (lngMax - lngMin) * 60 * Math.cos(midLat * Math.PI / 180));
+  let stepNm = 8;
+  let pts = [];
+  for(let guard = 0; guard < 8; guard++){
+    const stepLat = stepNm / 60;
+    const stepLng = stepNm / (60 * Math.cos(midLat * Math.PI / 180));
+    pts = [];
+    for(let la = latMin; la <= latMax + 1e-9; la += stepLat)
+      for(let ln = lngMin; ln <= lngMax + 1e-9; ln += stepLng)
+        if(isFishableWater(la, ln)) pts.push([la, ln]);
+    if(pts.length <= maxPoints) break;
+    stepNm += 3;  // coarsen until we fit the request budget
+  }
+  if(pts.length > maxPoints) pts = decimateOceanPts(pts, maxPoints);
+  // Throttle the prefetch: firing every request at once overwhelms the upstream
+  // ocean feed (ERDDAP/NDBC), which rate-limits the burst and returns null for
+  // most points. A small concurrency pool keeps each request reliable.
   const CONCURRENCY = 8;
-  const results = new Array(capped.length);
+  const results = new Array(pts.length);
   let next = 0;
   async function worker(){
-    while(next < capped.length){
+    while(next < pts.length){
       const i = next++;
-      const [la, ln] = capped[i];
+      const [la, ln] = pts[i];
       const p = await BW_OCEAN.fetchOcean(la, ln);
       results[i] = { la, ln, p };
     }
   }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, capped.length) }, worker));
-  OCEAN_FIELD = { samples: results, builtAtMs: Date.now() };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pts.length) }, worker));
+  OCEAN_FIELD = { samples: results.filter(Boolean), builtAtMs: Date.now(), spacingNm: stepNm };
 }
 
 function nearestSample(lat, lng){
@@ -5257,23 +5275,45 @@ function nearestSample(lat, lng){
   return best ? best.p : null;
 }
 
+// Nearest sample whose given field actually has a real value. Satellite pixels
+// (especially chlorophyll) are frequently cloud-gapped, so the closest sample
+// can be null while a neighbor a few miles away has a valid, recent reading.
+// This pulls the field from the nearest VALID local sample instead of dropping
+// it — using only real measured values, with their real observedAt.
+function nearestFieldSample(lat, lng, key, maxNm){
+  const limit = maxNm || (OCEAN_FIELD.spacingNm ? OCEAN_FIELD.spacingNm * 3 : 45);
+  let best = null, bestNm = Infinity;
+  for(const s of OCEAN_FIELD.samples){
+    const f = s.p && s.p[key];
+    if(!f || f.value == null) continue;
+    const d = nmBetween(lat, lng, s.la, s.ln);
+    if(d <= limit && d < bestNm){ bestNm = d; best = f; }
+  }
+  return best;
+}
+
+// Thermal break = strongest SST gradient near this point, expressed in
+// °F per 10nm (the natural scale for a Gulf Stream / temperature-break edge).
+// Uses the LOCAL ocean field samples; the search radius is tied to the field's
+// own spacing so there are always enough neighbors to measure a gradient.
 function thermalBreakReal(lat, lng){
+  const radiusNm = (OCEAN_FIELD.spacingNm ? OCEAN_FIELD.spacingNm * 2.2 : 35);
   const near = [];
   for(const s of OCEAN_FIELD.samples){
     const d = nmBetween(lat, lng, s.la, s.ln);
-    if(d <= 20 && s.p?.sst?.value != null) near.push({ la: s.la, ln: s.ln, v: s.p.sst.value });
+    if(d <= radiusNm && s.p?.sst?.value != null) near.push({ la: s.la, ln: s.ln, v: s.p.sst.value });
   }
   if(near.length < 2) return 0;
-  let maxGrad = 0;
+  let maxGrad = 0;  // °F per nm
   for(let i = 0; i < near.length; i++){
     for(let j = i + 1; j < near.length; j++){
       const dNm = nmBetween(near[i].la, near[i].ln, near[j].la, near[j].ln);
-      if(dNm < 0.1) continue;
+      if(dNm < 1) continue;  // ignore near-duplicate samples
       const grad = Math.abs(near[i].v - near[j].v) / dNm;
       if(grad > maxGrad) maxGrad = grad;
     }
   }
-  return maxGrad;
+  return maxGrad * 10;  // convert to °F per 10nm
 }
 
 function scoreCell(lat, lng, speciesId){
@@ -5286,8 +5326,11 @@ function scoreCell(lat, lng, speciesId){
   const speciesCat = sp ? sp.cat : "offshore";
 
   const ocean = nearestSample(lat, lng);
-  const sstObj   = ocean?.sst   ?? { value: null, observedAtMs: null };
-  const chlorObj = ocean?.chlor ?? { value: null, observedAtMs: null };
+  // SST and chlorophyll are satellite fields with frequent cloud gaps, so prefer
+  // the nearest sample that actually has a value rather than the geographically
+  // closest sample (which may be a cloud-gapped null). Real values only.
+  const sstObj   = (ocean?.sst?.value != null ? ocean.sst : nearestFieldSample(lat, lng, "sst"))   ?? { value: null, observedAtMs: null };
+  const chlorObj = (ocean?.chlor?.value != null ? ocean.chlor : nearestFieldSample(lat, lng, "chlor")) ?? { value: null, observedAtMs: null };
   const windObj  = ocean?.wind  ?? { value: null, dir: null, observedAtMs: null };
   const presObj  = ocean?.pressure ?? { value: null, observedAtMs: null };
   const tideObj  = ocean?.tide  ?? { value: null, observedAtMs: null };
@@ -5391,9 +5434,6 @@ function scoreCell(lat, lng, speciesId){
   // ── Factor 5: Recent fishing reports ──
   const reportScore = reportsBoost(lat, lng, speciesId);
 
-  // ── Factor 6: AIS vessel dwell ──
-  const aisScore_ = aisBoost(lat, lng, speciesId);
-
   // ── Factor 7: Seasonal alignment (regional override OR latitude phase shift) ──
   // Two paths:
   //   A) REGIONAL: species like striper/bluefin/cobia have fundamentally
@@ -5491,7 +5531,6 @@ function scoreCell(lat, lng, speciesId){
     { key:"pres",   variable:"pressure", baseWeight:W.pressure,      score:pressureScore,    observedAtMs:presObj.observedAtMs },
     { key:"depth",  variable:"depth",    baseWeight:W.depthStruct,   score:depthScore,       observedAtMs:now },
     { key:"break",  variable:"sst",      baseWeight:W.thermalBreak,  score:breakScore,       observedAtMs:sstObj.observedAtMs },
-    { key:"ais",     variable:null,       baseWeight:W.aisDwell,      score:aisScore_ },
     { key:"solunar", variable:null,       baseWeight:W.solunar,       score:solunarScoreVal },
     { key:"tide",    variable:null,       baseWeight:W.tide,          score:tideScoreVal },
     { key:"season",  variable:null,       baseWeight:W.season,        score:seasonScore },
@@ -5506,7 +5545,6 @@ function scoreCell(lat, lng, speciesId){
     chlorScore        * W.chlorophyll   +
     depthScore        * W.depthStruct   +
     breakScore        * W.thermalBreak  +
-    aisScore_         * W.aisDwell      +
     seasonScore       * W.season        +
     pressureScore     * W.pressure      +
     solunarScoreVal   * W.solunar       +
@@ -5602,8 +5640,7 @@ function scoreCell(lat, lng, speciesId){
     // suggests one. Weight shown is an effective bonus weight.
     ...(reportScore > 0.05 ? [{name:"🎣 Recent catch reports", weight:0.18, score:Math.min(1, reportScore * 2.5), raw:"+bonus"}] : []),
     {name:"Solunar window",     weight:W.solunar,       score:solunarScoreVal,  raw:solunar > 0.7 ? "MAJOR" : solunar > 0.4 ? "minor" : "off"},
-    {name:"Thermal break",      weight:W.thermalBreak,  score:breakScore,       raw:`${tBreak.toFixed(1)}°F gradient`},
-    {name:"AIS vessel dwell",   weight:W.aisDwell,      score:aisScore_,        raw:aisScore_ > 0.05 ? "active" : "—"},
+    {name:"Thermal break",      weight:W.thermalBreak,  score:breakScore,       raw:tBreak > 0 ? `${tBreak.toFixed(1)}°F/10nm` : "—"},
     {name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
     {name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw:wxLabel},
     {name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonScore > 0.66 ? "peak" : seasonScore > 0.33 ? "good" : "off"},
@@ -6794,7 +6831,23 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   }
   (async () => {
     if(myGen !== _predictGen) return;
-    try { await buildOceanField(LAT_MIN, LAT_MAX, LNG_MIN, LNG_MAX); }
+    try {
+      // Build the REAL ocean field over the port's local fishing area (not the
+      // whole coast) so SST/chlorophyll come from nearby pixels and a real
+      // temperature break can be measured. Fall back to the full extent only if
+      // no port is selected.
+      if(port){
+        const degLat = (maxRange / 60) + 0.15;
+        const degLng = (maxRange / (60 * Math.cos(port.lat * Math.PI / 180))) + 0.15;
+        const bLatMin = Math.max(LAT_MIN, port.lat - degLat);
+        const bLatMax = Math.min(LAT_MAX, port.lat + degLat);
+        const bLngMin = Math.max(LNG_MIN, port.lng - degLng);
+        const bLngMax = Math.min(LNG_MAX, port.lng + degLng);
+        await buildOceanField(bLatMin, bLatMax, bLngMin, bLngMax, { maxPoints: 90 });
+      } else {
+        await buildOceanField(LAT_MIN, LAT_MAX, LNG_MIN, LNG_MAX, { maxPoints: 60 });
+      }
+    }
     catch(e){ console.warn("buildOceanField", e); }
     if(myGen !== _predictGen) return;
     requestAnimationFrame(step_frame);
@@ -7804,10 +7857,10 @@ function renderExplainerMain(){
           <span style="flex:1;text-align:left">Weather here</span>
           <span style="color:#7dd3fc;opacity:.6">→</span>
         </button>
-        <button disabled aria-disabled="true" class="ex-action-btn" style="background:rgba(168,85,247,.06);border:1px solid rgba(168,85,247,.20);color:#a78bd9;opacity:.65;cursor:not-allowed">
+        <button onclick="openSubPanel('brief')" class="ex-action-btn" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.4);color:#c084fc">
           <span style="font-size:16px">🤖</span>
           <span style="flex:1;text-align:left">AI Captain's Brief</span>
-          <span style="font-size:9px;font-weight:700;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);color:#c084fc;padding:2px 7px;border-radius:6px;letter-spacing:.05em;white-space:nowrap">COMING SOON</span>
+          <span style="color:#c084fc;opacity:.6">→</span>
         </button>
         <button onclick="openSubPanel('reports')" class="ex-action-btn" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);color:#34d399">
           <span style="font-size:16px">📋</span>
@@ -10906,12 +10959,35 @@ async function renderWX(lat,lng){
     <div>Loading conditions for ${lat.toFixed(2)}°N ${Math.abs(lng).toFixed(2)}°W...</div>
   </div><style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>`);
 
-  // Try live API first
-  let wx = await API.getWeather(lat, lng);
-  const isLive = !!wx;
+  // Pull REAL conditions from the ocean data function (NDBC buoys + ERDDAP).
+  // Falls back to the modeled values (labeled DEMO) only if no real data.
+  let wx = null;
+  let isLive = false;
+  if(typeof BW_OCEAN !== "undefined"){
+    try {
+      const o = await BW_OCEAN.fetchOcean(lat, lng);
+      const hasReal = o && (o.wind?.value != null || o.sst?.value != null || o.waterTemp?.value != null);
+      if(hasReal){
+        const nm = (typeof nmOffshore === "function") ? Math.round(nmOffshore(lat, lng)) : 0;
+        const waterF = (o.waterTemp?.value != null) ? o.waterTemp.value : o.sst?.value;
+        wx = {
+          buoy: o.sources?.buoy?.id ? `${o.sources.buoy.id} NDBC` : "Forecast model",
+          nm,
+          waterTempF: waterF != null ? Math.round(waterF * 10) / 10 : null,
+          airTempF:   o.airTemp?.value != null ? Math.round(o.airTemp.value) : null,
+          waveHt:     o.waves?.value != null ? Math.round(o.waves.value * 10) / 10 : null,
+          wavePer:    o.waves?.periodS != null ? Math.round(o.waves.periodS) : null,
+          windKt:     o.wind?.value != null ? Math.round(o.wind.value) : null,
+          windDir:    o.wind?.dir != null ? bwiCompass16(o.wind.dir) : null,
+          pressure:   o.barometer?.value != null ? Math.round(o.barometer.value) : null,
+        };
+        isLive = true;
+      }
+    } catch(e){ /* fall through to modeled */ }
+  }
   if(!wx) wx = calcWx(lat, lng);
   const tide = calcTides(lat, lng);
-  const windDir = wx.windDir || "SW";
+  const windDir = wx.windDir || "—";
   const lastUpdate = new Date();
 
   // Bite quality assessment
@@ -10946,19 +11022,19 @@ async function renderWX(lat,lng){
     `;
   };
 
-  // Score each factor 0-1 based on how favorable it is
-  const tempScore  = wx.waterTempF >= 68 && wx.waterTempF <= 78 ? 1.0 : wx.waterTempF >= 65 && wx.waterTempF <= 82 ? 0.7 : 0.3;
-  const waveScore  = wx.waveHt <= 3 ? 1.0 : wx.waveHt <= 5 ? 0.7 : wx.waveHt <= 7 ? 0.4 : 0.15;
-  const windScore  = wx.windKt <= 12 ? 1.0 : wx.windKt <= 18 ? 0.7 : wx.windKt <= 25 ? 0.4 : 0.15;
+  // Score each factor 0-1 based on how favorable it is (null → neutral 0.5).
+  const tempScore  = wx.waterTempF == null ? 0.5 : (wx.waterTempF >= 68 && wx.waterTempF <= 78 ? 1.0 : wx.waterTempF >= 65 && wx.waterTempF <= 82 ? 0.7 : 0.3);
+  const waveScore  = wx.waveHt == null ? 0.5 : (wx.waveHt <= 3 ? 1.0 : wx.waveHt <= 5 ? 0.7 : wx.waveHt <= 7 ? 0.4 : 0.15);
+  const windScore  = wx.windKt == null ? 0.5 : (wx.windKt <= 12 ? 1.0 : wx.windKt <= 18 ? 0.7 : wx.windKt <= 25 ? 0.4 : 0.15);
   const tideScore  = tide.state === "Rising" || tide.state === "Falling" ? 0.85 : 0.4;
-  const presScore  = wx.pressure >= 1015 && wx.pressure <= 1022 ? 0.85 : 0.65;
+  const presScore  = wx.pressure == null ? 0.5 : (wx.pressure >= 1015 && wx.pressure <= 1022 ? 0.85 : 0.65);
 
   pbody(`
     <!-- Status bar -->
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(107,191,234,.15);font-size:10px;font-family:monospace;flex-wrap:wrap">
       <span style="color:${isLive?'#10b981':'#fbbf24'};font-weight:bold">${isLive?'● LIVE':'● DEMO'}</span>
       <span style="color:#9ec5e8">${lat.toFixed(3)}°N ${Math.abs(lng).toFixed(3)}°W · ${wx.nm}nm offshore</span>
-      <span style="margin-left:auto;color:#7dd3fc">NDBC ${wx.buoy.split(" ")[0]} · ${fmtTime(lastUpdate)}</span>
+      <span style="margin-left:auto;color:#7dd3fc">${wx.buoy} · ${fmtTime(lastUpdate)}</span>
     </div>
 
     ${FORECAST_HOUR_OFFSET > 0 ? `
@@ -10986,10 +11062,10 @@ async function renderWX(lat,lng){
 
     <!-- Factor list -->
     <div style="font-size:10px;color:#7dd3fc;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:8px">Current Conditions</div>
-    ${factor("🌊 Water Temperature", wx.waterTempF, tempScore, `${wx.waterTempF}°F`)}
-    ${factor("〰 Wave Height",        wx.waveHt,    waveScore, `${wx.waveHt}ft @ ${wx.wavePer}s`)}
-    ${factor("💨 Wind",               wx.windKt,    windScore, `${wx.windKt}kt ${windDir}`)}
-    ${factor("📊 Pressure",           wx.pressure,  presScore, `${wx.pressure} hPa`)}
+    ${factor("🌊 Water Temperature", wx.waterTempF, tempScore, wx.waterTempF != null ? `${wx.waterTempF}°F` : "—")}
+    ${factor("〰 Wave Height",        wx.waveHt,    waveScore, wx.waveHt != null ? `${wx.waveHt}ft${wx.wavePer ? ` @ ${wx.wavePer}s` : ""}` : "—")}
+    ${factor("💨 Wind",               wx.windKt,    windScore, wx.windKt != null ? `${wx.windKt}kt ${windDir}` : "—")}
+    ${factor("📊 Pressure",           wx.pressure,  presScore, wx.pressure != null ? `${wx.pressure} hPa` : "—")}
     ${factor(`🌙 Tide (${tide.station})`, tide.height, tideScore, `${tide.height}ft ${tide.state==="Rising"?"↑":"↓"}`)}
 
     <!-- Tide times row -->
@@ -11004,7 +11080,7 @@ async function renderWX(lat,lng){
       </div>
       <div style="flex:1">
         <div style="font-size:9px;color:#7dd3fc;letter-spacing:.05em;font-weight:600">☀ AIR TEMP</div>
-        <div style="font-size:13px;font-weight:700;color:#f0f6ff">${wx.airTempF}°F</div>
+        <div style="font-size:13px;font-weight:700;color:#f0f6ff">${wx.airTempF != null ? wx.airTempF + "°F" : "—"}</div>
       </div>
     </div>
 
