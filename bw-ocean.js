@@ -2,7 +2,10 @@
 (function (root) {
   const cfgCandidates = [root.BW_SUPABASE_CONFIG, root.BW_DATA_CONFIG].filter(Boolean);
   const cfg = cfgCandidates.find((c) => c.supabaseUrl || c.url) || {};
-  const BASE = (cfg.supabaseUrl || cfg.url || "").replace(/\/$/, "");
+  const configuredBase = (cfg.supabaseUrl || cfg.url || "").replace(/\/$/, "");
+  const BASE = (!configuredBase || configuredBase.includes("YOURPROJECT"))
+    ? "https://mealpzwbjamkjdrsszqe.supabase.co"
+    : configuredBase;
   const ANON = cfg.supabaseAnonKey || cfg.anonKey || "";
   const cache = new Map();
   const TTL = 20 * 60 * 1000;
