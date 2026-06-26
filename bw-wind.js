@@ -93,8 +93,8 @@
   //   0-10 blue → light blue · 10 dark green · 15 light green · 16 yellow
   //   23 dark yellow · 24 light orange · 30 dark orange · 31-35 red · 36+ pink
   const WIND_STOPS = [
-    [0,  [ 40, 110, 210]], // blue
-    [9,  [150, 205, 245]], // light blue
+    [0,  [ 30,  95, 215]], // blue
+    [9,  [115, 180, 250]], // light blue (kept clearly blue, not teal)
     [10, [ 20, 120,  50]], // dark green (green starts at 10 kt)
     [15, [130, 225, 120]], // light green
     [16, [235, 230,  80]], // yellow

@@ -9911,8 +9911,8 @@ function updateOceanLegend(){
       <div style="${gap()}">
         <div style="font-size:12px;font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:5px">WIND (kt)</div>
         <div style="height:18px;border-radius:4px;background:${(window.BW_WIND && window.BW_WIND.legendGradient) ? window.BW_WIND.legendGradient(40) : 'linear-gradient(90deg,#2870d2,#82e178,#ebe650,#e46e19,#be1a26,#f05ab4)'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:#cfe5ff;margin-top:3px;font-weight:600">
-          <span>0</span><span>5</span><span>10</span><span>15</span><span>20</span><span>25</span><span>30</span><span>35</span><span>40+</span>
+        <div style="position:relative;height:14px;margin-top:3px;font-size:10px;color:#cfe5ff;font-weight:600">
+          ${[0,5,10,15,20,25,30,35,40].map((v,i,arr)=>{const pct=v/40*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===40?'40+':v}</span>`;}).join('')}
         </div>
         <div style="font-size:9px;color:#9ec5e8;margin-top:4px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
       </div>`);
