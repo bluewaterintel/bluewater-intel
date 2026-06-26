@@ -61,6 +61,11 @@ const CHL_DATASET = Deno.env.get("CHL_DATASET") ?? "noaacwNPPVIIRSSQchlaDaily";
 const CHL_VAR = Deno.env.get("CHL_VAR") ?? "chlor_a";
 const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true";
 const OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast";
+// ETOPO 1-arcmin global relief (real bathymetry) via NOAA CoastWatch ERDDAP.
+// altitude is metres relative to sea level (negative = below sea level).
+const ETOPO_ERDDAP = Deno.env.get("ETOPO_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
+const ETOPO_DATASET = Deno.env.get("ETOPO_DATASET") ?? "etopo180";
+const ETOPO_STEP_DEG = 1 / 60; // native ~1 arcmin grid step
 
 const num = (v: unknown): number | null => {
   const n = typeof v === "string" ? parseFloat(v) : (v as number);
@@ -413,10 +418,55 @@ async function fetchTide(lat: number, lng: number) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const u = new URL(req.url);
+  const mode = u.searchParams.get("mode") || "ocean";
+
+  // ── Real bathymetry grid (ETOPO) for a bounding box, one request ───────────
+  // Returns a coarse grid of real depths so the prediction engine can place
+  // species on the correct shelf/break depth instead of a static estimate.
+  if (mode === "bathy") {
+    const latMin = num(u.searchParams.get("latMin"));
+    const latMax = num(u.searchParams.get("latMax"));
+    const lngMin = num(u.searchParams.get("lngMin"));
+    const lngMax = num(u.searchParams.get("lngMax"));
+    if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+    }
+    // Cap the box and choose an index stride targeting ~0.05° (~3nm) samples so
+    // the response stays small (one cached request covers a whole port area).
+    const a0 = Math.max(-89, Math.min(latMin, latMax));
+    const a1 = Math.min(89, Math.max(latMin, latMax));
+    const o0 = Math.max(-179, Math.min(lngMin, lngMax));
+    const o1 = Math.min(179, Math.max(lngMin, lngMax));
+    const targetDeg = 0.05;
+    const strideIdx = Math.max(1, Math.round(targetDeg / ETOPO_STEP_DEG));
+    const url = `${ETOPO_ERDDAP}/${ETOPO_DATASET}.json`
+      + `?altitude%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(12000), headers: ERDDAP_HEADERS });
+      if (!r.ok) return json({ error: `bathy ${r.status}`, rows: [] }, 200);
+      const d = await r.json();
+      const cols: string[] = d?.table?.columnNames ?? [];
+      const rawRows: unknown[][] = d?.table?.rows ?? [];
+      const li = cols.indexOf("latitude"), gi = cols.indexOf("longitude"), ai = cols.indexOf("altitude");
+      // Compact: [lat, lng, depthMeters(>0 = below sea level)]. Land → 0.
+      const rows = rawRows.map((row) => {
+        const la = num(row[li]), ln = num(row[gi]), alt = num(row[ai]);
+        if (la == null || ln == null) return null;
+        const depth = alt != null ? Math.max(0, -alt) : null;
+        return [Math.round(la * 1000) / 1000, Math.round(ln * 1000) / 1000, depth];
+      }).filter(Boolean);
+      return new Response(JSON.stringify({ stepDeg: strideIdx * ETOPO_STEP_DEG, rows }), {
+        headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=604800" },
+      });
+    } catch {
+      return json({ error: "bathy fetch failed", rows: [] }, 200);
+    }
+  }
+
+  // Point modes (ocean/wind) require coordinates.
   const lat = num(u.searchParams.get("lat"));
   const lng = num(u.searchParams.get("lng"));
   if (lat == null || lng == null) return json({ error: "lat and lng required" }, 400);
-  const mode = u.searchParams.get("mode") || "ocean";
   const hoursAhead = num(u.searchParams.get("hours")) ?? 0;
 
   if (mode === "wind") {

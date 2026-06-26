@@ -5213,6 +5213,56 @@ function normalizeScore(raw){
 // Real ocean field cache for the current heatmap render (coarse grid prefetch).
 let OCEAN_FIELD = { samples: [], builtAtMs: 0 };
 
+// Real bathymetry grid (ETOPO) for the active prediction area. Built once per
+// port render and sampled per cell so depth reflects the ACTUAL shelf/break,
+// not a static estimate. { stepDeg, minLat, minLng, nLat, nLng, depth:Float32 }.
+let BATHY_GRID = null;
+
+async function buildBathyGrid(latMin, latMax, lngMin, lngMax){
+  BATHY_GRID = null;
+  if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchBathy) return;
+  let data = null;
+  try { data = await BW_OCEAN.fetchBathy(latMin, latMax, lngMin, lngMax); }
+  catch(e){ data = null; }
+  if(!data || !data.rows || !data.rows.length) return;
+  const step = data.stepDeg || 0.05;
+  let mnLa = Infinity, mxLa = -Infinity, mnLn = Infinity, mxLn = -Infinity;
+  for(const [la, ln] of data.rows){
+    if(la < mnLa) mnLa = la; if(la > mxLa) mxLa = la;
+    if(ln < mnLn) mnLn = ln; if(ln > mxLn) mxLn = ln;
+  }
+  const nLat = Math.max(1, Math.round((mxLa - mnLa) / step) + 1);
+  const nLng = Math.max(1, Math.round((mxLn - mnLn) / step) + 1);
+  const depth = new Float32Array(nLat * nLng).fill(NaN);
+  for(const [la, ln, d] of data.rows){
+    if(d == null) continue;
+    const i = Math.round((la - mnLa) / step);
+    const j = Math.round((ln - mnLn) / step);
+    if(i >= 0 && i < nLat && j >= 0 && j < nLng) depth[i * nLng + j] = d;
+  }
+  BATHY_GRID = { step, minLat: mnLa, minLng: mnLn, nLat, nLng, depth };
+}
+
+// Real depth (meters) at a point from the ETOPO grid; null if unavailable.
+function realDepthAt(lat, lng){
+  const g = BATHY_GRID;
+  if(!g) return null;
+  const fi = (lat - g.minLat) / g.step;
+  const fj = (lng - g.minLng) / g.step;
+  if(fi < 0 || fj < 0 || fi > g.nLat - 1 || fj > g.nLng - 1) return null;
+  const i = Math.round(fi), j = Math.round(fj);
+  const v = g.depth[i * g.nLng + j];
+  return (typeof v === "number" && isFinite(v)) ? v : null;
+}
+
+// Depth used by the prediction engine: prefer REAL bathymetry, fall back to the
+// static shelf model only where the grid has no coverage.
+function predictDepth(lat, lng){
+  const real = realDepthAt(lat, lng);
+  if(real != null) return real;
+  return seaDepth(lat, lng);
+}
+
 function decimateOceanPts(pts, max){
   if(pts.length <= max) return pts;
   const out = [];
@@ -5337,7 +5387,7 @@ function scoreCell(lat, lng, speciesId){
 
   const sst   = sstObj.value;
   const chlor = chlorObj.value;
-  const depth = seaDepth(lat, lng);
+  const depth = predictDepth(lat, lng);
   const tBreak = thermalBreakReal(lat, lng);
   const pressureTrend = presObj.value;
   const solunar = solunarScore(lat, lng);
@@ -6534,8 +6584,9 @@ function classifyWaterType(lat, lng){
     }
   }
 
-  // Depth-based classification in FEET (depth from seaDepth is in meters).
-  const depthM = seaDepth(lat, lng);
+  // Depth-based classification in FEET. Prefer REAL bathymetry (ETOPO) so the
+  // shelf/nearshore/offshore split matches actual depth, not the static model.
+  const depthM = (typeof predictDepth === "function") ? predictDepth(lat, lng) : seaDepth(lat, lng);
   const depthFt = depthM * 3.281;
   if(depthFt < 30)  return "inshore";       // 0-30 ft
   if(depthFt < 100) return "nearshore";     // 30-100 ft
@@ -6843,7 +6894,12 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
         const bLatMax = Math.min(LAT_MAX, port.lat + degLat);
         const bLngMin = Math.max(LNG_MIN, port.lng - degLng);
         const bLngMax = Math.min(LNG_MAX, port.lng + degLng);
-        await buildOceanField(bLatMin, bLatMax, bLngMin, bLngMax, { maxPoints: 90 });
+        // Real bathymetry first (one cached request) so depth scoring is accurate,
+        // then the SST/chlorophyll/wind field.
+        await Promise.all([
+          buildBathyGrid(bLatMin, bLatMax, bLngMin, bLngMax),
+          buildOceanField(bLatMin, bLatMax, bLngMin, bLngMax, { maxPoints: 90 }),
+        ]);
       } else {
         await buildOceanField(LAT_MIN, LAT_MAX, LNG_MIN, LNG_MAX, { maxPoints: 60 });
       }
@@ -7478,23 +7534,29 @@ const WindParticleLayer = L.Layer.extend({
     if(!WIND_FIELD.samples.length) return;
     const map = this._map;
     const zoom = map.getZoom();
-    // px per m/s scaled by zoom so motion looks consistent across scales
-    const scale = this._opts.speedScale * Math.pow(2, (zoom-6));
+    // Per-frame step is PROPORTIONAL to wind speed, so calm (blue) water barely
+    // moves and strong (orange/red) wind streaks fast with longer streaks. A mild
+    // zoom factor keeps motion readable across scales without runaway speed.
+    const zoomScale = Math.pow(2, (zoom - 6) * 0.5);
+    const CALM_KTS = 3;        // below this, treat as effectively calm (no streak)
     ctx.lineWidth = this._opts.lineWidth;
     ctx.lineCap = 'round';
 
     for(const p of this._particles){
-      // Convert this pixel to lat/lng, sample wind there
       const ll = map.containerPointToLatLng([p.x, p.y]);
       const wind = getWindField(ll.lat, ll.lng);
       if(!wind){ Object.assign(p, this._spawn()); continue; }
-      // u=east(+x), v=north(-y in screen space)
-      let dx = wind.u * scale;
-      let dy = -wind.v * scale;
-      const mag = Math.hypot(dx, dy) || 1;
-      const dashLen = Math.max(1.8, Math.min(6.5, 1.6 + wind.speedKts * 0.13));
-      dx = (dx / mag) * dashLen;
-      dy = (dy / mag) * dashLen;
+      // Calm water: leave it nearly still (occasional drift), don't draw a streak.
+      if(wind.speedKts < CALM_KTS){
+        p.age++;
+        if(p.age > this._opts.maxAgeFrames) Object.assign(p, this._spawn());
+        continue;
+      }
+      // Step length grows with speed (px/frame), capped so gales stay on-screen.
+      const stepPx = Math.min(5.0, wind.speedKts * 0.12) * zoomScale;
+      const mag = Math.hypot(wind.u, wind.v) || 1;
+      const dx = (wind.u / mag) * stepPx;     // east = +x
+      const dy = (-wind.v / mag) * stepPx;    // north = -y on screen
       const nx = p.x + dx, ny = p.y + dy;
       ctx.strokeStyle = this._speedColor(wind.speedKts);
       ctx.beginPath();
