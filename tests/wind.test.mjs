@@ -47,19 +47,19 @@ console.log("\nwind interpolation:");
 console.log("\nwind speed shading bands:");
 const rgba = (s) => { const m = s.match(/rgba\((\d+),(\d+),(\d+),([\d.]+)\)/); return m ? { r:+m[1], g:+m[2], b:+m[3], a:+m[4] } : null; };
 {
-  const calm = rgba(colorForSpeed(3));
-  check("calm (3kt) is blue-dominant", calm && calm.b > calm.r && calm.b > calm.g);
-  check("calm (3kt) is faint (low alpha)", calm && calm.a < 0.35);
+  check("truly calm (<2kt) shows no color", colorForSpeed(1) === "rgba(0,0,0,0)");
+  const blue = rgba(colorForSpeed(5));
+  check("0-10kt is blue-dominant & faint", blue && blue.b > blue.r && blue.b > blue.g && blue.a < 0.35);
   const green = rgba(colorForSpeed(12));
   check("10-15kt is green-dominant", green && green.g > green.r && green.g > green.b);
-  const yellow = rgba(colorForSpeed(17));
-  check("15-20kt is yellow (r&g high, b low)", yellow && yellow.r > 180 && yellow.g > 180 && yellow.b < 130);
-  const orange = rgba(colorForSpeed(22));
-  check("20-25kt is orange (r high, g mid, b low)", orange && orange.r > 220 && orange.g > 100 && orange.g < 190 && orange.b < 110);
-  const red = rgba(colorForSpeed(28));
-  check("25-30kt is red-dominant and bold", red && red.r > 190 && red.g < 100 && red.a > 0.6);
-  const pink = rgba(colorForSpeed(34));
-  check(">30kt is pink (high r AND high b)", pink && pink.r > 200 && pink.b > 120 && pink.g < 130);
+  const yellow = rgba(colorForSpeed(18));
+  check("15-23kt is yellow (r&g high, b low)", yellow && yellow.r > 180 && yellow.g > 160 && yellow.b < 120);
+  const orange = rgba(colorForSpeed(26));
+  check("23-30kt is orange (r high, g mid, b low)", orange && orange.r > 215 && orange.g > 90 && orange.g < 185 && orange.b < 110);
+  const red = rgba(colorForSpeed(32));
+  check("30-35kt is red-dominant and bold", red && red.r > 180 && red.g < 90 && red.a > 0.6);
+  const pink = rgba(colorForSpeed(38));
+  check(">35kt is pink (high r AND high b)", pink && pink.r > 200 && pink.b > 120 && pink.g < 130);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

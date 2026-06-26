@@ -7734,11 +7734,12 @@ const WindParticleLayer = L.Layer.extend({
     if(!WIND_FIELD.samples.length) return;
     const map = this._map;
     const zoom = map.getZoom();
-    // Per-frame step is PROPORTIONAL to wind speed, so calm (blue) water barely
-    // moves and strong (orange/red) wind streaks fast with longer streaks. A mild
-    // zoom factor keeps motion readable across scales without runaway speed.
-    const zoomScale = Math.pow(2, (zoom - 6) * 0.5);
-    const CALM_KTS = 3;        // below this, treat as effectively calm (no streak)
+    // Per-frame step is PROPORTIONAL to wind speed, so calm (blue/green) water
+    // drifts slowly and only strong (orange/red/pink) wind moves fast. Kept
+    // deliberately slow so direction is easy to read. A gentle zoom factor keeps
+    // motion consistent across scales without runaway speed.
+    const zoomScale = Math.pow(2, (zoom - 6) * 0.35);
+    const CALM_KTS = 2;        // below this, treat as effectively calm (no streak)
     ctx.lineWidth = this._opts.lineWidth;
     ctx.lineCap = 'round';
 
@@ -7752,8 +7753,9 @@ const WindParticleLayer = L.Layer.extend({
         if(p.age > this._opts.maxAgeFrames) Object.assign(p, this._spawn());
         continue;
       }
-      // Step length grows with speed (px/frame), capped so gales stay on-screen.
-      const stepPx = Math.min(5.0, wind.speedKts * 0.12) * zoomScale;
+      // Step length grows with speed (px/frame), capped so gales stay readable.
+      // ~3x slower than before: light wind ≈ 0.2-0.5 px/frame, a 35kt gale ≈ 1.6.
+      const stepPx = Math.min(1.8, wind.speedKts * 0.045) * zoomScale;
       const mag = Math.hypot(wind.u, wind.v) || 1;
       const dx = (wind.u / mag) * stepPx;     // east = +x
       const dy = (-wind.v / mag) * stepPx;    // north = -y on screen
@@ -9908,9 +9910,9 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:12px;font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:5px">WIND (kt)</div>
-        <div style="height:18px;border-radius:4px;background:linear-gradient(90deg,#96c8f5 0%,#268bc8 22%,#3cc878 28%,#1ea050 36%,#e6d746 47%,#ec8c28 59%,#cd3220 70%,#e63c8c 86%,#f05ab4 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="height:18px;border-radius:4px;background:linear-gradient(90deg,#2870d2 0%,#96cdf5 25%,#147832 26%,#82e178 37.5%,#ebe650 40%,#c8b219 57.5%,#f8b95f 60%,#e46e19 75%,#cd3728 76%,#be1a26 87.5%,#e65fb0 88%,#f05ab4 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:10px;color:#cfe5ff;margin-top:3px;font-weight:600">
-          <span>0</span><span>10</span><span>15</span><span>20</span><span>25</span><span>30</span><span>40+</span>
+          <span>0</span><span>10</span><span>15</span><span>20</span><span>25</span><span>30</span><span>35+</span>
         </div>
         <div style="font-size:9px;color:#9ec5e8;margin-top:4px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
       </div>`);

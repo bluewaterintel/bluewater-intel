@@ -87,26 +87,32 @@
     return a + (b - a) * t;
   }
 
-  // Wind-speed color bands (kt). Each band shades light→dark within ONE hue so
-  // you read "shades of blue/green/yellow/…" exactly as the marine scale expects:
-  //   0-10 blue · 10-15 green · 15-20 yellow · 20-25 orange · 25-30 red · >30 pink
+  // Wind-speed color bands (kt). Each band shades light→dark (or dark→light)
+  // within ONE hue family per the marine scale:
+  //   0-10  none → blue → light blue
+  //   10-15 dark green → light green
+  //   15-23 yellow → darker yellow
+  //   23-30 light orange → dark orange
+  //   30-35 red
+  //   35+   pink
   const WIND_BANDS = [
-    { min: 0,  max: 10, lo: [150, 200, 245], hi: [ 38, 120, 205] }, // blue
-    { min: 10, max: 15, lo: [120, 225, 140], hi: [ 30, 160,  70] }, // green
-    { min: 15, max: 20, lo: [245, 235, 120], hi: [228, 205,  40] }, // yellow
-    { min: 20, max: 25, lo: [245, 180,  90], hi: [232, 120,  30] }, // orange
-    { min: 25, max: 30, lo: [235,  90,  70], hi: [205,  30,  30] }, // red
-    { min: 30, max: 50, lo: [240, 110, 185], hi: [226,  40, 140] }, // pink
+    { min: 0,  max: 10, lo: [ 40, 110, 210], hi: [150, 205, 245] }, // blue → light blue
+    { min: 10, max: 15, lo: [ 20, 120,  50], hi: [130, 225, 120] }, // dark green → light green
+    { min: 15, max: 23, lo: [235, 230,  80], hi: [200, 175,  25] }, // yellow → darker yellow
+    { min: 23, max: 30, lo: [248, 185,  95], hi: [228, 110,  25] }, // light orange → dark orange
+    { min: 30, max: 35, lo: [225,  55,  40], hi: [190,  25,  30] }, // red
+    { min: 35, max: 55, lo: [240,  95, 175], hi: [228,  40, 140] }, // pink
   ];
 
   function colorForSpeed(kts, alphaScale = 1) {
-    if (!finite(kts) || kts < 0) return "rgba(0,0,0,0)";
+    // Truly calm (<2 kt) shows no color.
+    if (!finite(kts) || kts < 2) return "rgba(0,0,0,0)";
     let b = WIND_BANDS[WIND_BANDS.length - 1];
     for (const cand of WIND_BANDS) { if (kts >= cand.min && kts < cand.max) { b = cand; break; } }
     const t = Math.max(0, Math.min(1, (kts - b.min) / ((b.max - b.min) || 1)));
     const c = b.lo.map((v, i) => Math.round(lerp(v, b.hi[i], t)));
-    // Calm (≤5 kt) is faint; opacity ramps up with speed so windy water is bold.
-    const a = Math.max(0, Math.min(0.95, (0.18 + (kts / 35) * 0.8) * alphaScale));
+    // Faint for light wind, ramping bold for strong wind so the band reads clearly.
+    const a = Math.max(0, Math.min(0.95, (0.16 + (kts / 35) * 0.8) * alphaScale));
     return `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`;
   }
 
