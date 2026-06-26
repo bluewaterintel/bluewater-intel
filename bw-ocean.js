@@ -102,5 +102,32 @@
     }
   }
 
-  root.BW_OCEAN = { fetchOcean, fetchBathy };
+  // Chlorophyll spatial+temporal composite grid for a bounding box — one cached
+  // request returns the freshest real value per cell (gap-filled from clouds).
+  const chlorGridCache = new Map();
+  async function fetchChlorGrid(latMin, latMax, lngMin, lngMax) {
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}`;
+    const hit = chlorGridCache.get(k);
+    if (hit) return hit;
+    try {
+      const params = new URLSearchParams({
+        mode: "chlorgrid",
+        latMin: String(latMin), latMax: String(latMax),
+        lngMin: String(lngMin), lngMax: String(lngMax),
+      });
+      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+        headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
+        signal: AbortSignal.timeout(22000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !Array.isArray(data.rows) || !data.rows.length) return null;
+      chlorGridCache.set(k, data);
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  root.BW_OCEAN = { fetchOcean, fetchBathy, fetchChlorGrid };
 })(typeof globalThis !== "undefined" ? globalThis : this);

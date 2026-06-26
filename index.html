@@ -5243,6 +5243,35 @@ async function buildBathyGrid(latMin, latMax, lngMin, lngMax){
   BATHY_GRID = { step, minLat: mnLa, minLng: mnLn, nLat, nLng, depth };
 }
 
+// Gap-filled chlorophyll composite for the active prediction area. Built once per
+// port render: a list of cells, each carrying the freshest real chlor value.
+let CHLOR_GRID = null;
+async function buildChlorGrid(latMin, latMax, lngMin, lngMax){
+  CHLOR_GRID = null;
+  if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchChlorGrid) return;
+  let data = null;
+  try { data = await BW_OCEAN.fetchChlorGrid(latMin, latMax, lngMin, lngMax); }
+  catch(e){ data = null; }
+  if(!data || !data.rows || !data.rows.length) return;
+  // rows: [lat, lng, value, observedAtMs]
+  let freshest = 0;
+  for(const r of data.rows){ if(r[3] > freshest) freshest = r[3]; }
+  CHLOR_GRID = { step: data.stepDeg || 0.08, rows: data.rows, freshestMs: freshest || null };
+}
+
+// Nearest gap-filled chlorophyll value to a point (within ~2 grid cells).
+function chlorGridAt(lat, lng){
+  const g = CHLOR_GRID;
+  if(!g || !g.rows.length) return null;
+  const maxNm = (g.step * 60) * 2.5;
+  let best = null, bestNm = Infinity;
+  for(const r of g.rows){
+    const d = nmBetween(lat, lng, r[0], r[1]);
+    if(d <= maxNm && d < bestNm){ bestNm = d; best = r; }
+  }
+  return best ? { value: best[2], observedAtMs: best[3] } : null;
+}
+
 // Real depth (meters) at a point from the ETOPO grid; null if unavailable.
 function realDepthAt(lat, lng){
   const g = BATHY_GRID;
@@ -5404,7 +5433,12 @@ function scoreCell(lat, lng, speciesId){
     sstObj = { value: OCEAN_FIELD.medianSst, observedAtMs: OCEAN_FIELD.freshestSstMs, _regional: true };
   }
   sstObj = sstObj ?? { value: null, observedAtMs: null };
-  let chlorObj = (ocean?.chlor?.value != null ? ocean.chlor : nearestFieldSample(lat, lng, "chlor"));
+  // Chlorophyll resolve order: gap-filled composite grid (best coverage) →
+  // this cell's own pixel → nearest valid pixel → regional median.
+  let chlorObj = chlorGridAt(lat, lng);
+  if(!chlorObj || chlorObj.value == null){
+    chlorObj = (ocean?.chlor?.value != null ? ocean.chlor : nearestFieldSample(lat, lng, "chlor"));
+  }
   if((!chlorObj || chlorObj.value == null) && OCEAN_FIELD.medianChlor != null){
     chlorObj = { value: OCEAN_FIELD.medianChlor, observedAtMs: OCEAN_FIELD.freshestChlorMs, _regional: true };
   }
@@ -6942,10 +6976,11 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
         const bLatMax = Math.min(LAT_MAX, port.lat + degLat);
         const bLngMin = Math.max(LNG_MIN, port.lng - degLng);
         const bLngMax = Math.min(LNG_MAX, port.lng + degLng);
-        // Real bathymetry first (one cached request) so depth scoring is accurate,
-        // then the SST/chlorophyll/wind field.
+        // Real bathymetry + gap-filled chlorophyll composite (each one cached
+        // request) plus the SST/wind point field — all in parallel.
         await Promise.all([
           buildBathyGrid(bLatMin, bLatMax, bLngMin, bLngMax),
+          buildChlorGrid(bLatMin, bLatMax, bLngMin, bLngMax),
           buildOceanField(bLatMin, bLatMax, bLngMin, bLngMax, { maxPoints: 90 }),
         ]);
       } else {
@@ -9756,9 +9791,9 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:12px;font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:5px">WIND (kt)</div>
-        <div style="height:18px;border-radius:4px;background:linear-gradient(90deg,#1e3a5f 0%,#2e8bc0 25%,#5fd0a0 45%,#e8d65a 65%,#e8852e 82%,#c83520 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="height:18px;border-radius:4px;background:linear-gradient(90deg,#96c8f5 0%,#268bc8 22%,#3cc878 28%,#1ea050 36%,#e6d746 47%,#ec8c28 59%,#cd3220 70%,#e63c8c 86%,#f05ab4 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:10px;color:#cfe5ff;margin-top:3px;font-weight:600">
-          <span>0</span><span>10</span><span>15</span><span>20</span><span>30</span><span>40+</span>
+          <span>0</span><span>10</span><span>15</span><span>20</span><span>25</span><span>30</span><span>40+</span>
         </div>
         <div style="font-size:9px;color:#9ec5e8;margin-top:4px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
       </div>`);

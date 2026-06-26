@@ -463,6 +463,59 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── Chlorophyll spatial+temporal COMPOSITE grid for a bounding box ──────────
+  // Satellite chlorophyll is heavily cloud-gapped on any single day/pixel. This
+  // fetches a box over the last N daily slices in ONE ERDDAP request and reduces
+  // it server-side to the FRESHEST real (non-null) value per cell — a gap-filled
+  // composite built only from real measurements. The compact result (one row per
+  // cell) is cached at the edge so the client gets dense coverage in one call.
+  if (mode === "chlorgrid") {
+    const latMin = num(u.searchParams.get("latMin"));
+    const latMax = num(u.searchParams.get("latMax"));
+    const lngMin = num(u.searchParams.get("lngMin"));
+    const lngMax = num(u.searchParams.get("lngMax"));
+    if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+    }
+    const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+    const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+    const native = Number(Deno.env.get("CHL_STEP_DEG") ?? "0.0375");
+    const targetDeg = Number(Deno.env.get("CHLGRID_DEG") ?? "0.08");
+    const strideIdx = Math.max(1, Math.round(targetDeg / native));
+    const lookback = Number(Deno.env.get("CHLGRID_LOOKBACK") ?? "14");
+    const altIdx = CHL_HAS_ALTITUDE ? "%5B(0.0)%5D" : "";
+    // lat axis is stored descending for this product → request hi:stride:lo.
+    const url = `${CHL_ERDDAP}/${CHL_DATASET}.json`
+      + `?${CHL_VAR}%5Blast-${lookback}:last%5D${altIdx}`
+      + `%5B(${a1}):${strideIdx}:(${a0})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(20000), headers: ERDDAP_HEADERS });
+      if (!r.ok) return json({ error: `chlorgrid ${r.status}`, rows: [] }, 200);
+      const d = await r.json();
+      const cols: string[] = d?.table?.columnNames ?? [];
+      const rawRows: unknown[][] = d?.table?.rows ?? [];
+      const ti = cols.indexOf("time"), li = cols.indexOf("latitude"), gi = cols.indexOf("longitude"), vi = cols.indexOf(CHL_VAR);
+      // Reduce to freshest non-null per cell.
+      const best = new Map<string, { lat: number; lng: number; v: number; ms: number }>();
+      for (const row of rawRows) {
+        const v = num(row[vi]);
+        if (v == null) continue;
+        const la = num(row[li]), ln = num(row[gi]);
+        if (la == null || ln == null) continue;
+        const ms = ti >= 0 && typeof row[ti] === "string" ? Date.parse(row[ti] as string) : 0;
+        const k = `${la.toFixed(3)},${ln.toFixed(3)}`;
+        const cur = best.get(k);
+        if (!cur || ms > cur.ms) best.set(k, { lat: la, lng: ln, v, ms });
+      }
+      const rows = [...best.values()].map((c) => [c.lat, c.lng, Math.round(c.v * 1000) / 1000, c.ms]);
+      return new Response(JSON.stringify({ stepDeg: strideIdx * native, rows }), {
+        headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" },
+      });
+    } catch {
+      return json({ error: "chlorgrid fetch failed", rows: [] }, 200);
+    }
+  }
+
   // Point modes (ocean/wind) require coordinates.
   const lat = num(u.searchParams.get("lat"));
   const lng = num(u.searchParams.get("lng"));

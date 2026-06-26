@@ -44,10 +44,23 @@ console.log("\nwind interpolation:");
   check("empty samples withhold wind", interpolateWind([], 35, -75) === null);
 }
 
-console.log("\nwind speed shading:");
-check("calm wind (<2kt) has no shaded fill", colorForSpeed(1) === "rgba(0,0,0,0)");
-check("light wind (3kt) is faintly shaded, not transparent", colorForSpeed(3) !== "rgba(0,0,0,0)");
-check("strong wind has visible orange/red fill", /rgba\((200|201|202|203|204|205|206|207|208|209|210|211|212|213|214|215|216|217|218|219|220|221|222|223|224|225|226|227|228|229|230|231|232),/.test(colorForSpeed(28)));
+console.log("\nwind speed shading bands:");
+const rgba = (s) => { const m = s.match(/rgba\((\d+),(\d+),(\d+),([\d.]+)\)/); return m ? { r:+m[1], g:+m[2], b:+m[3], a:+m[4] } : null; };
+{
+  const calm = rgba(colorForSpeed(3));
+  check("calm (3kt) is blue-dominant", calm && calm.b > calm.r && calm.b > calm.g);
+  check("calm (3kt) is faint (low alpha)", calm && calm.a < 0.35);
+  const green = rgba(colorForSpeed(12));
+  check("10-15kt is green-dominant", green && green.g > green.r && green.g > green.b);
+  const yellow = rgba(colorForSpeed(17));
+  check("15-20kt is yellow (r&g high, b low)", yellow && yellow.r > 180 && yellow.g > 180 && yellow.b < 130);
+  const orange = rgba(colorForSpeed(22));
+  check("20-25kt is orange (r high, g mid, b low)", orange && orange.r > 220 && orange.g > 100 && orange.g < 190 && orange.b < 110);
+  const red = rgba(colorForSpeed(28));
+  check("25-30kt is red-dominant and bold", red && red.r > 190 && red.g < 100 && red.a > 0.6);
+  const pink = rgba(colorForSpeed(34));
+  check(">30kt is pink (high r AND high b)", pink && pink.r > 200 && pink.b > 120 && pink.g < 130);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
