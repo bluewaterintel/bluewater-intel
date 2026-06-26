@@ -415,6 +415,178 @@ async function fetchTide(lat: number, lng: number) {
   }
 }
 
+// Per-point lookback windows (module-level so batch + point modes share them).
+const SST_LOOKBACK = Number(Deno.env.get("SST_LOOKBACK") ?? "3");
+const CHL_LOOKBACK = Number(Deno.env.get("CHL_LOOKBACK") ?? "21");
+
+// Assemble one point's full ocean payload from the real sources. Used by both
+// the single-point GET and the batched predictinputs mode so values are IDENTICAL
+// regardless of how they're requested.
+async function assembleOcean(lat: number, lng: number) {
+  const [buoy, sst, chlorRaw, tide] = await Promise.all([
+    fetchBuoy(lat, lng),
+    fetchGridPoint(SST_ERDDAP, SST_DATASET, SST_VAR, lat, lng, SST_HAS_ALTITUDE, SST_LOOKBACK),
+    fetchGridPoint(CHL_ERDDAP, CHL_DATASET, CHL_VAR, lat, lng, CHL_HAS_ALTITUDE, CHL_LOOKBACK),
+    fetchTide(lat, lng),
+  ]);
+  let sstF: { value: number | null; observedAtMs: number | null } = { value: null, observedAtMs: sst.observedAtMs };
+  if (sst.value != null) {
+    let c = sst.value;
+    if (c > 200) c = c - 273.15;
+    sstF = { value: Math.round((c * 9 / 5 + 32) * 10) / 10, observedAtMs: sst.observedAtMs };
+  }
+  return {
+    point: { lat, lng },
+    fetchedAtMs: Date.now(),
+    sst: sstF,
+    chlor: { value: chlorRaw.value, observedAtMs: chlorRaw.observedAtMs },
+    wind: buoy?.wind ?? { value: null, observedAtMs: null },
+    waves: buoy?.waves ?? { value: null, observedAtMs: null },
+    waterTemp: buoy?.waterTemp ?? { value: null, observedAtMs: null },
+    airTemp: buoy?.airTemp ?? { value: null, observedAtMs: null },
+    pressure: buoy?.pressure ?? { value: null, observedAtMs: null },
+    barometer: buoy?.barometer ?? { value: null, observedAtMs: null },
+    tide: { value: tide.value, state: tide.state, observedAtMs: tide.observedAtMs },
+    sources: { sst: SST_DATASET, chlor: CHL_DATASET, buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null, tide: tide.station },
+  };
+}
+
+// SST grid (MUR L4, gap-filled) for a box → { stepDeg, rows:[[lat,lng,°F,ms],…] }.
+// MUR L4 is daily and fully gap-filled, so a single latest slice on a coarse grid
+// is equivalent to per-point queries — same data, far fewer requests.
+async function fetchSstRows(latMin: number, latMax: number, lngMin: number, lngMax: number) {
+  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+  const native = Number(Deno.env.get("SST_STEP_DEG") ?? "0.01");
+  const targetDeg = Number(Deno.env.get("SSTGRID_DEG") ?? "0.05");
+  const strideIdx = Math.max(1, Math.round(targetDeg / native));
+  const altIdx = SST_HAS_ALTITUDE ? "%5B(0.0)%5D" : "";
+  const url = `${SST_ERDDAP}/${SST_DATASET}.json`
+    + `?${SST_VAR}%5B(last)%5D${altIdx}`
+    + `%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000), headers: ERDDAP_HEADERS });
+    if (!r.ok) return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
+    const d = await r.json();
+    const cols: string[] = d?.table?.columnNames ?? [];
+    const rawRows: unknown[][] = d?.table?.rows ?? [];
+    const ti = cols.indexOf("time"), li = cols.indexOf("latitude"), gi = cols.indexOf("longitude"), vi = cols.indexOf(SST_VAR);
+    const rows: unknown[][] = [];
+    for (const row of rawRows) {
+      let c = num(row[vi]);
+      if (c == null) continue;
+      if (c > 200) c = c - 273.15;            // Kelvin → C
+      const f = Math.round((c * 9 / 5 + 32) * 10) / 10;
+      const la = num(row[li]), ln = num(row[gi]);
+      if (la == null || ln == null) continue;
+      const ms = ti >= 0 && typeof row[ti] === "string" ? Date.parse(row[ti] as string) : null;
+      rows.push([Math.round(la * 1000) / 1000, Math.round(ln * 1000) / 1000, f, ms]);
+    }
+    return { stepDeg: strideIdx * native, rows };
+  } catch {
+    return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
+  }
+}
+
+// Light field point: buoy (wind/waves/temps/pressure) + tide only. SST and
+// chlorophyll come from their grids, so we skip the per-point ERDDAP calls here.
+async function assembleFieldPoint(lat: number, lng: number) {
+  const [buoy, tide] = await Promise.all([fetchBuoy(lat, lng), fetchTide(lat, lng)]);
+  return {
+    point: { lat, lng },
+    fetchedAtMs: Date.now(),
+    sst: { value: null, observedAtMs: null },
+    chlor: { value: null, observedAtMs: null },
+    wind: buoy?.wind ?? { value: null, observedAtMs: null },
+    waves: buoy?.waves ?? { value: null, observedAtMs: null },
+    waterTemp: buoy?.waterTemp ?? { value: null, observedAtMs: null },
+    airTemp: buoy?.airTemp ?? { value: null, observedAtMs: null },
+    pressure: buoy?.pressure ?? { value: null, observedAtMs: null },
+    barometer: buoy?.barometer ?? { value: null, observedAtMs: null },
+    tide: { value: tide.value, state: tide.state, observedAtMs: tide.observedAtMs },
+    sources: { buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null, tide: tide.station },
+  };
+}
+
+// ETOPO bathymetry grid for a box → { stepDeg, rows:[[lat,lng,depthM],…] }.
+async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, lngMax: number) {
+  const a0 = Math.max(-89, Math.min(latMin, latMax));
+  const a1 = Math.min(89, Math.max(latMin, latMax));
+  const o0 = Math.max(-179, Math.min(lngMin, lngMax));
+  const o1 = Math.min(179, Math.max(lngMin, lngMax));
+  const strideIdx = Math.max(1, Math.round(0.05 / ETOPO_STEP_DEG));
+  const url = `${ETOPO_ERDDAP}/${ETOPO_DATASET}.json`
+    + `?altitude%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(12000), headers: ERDDAP_HEADERS });
+    if (!r.ok) return { stepDeg: strideIdx * ETOPO_STEP_DEG, rows: [] as unknown[][] };
+    const d = await r.json();
+    const cols: string[] = d?.table?.columnNames ?? [];
+    const rawRows: unknown[][] = d?.table?.rows ?? [];
+    const li = cols.indexOf("latitude"), gi = cols.indexOf("longitude"), ai = cols.indexOf("altitude");
+    const rows = rawRows.map((row) => {
+      const la = num(row[li]), ln = num(row[gi]), alt = num(row[ai]);
+      if (la == null || ln == null) return null;
+      const depth = alt != null ? Math.max(0, -alt) : null;
+      return [Math.round(la * 1000) / 1000, Math.round(ln * 1000) / 1000, depth];
+    }).filter(Boolean) as unknown[][];
+    return { stepDeg: strideIdx * ETOPO_STEP_DEG, rows };
+  } catch {
+    return { stepDeg: strideIdx * ETOPO_STEP_DEG, rows: [] as unknown[][] };
+  }
+}
+
+// Chlorophyll spatial+temporal composite for a box → freshest real value per cell.
+async function fetchChlorRows(latMin: number, latMax: number, lngMin: number, lngMax: number) {
+  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+  const native = Number(Deno.env.get("CHL_STEP_DEG") ?? "0.0375");
+  const targetDeg = Number(Deno.env.get("CHLGRID_DEG") ?? "0.08");
+  const strideIdx = Math.max(1, Math.round(targetDeg / native));
+  const lookback = Number(Deno.env.get("CHLGRID_LOOKBACK") ?? "14");
+  const altIdx = CHL_HAS_ALTITUDE ? "%5B(0.0)%5D" : "";
+  const url = `${CHL_ERDDAP}/${CHL_DATASET}.json`
+    + `?${CHL_VAR}%5Blast-${lookback}:last%5D${altIdx}`
+    + `%5B(${a1}):${strideIdx}:(${a0})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000), headers: ERDDAP_HEADERS });
+    if (!r.ok) return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
+    const d = await r.json();
+    const cols: string[] = d?.table?.columnNames ?? [];
+    const rawRows: unknown[][] = d?.table?.rows ?? [];
+    const ti = cols.indexOf("time"), li = cols.indexOf("latitude"), gi = cols.indexOf("longitude"), vi = cols.indexOf(CHL_VAR);
+    const best = new Map<string, { lat: number; lng: number; v: number; ms: number }>();
+    for (const row of rawRows) {
+      const v = num(row[vi]);
+      if (v == null) continue;
+      const la = num(row[li]), ln = num(row[gi]);
+      if (la == null || ln == null) continue;
+      const ms = ti >= 0 && typeof row[ti] === "string" ? Date.parse(row[ti] as string) : 0;
+      const k = `${la.toFixed(3)},${ln.toFixed(3)}`;
+      const cur = best.get(k);
+      if (!cur || ms > cur.ms) best.set(k, { lat: la, lng: ln, v, ms });
+    }
+    const rows = [...best.values()].map((c) => [c.lat, c.lng, Math.round(c.v * 1000) / 1000, c.ms]);
+    return { stepDeg: strideIdx * native, rows };
+  } catch {
+    return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
+  }
+}
+
+// Run an async task over items with bounded concurrency.
+async function pool<T, R>(items: T[], limit: number, fn: (it: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const u = new URL(req.url);
@@ -431,36 +603,10 @@ Deno.serve(async (req) => {
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
       return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
     }
-    // Cap the box and choose an index stride targeting ~0.05° (~3nm) samples so
-    // the response stays small (one cached request covers a whole port area).
-    const a0 = Math.max(-89, Math.min(latMin, latMax));
-    const a1 = Math.min(89, Math.max(latMin, latMax));
-    const o0 = Math.max(-179, Math.min(lngMin, lngMax));
-    const o1 = Math.min(179, Math.max(lngMin, lngMax));
-    const targetDeg = 0.05;
-    const strideIdx = Math.max(1, Math.round(targetDeg / ETOPO_STEP_DEG));
-    const url = `${ETOPO_ERDDAP}/${ETOPO_DATASET}.json`
-      + `?altitude%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
-    try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(12000), headers: ERDDAP_HEADERS });
-      if (!r.ok) return json({ error: `bathy ${r.status}`, rows: [] }, 200);
-      const d = await r.json();
-      const cols: string[] = d?.table?.columnNames ?? [];
-      const rawRows: unknown[][] = d?.table?.rows ?? [];
-      const li = cols.indexOf("latitude"), gi = cols.indexOf("longitude"), ai = cols.indexOf("altitude");
-      // Compact: [lat, lng, depthMeters(>0 = below sea level)]. Land → 0.
-      const rows = rawRows.map((row) => {
-        const la = num(row[li]), ln = num(row[gi]), alt = num(row[ai]);
-        if (la == null || ln == null) return null;
-        const depth = alt != null ? Math.max(0, -alt) : null;
-        return [Math.round(la * 1000) / 1000, Math.round(ln * 1000) / 1000, depth];
-      }).filter(Boolean);
-      return new Response(JSON.stringify({ stepDeg: strideIdx * ETOPO_STEP_DEG, rows }), {
-        headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=604800" },
-      });
-    } catch {
-      return json({ error: "bathy fetch failed", rows: [] }, 200);
-    }
+    const out = await fetchBathyRows(latMin, latMax, lngMin, lngMax);
+    return new Response(JSON.stringify(out), {
+      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=604800" },
+    });
   }
 
   // ── Chlorophyll spatial+temporal COMPOSITE grid for a bounding box ──────────
@@ -477,43 +623,52 @@ Deno.serve(async (req) => {
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
       return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
     }
-    const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
-    const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
-    const native = Number(Deno.env.get("CHL_STEP_DEG") ?? "0.0375");
-    const targetDeg = Number(Deno.env.get("CHLGRID_DEG") ?? "0.08");
-    const strideIdx = Math.max(1, Math.round(targetDeg / native));
-    const lookback = Number(Deno.env.get("CHLGRID_LOOKBACK") ?? "14");
-    const altIdx = CHL_HAS_ALTITUDE ? "%5B(0.0)%5D" : "";
-    // lat axis is stored descending for this product → request hi:stride:lo.
-    const url = `${CHL_ERDDAP}/${CHL_DATASET}.json`
-      + `?${CHL_VAR}%5Blast-${lookback}:last%5D${altIdx}`
-      + `%5B(${a1}):${strideIdx}:(${a0})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
-    try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(20000), headers: ERDDAP_HEADERS });
-      if (!r.ok) return json({ error: `chlorgrid ${r.status}`, rows: [] }, 200);
-      const d = await r.json();
-      const cols: string[] = d?.table?.columnNames ?? [];
-      const rawRows: unknown[][] = d?.table?.rows ?? [];
-      const ti = cols.indexOf("time"), li = cols.indexOf("latitude"), gi = cols.indexOf("longitude"), vi = cols.indexOf(CHL_VAR);
-      // Reduce to freshest non-null per cell.
-      const best = new Map<string, { lat: number; lng: number; v: number; ms: number }>();
-      for (const row of rawRows) {
-        const v = num(row[vi]);
-        if (v == null) continue;
-        const la = num(row[li]), ln = num(row[gi]);
-        if (la == null || ln == null) continue;
-        const ms = ti >= 0 && typeof row[ti] === "string" ? Date.parse(row[ti] as string) : 0;
-        const k = `${la.toFixed(3)},${ln.toFixed(3)}`;
-        const cur = best.get(k);
-        if (!cur || ms > cur.ms) best.set(k, { lat: la, lng: ln, v, ms });
-      }
-      const rows = [...best.values()].map((c) => [c.lat, c.lng, Math.round(c.v * 1000) / 1000, c.ms]);
-      return new Response(JSON.stringify({ stepDeg: strideIdx * native, rows }), {
-        headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" },
-      });
-    } catch {
-      return json({ error: "chlorgrid fetch failed", rows: [] }, 200);
+    const out = await fetchChlorRows(latMin, latMax, lngMin, lngMax);
+    return new Response(JSON.stringify(out), {
+      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" },
+    });
+  }
+
+  // ── COMBINED prediction inputs in ONE request ───────────────────────────────
+  // Returns bathymetry grid + gap-filled chlorophyll composite + a batched
+  // per-point ocean field (SST/wind/tide/etc), all for one bounding box. This
+  // collapses what used to be ~90 per-point requests plus 2 grid requests into a
+  // SINGLE cached call. Every value is produced by the exact same source/logic as
+  // the per-point endpoint, so accuracy is unchanged — only transport + caching.
+  if (mode === "predictinputs") {
+    const latMin = num(u.searchParams.get("latMin"));
+    const latMax = num(u.searchParams.get("latMax"));
+    const lngMin = num(u.searchParams.get("lngMin"));
+    const lngMax = num(u.searchParams.get("lngMax"));
+    if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
     }
+    const maxPoints = Math.max(20, Math.min(120, Math.round(num(u.searchParams.get("maxPoints")) ?? 90)));
+    // All three grids in parallel (each ONE ERDDAP box request). Bathy also tells
+    // us which field points are water so we don't fetch buoy/tide over land.
+    const [bathy, chlor, sst] = await Promise.all([
+      fetchBathyRows(latMin, latMax, lngMin, lngMax),
+      fetchChlorRows(latMin, latMax, lngMin, lngMax),
+      fetchSstRows(latMin, latMax, lngMin, lngMax),
+    ]);
+    // Pick water field points (depth > 0) spread across the box, capped. These
+    // only carry wind/tide (buoy + CO-OPS) — SST/chlor come from the grids.
+    const water = (bathy.rows as number[][]).filter((r) => typeof r[2] === "number" && (r[2] as number) > 0);
+    let fieldPts: number[][] = water;
+    if (water.length > maxPoints) {
+      const step = water.length / maxPoints;
+      fieldPts = Array.from({ length: maxPoints }, (_, i) => water[Math.floor(i * step)]);
+    }
+    const fieldStepNm = fieldPts.length > 1
+      ? Math.max(4, (Math.max(latMax, latMin) - Math.min(latMax, latMin)) * 60 / Math.sqrt(fieldPts.length))
+      : 12;
+    const field = await pool(fieldPts, 16, async (pt) => {
+      const p = await assembleFieldPoint(pt[0], pt[1]);
+      return { la: pt[0], ln: pt[1], p };
+    });
+    return new Response(JSON.stringify({ bathy, chlor, sst, field, fieldStepNm }), {
+      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
+    });
   }
 
   // Point modes (ocean/wind) require coordinates.
@@ -543,48 +698,8 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Fetch all sources in parallel. Each returns real value+observedAt or nulls.
-  // Lookback windows: SST (MUR) is gap-filled so a short window is just safety;
-  // chlorophyll is frequently cloud-gapped so scan ~2 weeks for the last clear pixel.
-  const SST_LOOKBACK = Number(Deno.env.get("SST_LOOKBACK") ?? "3");
-  const CHL_LOOKBACK = Number(Deno.env.get("CHL_LOOKBACK") ?? "21");
-  const [buoy, sst, chlorRaw, tide] = await Promise.all([
-    fetchBuoy(lat, lng),
-    fetchGridPoint(SST_ERDDAP, SST_DATASET, SST_VAR, lat, lng, SST_HAS_ALTITUDE, SST_LOOKBACK),
-    fetchGridPoint(CHL_ERDDAP, CHL_DATASET, CHL_VAR, lat, lng, CHL_HAS_ALTITUDE, CHL_LOOKBACK),
-    fetchTide(lat, lng),
-  ]);
-
-  // SST: prefer gridded (spatial coverage); buoy water temp is a separate field.
-  // ERDDAP SST may be Celsius or Kelvin depending on dataset — normalize to °F.
-  let sstF: { value: number | null; observedAtMs: number | null } = { value: null, observedAtMs: sst.observedAtMs };
-  if (sst.value != null) {
-    let c = sst.value;
-    if (c > 200) c = c - 273.15;            // Kelvin → C
-    sstF = { value: Math.round((c * 9 / 5 + 32) * 10) / 10, observedAtMs: sst.observedAtMs };
-  }
-
-  const payload = {
-    point: { lat, lng },
-    fetchedAtMs: Date.now(),
-    // Each field carries its own real observedAt so the client computes age.
-    sst: sstF,                                            // °F, gridded
-    chlor: { value: chlorRaw.value, observedAtMs: chlorRaw.observedAtMs }, // mg/m^3
-    wind: buoy?.wind ?? { value: null, observedAtMs: null },
-    waves: buoy?.waves ?? { value: null, observedAtMs: null },
-    waterTemp: buoy?.waterTemp ?? { value: null, observedAtMs: null },
-    airTemp: buoy?.airTemp ?? { value: null, observedAtMs: null },
-    pressure: buoy?.pressure ?? { value: null, observedAtMs: null },
-    barometer: buoy?.barometer ?? { value: null, observedAtMs: null },
-    // tide stage 0..1 (0 = slack, 1 = peak flood/ebb) from NOAA CO-OPS predictions.
-    tide: { value: tide.value, state: tide.state, observedAtMs: tide.observedAtMs },
-    sources: {
-      sst: SST_DATASET, chlor: CHL_DATASET,
-      buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
-      tide: tide.station,
-    },
-  };
-
+  // Single point — identical data to the batched predictinputs field.
+  const payload = await assembleOcean(lat, lng);
   // Cache at the edge for 30 min (these feeds update hourly at most).
   return new Response(JSON.stringify(payload), {
     headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },

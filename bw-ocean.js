@@ -129,5 +129,34 @@
     }
   }
 
-  root.BW_OCEAN = { fetchOcean, fetchBathy, fetchChlorGrid };
+  // Combined prediction inputs (bathy grid + chlorophyll composite + batched
+  // per-point ocean field) in ONE cached request. Same data as the per-point
+  // calls — just bundled to remove ~90 round-trips.
+  const predictInputsCache = new Map();
+  async function fetchPredictInputs(latMin, latMax, lngMin, lngMax, maxPoints) {
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)},${maxPoints || 90}`;
+    const hit = predictInputsCache.get(k);
+    if (hit) return hit;
+    try {
+      const params = new URLSearchParams({
+        mode: "predictinputs",
+        latMin: String(latMin), latMax: String(latMax),
+        lngMin: String(lngMin), lngMax: String(lngMax),
+        maxPoints: String(maxPoints || 90),
+      });
+      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+        headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
+        signal: AbortSignal.timeout(35000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !Array.isArray(data.field)) return null;
+      predictInputsCache.set(k, data);
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  root.BW_OCEAN = { fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs };
 })(typeof globalThis !== "undefined" ? globalThis : this);

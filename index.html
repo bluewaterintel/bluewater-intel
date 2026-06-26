@@ -5224,6 +5224,12 @@ async function buildBathyGrid(latMin, latMax, lngMin, lngMax){
   let data = null;
   try { data = await BW_OCEAN.fetchBathy(latMin, latMax, lngMin, lngMax); }
   catch(e){ data = null; }
+  applyBathyData(data);
+}
+
+// Build BATHY_GRID from an already-fetched {stepDeg, rows} payload.
+function applyBathyData(data){
+  BATHY_GRID = null;
   if(!data || !data.rows || !data.rows.length) return;
   const step = data.stepDeg || 0.05;
   let mnLa = Infinity, mxLa = -Infinity, mnLn = Infinity, mxLn = -Infinity;
@@ -5252,6 +5258,12 @@ async function buildChlorGrid(latMin, latMax, lngMin, lngMax){
   let data = null;
   try { data = await BW_OCEAN.fetchChlorGrid(latMin, latMax, lngMin, lngMax); }
   catch(e){ data = null; }
+  applyChlorData(data);
+}
+
+// Build CHLOR_GRID from an already-fetched {stepDeg, rows} payload.
+function applyChlorData(data){
+  CHLOR_GRID = null;
   if(!data || !data.rows || !data.rows.length) return;
   // rows: [lat, lng, value, observedAtMs]
   let freshest = 0;
@@ -5270,6 +5282,76 @@ function chlorGridAt(lat, lng){
     if(d <= maxNm && d < bestNm){ bestNm = d; best = r; }
   }
   return best ? { value: best[2], observedAtMs: best[3] } : null;
+}
+
+// SST grid (MUR L4) for the active prediction area, sampled densely so the
+// temperature break is real and SST no longer needs ~90 per-point calls.
+let SST_GRID = null;
+function applySstData(data){
+  SST_GRID = null;
+  if(!data || !data.rows || !data.rows.length) return;
+  const step = data.stepDeg || 0.05;
+  let mnLa = Infinity, mxLa = -Infinity, mnLn = Infinity, mxLn = -Infinity, freshest = 0;
+  const vals = [];
+  for(const r of data.rows){
+    if(r[0] < mnLa) mnLa = r[0]; if(r[0] > mxLa) mxLa = r[0];
+    if(r[1] < mnLn) mnLn = r[1]; if(r[1] > mxLn) mxLn = r[1];
+    if(r[2] != null) vals.push(r[2]);
+    if(r[3] && r[3] > freshest) freshest = r[3];
+  }
+  const nLat = Math.max(1, Math.round((mxLa - mnLa) / step) + 1);
+  const nLng = Math.max(1, Math.round((mxLn - mnLn) / step) + 1);
+  const val = new Float32Array(nLat * nLng).fill(NaN);
+  for(const r of data.rows){
+    if(r[2] == null) continue;
+    const i = Math.round((r[0] - mnLa) / step), j = Math.round((r[1] - mnLn) / step);
+    if(i >= 0 && i < nLat && j >= 0 && j < nLng) val[i * nLng + j] = r[2];
+  }
+  const s = [...vals].sort((a,b)=>a-b); const m = s.length>>1;
+  const median = s.length ? (s.length%2 ? s[m] : (s[m-1]+s[m])/2) : null;
+  SST_GRID = { step, minLat: mnLa, minLng: mnLn, nLat, nLng, val, median, freshestMs: freshest || null };
+}
+
+// SST (°F) at a point from the grid (nearest cell); null if unavailable.
+function sstGridAt(lat, lng){
+  const g = SST_GRID;
+  if(!g) return null;
+  const fi = (lat - g.minLat) / g.step, fj = (lng - g.minLng) / g.step;
+  if(fi < -0.5 || fj < -0.5 || fi > g.nLat - 0.5 || fj > g.nLng - 0.5) return null;
+  const i = Math.max(0, Math.min(g.nLat-1, Math.round(fi)));
+  const j = Math.max(0, Math.min(g.nLng-1, Math.round(fj)));
+  const v = g.val[i * g.nLng + j];
+  return (typeof v === "number" && isFinite(v)) ? { value: v, observedAtMs: g.freshestMs } : null;
+}
+
+// Thermal break (°F per 10nm) from the dense SST grid around a point.
+function thermalBreakGrid(lat, lng){
+  const g = SST_GRID;
+  if(!g) return null;
+  const radNm = 18;
+  const dLat = radNm / 60, dLng = radNm / (60 * Math.cos(lat * Math.PI/180));
+  const near = [];
+  const iC = Math.round((lat - g.minLat) / g.step), jC = Math.round((lng - g.minLng) / g.step);
+  const di = Math.max(1, Math.round(dLat / g.step)), dj = Math.max(1, Math.round(dLng / g.step));
+  for(let i = iC - di; i <= iC + di; i++){
+    for(let j = jC - dj; j <= jC + dj; j++){
+      if(i < 0 || j < 0 || i >= g.nLat || j >= g.nLng) continue;
+      const v = g.val[i * g.nLng + j];
+      if(typeof v !== "number" || !isFinite(v)) continue;
+      near.push({ la: g.minLat + i * g.step, ln: g.minLng + j * g.step, v });
+    }
+  }
+  if(near.length < 2) return null;
+  let maxGrad = 0;
+  for(let a = 0; a < near.length; a++){
+    for(let b = a + 1; b < near.length; b++){
+      const dNm = nmBetween(near[a].la, near[a].ln, near[b].la, near[b].ln);
+      if(dNm < 1) continue;
+      const grad = Math.abs(near[a].v - near[b].v) / dNm;
+      if(grad > maxGrad) maxGrad = grad;
+    }
+  }
+  return maxGrad * 10;
 }
 
 // Real depth (meters) at a point from the ETOPO grid; null if unavailable.
@@ -5342,13 +5424,16 @@ async function buildOceanField(latMin, latMax, lngMin, lngMax, opts){
     }
   }
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pts.length) }, worker));
-  const samples = results.filter(Boolean);
-  // Regional baselines: the MEDIAN real SST/chlorophyll across the area, plus the
-  // freshest observation time for each. Cells whose own pixel is cloud-gapped use
-  // these so a no-data spot is scored against the regional AVERAGE instead of
-  // being dropped — which previously skewed the heat map toward cells that simply
-  // happened to have a satellite reading. (We never invent a value; the median is
-  // a real measured aggregate and is labeled regional.)
+  applyOceanField(results.filter(Boolean), stepNm);
+}
+
+// Build OCEAN_FIELD (samples + regional baselines) from a list of {la,ln,p}.
+// Regional baselines = MEDIAN real SST/chlorophyll across the area + freshest
+// observation time. Cells whose own pixel is cloud-gapped use these so a no-data
+// spot is scored against the regional AVERAGE instead of being dropped (which
+// previously skewed the map toward cells that happened to have a satellite read).
+function applyOceanField(samples, spacingNm){
+  samples = samples || [];
   const med = (arr) => { if(!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); const m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; };
   const collect = (key) => {
     const vals = [], times = [];
@@ -5357,10 +5442,36 @@ async function buildOceanField(latMin, latMax, lngMin, lngMax, opts){
   };
   const sstAgg = collect("sst"), chlorAgg = collect("chlor");
   OCEAN_FIELD = {
-    samples, builtAtMs: Date.now(), spacingNm: stepNm,
+    samples, builtAtMs: Date.now(), spacingNm: spacingNm || 12,
     medianSst: sstAgg.median, freshestSstMs: sstAgg.freshest, sstCoverage: sstAgg.coverage,
     medianChlor: chlorAgg.median, freshestChlorMs: chlorAgg.freshest, chlorCoverage: chlorAgg.coverage,
   };
+}
+
+// ── ONE-REQUEST prediction inputs ────────────────────────────────────────────
+// Fetch bathymetry grid + chlorophyll composite + per-point ocean field in a
+// single combined call. Falls back to the separate builders if the combined
+// endpoint is unavailable, so behavior is preserved either way.
+async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
+  let data = null;
+  if(typeof BW_OCEAN !== "undefined" && BW_OCEAN.fetchPredictInputs){
+    try { data = await BW_OCEAN.fetchPredictInputs(latMin, latMax, lngMin, lngMax, 90); }
+    catch(e){ data = null; }
+  }
+  if(data && Array.isArray(data.field)){
+    applyBathyData(data.bathy);
+    applyChlorData(data.chlor);
+    applySstData(data.sst);
+    applyOceanField(data.field, data.fieldStepNm);
+    return;
+  }
+  // Fallback: separate requests (older path; per-point SST in the field).
+  SST_GRID = null;
+  await Promise.all([
+    buildBathyGrid(latMin, latMax, lngMin, lngMax),
+    buildChlorGrid(latMin, latMax, lngMin, lngMax),
+    buildOceanField(latMin, latMax, lngMin, lngMax, { maxPoints: 90 }),
+  ]);
 }
 
 function nearestSample(lat, lng){
@@ -5394,6 +5505,9 @@ function nearestFieldSample(lat, lng, key, maxNm){
 // Uses the LOCAL ocean field samples; the search radius is tied to the field's
 // own spacing so there are always enough neighbors to measure a gradient.
 function thermalBreakReal(lat, lng){
+  // Prefer the dense SST grid (best gradient resolution) when available.
+  const fromGrid = thermalBreakGrid(lat, lng);
+  if(fromGrid != null) return fromGrid;
   const radiusNm = (OCEAN_FIELD.spacingNm ? OCEAN_FIELD.spacingNm * 2.2 : 35);
   const near = [];
   for(const s of OCEAN_FIELD.samples){
@@ -5428,9 +5542,16 @@ function scoreCell(lat, lng, speciesId){
   // cells: (1) this cell's own pixel, (2) the nearest valid pixel in the area,
   // (3) the regional MEDIAN for the whole fishing area (a real aggregate, labeled
   // regional). Every cell is then scored on the SAME factors with equal weight.
-  let sstObj = (ocean?.sst?.value != null ? ocean.sst : nearestFieldSample(lat, lng, "sst"));
-  if((!sstObj || sstObj.value == null) && OCEAN_FIELD.medianSst != null){
-    sstObj = { value: OCEAN_FIELD.medianSst, observedAtMs: OCEAN_FIELD.freshestSstMs, _regional: true };
+  // SST resolve: dense MUR grid → cell's own pixel/nearest field sample →
+  // regional median. (Grid is gap-filled MUR L4, identical data to per-point.)
+  let sstObj = sstGridAt(lat, lng);
+  if(!sstObj || sstObj.value == null){
+    sstObj = (ocean?.sst?.value != null ? ocean.sst : nearestFieldSample(lat, lng, "sst"));
+  }
+  if((!sstObj || sstObj.value == null)){
+    const regSst = (SST_GRID && SST_GRID.median != null) ? { value: SST_GRID.median, observedAtMs: SST_GRID.freshestMs, _regional: true }
+      : (OCEAN_FIELD.medianSst != null ? { value: OCEAN_FIELD.medianSst, observedAtMs: OCEAN_FIELD.freshestSstMs, _regional: true } : null);
+    if(regSst) sstObj = regSst;
   }
   sstObj = sstObj ?? { value: null, observedAtMs: null };
   // Chlorophyll resolve order: gap-filled composite grid (best coverage) →
@@ -6976,13 +7097,9 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
         const bLatMax = Math.min(LAT_MAX, port.lat + degLat);
         const bLngMin = Math.max(LNG_MIN, port.lng - degLng);
         const bLngMax = Math.min(LNG_MAX, port.lng + degLng);
-        // Real bathymetry + gap-filled chlorophyll composite (each one cached
-        // request) plus the SST/wind point field — all in parallel.
-        await Promise.all([
-          buildBathyGrid(bLatMin, bLatMax, bLngMin, bLngMax),
-          buildChlorGrid(bLatMin, bLatMax, bLngMin, bLngMax),
-          buildOceanField(bLatMin, bLatMax, bLngMin, bLngMax, { maxPoints: 90 }),
-        ]);
+        // One combined request returns bathymetry grid + chlorophyll composite +
+        // the batched ocean field (same data as ~90 separate calls).
+        await buildPredictInputs(bLatMin, bLatMax, bLngMin, bLngMax);
       } else {
         await buildOceanField(LAT_MIN, LAT_MAX, LNG_MIN, LNG_MAX, { maxPoints: 60 });
       }
