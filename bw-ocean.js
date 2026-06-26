@@ -1,6 +1,7 @@
 /* Bluewater Intel — Milestone 4: ocean data source (real feeds via Edge Function) */
 (function (root) {
-  const cfg = root.BW_SUPABASE_CONFIG || root.BW_DATA_CONFIG || {};
+  const cfgCandidates = [root.BW_SUPABASE_CONFIG, root.BW_DATA_CONFIG].filter(Boolean);
+  const cfg = cfgCandidates.find((c) => c.supabaseUrl || c.url) || {};
   const BASE = (cfg.supabaseUrl || cfg.url || "").replace(/\/$/, "");
   const ANON = cfg.supabaseAnonKey || cfg.anonKey || "";
   const cache = new Map();
@@ -17,7 +18,7 @@
   // keeps its ORIGINAL observedAt, so the freshness model ages/labels it honestly
   // and confidence reflects the staleness. We never invent a number; we only ever
   // reuse one that was actually measured.
-  const FIELDS = ["sst", "chlor", "wind", "waves", "waterTemp", "pressure", "tide"];
+  const FIELDS = ["sst", "chlor", "wind", "waves", "waterTemp", "airTemp", "pressure", "barometer", "tide"];
   const lastGood = new Map(); // key -> { field: {value, observedAtMs, ...} }
 
   function mergeBestAvailable(k, payload) {
@@ -60,7 +61,9 @@
         wind: { value: null, observedAtMs: null },
         waves: { value: null, observedAtMs: null },
         waterTemp: { value: null, observedAtMs: null },
+        airTemp: { value: null, observedAtMs: null },
         pressure: { value: null, observedAtMs: null },
+        barometer: { value: null, observedAtMs: null },
         sources: {}, _cache: "unavailable",
       });
     }

@@ -659,25 +659,27 @@ body.nav-open #ruler-readout{
   padding:6px 10px !important;
 }
 /* Waypoint / fishing-area forecast popups — keep the close button tucked in the
-   corner of the white card (not floating over the title or the tooltip behind
+   corner of the dark card (not floating over the title or the tooltip behind
    it), and give the content room so the × never overlaps the heading. */
 .wp-fc-popup .leaflet-popup-content-wrapper{
+  background:rgba(15,28,52,.97) !important;
+  color:#f0f6ff !important;
   border-radius:12px;
   padding-top:4px;
   box-shadow:0 6px 22px rgba(0,0,0,.45);
 }
 .wp-fc-popup .leaflet-popup-content{ margin:14px 14px 12px; }
 .wp-fc-popup .leaflet-popup-close-button{
-  color:#64748b !important;
+  color:#9ec5e8 !important;
   font-size:18px !important;
   width:24px !important;height:24px !important;
   padding:0 !important;
   top:6px !important;right:6px !important;
   display:flex !important;align-items:center;justify-content:center;
   border-radius:50%;
-  background:rgba(0,0,0,.05);
+  background:rgba(255,255,255,.06);
 }
-.wp-fc-popup .leaflet-popup-close-button:hover{ background:rgba(0,0,0,.12); }
+.wp-fc-popup .leaflet-popup-close-button:hover{ background:rgba(255,255,255,.14); }
 #layers-toggle, #ruler-toggle, #basemap-toggle, #settings-toggle, #catch-log-toggle{
   width:52px;height:52px;
   background:rgba(10,22,40,.92);
@@ -9903,8 +9905,8 @@ function drawCanyons(){
     const cSafeName = (c.name || "Spot").replace(/'/g, "\\'");
     mk.bindPopup(
       `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:180px">
-        <div style="font-weight:700;color:#0a1628;margin-bottom:2px;font-size:15px;padding:0 18px">${c.name}</div>
-        <div style="font-size:12px;color:#475569;margin-bottom:9px">${typeLabel}</div>
+        <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:15px;padding:0 18px">${c.name}</div>
+        <div style="font-size:12px;color:#cfe5ff;margin-bottom:9px">${typeLabel}</div>
         <button onclick="showForecast(${c.lat},${c.lng},'${cSafeName}')" style="
           width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
           padding:11px 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
@@ -9913,7 +9915,7 @@ function drawCanyons(){
           6-Day Forecast
         </button>
       </div>`,
-      {offset:[0,-8], className:"wp-fc-popup"}
+      {offset:[0,-46], className:"wp-fc-popup"}
     );
     canyonLayers.push(mk);
   });
@@ -10213,8 +10215,8 @@ function renderWaypointMarkers(force){
     const wpSafeName = (w.name || "Spot").replace(/'/g, "\\'");
     m.bindPopup(
       `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:180px">
-        <div style="font-weight:700;color:#0a1628;margin-bottom:2px;font-size:15px;padding:0 18px">${w.name}</div>
-        <div style="font-size:12px;color:#475569;margin-bottom:9px">${s.label} · ${w.nm.toFixed(1)} nm</div>
+        <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:15px;padding:0 18px">${w.name}</div>
+        <div style="font-size:12px;color:#cfe5ff;margin-bottom:9px">${s.label} · ${w.nm.toFixed(1)} nm</div>
         <button onclick="showForecast(${w.lat},${w.lng},'${wpSafeName}')" style="
           width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
           padding:11px 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
@@ -10223,7 +10225,7 @@ function renderWaypointMarkers(force){
           6-Day Forecast
         </button>
       </div>`,
-      {offset:[0,-8], className:"wp-fc-popup"}
+      {offset:[0,-46], className:"wp-fc-popup"}
     );
     wpLayerGroup.addLayer(m);
     waypointLayers.push(m);
@@ -19999,8 +20001,8 @@ function drawUserWaypoints(){
     const safeName = (p.name || "Waypoint").replace(/'/g, "\\'");
     m.bindPopup(
       `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:170px">
-        <div style="font-weight:700;color:#0a1628;margin-bottom:2px;font-size:15px;padding:0 18px">${p.name || "Waypoint"}</div>
-        <div style="font-size:12px;color:#475569;margin-bottom:9px">${t.name}${p.depth ? " · " + p.depth : ""}</div>
+        <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:15px;padding:0 18px">${p.name || "Waypoint"}</div>
+        <div style="font-size:12px;color:#cfe5ff;margin-bottom:9px">${t.name}${p.depth ? " · " + p.depth : ""}</div>
         <button onclick="showForecast(${p.lat},${p.lng},'${safeName}')" style="
           width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
           padding:11px 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
@@ -20009,7 +20011,7 @@ function drawUserWaypoints(){
           6-Day Forecast
         </button>
       </div>`,
-      {offset:[0,-12], className:"wp-fc-popup"}
+      {offset:[0,-46], className:"wp-fc-popup"}
     );
     userWpLayerGroup.addLayer(m);
   }
@@ -20060,7 +20062,7 @@ function wpFlyTo(lat, lng, name, type, sourceType){
     const safeName = (name||"").replace(/'/g,"\\'");
     marker.bindPopup(
       `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:150px">
-        <div style="font-weight:700;color:#0a1628;margin-bottom:8px;font-size:13px;padding:0 18px">${name||"Waypoint"}</div>
+        <div style="font-weight:700;color:#f0f6ff;margin-bottom:8px;font-size:13px;padding:0 18px">${name||"Waypoint"}</div>
         <button onclick="showForecast(${lat},${lng},'${safeName}')" style="
           width:100%;background:#2979b5;color:#fff;border:none;border-radius:8px;
           padding:9px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;
@@ -20069,10 +20071,10 @@ function wpFlyTo(lat, lng, name, type, sourceType){
           6-Day Forecast
         </button>
         <button onclick="wpDismissActiveMarker()" style="
-          width:100%;background:transparent;color:#64748b;border:1px solid rgba(0,0,0,.15);border-radius:8px;
+          width:100%;background:transparent;color:#cfe5ff;border:1px solid rgba(207,229,255,.25);border-radius:8px;
           padding:6px;font-size:11px;cursor:pointer;font-family:inherit">Remove pin</button>
       </div>`,
-      {offset:[0,-14], closeButton:true, className:"wp-fc-popup"}
+      {offset:[0,-52], closeButton:true, className:"wp-fc-popup"}
     );
     marker.on("click", () => { marker.openPopup(); });
     _wpActiveMarker = marker;
@@ -20575,6 +20577,7 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
     const waveTxt = d.waveFt!=null
       ? `${d.waveFt}<span class="fc-unit">ft</span>${d.wavePer? ` <span class="fc-per">@${d.wavePer}s</span>`:""}`
       : `<span style="color:#7d9bb8">n/a</span>`;
+    const airTxt = d.airF!=null ? `${d.airF}<span class="fc-unit">°F</span>` : "—";
     const precipTxt = (d.precip!=null && d.precip >= 20) ? `<span class="fc-precip">${d.precip}%</span>` : "";
     return `
       <div class="fc-row" ${i===0?'data-today="1"':''}>
@@ -20585,6 +20588,10 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
         <div class="fc-wx">
           <div class="fc-wx-icon">${wx.icon}</div>
           <div class="fc-wx-label">${wx.label}${precipTxt}</div>
+        </div>
+        <div class="fc-metric fc-air">
+          <div class="fc-metric-val">${airTxt}</div>
+          <div class="fc-metric-cap">air</div>
         </div>
         <div class="fc-metric">
           <div class="fc-metric-val">${arrow}${windTxt}</div>
@@ -20654,7 +20661,7 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
 .fc-retry:hover{background:rgba(56,189,248,.28)}
 .fc-table{display:flex;flex-direction:column;gap:8px}
 .fc-row{
-  display:grid;grid-template-columns:54px 1fr auto auto;align-items:center;gap:10px;
+  display:grid;grid-template-columns:54px 1fr auto auto auto;align-items:center;gap:10px;
   background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);
   border-radius:12px;padding:11px 12px;
 }
@@ -20676,10 +20683,11 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
 .fc-arrow{display:inline-block;color:#7dd3fc;font-weight:900;margin-right:3px;font-size:15px}
 .fc-foot{margin-top:14px;font-size:12px;color:#7d9bb8;line-height:1.5;border-top:1px solid rgba(255,255,255,.08);padding-top:10px}
 @media (max-width:480px){
-  .fc-row{grid-template-columns:48px 1fr auto;row-gap:8px}
-  .fc-wx{grid-column:2 / 4}
+  .fc-row{grid-template-columns:48px 1fr auto auto;row-gap:8px}
+  .fc-wx{grid-column:2 / 5}
   .fc-metric:nth-of-type(3){grid-column:2}
   .fc-metric:nth-of-type(4){grid-column:3}
+  .fc-metric:nth-of-type(5){grid-column:4}
   .fc-day{grid-row:1 / 3}
 }
 </style>

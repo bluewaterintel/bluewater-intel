@@ -94,7 +94,9 @@ type BuoyRec = {
   wind: { value: number | null; dir: number | null; observedAtMs: number | null };
   waves: { value: number | null; periodS?: number | null; observedAtMs: number | null };
   waterTemp: { value: number | null; observedAtMs: number | null };
+  airTemp: { value: number | null; observedAtMs: number | null };
   pressure: { value: number | null; observedAtMs: number | null };
+  barometer: { value: number | null; observedAtMs: number | null };
 };
 async function fetchBuoyRaw(id: string): Promise<BuoyRec | null> {
   try {
@@ -103,16 +105,40 @@ async function fetchBuoyRaw(id: string): Promise<BuoyRec | null> {
     const text = await r.text();
     const lines = text.split("\n").filter((l) => l && !l.startsWith("#"));
     if (!lines.length) return null;
-    const c = lines[0].trim().split(/\s+/);
-    const [YY, MM, DD, hh, mm] = [c[0], c[1], c[2], c[3], c[4]].map((x) => parseInt(x, 10));
-    const observedAtMs = Date.UTC(YY, MM - 1, DD, hh, mm);
-    const mps = num(c[6]), wvhtM = num(c[8]), dpd = num(c[9]), pres = num(c[12]), wtmpC = num(c[14]), wdir = num(c[5]);
+    const rows = lines.map((line) => {
+      const c = line.trim().split(/\s+/);
+      const [YY, MM, DD, hh, mm] = [c[0], c[1], c[2], c[3], c[4]].map((x) => parseInt(x, 10));
+      const observedAtMs = Date.UTC(YY, MM - 1, DD, hh, mm);
+      return {
+        c, observedAtMs,
+        pres: num(c[12]),
+        ptdy: num(c[17]),
+      };
+    }).filter((row) => isFinite(row.observedAtMs));
+    if (!rows.length) return null;
+    const latest = rows[0];
+    const c = latest.c;
+    const observedAtMs = latest.observedAtMs;
+    const mps = num(c[6]), wvhtM = num(c[8]), dpd = num(c[9]), pres = latest.pres, atmpC = num(c[13]), wtmpC = num(c[14]), wdir = num(c[5]);
+    const targetTrendMs = observedAtMs - 24 * 3600 * 1000;
+    let trend: number | null = null;
+    if (pres != null) {
+      const historic = rows
+        .filter((row) => row.pres != null && row.observedAtMs <= observedAtMs - 18 * 3600 * 1000)
+        .sort((a, b) => Math.abs(a.observedAtMs - targetTrendMs) - Math.abs(b.observedAtMs - targetTrendMs))[0];
+      if (historic?.pres != null) trend = Math.round((pres - historic.pres) * 10) / 10;
+    }
+    if (trend == null && latest.ptdy != null) trend = latest.ptdy;
     return {
       id, observedAtMs,
       wind: mps != null ? { value: Math.round(mps * 1.943844 * 10) / 10, dir: wdir, observedAtMs } : { value: null, dir: null, observedAtMs: null }, // kt
       waves: wvhtM != null ? { value: Math.round(wvhtM * 3.28084 * 10) / 10, periodS: dpd, observedAtMs } : { value: null, observedAtMs: null }, // ft
       waterTemp: wtmpC != null ? { value: Math.round((wtmpC * 9 / 5 + 32) * 10) / 10, observedAtMs } : { value: null, observedAtMs: null }, // F
-      pressure: pres != null ? { value: pres, observedAtMs } : { value: null, observedAtMs: null },
+      airTemp: atmpC != null ? { value: Math.round((atmpC * 9 / 5 + 32) * 10) / 10, observedAtMs } : { value: null, observedAtMs: null }, // F
+      // hPa pressure trend, preferably latest minus ~24h-ago pressure; falls back
+      // to NDBC PTDY when there is not enough history in the realtime feed.
+      pressure: trend != null ? { value: trend, observedAtMs } : { value: null, observedAtMs: null },
+      barometer: pres != null ? { value: pres, observedAtMs } : { value: null, observedAtMs: null },
     };
   } catch {
     return null;
@@ -158,9 +184,9 @@ async function fetchBuoy(lat: number, lng: number) {
     .sort((a, b) => a.nm - b.nm); // nearest first
   if (!recs.length) return null;
   const nullField = { value: null as number | null, observedAtMs: null as number | null };
-  // Wind: take the nearest buoy that has a DIRECTION (that's what scoring/display use).
+  // Wind: take the nearest buoy that has both speed and direction.
   let wind: BuoyRec["wind"] | null = null;
-  for (const { rec } of recs) { if (rec.wind && rec.wind.dir != null) { wind = rec.wind; break; } }
+  for (const { rec } of recs) { if (rec.wind && rec.wind.value != null && rec.wind.dir != null) { wind = rec.wind; break; } }
   // Other fields: nearest buoy reporting a value.
   const pick = (sel: (r: BuoyRec) => { value: number | null }) => {
     for (const { rec } of recs) { const f = sel(rec); if (f && f.value != null) return f; }
@@ -172,7 +198,9 @@ async function fetchBuoy(lat: number, lng: number) {
     wind: wind ?? { value: null, dir: null, observedAtMs: null },
     waves: pick((r) => r.waves) ?? nullField,
     waterTemp: pick((r) => r.waterTemp) ?? nullField,
+    airTemp: pick((r) => r.airTemp) ?? nullField,
     pressure: pick((r) => r.pressure) ?? nullField,
+    barometer: pick((r) => r.barometer) ?? nullField,
   };
 }
 
@@ -354,7 +382,9 @@ Deno.serve(async (req) => {
     wind: buoy?.wind ?? { value: null, observedAtMs: null },
     waves: buoy?.waves ?? { value: null, observedAtMs: null },
     waterTemp: buoy?.waterTemp ?? { value: null, observedAtMs: null },
+    airTemp: buoy?.airTemp ?? { value: null, observedAtMs: null },
     pressure: buoy?.pressure ?? { value: null, observedAtMs: null },
+    barometer: buoy?.barometer ?? { value: null, observedAtMs: null },
     // tide stage 0..1 (0 = slack, 1 = peak flood/ebb) from NOAA CO-OPS predictions.
     tide: { value: tide.value, state: tide.state, observedAtMs: tide.observedAtMs },
     sources: {
