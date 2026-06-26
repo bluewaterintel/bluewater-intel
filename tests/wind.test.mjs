@@ -45,7 +45,8 @@ console.log("\nwind interpolation:");
 }
 
 console.log("\nwind speed shading:");
-check("light wind has no shaded fill", colorForSpeed(3) === "rgba(0,0,0,0)");
+check("calm wind (<2kt) has no shaded fill", colorForSpeed(1) === "rgba(0,0,0,0)");
+check("light wind (3kt) is faintly shaded, not transparent", colorForSpeed(3) !== "rgba(0,0,0,0)");
 check("strong wind has visible orange/red fill", /rgba\((200|201|202|203|204|205|206|207|208|209|210|211|212|213|214|215|216|217|218|219|220|221|222|223|224|225|226|227|228|229|230|231|232),/.test(colorForSpeed(28)));
 
 console.log(`\n${pass} passed, ${fail} failed`);

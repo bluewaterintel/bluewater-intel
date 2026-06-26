@@ -5313,7 +5313,25 @@ async function buildOceanField(latMin, latMax, lngMin, lngMax, opts){
     }
   }
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pts.length) }, worker));
-  OCEAN_FIELD = { samples: results.filter(Boolean), builtAtMs: Date.now(), spacingNm: stepNm };
+  const samples = results.filter(Boolean);
+  // Regional baselines: the MEDIAN real SST/chlorophyll across the area, plus the
+  // freshest observation time for each. Cells whose own pixel is cloud-gapped use
+  // these so a no-data spot is scored against the regional AVERAGE instead of
+  // being dropped — which previously skewed the heat map toward cells that simply
+  // happened to have a satellite reading. (We never invent a value; the median is
+  // a real measured aggregate and is labeled regional.)
+  const med = (arr) => { if(!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); const m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; };
+  const collect = (key) => {
+    const vals = [], times = [];
+    for(const s of samples){ const f = s.p && s.p[key]; if(f && f.value != null){ vals.push(f.value); if(f.observedAtMs != null) times.push(f.observedAtMs); } }
+    return { median: med(vals), freshest: times.length ? Math.max(...times) : null, coverage: samples.length ? vals.length / samples.length : 0 };
+  };
+  const sstAgg = collect("sst"), chlorAgg = collect("chlor");
+  OCEAN_FIELD = {
+    samples, builtAtMs: Date.now(), spacingNm: stepNm,
+    medianSst: sstAgg.median, freshestSstMs: sstAgg.freshest, sstCoverage: sstAgg.coverage,
+    medianChlor: chlorAgg.median, freshestChlorMs: chlorAgg.freshest, chlorCoverage: chlorAgg.coverage,
+  };
 }
 
 function nearestSample(lat, lng){
@@ -5376,11 +5394,21 @@ function scoreCell(lat, lng, speciesId){
   const speciesCat = sp ? sp.cat : "offshore";
 
   const ocean = nearestSample(lat, lng);
-  // SST and chlorophyll are satellite fields with frequent cloud gaps, so prefer
-  // the nearest sample that actually has a value rather than the geographically
-  // closest sample (which may be a cloud-gapped null). Real values only.
-  const sstObj   = (ocean?.sst?.value != null ? ocean.sst : nearestFieldSample(lat, lng, "sst"))   ?? { value: null, observedAtMs: null };
-  const chlorObj = (ocean?.chlor?.value != null ? ocean.chlor : nearestFieldSample(lat, lng, "chlor")) ?? { value: null, observedAtMs: null };
+  // SST and chlorophyll are satellite fields with frequent cloud gaps. Resolve
+  // each in three tiers so missing pixels don't skew the map toward data-present
+  // cells: (1) this cell's own pixel, (2) the nearest valid pixel in the area,
+  // (3) the regional MEDIAN for the whole fishing area (a real aggregate, labeled
+  // regional). Every cell is then scored on the SAME factors with equal weight.
+  let sstObj = (ocean?.sst?.value != null ? ocean.sst : nearestFieldSample(lat, lng, "sst"));
+  if((!sstObj || sstObj.value == null) && OCEAN_FIELD.medianSst != null){
+    sstObj = { value: OCEAN_FIELD.medianSst, observedAtMs: OCEAN_FIELD.freshestSstMs, _regional: true };
+  }
+  sstObj = sstObj ?? { value: null, observedAtMs: null };
+  let chlorObj = (ocean?.chlor?.value != null ? ocean.chlor : nearestFieldSample(lat, lng, "chlor"));
+  if((!chlorObj || chlorObj.value == null) && OCEAN_FIELD.medianChlor != null){
+    chlorObj = { value: OCEAN_FIELD.medianChlor, observedAtMs: OCEAN_FIELD.freshestChlorMs, _regional: true };
+  }
+  chlorObj = chlorObj ?? { value: null, observedAtMs: null };
   const windObj  = ocean?.wind  ?? { value: null, dir: null, observedAtMs: null };
   const presObj  = ocean?.pressure ?? { value: null, observedAtMs: null };
   const tideObj  = ocean?.tide  ?? { value: null, observedAtMs: null };
@@ -5702,7 +5730,7 @@ function scoreCell(lat, lng, speciesId){
 
   const allFactors = [
     {name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw:sst != null ? `${sst.toFixed(1)}°F` : "—"},
-    {name:"Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth)} m`},
+    {name:"Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
     {name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
     {name:"Chlorophyll edge",   weight:W.chlorophyll,   score:chlorScore,       raw:chlor != null ? `${chlor.toFixed(2)} mg/m³` : "—"},
     // Reports: only shown when there ARE positive nearby reports. Absence of
@@ -7515,7 +7543,7 @@ const WindParticleLayer = L.Layer.extend({
       }
     }
     ctx.imageSmoothingEnabled = true;
-    ctx.filter = "blur(10px)";
+    ctx.filter = "blur(6px)";
     ctx.drawImage(off, -cell, -cell, w + cell * 2, h + cell * 2);
     ctx.filter = "none";
   },
@@ -7652,7 +7680,7 @@ function bindPredictInteractionHandlers(){
             </div>
             <div style="font-size:12.5px;color:#cfe5ff;line-height:1.6">
               ${cell.lat.toFixed(2)}°N ${Math.abs(cell.lng).toFixed(2)}°W<br>
-              SST ${cell.sst != null ? cell.sst.toFixed(1) : "—"}°F · ${Math.round(cell.depth)}m<br>
+              SST ${cell.sst != null ? cell.sst.toFixed(1) : "—"}°F · ${Math.round(cell.depth * 3.28084)} ft<br>
               <b>Top factor:</b> ${top.name}<br>
               <b>Confidence:</b> ${cell.confidence}%
             </div>
@@ -7960,9 +7988,9 @@ function renderExplainerMain(){
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(107,191,234,.12)">
       <div style="font-size:11px;color:#6bbfea;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:8px">Get more detail</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <button onclick="openSubPanel('wx')" class="ex-action-btn" style="background:rgba(41,121,181,.15);border:1px solid rgba(41,121,181,.4);color:#7dd3fc">
+        <button onclick="showForecast(${cell.lat}, ${cell.lng}, 'Weather Forecast')" class="ex-action-btn" style="background:rgba(41,121,181,.15);border:1px solid rgba(41,121,181,.4);color:#7dd3fc">
           <span style="font-size:16px">🌊</span>
-          <span style="flex:1;text-align:left">Weather here</span>
+          <span style="flex:1;text-align:left">Weather Forecast</span>
           <span style="color:#7dd3fc;opacity:.6">→</span>
         </button>
         <button onclick="openSubPanel('brief')" class="ex-action-btn" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.4);color:#c084fc">

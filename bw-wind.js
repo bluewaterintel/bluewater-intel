@@ -88,14 +88,18 @@
   }
 
   function colorForSpeed(kts, alphaScale = 1) {
-    if (!finite(kts) || kts < 5) return "rgba(0,0,0,0)";
+    // Only truly calm water (<2 kt) is left unshaded. Everything else gets a
+    // clearly-visible, saturated tint so calm vs. windy reads at a glance — the
+    // previous ramp was so transparent the speed was hard to tell.
+    if (!finite(kts) || kts < 2) return "rgba(0,0,0,0)";
     const stops = [
-      [5, [38, 139, 192], 0.10],
-      [10, [63, 194, 120], 0.18],
-      [15, [232, 214, 90], 0.28],
-      [22, [232, 133, 46], 0.40],
-      [30, [200, 53, 32], 0.52],
-      [45, [145, 32, 82], 0.62],
+      [2,  [ 36, 120, 205], 0.30],   // light blue — barely breezy
+      [7,  [ 40, 165, 215], 0.46],   // blue
+      [12, [ 60, 200, 120], 0.62],   // green
+      [17, [225, 210,  70], 0.74],   // yellow
+      [24, [232, 130,  40], 0.85],   // orange
+      [32, [210,  45,  35], 0.92],   // red
+      [45, [150,  30,  90], 0.96],   // deep red / purple — gale
     ];
     let lo = stops[0];
     let hi = stops[stops.length - 1];
@@ -108,7 +112,7 @@
     }
     const t = Math.max(0, Math.min(1, (kts - lo[0]) / ((hi[0] - lo[0]) || 1)));
     const c = lo[1].map((v, i) => Math.round(lerp(v, hi[1][i], t)));
-    const a = Math.max(0, Math.min(0.75, lerp(lo[2], hi[2], t) * alphaScale));
+    const a = Math.max(0, Math.min(0.96, lerp(lo[2], hi[2], t) * alphaScale));
     return `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`;
   }
 
