@@ -1521,6 +1521,12 @@ body.nav-open #ruler-readout{
           <span class="wx-icon">💨</span><span id="hdr-wind">—</span>
         </div>
       </div>
+      <div class="wx-cell" id="hdr-tide-cell" style="display:none">
+        <div class="wx-cell-label">Tide</div>
+        <div class="wx-cell-value" style="color:#93c5fd">
+          <span class="wx-icon">⇅</span><span id="hdr-tide">—</span>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -4953,17 +4959,31 @@ function stepWindForecast(delta){ setWindForecastHour(WIND_FORECAST_HOUR + delta
 
 function getWindField(lat, lng){
   if(!window.BW_WIND) return null;
-  return window.BW_WIND.interpolateWind(WIND_FIELD.samples, lat, lng);
+  // Limit interpolation to nearby lattice nodes (~5 steps) so the rendered field
+  // is determined by LOCAL samples rather than averaging the whole viewport. This
+  // keeps a location's wind consistent regardless of how far you're zoomed out
+  // (a wide view no longer smears distant wind into a calm spot, and vice-versa).
+  const stepDeg = WIND_FIELD.stepDeg || 0.2;
+  const maxNm = Math.max(45, stepDeg * 60 * 5);
+  return window.BW_WIND.interpolateWind(WIND_FIELD.samples, lat, lng, maxNm);
 }
 
 // Snap a raw degree step to a fixed "nice" ladder so the wind sampling lattice
 // only changes with ZOOM, never with pan. Keeping the step on a fixed ladder is
 // what lets the absolute lattice below stay aligned across map moves.
 function windLatticeStep(){
-  const STEPS = [0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 1, 2, 3];
-  const raw = MAP ? (MAP.getBounds().getEast() - MAP.getBounds().getWest()) / 6 : 0.25;
-  for(const s of STEPS){ if(raw <= s) return s; }
-  return STEPS[STEPS.length - 1];
+  // NESTED ladder: every step is 2x the previous, so a coarser lattice's points
+  // are a strict SUBSET of a finer one's. Combined with the absolute alignment in
+  // windSampleGridForMap, zooming then keeps the existing sample points and only
+  // ADDS detail between them, instead of re-sampling at shifted locations. That
+  // stops the wind field from visibly changing as you zoom in/out. Finest 0.1°
+  // (~the GFS model resolution — finer buys nothing). Based on the E-W span, which
+  // is pan-invariant at a given zoom, so panning never changes the step.
+  const LADDER = [0.1, 0.2, 0.4, 0.8, 1.6, 3.2];
+  const spanLng = MAP ? (MAP.getBounds().getEast() - MAP.getBounds().getWest()) : 1.5;
+  const target = spanLng / 10;   // ~10 samples across the view
+  for(const s of LADDER){ if(s >= target) return s; }
+  return LADDER[LADDER.length - 1];
 }
 
 // Wind samples are taken on a FIXED geographic lattice (absolute multiples of a
@@ -5034,6 +5054,7 @@ async function buildWindFieldForMap(){
     forecastHour: WIND_FORECAST_HOUR,
     seq,
     boundsKey: MAP.getBounds().toBBoxString(),
+    stepDeg: windLatticeStep(),
   };
   updateOceanLegend();
   return WIND_FIELD;
@@ -12006,6 +12027,7 @@ function updateHeaderConditions(){
   const p = activePort ? PORTS[activePort] : null;
   if(!p){
     water.textContent = air.textContent = seas.textContent = wind.textContent = "—";
+    updateHeaderTide();
     return;
   }
   // Sample conditions a short distance offshore from the port (where you'd fish),
@@ -12015,6 +12037,72 @@ function updateHeaderConditions(){
   air.textContent   = `${Math.round(wx.airTempF)}°F`;
   seas.textContent  = `${wx.waveHt}ft`;
   wind.textContent  = `${wx.windKt}kt`;
+  updateHeaderTide();
+}
+
+// Tide status + next high/low for the header. Uses the deployed ocean function to
+// get the current tide state and the nearest NOAA CO-OPS station id, then fetches
+// that station's hi/lo predictions directly (CO-OPS sends CORS *), so the banner
+// shows e.g. "↑ High 3:42 PM". Cached per-port for 15 min; degrades to just the
+// rising/falling state if the hi/lo lookup is unavailable.
+let _hdrTide = { key: "", text: "", atMs: 0 };
+async function updateHeaderTide(){
+  const cell = document.getElementById("hdr-tide-cell");
+  const el   = document.getElementById("hdr-tide");
+  if(!cell || !el) return;
+  const p = activePort ? PORTS[activePort] : null;
+  if(!p){ cell.style.display = "none"; return; }
+  cell.style.display = "";
+  if(_hdrTide.key === activePort && Date.now() - _hdrTide.atMs < 15 * 60 * 1000){
+    el.textContent = _hdrTide.text || "—"; return;
+  }
+  el.textContent = "…";
+  const portKey = activePort;
+  try {
+    if(typeof BW_OCEAN === "undefined"){ el.textContent = "—"; return; }
+    const o = await BW_OCEAN.fetchOcean(p.lat + 0.05, p.lng + 0.05);
+    if(activePort !== portKey) return;  // port changed while we were fetching
+    const state = o && o.tide ? o.tide.state : null;
+    const station = o && o.sources ? o.sources.tide : null;
+    const arrow = state === "rising" ? "↑" : state === "falling" ? "↓" : "";
+    let nextTxt = "";
+    if(station){
+      const next = await fetchNextTideEvent(station);
+      if(activePort !== portKey) return;
+      if(next) nextTxt = `${next.type} ${next.timeTxt}`;
+    }
+    const text = [arrow, nextTxt].filter(Boolean).join(" ").trim()
+      || (state ? state.charAt(0).toUpperCase() + state.slice(1) : "—");
+    el.textContent = text;
+    _hdrTide = { key: portKey, text, atMs: Date.now() };
+  } catch(e){
+    el.textContent = "—";
+  }
+}
+
+// Next high/low tide event after now for a CO-OPS station (hi/lo predictions).
+async function fetchNextTideEvent(station){
+  const pad = (n)=>String(n).padStart(2,"0");
+  const fmt = (d)=>`${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  const now = Date.now();
+  const begin = new Date(now - 3600000), end = new Date(now + 48 * 3600000);
+  const url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+    + "?product=predictions&interval=hilo&datum=MLLW&units=english&time_zone=gmt&format=json&application=bluewaterintel"
+    + `&station=${encodeURIComponent(station)}&begin_date=${encodeURIComponent(fmt(begin))}&end_date=${encodeURIComponent(fmt(end))}`;
+  const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if(!r.ok) return null;
+  const d = await r.json();
+  const preds = (d && d.predictions) ? d.predictions : [];
+  for(const pr of preds){
+    const t = Date.parse(pr.t.replace(" ", "T") + "Z");  // CO-OPS gmt
+    if(isFinite(t) && t > now){
+      return {
+        type: pr.type === "H" ? "High" : "Low",
+        timeTxt: new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+      };
+    }
+  }
+  return null;
 }
 
 // Turn the predictive heat map on once the user has picked both required inputs.
@@ -21103,7 +21191,7 @@ function bwiWeatherIcon(code, precip){
   if(c >= 71 && c <= 77)            return {icon:snow,   label:"Snow"};
   if(c >= 80 && c <= 82)            return {icon:rain,   label:"Showers"};
   if(c >= 85 && c <= 86)            return {icon:snow,   label:"Snow showers"};
-  if(c >= 95)                       return {icon:storm,  label:"Thunderstorms"};
+  if(c >= 95)                       return {icon:storm,  label:"T-Storms"};
   // Unknown / no code — fall back to cloud, or sun if precip chance is low.
   return {icon:(precip!=null && precip < 20) ? sun : cloudy, label:"—"};
 }
@@ -21184,7 +21272,7 @@ async function fetchForecast(lat, lng){
   const marineUrl  = `https://marine-api.open-meteo.com/v1/marine?${base}` +
     `&daily=wave_height_max,wave_period_max,wave_direction_dominant`;
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?${base}` +
-    `&daily=weather_code,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,temperature_2m_max,precipitation_probability_max`;
+    `&daily=weather_code,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,temperature_2m_max,temperature_2m_min,precipitation_probability_max`;
 
   // Run both in parallel. Marine coverage is open-ocean; very nearshore points
   // can occasionally lack wave data, so we tolerate a missing marine response
@@ -21206,7 +21294,8 @@ async function fetchForecast(lat, lng){
     const windKt = wd.wind_speed_10m_max ? bwiKmhToKt(wd.wind_speed_10m_max[i]) : null;
     const gustKt = wd.wind_gusts_10m_max ? bwiKmhToKt(wd.wind_gusts_10m_max[i]) : null;
     const windDir = wd.wind_direction_10m_dominant ? wd.wind_direction_10m_dominant[i] : null;
-    const airF = wd.temperature_2m_max ? (wd.temperature_2m_max[i] * 9/5 + 32) : null;
+    const airHiF = wd.temperature_2m_max ? (wd.temperature_2m_max[i] * 9/5 + 32) : null;
+    const airLoF = (wd.temperature_2m_min && wd.temperature_2m_min[i]!=null) ? (wd.temperature_2m_min[i] * 9/5 + 32) : null;
     const waveFt = (md.wave_height_max && md.wave_height_max[i]!=null) ? bwiMToFt(md.wave_height_max[i]) : null;
     const wavePer = (md.wave_period_max && md.wave_period_max[i]!=null) ? md.wave_period_max[i] : null;
     const wxCode = (wd.weather_code && wd.weather_code[i]!=null) ? wd.weather_code[i] : null;
@@ -21216,7 +21305,9 @@ async function fetchForecast(lat, lng){
       windKt: windKt!=null ? Math.round(windKt) : null,
       gustKt: gustKt!=null ? Math.round(gustKt) : null,
       windDir,
-      airF: airF!=null ? Math.round(airF) : null,
+      airF: airHiF!=null ? Math.round(airHiF) : null,
+      airHiF: airHiF!=null ? Math.round(airHiF) : null,
+      airLoF: airLoF!=null ? Math.round(airLoF) : null,
       waveFt: waveFt!=null ? Math.round(waveFt*10)/10 : null,
       wavePer: wavePer!=null ? Math.round(wavePer) : null,
       wxCode,
@@ -21247,7 +21338,12 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
     const waveTxt = d.waveFt!=null
       ? `${d.waveFt}<span class="fc-unit">ft</span>${d.wavePer? ` <span class="fc-per">@${d.wavePer}s</span>`:""}`
       : `<span style="color:#7d9bb8">n/a</span>`;
-    const airTxt = d.airF!=null ? `${d.airF}<span class="fc-unit">°F</span>` : "—";
+    // Air temperature: show daily HIGH / LOW when both are available (older cached
+    // forecasts may only have a single value — fall back to it gracefully).
+    const airHi = (d.airHiF!=null) ? d.airHiF : d.airF;
+    const airTxt = (airHi!=null && d.airLoF!=null)
+      ? `${airHi}<span class="fc-unit">°</span>/${d.airLoF}<span class="fc-unit">°</span>`
+      : (airHi!=null ? `${airHi}<span class="fc-unit">°F</span>` : "—");
     const precipTxt = (d.precip!=null && d.precip >= 20) ? `<span class="fc-precip">${d.precip}%</span>` : "";
     return `
       <div class="fc-row" ${i===0?'data-today="1"':''}>
@@ -21261,7 +21357,7 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
         </div>
         <div class="fc-metric fc-air">
           <div class="fc-metric-val">${airTxt}</div>
-          <div class="fc-metric-cap">air</div>
+          <div class="fc-metric-cap">${(d.airHiF!=null && d.airLoF!=null) ? "air hi/lo" : "air"}</div>
         </div>
         <div class="fc-metric">
           <div class="fc-metric-val">${arrow}${windTxt}</div>
