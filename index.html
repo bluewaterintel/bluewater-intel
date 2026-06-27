@@ -404,7 +404,7 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     transform:none !important;
   }
   #ocean-legend .oc-legend-bar,
-  #ocean-legend [style*="height:18px"]{ height:14px !important; }
+  #ocean-legend [style*="height:11px"]{ height:10px !important; }
   /* Legend label + tick fonts — sized for readability (the phone readability
      layer below keeps these consistent if anything overrides). */
   #ocean-legend-content > div > div:first-child{ font-size:12px !important; margin-bottom:3px !important; }
@@ -1737,14 +1737,14 @@ body.nav-open #ruler-readout{
     top:10px;left:50%;transform:translateX(-50%);z-index:500;
     background:rgba(10,22,40,.94);
     border:1px solid rgba(107,191,234,.3);
-    border-radius:10px;
-    padding:12px 18px;
+    border-radius:9px;
+    padding:7px 11px;
     font-family:'Segoe UI',Arial,sans-serif;
     color:#e8f4ff;font-size:10px;
     box-shadow:0 4px 14px rgba(0,0,0,.55);
     pointer-events:none;
-    max-width:min(440px, 92vw);
-    min-width:320px;
+    max-width:min(420px, 92vw);
+    min-width:210px;
   ">
     <div id="ocean-legend-content"></div>
   </div>
@@ -1800,26 +1800,26 @@ body.nav-open #ruler-readout{
     bottom:60px;left:50%;transform:translateX(-50%);z-index:500;
     background:rgba(10,22,40,.94);
     border:1px solid rgba(56,189,248,.35);
-    border-radius:14px;
-    padding:10px 16px 8px;
+    border-radius:12px;
+    padding:6px 12px 6px;
     font-family:'Segoe UI',Arial,sans-serif;
     color:#e8f4ff;
     box-shadow:0 4px 14px rgba(0,0,0,.55);
-    width:min(520px, calc(100vw - 32px));
+    width:min(480px, calc(100vw - 32px));
   ">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px">
-      <div style="font-size:9px;color:#38bdf8;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Wind Forecast</div>
-      <div id="wind-forecast-display" style="font-size:11px;color:#cfe5ff;font-weight:700">Now</div>
-    </div>
     <div style="display:flex;align-items:center;gap:8px">
       <button id="wind-prev-btn" onclick="stepWindForecast(-3)" type="button" class="wind-step-btn" aria-label="Previous 3 hours">‹</button>
-      <div style="flex:1;min-width:0;text-align:center;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.10);border-radius:11px;padding:7px 10px">
-        <div id="wind-forecast-date" style="font-size:13px;color:#f0f6ff;font-weight:800;line-height:1.2">Current</div>
-        <div id="wind-forecast-time" style="font-size:10px;color:#9ec5e8;font-weight:700;letter-spacing:.04em;margin-top:2px">Current</div>
+      <div style="flex:1;min-width:0;text-align:center;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.10);border-radius:9px;padding:4px 10px">
+        <div style="display:flex;align-items:baseline;justify-content:center;gap:7px">
+          <span style="font-size:8px;color:#38bdf8;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Wind</span>
+          <span id="wind-forecast-date" style="font-size:12px;color:#f0f6ff;font-weight:800;line-height:1.15">Current</span>
+          <span id="wind-forecast-time" style="font-size:10px;color:#9ec5e8;font-weight:700;letter-spacing:.04em">Current</span>
+        </div>
       </div>
       <button id="wind-next-btn" onclick="stepWindForecast(3)" type="button" class="wind-step-btn" aria-label="Next 3 hours">›</button>
     </div>
-    <div style="display:flex;justify-content:space-between;gap:5px;font-size:9px;color:#9ec5e8;margin-top:7px">
+    <div id="wind-forecast-display" style="display:none"></div>
+    <div style="display:flex;justify-content:space-between;gap:5px;font-size:9px;color:#9ec5e8;margin-top:5px">
       <button onclick="setWindForecastHour(0)"  type="button" class="wind-time-chip wind-mark">Current</button>
       <button onclick="setWindForecastHour(24)" type="button" class="wind-time-chip wind-mark">+24h</button>
       <button onclick="setWindForecastHour(48)" type="button" class="wind-time-chip wind-mark">+48h</button>
@@ -1905,30 +1905,6 @@ body.nav-open #ruler-readout{
      lives on the Waypoints page (menu → Import/Export tab), not on this map
      bubble, to keep the on-map footprint minimal. Shown only when the Fishing
      Waypoints layer is on. -->
-<div id="waypoint-control" style="
-  display:none;position:absolute;
-  bottom:80px;left:50%;transform:translateX(-50%);z-index:500;
-  background:rgba(10,22,40,.95);
-  border:1px solid rgba(239,68,68,.40);
-  border-radius:12px;padding:7px 12px;
-  font-family:'Segoe UI',Arial,sans-serif;color:#e8f4ff;
-  box-shadow:0 4px 16px rgba(0,0,0,.6);
-  width:auto;max-width:calc(100vw - 24px);
-">
-  <!-- Slim single-row bar: label + count on the left, radius buttons on the
-       right. GPX import/export lives on the Waypoints page (menu), not here,
-       to keep this off the map as small as possible. -->
-  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-    <div style="display:flex;flex-direction:column;line-height:1.15">
-      <span style="font-size:12px;color:#f87171;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Fishing Waypoints</span>
-      <span id="wp-count" style="font-size:12px;color:#9ec5e8">select a port to begin</span>
-    </div>
-    <span class="wp-ctrl-divider" style="width:1px;align-self:stretch;background:rgba(255,255,255,.12)"></span>
-    <span style="font-size:12px;color:#7d9bb8;font-weight:600">RADIUS</span>
-    <span id="wp-radius-row" style="display:inline-flex;gap:6px;flex-wrap:nowrap;flex:1 1 auto"></span>
-  </div>
-</div>
-
 <!-- WAYPOINT TYPE LEGEND — symbol key, anchored on the right edge so it stays clear
      of the ocean legend (top-left) and the bottom control bars. Shown only when the
      Fishing Waypoints layer is on. Built from WP_TYPE_STYLE so it always matches the
@@ -1962,6 +1938,17 @@ body.nav-open #ruler-readout{
       cursor:pointer;padding:0 2px;">×</button>
   </div>
   <div id="wp-legend-rows" style="display:flex;flex-direction:column;gap:4px"></div>
+  <!-- Distance-from-port selector — moved here from the old bottom bubble so the
+       bottom of the map stays clean. Compact dropdown + in-range count. -->
+  <div id="wp-radius-section" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)">
+    <label for="wp-radius-select" style="display:block;font-size:9px;color:#f87171;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:4px">Distance from port</label>
+    <select id="wp-radius-select" onchange="setWpRadius(Number(this.value))" aria-label="Waypoint distance from port" style="
+      width:100%;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);
+      color:#fecaca;font-weight:700;font-size:12px;border-radius:8px;padding:6px 8px;
+      font-family:inherit;cursor:pointer;outline:none;
+    "></select>
+    <div id="wp-count" style="font-size:10px;color:#9ec5e8;margin-top:5px;line-height:1.3">select a port to begin</div>
+  </div>
 </div>
 
 <!-- EMPTY-STATE OVERLAY — shown when port or species isn't selected.
@@ -2124,6 +2111,30 @@ body.nav-open #ruler-readout{
       </span>
       <span class="lyr-toggle"></span>
     </label>
+    <label class="layer-row" title="Marine sanctuaries, no-take reserves, and Habitat Areas of Particular Concern. Tap a closure on the map for rules and official regulation links.">
+      <input type="checkbox" id="chk-closures" onchange="toggleLayer('closures')">
+      <span class="lyr-label">
+        <span class="layer-swatch" style="background:rgba(220,38,38,.15);border:2px solid #dc2626;border-radius:2px;width:10px;height:10px"></span>
+        <span>Closures &amp; Sanctuaries</span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
+    <label class="layer-row" title="LORAN-C Y/Z-rate TD lines (9960-Y for NC→MD, 7980-Z for SC/GA). Matches BLACK diagonal lines on NOAA Grease Charts.">
+      <input type="checkbox" id="chk-loran" onchange="toggleLayer('loran')">
+      <span class="lyr-label">
+        <span class="layer-swatch" style="background:transparent;border:1px dashed #15803d;border-radius:0"></span>
+        <span>LORAN-C Lines <span style="font-size:8px;color:#9ec5e8;opacity:.7">(Y/Z-rate)</span></span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
+    <label class="layer-row" title="Anonymized aggregate areas where AIS shows fishing-vessel activity near your port.">
+      <input type="checkbox" id="chk-zones" onchange="toggleLayer('zones')">
+      <span class="lyr-label">
+        <span class="layer-swatch" style="background:transparent;border:2px dashed #22d3ee;border-radius:50%"></span>
+        <span>Active Fishing Areas</span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
 
     <!-- OCEAN DATA — satellite overlays -->
     <div class="layers-section">OCEAN DATA</div>
@@ -2163,38 +2174,6 @@ body.nav-open #ruler-readout{
       </span>
       <span class="lyr-toggle"></span>
     </label>
-
-    <!-- ADVANCED — niche overlays, collapsed by default -->
-    <div class="layers-expander" id="advanced-expander" onclick="toggleAdvancedLayers()" role="button" tabindex="0">
-      <span>Advanced overlays</span>
-      <span class="exp-arrow">▾</span>
-    </div>
-    <div id="advanced-layers">
-      <label class="layer-row" title="Marine sanctuaries, no-take reserves, and Habitat Areas of Particular Concern. Tap a closure on the map for rules and official regulation links.">
-        <input type="checkbox" id="chk-closures" onchange="toggleLayer('closures')">
-        <span class="lyr-label">
-          <span class="layer-swatch" style="background:rgba(220,38,38,.15);border:2px solid #dc2626;border-radius:2px;width:10px;height:10px"></span>
-          <span>Closures &amp; Sanctuaries</span>
-        </span>
-        <span class="lyr-toggle"></span>
-      </label>
-      <label class="layer-row">
-        <input type="checkbox" id="chk-zones" onchange="toggleLayer('zones')">
-        <span class="lyr-label">
-          <span class="layer-swatch" style="background:transparent;border:2px dashed #22d3ee;border-radius:50%"></span>
-          <span>Active Fishing Areas</span>
-        </span>
-        <span class="lyr-toggle"></span>
-      </label>
-      <label class="layer-row" title="LORAN-C Y/Z-rate TD lines (9960-Y for NC→MD, 7980-Z for SC/GA). Matches BLACK diagonal lines on NOAA Grease Charts.">
-        <input type="checkbox" id="chk-loran" onchange="toggleLayer('loran')">
-        <span class="lyr-label">
-          <span class="layer-swatch" style="background:transparent;border:1px dashed #15803d;border-radius:0"></span>
-          <span>LORAN-C Lines <span style="font-size:8px;color:#9ec5e8;opacity:.7">(Y/Z-rate)</span></span>
-        </span>
-        <span class="lyr-toggle"></span>
-      </label>
-    </div>
 
     <hr class="layers-divider">
     <div class="layers-section">BATHYMETRY</div>
@@ -2474,13 +2453,6 @@ body.nav-open #ruler-readout{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<div id="map-scale-bar" aria-label="Map scale">
-  <div id="scale-bar-track">
-    <div id="scale-bar-fill"></div>
-    <div id="scale-bar-label-nm"></div>
-  </div>
-</div>
-
 <script>
 // ════════════════════════════════════════════════════════════════════════════
 // DATA
@@ -3485,7 +3457,11 @@ async function initMap(){
   // Restore saved preferences (default port, basemap, etc.) before any view
   // logic reads them, so the app opens with the user's chosen defaults.
   if(typeof prefLoad === "function") prefLoad();
-  MAP=L.map("map",{center:[29.0,-85.0],zoom:5,zoomControl:false,attributionControl:true,maxZoom:13});
+  MAP=L.map("map",{center:[29.0,-85.0],zoom:5,zoomControl:false,attributionControl:true,maxZoom:13,
+    // Tame mouse-wheel / trackpad zoom: one notch or swipe = one zoom level
+    // instead of jumping 2-3 levels. Higher wheelPxPerZoomLevel = less sensitive;
+    // integer zoomSnap/zoomDelta keep each gesture to a single, clean step.
+    zoomSnap:1, zoomDelta:1, wheelPxPerZoomLevel:140, wheelDebounceTime:90});
 
   // Auto-detect if tiles are blocked (Claude artifact sandbox limitation) and show subtle notice
   let tileStats={loaded:0,errored:0};
@@ -3732,7 +3708,7 @@ async function initMap(){
     radarCtl.addEventListener("touchstart",   stopAllRadar, {passive: true});
     radarCtl.addEventListener("mousedown",    stopAllRadar);
   }
-  const wpCtl = document.getElementById("waypoint-control");
+  const wpCtl = document.getElementById("waypoint-legend");
   if(wpCtl && typeof L !== "undefined" && L.DomEvent){
     L.DomEvent.disableClickPropagation(wpCtl);
     L.DomEvent.disableScrollPropagation(wpCtl);
@@ -4934,7 +4910,7 @@ function windForecastLabel(hours){
 
 function windForecastDateParts(hours){
   const h = Math.max(0, Math.min(96, Math.round(Number(hours)||0)));
-  if(h === 0) return { date: "Current", time: "Current observations" };
+  if(h === 0) return { date: "Current", time: "" };
   const d = new Date(Date.now() + h * 3600000);
   return {
     date: d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" }),
@@ -8661,7 +8637,7 @@ function updateSatDateControlVisibility(){
 // nearest the thumb-friendly bottom edge. Called by every visibility updater.
 // The distance scale bar is then lifted to sit just above the top of the stack
 // so it never overlaps the bars or the Leaflet attribution line.
-const BOTTOM_STACK_ORDER = ["waypoint-control", "sat-date-control", "radar-loop-control", "wind-forecast-slider", "forecast-slider"];
+const BOTTOM_STACK_ORDER = ["sat-date-control", "radar-loop-control", "wind-forecast-slider", "forecast-slider"];
 const BOTTOM_STACK_GAP  = 8;    // px gap between stacked bars
 function restackBottomControls(){
   // On phones the Leaflet attribution/credit line sits along the very bottom,
@@ -9224,13 +9200,6 @@ function toggleLayersPanel(){
   // user can see/disable what they turned on. Otherwise keep it collapsed.
   if(layersPanelOpen){
     if(typeof refreshDiagSummary === "function") refreshDiagSummary();
-    const anyAdvOn = !!(layerVis && (layerVis.closures || layerVis.zones || layerVis.loran));
-    const exp = document.getElementById("advanced-expander");
-    const body = document.getElementById("advanced-layers");
-    if(exp && body){
-      body.classList.toggle("open", anyAdvOn);
-      exp.classList.toggle("open", anyAdvOn);
-    }
   }
 }
 
@@ -10031,16 +10000,16 @@ function updateOceanLegend(){
     return;
   }
   const parts = [];
-  const gap = () => parts.length ? 'margin-top:10px' : '';
+  const gap = () => parts.length ? 'margin-top:6px' : '';
   // NOTE: the bite-score legend is rendered as a slim banner across the top of
   // the map (see updateBiteBanner), not in this side panel — it was taking up
   // too much room here. This panel now only covers the gradient overlays.
   if(layerVis.sst){
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:12px;font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:5px">SST (°F)</div>
-        <div style="height:18px;border-radius:4px;background:linear-gradient(90deg,#0a2e6b 0%,#0e72b5 20%,#4dbed5 40%,#8fd96b 55%,#e8d65a 70%,#e8975a 85%,#c83520 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:#cfe5ff;margin-top:3px;font-weight:600">
+        <div style="font-size:11px;font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:2px">SST (°F)</div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#0a2e6b 0%,#0e72b5 20%,#4dbed5 40%,#8fd96b 55%,#e8d65a 70%,#e8975a 85%,#c83520 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#cfe5ff;margin-top:2px;font-weight:600">
           <span>40°</span><span>50°</span><span>60°</span><span>68°</span><span>72°</span><span>78°</span><span>84°+</span>
         </div>
       </div>`);
@@ -10048,9 +10017,9 @@ function updateOceanLegend(){
   if(layerVis.chlor){
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:12px;font-weight:700;color:#34d399;letter-spacing:.08em;margin-bottom:5px">CHLOROPHYLL</div>
-        <div style="height:18px;border-radius:4px;background:linear-gradient(90deg,#1a1a4d 0%,#2563a8 25%,#34d399 55%,#fbbf24 80%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:#cfe5ff;margin-top:3px;font-weight:600">
+        <div style="font-size:11px;font-weight:700;color:#34d399;letter-spacing:.08em;margin-bottom:2px">CHLOROPHYLL</div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1a1a4d 0%,#2563a8 25%,#34d399 55%,#fbbf24 80%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#cfe5ff;margin-top:2px;font-weight:600">
           <span>Low</span><span>Productive</span><span>High</span>
         </div>
       </div>`);
@@ -10058,20 +10027,20 @@ function updateOceanLegend(){
   if(layerVis.wind){
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:12px;font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:5px">WIND (kt)</div>
-        <div style="height:18px;border-radius:4px;background:${(window.BW_WIND && window.BW_WIND.legendGradient) ? window.BW_WIND.legendGradient(40) : 'linear-gradient(90deg,#2870d2,#82e178,#ebe650,#e46e19,#be1a26,#f05ab4)'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="position:relative;height:14px;margin-top:3px;font-size:10px;color:#cfe5ff;font-weight:600">
+        <div style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:2px">WIND (kt)</div>
+        <div style="height:11px;border-radius:3px;background:${(window.BW_WIND && window.BW_WIND.legendGradient) ? window.BW_WIND.legendGradient(40) : 'linear-gradient(90deg,#2870d2,#82e178,#ebe650,#e46e19,#be1a26,#f05ab4)'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="position:relative;height:11px;margin-top:2px;font-size:9px;color:#cfe5ff;font-weight:600">
           ${[0,5,10,15,20,25,30,35,40].map((v,i,arr)=>{const pct=v/40*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===40?'40+':v}</span>`;}).join('')}
         </div>
-        <div style="font-size:9px;color:#9ec5e8;margin-top:4px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
+        <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
       </div>`);
   }
   if(layerVis.radar){
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:12px;font-weight:700;color:#a855f7;letter-spacing:.08em;margin-bottom:5px">RADAR (dBZ)</div>
-        <div style="height:18px;border-radius:4px;background:linear-gradient(90deg,#04e9e7 0%,#019ff4 15%,#0300f4 28%,#02fd02 42%,#01c501 52%,#fdf802 64%,#e5bc00 72%,#fd9500 80%,#fd0000 90%,#d40000 95%,#bc0000 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:#cfe5ff;margin-top:3px;font-weight:600">
+        <div style="font-size:11px;font-weight:700;color:#a855f7;letter-spacing:.08em;margin-bottom:2px">RADAR (dBZ)</div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#04e9e7 0%,#019ff4 15%,#0300f4 28%,#02fd02 42%,#01c501 52%,#fdf802 64%,#e5bc00 72%,#fd9500 80%,#fd0000 90%,#d40000 95%,#bc0000 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#cfe5ff;margin-top:2px;font-weight:600">
           <span>light</span><span>moderate</span><span>heavy</span><span>intense</span>
         </div>
       </div>`);
@@ -11097,24 +11066,21 @@ function gpxEscape(s){
 // Radius setter from the UI.
 function setWpRadius(nm){
   wpRadiusNm = nm;
-  document.querySelectorAll(".wp-radius-btn").forEach(b=>{
-    b.classList.toggle("sel", Number(b.dataset.nm)===nm);
-  });
+  const sel = document.getElementById("wp-radius-select");
+  if(sel && Number(sel.value) !== nm) sel.value = String(nm);
   drawWaypoints();
   drawRamps();
 }
-// Build the radius-band buttons once.
+// Populate the distance-from-port dropdown (in the left waypoint legend) once.
 function buildWpRadiusButtons(){
-  const row = document.getElementById("wp-radius-row");
-  if(!row || row.children.length) return;
+  const sel = document.getElementById("wp-radius-select");
+  if(!sel || sel.children.length) return;
   WP_RADII.forEach(nm=>{
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "wp-radius-btn" + (nm===wpRadiusNm ? " sel" : "");
-    b.dataset.nm = nm;
-    b.textContent = nm;
-    b.onclick = ()=>setWpRadius(nm);
-    row.appendChild(b);
+    const o = document.createElement("option");
+    o.value = String(nm);
+    o.textContent = nm + " nm";
+    if(nm === wpRadiusNm) o.selected = true;
+    sel.appendChild(o);
   });
 }
 
@@ -11158,12 +11124,9 @@ function buildWpLegend(){
 
 // Show the waypoint control only when the layer is on AND a port is chosen.
 function updateWaypointControlVisibility(){
-  const box = document.getElementById("waypoint-control");
-  if(box){
-    const show = layerVis.waypoints && !!activePort;
-    box.style.display = show ? "block" : "none";
-    if(show){ buildWpRadiusButtons(); updateWaypointPanel(); }
-  }
+  // Radius selector + in-range count now live in the left waypoint legend; keep
+  // them built and current. Legend visibility itself is handled below.
+  if(layerVis.waypoints){ buildWpRadiusButtons(); updateWaypointPanel(); }
   refreshWpLegendDisplay();
   restackBottomControls();
 }
