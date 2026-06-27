@@ -1,0 +1,47 @@
+CURSOR INSTRUCTIONS — add break detection + convergence scoring
+================================================================
+
+CONTEXT: M4 (real ocean data + freshness) is ALREADY integrated and live in my
+index.html. This adds ONE new factor — "break convergence" — on top of it.
+
+IMPORTANT:
+- Do NOT overwrite or replace my index.html. Make only the in-place edits below.
+- Before changing anything, confirm there is a clean git commit. If not, stop and
+  tell me to commit first.
+- If any anchor text below isn't found EXACTLY in my file, STOP and show me that
+  section so I can re-target — do not guess.
+
+STEP 1 — Add the new file to the project (pure addition):
+  • Add bw-breaks.js to the project (same folder as index.html, or wherever you
+    keep JS). Then load it before the main app script with:
+        <script src="bw-breaks.js"></script>
+    OR, if I keep everything in one HTML file, paste the FULL contents of
+    bw-breaks.js into a new <script>…</script> placed BEFORE the scoreCell
+    function. Ask me which if unsure.
+
+STEP 2 — Apply the 5 in-place edits in INTEGRATION.md to my index.html:
+  Follow INTEGRATION.md Steps 2–5 exactly (Step 6 is optional — see below). Each
+  edit is anchored on existing text in my prediction code:
+    • Step 2: after `const tBreak = thermalBreakReal(lat, lng);` add the
+      chlorophyll-break + convergence read.
+    • Step 3: add a `convergence` weight to each species profile in the weight
+      tables (reallocating from thermalBreak/chlorophyll as described).
+    • Step 4: add the convergence entry to the BW_FRESHNESS.combine scoreFactors
+      array (after the `key:"break"` line) AND to the fallback finalScore sum.
+    • Step 5: add the "Break convergence" row to the allFactors list (after the
+      "Thermal break" entry).
+  If an anchor doesn't match exactly, STOP and show me the surrounding code.
+
+STEP 3 — Optional, only if I say so:
+  INTEGRATION.md Step 6 (spacedTop badge spacing) is OPTIONAL. Do NOT apply it
+  unless I explicitly ask — it changes how the top-3 badges are placed.
+
+AFTER THE EDITS:
+  • Run an integrity check: every <script> must still parse (node --check), and
+    div/svg/label/style tag counts and CSS brace counts must be balanced
+    (open == close).
+  • Show me a diff of every change to index.html.
+  • Confirm you did NOT replace the file wholesale.
+  • Do not commit; let me review and commit.
+
+If anything is ambiguous, STOP and ask before changing my files.
