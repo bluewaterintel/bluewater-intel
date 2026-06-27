@@ -3482,6 +3482,9 @@ let layersPanelOpen=false;
 // MAP INIT
 // ════════════════════════════════════════════════════════════════════════════
 async function initMap(){
+  // Restore saved preferences (default port, basemap, etc.) before any view
+  // logic reads them, so the app opens with the user's chosen defaults.
+  if(typeof prefLoad === "function") prefLoad();
   MAP=L.map("map",{center:[29.0,-85.0],zoom:5,zoomControl:false,attributionControl:true,maxZoom:13});
 
   // Auto-detect if tiles are blocked (Claude artifact sandbox limitation) and show subtle notice
@@ -3748,9 +3751,17 @@ async function initMap(){
   //      east-coast region so the chart isn't blank.
   //   3. (Defensive) Saved port no longer exists in PORTS → treat as #2.
   const savedDefault = (typeof USER_PREFS !== "undefined" && USER_PREFS.defaultPort) || null;
+  // If we have a saved map view from a previous visit, restore it so returning
+  // to the page keeps the user's zoom + position instead of snapping back to a
+  // default. The active port still resolves from the saved default below.
+  const savedView = loadMapView();
   if (savedDefault && PORTS[savedDefault]) {
     activePort = savedDefault;
-    MAP.setView([PORTS[savedDefault].lat, PORTS[savedDefault].lng], HOME_PORT_ZOOM);
+    if (savedView) {
+      MAP.setView([savedView.lat, savedView.lng], savedView.zoom);
+    } else {
+      MAP.setView([PORTS[savedDefault].lat, PORTS[savedDefault].lng], HOME_PORT_ZOOM);
+    }
     const portLbl = document.getElementById("port-name");
     if (portLbl) {
       portLbl.textContent = savedDefault;
@@ -3759,9 +3770,16 @@ async function initMap(){
   } else {
     // No saved default — open with a neutral US east-coast framing but
     // leave activePort empty so the "Select port" empty-state shows.
-    MAP.setView([PORTS[FALLBACK_HOME_PORT].lat, PORTS[FALLBACK_HOME_PORT].lng], HOME_PORT_ZOOM);
+    if (savedView) {
+      MAP.setView([savedView.lat, savedView.lng], savedView.zoom);
+    } else {
+      MAP.setView([PORTS[FALLBACK_HOME_PORT].lat, PORTS[FALLBACK_HOME_PORT].lng], HOME_PORT_ZOOM);
+    }
     // Port label keeps its default "Select port…" placeholder.
   }
+  // Start remembering the map view from here on (after the initial setView so we
+  // don't immediately overwrite a restored view with the default).
+  startMapViewPersistence();
 
   drawCanyons();
   drawPortMarkers();
@@ -9407,12 +9425,86 @@ function prefGet(key){
 }
 function prefSet(key, val){
   USER_PREFS[key] = val;
-  // In production: localStorage.setItem("bwi.prefs", JSON.stringify(USER_PREFS));
+  prefSave();
   // Apply side effects of the change immediately where it makes sense
   if(key === "defaultBaseMap"){
     // Don't switch the current map — the user is just setting the default
     // for next session. (If they want to switch now, they use the map icon.)
   }
+}
+// Persist preferences. localStorage is the durable store on this device; when
+// the account backend is wired, prefs also sync to the user's profile so they
+// follow the user across devices. We never persist the `account` object here.
+const PREFS_KEY = "bwi.prefs";
+function prefSave(){
+  try {
+    const out = {
+      defaultPort:    USER_PREFS.defaultPort,
+      defaultSpecies: USER_PREFS.defaultSpecies,
+      defaultBaseMap: USER_PREFS.defaultBaseMap,
+      autozoomPort:   USER_PREFS.autozoomPort,
+      persistLoran:   USER_PREFS.persistLoran,
+    };
+    localStorage.setItem(PREFS_KEY, JSON.stringify(out));
+  } catch(e){ /* storage unavailable — prefs stay in-memory for this session */ }
+  // When signed in, also persist to the account so settings follow the user.
+  try {
+    if(typeof BW_AUTH !== "undefined" && BW_AUTH.isSignedIn && BW_AUTH.isSignedIn() && BW_AUTH.saveProfile){
+      BW_AUTH.saveProfile({
+        home_port: USER_PREFS.defaultPort || null,
+        // extend with other columns if/when the profile schema carries them
+      }).catch(()=>{});
+    }
+  } catch(e){}
+}
+// Load saved preferences at startup. Account values (when signed in) take
+// precedence and are applied later by the auth hydrate; this restores the
+// on-device defaults so the app opens correctly even before sign-in resolves.
+function prefLoad(){
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if(!raw) return;
+    const saved = JSON.parse(raw);
+    if(saved && typeof saved === "object"){
+      if("defaultPort" in saved)    USER_PREFS.defaultPort    = saved.defaultPort;
+      if("defaultSpecies" in saved) USER_PREFS.defaultSpecies = saved.defaultSpecies;
+      if("defaultBaseMap" in saved) USER_PREFS.defaultBaseMap = saved.defaultBaseMap || "satellite";
+      if("autozoomPort" in saved)   USER_PREFS.autozoomPort   = !!saved.autozoomPort;
+      if("persistLoran" in saved)   USER_PREFS.persistLoran   = !!saved.persistLoran;
+    }
+  } catch(e){ /* corrupt/unavailable — fall back to defaults */ }
+}
+
+// ── Map view persistence ────────────────────────────────────────────────────
+// Remember the last map center + zoom so returning to the page keeps the user
+// where they left off, instead of snapping back to the default home-port zoom.
+const MAP_VIEW_KEY = "bwi.mapview";
+function saveMapView(){
+  try {
+    if(typeof MAP === "undefined" || !MAP) return;
+    const c = MAP.getCenter();
+    localStorage.setItem(MAP_VIEW_KEY, JSON.stringify({ lat: c.lat, lng: c.lng, zoom: MAP.getZoom(), at: Date.now() }));
+  } catch(e){}
+}
+function loadMapView(){
+  try {
+    const raw = localStorage.getItem(MAP_VIEW_KEY);
+    if(!raw) return null;
+    const v = JSON.parse(raw);
+    if(v && typeof v.lat === "number" && typeof v.lng === "number" && typeof v.zoom === "number"){
+      return v;
+    }
+  } catch(e){}
+  return null;
+}
+function startMapViewPersistence(){
+  if(typeof MAP === "undefined" || !MAP) return;
+  // Save whenever the user finishes panning or zooming.
+  MAP.on("moveend zoomend", saveMapView);
+  // Also save when the tab is hidden or the page is being unloaded, so a
+  // background/return cycle restores the exact last view.
+  document.addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") saveMapView(); });
+  window.addEventListener("pagehide", saveMapView);
 }
 // ════════════════════════════════════════════════════════════════════════════
 // HELP & CONTACT
@@ -9458,6 +9550,7 @@ function prefResetAll(){
   USER_PREFS.defaultBaseMap = "satellite";
   USER_PREFS.autozoomPort = true;
   USER_PREFS.persistLoran = false;
+  prefSave();
   refreshSettingsModal();
 }
 
