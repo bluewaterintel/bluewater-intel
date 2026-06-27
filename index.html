@@ -18,6 +18,7 @@
 <script src="bw-freshness.js"></script>
 <script src="bw-ocean.js"></script>
 <script src="bw-wind.js"></script>
+<script src="bw-breaks.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Master fishing-waypoint dataset (~23k points), loaded as a companion file so the
      main app stays lean. Defines window.BW_WAYPOINTS = {version, types, count, wp:[[name,lat,lng,typecode],…]}.
@@ -5090,8 +5091,9 @@ const PREDICT_WEIGHTS = {
     temperature:   0.26,   // Slightly reduced — pelagics often hold at the EDGE rather than
                            //   in the warmest water; trim shifts emphasis to thermalBreak.
     depthStruct:   0.18,   // Picked up part of the removed AIS weight — structure is real.
-    chlorophyll:   0.16,   // Color breaks = bite edges
-    thermalBreak:  0.21,   // Bumped — the Gulf Stream temperature break is where pelagics hunt.
+    chlorophyll:   0.11,   // Color breaks (reallocated 0.05 into convergence below).
+    thermalBreak:  0.14,   // Temperature break (reallocated 0.07 into convergence below).
+    convergence:   0.12,   // NEW — rewards where SST break + chlorophyll edge COINCIDE.
     reports:       0.00,   // Moved out of weighted sum — pure additive bonus
     aisDwell:      0.00,   // REMOVED — no real AIS feed; the old value was synthetic.
     season:        0.04,
@@ -5105,8 +5107,9 @@ const PREDICT_WEIGHTS = {
   nearshore: {
     temperature:   0.18,
     depthStruct:   0.31,   // DOMINANT — find the wreck/ledge/reef first (absorbed AIS weight).
-    chlorophyll:   0.07,
-    thermalBreak:  0.06,   // Less important than offshore but still relevant
+    chlorophyll:   0.05,   // Reallocated 0.02 into convergence below.
+    thermalBreak:  0.04,   // Reallocated 0.02 into convergence below.
+    convergence:   0.04,   // NEW — modest credit when a break + color edge coincide.
     reports:       0.00,
     aisDwell:      0.00,   // REMOVED — no real AIS feed.
     season:        0.05,
@@ -5124,6 +5127,7 @@ const PREDICT_WEIGHTS = {
     chlorophyll:   0.00,   // Zeroed — satellite chlor is unreliable in shallow water
                            //   (bottom reflectance, sediment contamination)
     thermalBreak:  0.00,   // Inshore species want stable water, not breaks
+    convergence:   0.00,   // NEW — irrelevant inshore (no offshore edges).
     reports:       0.00,
     aisDwell:      0.00,   // REMOVED — no real AIS feed.
     season:        0.07,
@@ -5360,6 +5364,26 @@ function thermalBreakGrid(lat, lng){
   return maxGrad * 10;
 }
 
+// Chlorophyll color-edge gradient (mg/m³ per 10nm) from the dense CHLOR_GRID
+// composite around a point. Mirrors thermalBreakGrid: the per-point field samples
+// no longer carry chlorophyll (it's a grid now), so the convergence factor reads
+// its color edge here. Returns null when the grid has no usable coverage here.
+function chlorBreakGrid(lat, lng){
+  const g = CHLOR_GRID;
+  if(!g || !g.rows || !g.rows.length) return null;
+  const radNm = 18;
+  const near = [];
+  for(const r of g.rows){
+    if(r[2] == null) continue;
+    if(nmBetween(lat, lng, r[0], r[1]) <= radNm) near.push({ la:r[0], ln:r[1], v:r[2] });
+  }
+  if(near.length < 2) return null;
+  if(typeof BW_BREAKS !== "undefined" && BW_BREAKS.maxGradientPer10nm){
+    return BW_BREAKS.maxGradientPer10nm(near, lat, lng, radNm);
+  }
+  return null;
+}
+
 // Real depth (meters) at a point from the ETOPO grid; null if unavailable.
 function realDepthAt(lat, lng){
   const g = BATHY_GRID;
@@ -5578,6 +5602,21 @@ function scoreCell(lat, lng, speciesId){
   const chlor = chlorObj.value;
   const depth = predictDepth(lat, lng);
   const tBreak = thermalBreakReal(lat, lng);
+  // Chlorophyll color-edge gradient + convergence with the SST break. Real data
+  // only (uses the same OCEAN_FIELD samples). 0 when the module/data isn't ready.
+  let chlorBreak = 0, convergence = 0;
+  if (typeof BW_BREAKS !== "undefined") {
+    // Prefer the dense chlorophyll composite grid (field samples no longer carry
+    // chlor); fall back to OCEAN_FIELD samples only where the grid has no cover.
+    const cbGrid = chlorBreakGrid(lat, lng);
+    if (cbGrid != null) {
+      chlorBreak = cbGrid;
+    } else if (OCEAN_FIELD && OCEAN_FIELD.samples) {
+      const radiusNm = (OCEAN_FIELD.spacingNm ? OCEAN_FIELD.spacingNm * 2.2 : 35);
+      chlorBreak = BW_BREAKS.chlorBreak(OCEAN_FIELD.samples, lat, lng, radiusNm);
+    }
+    convergence = BW_BREAKS.convergenceScore(tBreak, chlorBreak);
+  }
   const pressureTrend = presObj.value;
   const solunar = solunarScore(lat, lng);
   const tide = tideObj.value;          // real NOAA CO-OPS tide stage (0..1) or null
@@ -5790,6 +5829,7 @@ function scoreCell(lat, lng, speciesId){
     { key:"pres",   variable:"pressure", baseWeight:W.pressure,      score:pressureScore,    observedAtMs:presObj.observedAtMs },
     { key:"depth",  variable:"depth",    baseWeight:W.depthStruct,   score:depthScore,       observedAtMs:now },
     { key:"break",  variable:"sst",      baseWeight:W.thermalBreak,  score:breakScore,       observedAtMs:sstObj.observedAtMs },
+    { key:"convergence", variable:"sst",  baseWeight:(W.convergence||0), score:convergence,  observedAtMs:sstObj.observedAtMs },
     { key:"solunar", variable:null,       baseWeight:W.solunar,       score:solunarScoreVal },
     { key:"tide",    variable:null,       baseWeight:W.tide,          score:tideScoreVal },
     { key:"season",  variable:null,       baseWeight:W.season,        score:seasonScore },
@@ -5804,6 +5844,7 @@ function scoreCell(lat, lng, speciesId){
     chlorScore        * W.chlorophyll   +
     depthScore        * W.depthStruct   +
     breakScore        * W.thermalBreak  +
+    convergence       * (W.convergence || 0) +
     seasonScore       * W.season        +
     pressureScore     * W.pressure      +
     solunarScoreVal   * W.solunar       +
@@ -5900,6 +5941,8 @@ function scoreCell(lat, lng, speciesId){
     ...(reportScore > 0.05 ? [{name:"🎣 Recent catch reports", weight:0.18, score:Math.min(1, reportScore * 2.5), raw:"+bonus"}] : []),
     {name:"Solunar window",     weight:W.solunar,       score:solunarScoreVal,  raw:solunar > 0.7 ? "MAJOR" : solunar > 0.4 ? "minor" : "off"},
     {name:"Thermal break",      weight:W.thermalBreak,  score:breakScore,       raw:tBreak > 0 ? `${tBreak.toFixed(1)}°F/10nm` : "—"},
+    {name:"Break convergence", weight:(W.convergence||0), score:convergence,
+     raw: convergence > 0 ? `${Math.round(convergence*100)}%` + (chlorBreak>0?` · ${chlorBreak.toFixed(2)} mg/m³/10nm`:"") : "—"},
     {name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
     {name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw:wxLabel},
     {name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonScore > 0.66 ? "peak" : seasonScore > 0.33 ? "good" : "off"},
