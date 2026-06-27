@@ -8028,10 +8028,10 @@ function showPredictionExplainer(cell, species){
     // collided with the zoom buttons after they moved to top-right.
     "left:50%",
     "transform:translateX(-50%)",
-    // Top offset: 64px header + 36px breathing room = 100px. This gives the
-    // popup clear separation from the header (which contains the port/species
-    // dropdowns) so its top edge and rounded corners are never clipped.
-    "top:110px",
+    // Top offset: clears the BITE SCORE banner at the top of the map (which
+    // sits at top:8px and is ~56px tall) plus breathing room, so the panel's
+    // top edge and rounded corners never overlap the banner.
+    "top:128px",
     "bottom:14px",
     // z-index 1100 sits above Leaflet's default control z-index (1000) so
     // the zoom buttons don't punch through the popup. Still below the nav
@@ -8048,9 +8048,9 @@ function showPredictionExplainer(cell, species){
     "width:360px",
     "max-width:calc(100vw - 28px)",
     // Fallback height cap for older browsers that don't support dvh:
-    "max-height:calc(100vh - 124px)",
+    "max-height:calc(100vh - 142px)",
     // Modern browsers — dynamic viewport correctly excludes mobile chrome:
-    "max-height:calc(100dvh - 124px)",
+    "max-height:calc(100dvh - 142px)",
     "overflow-y:auto",
     "overscroll-behavior:contain",
     "-webkit-overflow-scrolling:touch"].join(";");
@@ -8144,13 +8144,27 @@ function renderExplainerMain(){
         <div style="font-size:22px;font-weight:bold;color:#cfe5ff;line-height:1">${cell.confidence}<span style="font-size:12px;font-weight:normal">%</span></div>
         <div style="font-size:9px;color:#9ec5e8;letter-spacing:.08em;text-transform:uppercase;margin-top:3px;font-weight:700">Confidence</div>
         <div style="font-size:9.5px;color:#7a9ec0;margin-top:2px;font-style:italic">how sure</div>
-        ${(cell.freshnessAnnotations && cell.freshnessAnnotations.length) ? '<div style="font-size:9.5px;color:#9ec5e8;margin-top:6px;line-height:1.4">' + cell.freshnessAnnotations.map(a => '<div>• ' + (a.message || a) + '</div>').join('') + '</div>' : ''}
       </div>
       <div style="flex:1;font-size:11.5px;color:#9ec5e8;line-height:1.5;text-align:right;padding-top:2px">
         ${cell.lat.toFixed(3)}°N ${Math.abs(cell.lng).toFixed(3)}°W
         ${cell.distNm != null ? `<br><span style="color:#7dd3fc">⛵ ${cell.distNm}nm from ${activePort ? activePort.split(",")[0] : "port"}</span>` : ""}
       </div>
     </div>
+
+    ${(cell.freshnessAnnotations && cell.freshnessAnnotations.length) ? `<div style="margin:-2px 0 11px;padding:8px 11px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px">
+      <div style="font-size:9px;color:#6bbfea;letter-spacing:.09em;font-weight:700;text-transform:uppercase;margin-bottom:5px">What's affecting confidence</div>
+      ${(() => {
+        // Two factors (Water temp + Thermal break) both derive from SST, so the
+        // freshness model emits one annotation each. Collapse to one line per
+        // variable so SST isn't listed twice.
+        const seen = new Set();
+        return cell.freshnessAnnotations.filter(a => {
+          const v = (a && a.variable) ? a.variable : (a && a.message ? a.message : a);
+          if(seen.has(v)) return false;
+          seen.add(v); return true;
+        }).map(a => `<div style="font-size:11px;color:#9ec5e8;line-height:1.45;margin-bottom:3px">• ${a.message || a}</div>`).join('');
+      })()}
+    </div>` : ''}
 
     <div style="font-size:12.5px;color:#cfe5ff;background:rgba(220,38,38,.06);border-left:2px solid ${verdict.color};padding:8px 11px;margin-bottom:11px;line-height:1.5;border-radius:4px">${verdict.text}</div>
 
@@ -9501,9 +9515,31 @@ function startMapViewPersistence(){
   if(typeof MAP === "undefined" || !MAP) return;
   // Save whenever the user finishes panning or zooming.
   MAP.on("moveend zoomend", saveMapView);
-  // Also save when the tab is hidden or the page is being unloaded, so a
+  // Save when the tab is hidden or the page is being unloaded, so a
   // background/return cycle restores the exact last view.
-  document.addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") saveMapView(); });
+  document.addEventListener("visibilitychange", () => {
+    if(document.visibilityState === "hidden"){
+      saveMapView();
+    } else {
+      // Returning to the tab. Some mobile browsers resize/reflow the map
+      // container while it was backgrounded, which can make Leaflet re-render
+      // at the wrong zoom. Fix the size WITHOUT changing the view, then
+      // re-assert the saved center/zoom on the next frame as a safety net so
+      // we never snap back to a default zoom.
+      try { MAP.invalidateSize({animate:false}); } catch(e){}
+      const v = loadMapView();
+      if(v){
+        requestAnimationFrame(() => {
+          try { MAP.setView([v.lat, v.lng], v.zoom, {animate:false}); } catch(e){}
+        });
+      }
+    }
+  });
+  window.addEventListener("pageshow", () => {
+    // Fired when returning via bfcache (no full reload). Re-assert saved view.
+    const v = loadMapView();
+    if(v){ try { MAP.invalidateSize({animate:false}); MAP.setView([v.lat, v.lng], v.zoom, {animate:false}); } catch(e){} }
+  });
   window.addEventListener("pagehide", saveMapView);
 }
 // ════════════════════════════════════════════════════════════════════════════
@@ -21287,7 +21323,7 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
 .fc-retry:hover{background:rgba(56,189,248,.28)}
 .fc-table{display:flex;flex-direction:column;gap:8px}
 .fc-row{
-  display:grid;grid-template-columns:54px 1fr auto auto auto;align-items:center;gap:10px;
+  display:grid;grid-template-columns:54px minmax(0,1fr) auto auto auto;align-items:center;gap:10px;
   background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);
   border-radius:12px;padding:11px 12px;
 }
@@ -21296,9 +21332,9 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
 .fc-dow{font-size:16px;font-weight:800;color:#f0f6ff;line-height:1.1}
 .fc-date{font-size:12.5px;color:#7d9bb8}
 /* Weather-condition column: icon + short label */
-.fc-wx{display:flex;align-items:center;gap:10px;min-width:0}
+.fc-wx{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
 .fc-wx-icon{flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center}
-.fc-wx-label{font-size:15px;font-weight:600;color:#e8f4ff;line-height:1.2}
+.fc-wx-label{font-size:15px;font-weight:600;color:#e8f4ff;line-height:1.15;min-width:0;flex:1;overflow-wrap:break-word;word-break:break-word;hyphens:auto}
 .fc-precip{display:inline-block;margin-left:6px;font-size:12px;font-weight:700;color:#38bdf8}
 .fc-metric{text-align:right;min-width:60px}
 .fc-metric-val{font-size:19px;font-weight:800;color:#f0f6ff;line-height:1.1;white-space:nowrap}
