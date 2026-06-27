@@ -206,6 +206,10 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   margin-top:2px;line-height:1;
 }
 .wx-icon{font-size:13px;line-height:1}
+/* Degree symbol: the glyph naturally sits high in the em box, which made it
+   look like it was floating mid-height after the number. Pin it to the text
+   so it reads as "85°F" on one baseline. */
+.wx-deg{margin:0 0 0 0;font-size:.85em;vertical-align:baseline;position:relative;top:-.06em}
 
 /* Right zone (clock + nav) */
 .hdr-right{
@@ -1524,7 +1528,7 @@ body.nav-open #ruler-readout{
       <div class="wx-cell" id="hdr-tide-cell" style="display:none">
         <div class="wx-cell-label">Tide</div>
         <div class="wx-cell-value" style="color:#93c5fd">
-          <span class="wx-icon">⇅</span><span id="hdr-tide">—</span>
+          <span id="hdr-tide">—</span>
         </div>
       </div>
     </div>
@@ -3457,10 +3461,46 @@ async function initMap(){
   // logic reads them, so the app opens with the user's chosen defaults.
   if(typeof prefLoad === "function") prefLoad();
   MAP=L.map("map",{center:[29.0,-85.0],zoom:5,zoomControl:false,attributionControl:true,maxZoom:13,
-    // Tame mouse-wheel / trackpad zoom: one notch or swipe = one zoom level
-    // instead of jumping 2-3 levels. Higher wheelPxPerZoomLevel = less sensitive;
-    // integer zoomSnap/zoomDelta keep each gesture to a single, clean step.
-    zoomSnap:1, zoomDelta:1, wheelPxPerZoomLevel:140, wheelDebounceTime:90});
+    // Trackpad/mouse-wheel zoom is handled by our own debounced handler below
+    // (bindTrackpadZoom). Leaflet's built-in scrollWheelZoom accumulates the many
+    // tiny wheel events a trackpad fires and ends up jumping 2-3 levels per
+    // gesture, so we disable it here and step exactly ONE level per gesture.
+    scrollWheelZoom:false,
+    zoomSnap:1, zoomDelta:1});
+
+  // ── Custom trackpad / mouse-wheel zoom ────────────────────────────────────
+  // One scroll gesture (a single notch on a mouse, or one swipe on a trackpad)
+  // = exactly one zoom level. Trackpads emit a rapid burst of small wheel
+  // events; we accumulate their direction, act once, then ignore the rest of
+  // the burst until a short quiet period resets us. This removes the 2-3x
+  // over-zoom the user was seeing.
+  (function bindTrackpadZoom(){
+    const container = MAP.getContainer();
+    let cooldown = false;       // true right after a zoom step, blocks the burst tail
+    let cooldownTimer = null;
+    container.addEventListener("wheel", function(e){
+      e.preventDefault();       // stop the page/native zoom
+      if(cooldown) {
+        // Still inside the same gesture burst — keep the quiet timer alive so we
+        // don't zoom again until the trackpad actually stops sending events.
+        clearTimeout(cooldownTimer);
+        cooldownTimer = setTimeout(()=>{ cooldown = false; }, 140);
+        return;
+      }
+      const dir = e.deltaY < 0 ? 1 : -1;   // up = zoom in, down = zoom out
+      // Zoom toward the cursor, not the map center, so it feels natural.
+      const rect = container.getBoundingClientRect();
+      const point = L.point(e.clientX - rect.left, e.clientY - rect.top);
+      const target = MAP.containerPointToLatLng(point);
+      const newZoom = MAP.getZoom() + dir;
+      if(newZoom >= MAP.getMinZoom() && newZoom <= MAP.getMaxZoom()){
+        MAP.setZoomAround(target, newZoom, {animate:true});
+      }
+      cooldown = true;
+      clearTimeout(cooldownTimer);
+      cooldownTimer = setTimeout(()=>{ cooldown = false; }, 140);
+    }, {passive:false});
+  })();
 
   // Auto-detect if tiles are blocked (Claude artifact sandbox limitation) and show subtle notice
   let tileStats={loaded:0,errored:0};
@@ -5764,6 +5804,7 @@ function scoreCell(lat, lng, speciesId){
   //      default seasons curve by latitude per MIGRATION_PHASE entry.
   //   Species with neither override get their unshifted default curve.
   let seasonScore = 0.5;
+  let _seasonGateActive = false;   // only gate when a real seasonal curve exists
   if(typeof ENC_SPECIES !== "undefined"){
     const spEnc = ENC_SPECIES.find(s => s.id === speciesId);
     if(spEnc && spEnc.seasons){
@@ -5795,6 +5836,7 @@ function scoreCell(lat, lng, speciesId){
       const v1 = curve[months[m1]] || 0;
       const v = v0 * (1 - frac) + v1 * frac;
       seasonScore = v / 3;
+      _seasonGateActive = true;   // a real curve drove seasonScore — gate it
     }
   }
 
@@ -5921,6 +5963,39 @@ function scoreCell(lat, lng, speciesId){
   const depthGate = 0.22 + 0.78 * Math.pow(depthScore, 0.65);
   finalScore = finalScore * depthGate;
 
+  // ── SEASON GATE ──
+  // Seasonality, like temperature and depth, is DECISIVE, not a minor nudge.
+  // As a plain weighted factor (W.season ≈ 0.04) a dead-wrong month only shaved
+  // ~4% off the score, so an out-of-season fish on great-looking structure could
+  // still read 90%+ (e.g. bluefin off Oregon Inlet in July, when they are simply
+  // not in NC waters — the Hatteras run is a Dec-Mar winter fishery). A fish that
+  // isn't present cannot be caught no matter how good the water is, so we gate the
+  // whole score by seasonal presence.
+  //
+  // Only applied when this species actually has a seasonal curve for THIS
+  // location (regional curve, or a default curve). If neither exists we leave the
+  // score untouched (gate = 1) rather than guessing.
+  //   seasonScore 1.0 (peak)  → gate 1.00 (no penalty)
+  //   seasonScore 0.66 (good) → gate ~0.88
+  //   seasonScore 0.33 (slow) → gate ~0.55
+  //   seasonScore 0.0 (off)   → gate 0.06 (effectively absent — "poor")
+  // Floor is a small non-zero so a freak straggler still shows a faint trace
+  // rather than a hard zero, but it can never read "good"/"excellent".
+  if(_seasonGateActive){
+    const _seasonGateFloor = 0.06;
+    const seasonGate = _seasonGateFloor + (1 - _seasonGateFloor) * Math.pow(seasonScore, 0.55);
+    finalScore = finalScore * seasonGate;
+    // Out-of-season is also a HIGH-confidence call (the fish simply aren't here),
+    // which is handled in the confidence-adjustment block below. Here we cap the
+    // score so an off-season fish can't read good/excellent no matter how good
+    // the water looks.
+    if(seasonScore < 0.2){
+      finalScore = Math.min(finalScore, 0.22);   // hard ceiling = "poor"
+    } else if(seasonScore < 0.4){
+      finalScore = Math.min(finalScore, 0.45);   // ceiling = low "fair"
+    }
+  }
+
   // Cap at 1.0 so we don't exceed the heat-map's full-intensity range
   finalScore = Math.min(1.0, finalScore);
 
@@ -5938,8 +6013,80 @@ function scoreCell(lat, lng, speciesId){
 
   const confidenceFallback = { confidence: Math.min(95, 25 + [tempScore, chlorScore, depthScore, breakScore].filter(s => s > 0.7).length * 5), annotations: [] };
   const frSummary = fr || confidenceFallback;
-  const confidence = frSummary.confidence;
-  const freshnessAnnotations = frSummary.annotations || [];
+  let confidence = frSummary.confidence;
+  const freshnessAnnotations = (frSummary.annotations || []).slice();
+
+  // ── CONFIDENCE ADJUSTMENTS (certainty, not favorability) ───────────────────
+  // Confidence answers "how SURE are we about this bite score?", in EITHER
+  // direction. The base figure above only rises with positive data, so it has no
+  // way to express "we are very sure the bite is POOR." These adjustments fix
+  // that: some conditions make the prediction MORE certain (we can confidently
+  // call it bad), while genuinely ambiguous conditions make it LESS certain.
+  // Each adjustment also adds a one-line note to the "What's affecting
+  // confidence" panel so the number is explainable.
+
+  // 1) OUT OF SEASON → HIGH confidence the bite is poor.
+  //    If the fish isn't in this region this month, that's one of the most
+  //    reliable predictions we can make. We don't water it down — we RAISE
+  //    confidence and say why. Strength scales with how far out of season it is.
+  if(_seasonGateActive && seasonScore < 0.2){
+    confidence = Math.max(confidence, 90);
+    freshnessAnnotations.push({ variable: "season",
+      message: "Out of season here — high confidence the bite is poor this month." });
+  } else if(_seasonGateActive && seasonScore < 0.4){
+    confidence = Math.max(confidence, 75);
+    freshnessAnnotations.push({ variable: "season",
+      message: "Marginal season — fish are mostly elsewhere this month." });
+  }
+
+  // 2) STRONG MULTI-FACTOR AGREEMENT → more certain (in either direction).
+  //    When the major spatial signals (temp, depth, thermal break, chlorophyll)
+  //    all point the SAME way — all hot, or all cold — the prediction is robust.
+  //    When they disagree (one screaming hot, others flat), we're genuinely less
+  //    sure, so we trim confidence. Variance of the core factor scores measures
+  //    this directly.
+  {
+    const core = [tempScore, depthScore, breakScore, chlorScore];
+    const mean = core.reduce((a, b) => a + b, 0) / core.length;
+    const variance = core.reduce((a, b) => a + (b - mean) * (b - mean), 0) / core.length;
+    if(variance > 0.10){
+      // Factors strongly disagree → real ambiguity.
+      confidence = Math.max(20, confidence - 12);
+      freshnessAnnotations.push({ variable: "agreement",
+        message: "Signals disagree (one factor strong, others weak) — lower certainty." });
+    } else if(variance < 0.02){
+      // Tight agreement → modest confidence boost, capped so freshness still rules.
+      confidence = Math.min(95, confidence + 6);
+    }
+  }
+
+  // 3) FORECASTING INTO THE FUTURE → less certain the further out we look.
+  //    A "now" prediction leans on observed conditions; a +72h prediction leans
+  //    on a model forecast that drifts. Taper confidence with lead time so the
+  //    number honestly reflects that growing uncertainty.
+  {
+    const leadHrs = Math.max(0, (now - Date.now()) / 3600000);
+    if(leadHrs >= 6){
+      const drop = Math.min(20, Math.round(leadHrs / 12) * 4);  // ~4% per 12h, max 20%
+      if(drop > 0){
+        confidence = Math.max(20, confidence - drop);
+        freshnessAnnotations.push({ variable: "leadtime",
+          message: `Forecast is ${Math.round(leadHrs)}h out — certainty tapers with lead time.` });
+      }
+    }
+  }
+
+  // 4) WRONG TEMPERATURE FOR AN OFFSHORE PELAGIC → confident it's poor.
+  //    Tuna/marlin are temperature-locked; water well outside their tolerance is
+  //    a near-disqualifier, so a low temp score on an offshore species is a
+  //    high-confidence "no", not a maybe.
+  if(speciesCat === "offshore" && sst != null && tempScore < 0.25){
+    confidence = Math.max(confidence, 80);
+    freshnessAnnotations.push({ variable: "temp",
+      message: "Water is well outside this species' range — confidently poor." });
+  }
+
+  confidence = Math.max(20, Math.min(95, Math.round(confidence)));
 
   // ── Build factor contributions for the explainer panel ──
   // Skip factors with zero weight (they don't apply to this species category)
@@ -9586,6 +9733,28 @@ function startMapViewPersistence(){
     if(v){ try { MAP.invalidateSize({animate:false}); MAP.setView([v.lat, v.lng], v.zoom, {animate:false}); } catch(e){} }
   });
   window.addEventListener("pagehide", saveMapView);
+
+  // Chrome (desktop) does NOT fire `visibilitychange` when you merely MINIMIZE
+  // and then restore the window — only on real tab switches. When the window is
+  // minimized the map container can drop to zero size; on restore Leaflet
+  // re-measures and can snap the view back to a default zoom. To prevent that,
+  // re-assert the exact saved center/zoom whenever the window regains focus or
+  // is resized. We fix the container size first, WITHOUT animating, then pin the
+  // saved view on the next frame.
+  let _reassertTimer = null;
+  function reassertSavedView(){
+    const v = loadMapView();
+    if(!v) return;
+    try { MAP.invalidateSize({animate:false}); } catch(e){}
+    requestAnimationFrame(() => {
+      try { MAP.setView([v.lat, v.lng], v.zoom, {animate:false}); } catch(e){}
+    });
+  }
+  window.addEventListener("focus", reassertSavedView);
+  window.addEventListener("resize", () => {
+    clearTimeout(_reassertTimer);
+    _reassertTimer = setTimeout(reassertSavedView, 120);
+  });
 }
 // ════════════════════════════════════════════════════════════════════════════
 // HELP & CONTACT
@@ -12033,18 +12202,17 @@ function updateHeaderConditions(){
   // Sample conditions a short distance offshore from the port (where you'd fish),
   // not at the dock. ~10nm SE is a reasonable nearshore proxy.
   const wx = calcWx(p.lat + 0.05, p.lng + 0.05);
-  water.textContent = `${Math.round(wx.waterTempF)}°F`;
-  air.textContent   = `${Math.round(wx.airTempF)}°F`;
+  water.innerHTML = `${Math.round(wx.waterTempF)}<span class="wx-deg">°</span>F`;
+  air.innerHTML   = `${Math.round(wx.airTempF)}<span class="wx-deg">°</span>F`;
   seas.textContent  = `${wx.waveHt}ft`;
   wind.textContent  = `${wx.windKt}kt`;
   updateHeaderTide();
 }
 
-// Tide status + next high/low for the header. Uses the deployed ocean function to
-// get the current tide state and the nearest NOAA CO-OPS station id, then fetches
-// that station's hi/lo predictions directly (CO-OPS sends CORS *), so the banner
-// shows e.g. "↑ High 3:42 PM". Cached per-port for 15 min; degrades to just the
-// rising/falling state if the hi/lo lookup is unavailable.
+// Tide for the header: shows the NEXT high and NEXT low tide, e.g.
+// "H 7:33 PM · L 1:18 AM". Uses the deployed ocean function to get the nearest
+// NOAA CO-OPS station id, then fetches that station's hi/lo predictions directly
+// (CO-OPS sends CORS *). Cached per-port for 15 min; degrades gracefully.
 let _hdrTide = { key: "", text: "", atMs: 0 };
 async function updateHeaderTide(){
   const cell = document.getElementById("hdr-tide-cell");
@@ -12062,17 +12230,18 @@ async function updateHeaderTide(){
     if(typeof BW_OCEAN === "undefined"){ el.textContent = "—"; return; }
     const o = await BW_OCEAN.fetchOcean(p.lat + 0.05, p.lng + 0.05);
     if(activePort !== portKey) return;  // port changed while we were fetching
-    const state = o && o.tide ? o.tide.state : null;
     const station = o && o.sources ? o.sources.tide : null;
-    const arrow = state === "rising" ? "↑" : state === "falling" ? "↓" : "";
-    let nextTxt = "";
+    let text = "—";
     if(station){
       const next = await fetchNextTideEvent(station);
       if(activePort !== portKey) return;
-      if(next) nextTxt = `${next.type} ${next.timeTxt}`;
+      if(next){
+        const parts = [];
+        if(next.high) parts.push(`H ${next.high.timeTxt}`);
+        if(next.low)  parts.push(`L ${next.low.timeTxt}`);
+        if(parts.length) text = parts.join(" · ");
+      }
     }
-    const text = [arrow, nextTxt].filter(Boolean).join(" ").trim()
-      || (state ? state.charAt(0).toUpperCase() + state.slice(1) : "—");
     el.textContent = text;
     _hdrTide = { key: portKey, text, atMs: Date.now() };
   } catch(e){
@@ -12080,7 +12249,9 @@ async function updateHeaderTide(){
   }
 }
 
-// Next high/low tide event after now for a CO-OPS station (hi/lo predictions).
+// Next HIGH and next LOW tide events after now for a CO-OPS station (hi/lo
+// predictions). Returns {high:{timeTxt}, low:{timeTxt}} — either may be null if
+// not found in the lookahead window.
 async function fetchNextTideEvent(station){
   const pad = (n)=>String(n).padStart(2,"0");
   const fmt = (d)=>`${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
@@ -12093,16 +12264,16 @@ async function fetchNextTideEvent(station){
   if(!r.ok) return null;
   const d = await r.json();
   const preds = (d && d.predictions) ? d.predictions : [];
+  let high = null, low = null;
   for(const pr of preds){
     const t = Date.parse(pr.t.replace(" ", "T") + "Z");  // CO-OPS gmt
-    if(isFinite(t) && t > now){
-      return {
-        type: pr.type === "H" ? "High" : "Low",
-        timeTxt: new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-      };
-    }
+    if(!isFinite(t) || t <= now) continue;
+    const timeTxt = new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    if(pr.type === "H" && !high) high = { timeTxt };
+    else if(pr.type === "L" && !low) low = { timeTxt };
+    if(high && low) break;
   }
-  return null;
+  return { high, low };
 }
 
 // Turn the predictive heat map on once the user has picked both required inputs.
@@ -21353,7 +21524,7 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
         </div>
         <div class="fc-wx">
           <div class="fc-wx-icon">${wx.icon}</div>
-          <div class="fc-wx-label">${wx.label}${precipTxt}</div>
+          <div class="fc-wx-label${wx.label.length > 12 ? " fc-wx-xlong" : (wx.label.length > 8 ? " fc-wx-long" : "")}">${wx.label}${precipTxt}</div>
         </div>
         <div class="fc-metric fc-air">
           <div class="fc-metric-val">${airTxt}</div>
@@ -21438,7 +21609,11 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
 /* Weather-condition column: icon + short label */
 .fc-wx{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
 .fc-wx-icon{flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center}
-.fc-wx-label{font-size:15px;font-weight:600;color:#e8f4ff;line-height:1.15;min-width:0;flex:1;overflow-wrap:break-word;word-break:break-word;hyphens:auto}
+.fc-wx-label{font-size:15px;font-weight:600;color:#e8f4ff;line-height:1.15;min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Longer condition strings (e.g. "Thunderstorms", "Freezing rain") get a
+   smaller size so they still fit on a single line instead of wrapping. */
+.fc-wx-label.fc-wx-long{font-size:12.5px;letter-spacing:-.01em}
+.fc-wx-label.fc-wx-xlong{font-size:11px;letter-spacing:-.02em}
 .fc-precip{display:inline-block;margin-left:6px;font-size:12px;font-weight:700;color:#38bdf8}
 .fc-metric{text-align:right;min-width:60px}
 .fc-metric-val{font-size:19px;font-weight:800;color:#f0f6ff;line-height:1.1;white-space:nowrap}
