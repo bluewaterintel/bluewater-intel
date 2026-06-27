@@ -2127,14 +2127,6 @@ body.nav-open #ruler-readout{
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="Anonymized aggregate areas where AIS shows fishing-vessel activity near your port.">
-      <input type="checkbox" id="chk-zones" onchange="toggleLayer('zones')">
-      <span class="lyr-label">
-        <span class="layer-swatch" style="background:transparent;border:2px dashed #22d3ee;border-radius:50%"></span>
-        <span>Active Fishing Areas</span>
-      </span>
-      <span class="lyr-toggle"></span>
-    </label>
 
     <!-- OCEAN DATA — satellite overlays -->
     <div class="layers-section">OCEAN DATA</div>
@@ -10322,20 +10314,10 @@ function onMapClick(e){
 // LIVE DATA POLLING (existing)
 // ════════════════════════════════════════════════════════════════════════════
 async function startLivePolling(){
-  if(livePollTimer) clearInterval(livePollTimer);
-  // Refresh vessel zones every 30s if backend is live
-  livePollTimer = setInterval(async ()=>{
-    if(!API.available){
-      return;  // no backend connected — nothing to poll (demo mode)
-    }
-    const vessels = await API.getVessels();
-    if(vessels && vessels.length){
-      // Replace VESSELS data and redraw
-      VESSELS.length = 0;
-      vessels.forEach(v=>VESSELS.push(v));
-      drawVesselZones();
-    }
-  }, 30000);
+  // AIS "Active Fishing Areas" was removed as a data source, so there is no
+  // longer any background vessel polling. Kept as a no-op stub so existing
+  // callers don't break.
+  if(livePollTimer){ clearInterval(livePollTimer); livePollTimer = null; }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
