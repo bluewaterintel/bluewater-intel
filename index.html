@@ -4987,15 +4987,35 @@ function getWindField(lat, lng){
   return window.BW_WIND.interpolateWind(WIND_FIELD.samples, lat, lng);
 }
 
+// Snap a raw degree step to a fixed "nice" ladder so the wind sampling lattice
+// only changes with ZOOM, never with pan. Keeping the step on a fixed ladder is
+// what lets the absolute lattice below stay aligned across map moves.
+function windLatticeStep(){
+  const STEPS = [0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 1, 2, 3];
+  const raw = MAP ? (MAP.getBounds().getEast() - MAP.getBounds().getWest()) / 6 : 0.25;
+  for(const s of STEPS){ if(raw <= s) return s; }
+  return STEPS[STEPS.length - 1];
+}
+
+// Wind samples are taken on a FIXED geographic lattice (absolute multiples of a
+// zoom-derived step), NOT by slicing the live viewport. Previously the grid was
+// divided from the current bounds, so every sample point moved with the map and
+// a fixed location (e.g. Norfolk Canyon) was interpolated from a DIFFERENT set
+// of points after a pan — making its displayed/forecast wind change just from
+// scrolling. Anchoring to an absolute lattice means the same location always
+// keeps the same surrounding samples (until you zoom), so the wind it shows is
+// stable under panning.
 function windSampleGridForMap(){
   if(!MAP) return [];
   const b = MAP.getBounds().pad(0.18);
-  const rows = 5, cols = 6;
+  const step = windLatticeStep();
+  const iLatMin = Math.floor(b.getSouth() / step), iLatMax = Math.ceil(b.getNorth() / step);
+  const iLngMin = Math.floor(b.getWest()  / step), iLngMax = Math.ceil(b.getEast()  / step);
   const pts = [];
-  for(let r = 0; r < rows; r++){
-    const lat = b.getSouth() + (b.getNorth() - b.getSouth()) * (r / Math.max(1, rows - 1));
-    for(let c = 0; c < cols; c++){
-      const lng = b.getWest() + (b.getEast() - b.getWest()) * (c / Math.max(1, cols - 1));
+  for(let i = iLatMin; i <= iLatMax; i++){
+    const lat = +(i * step).toFixed(4);
+    for(let j = iLngMin; j <= iLngMax; j++){
+      const lng = +(j * step).toFixed(4);
       if(typeof isFishableWater === "function" && !isFishableWater(lat, lng)) continue;
       pts.push([lat, lng]);
     }
