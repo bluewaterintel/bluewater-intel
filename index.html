@@ -5376,6 +5376,26 @@ function thermalBreakGrid(lat, lng){
   return maxGrad * 10;
 }
 
+// Chlorophyll color-edge gradient (mg/m³ per 10nm) from the dense CHLOR_GRID
+// composite around a point. Mirrors thermalBreakGrid: the per-point field samples
+// no longer carry chlorophyll (it's a grid now), so the convergence factor reads
+// its color edge here. Returns null when the grid has no usable coverage here.
+function chlorBreakGrid(lat, lng){
+  const g = CHLOR_GRID;
+  if(!g || !g.rows || !g.rows.length) return null;
+  const radNm = 18;
+  const near = [];
+  for(const r of g.rows){
+    if(r[2] == null) continue;
+    if(nmBetween(lat, lng, r[0], r[1]) <= radNm) near.push({ la:r[0], ln:r[1], v:r[2] });
+  }
+  if(near.length < 2) return null;
+  if(typeof BW_BREAKS !== "undefined" && BW_BREAKS.maxGradientPer10nm){
+    return BW_BREAKS.maxGradientPer10nm(near, lat, lng, radNm);
+  }
+  return null;
+}
+
 // Real depth (meters) at a point from the ETOPO grid; null if unavailable.
 function realDepthAt(lat, lng){
   const g = BATHY_GRID;
@@ -5597,9 +5617,16 @@ function scoreCell(lat, lng, speciesId){
   // Chlorophyll color-edge gradient + convergence with the SST break. Real data
   // only (uses the same OCEAN_FIELD samples). 0 when the module/data isn't ready.
   let chlorBreak = 0, convergence = 0;
-  if (typeof BW_BREAKS !== "undefined" && OCEAN_FIELD && OCEAN_FIELD.samples) {
-    const radiusNm = (OCEAN_FIELD.spacingNm ? OCEAN_FIELD.spacingNm * 2.2 : 35);
-    chlorBreak = BW_BREAKS.chlorBreak(OCEAN_FIELD.samples, lat, lng, radiusNm);
+  if (typeof BW_BREAKS !== "undefined") {
+    // Prefer the dense chlorophyll composite grid (field samples no longer carry
+    // chlor); fall back to OCEAN_FIELD samples only where the grid has no cover.
+    const cbGrid = chlorBreakGrid(lat, lng);
+    if (cbGrid != null) {
+      chlorBreak = cbGrid;
+    } else if (OCEAN_FIELD && OCEAN_FIELD.samples) {
+      const radiusNm = (OCEAN_FIELD.spacingNm ? OCEAN_FIELD.spacingNm * 2.2 : 35);
+      chlorBreak = BW_BREAKS.chlorBreak(OCEAN_FIELD.samples, lat, lng, radiusNm);
+    }
     convergence = BW_BREAKS.convergenceScore(tBreak, chlorBreak);
   }
   const pressureTrend = presObj.value;
