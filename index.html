@@ -1432,10 +1432,20 @@ body.nav-open #ruler-readout{
   }
   wireAuth();
 
+  // Basic field validation so an empty submit can't fall through to an
+  // anonymous sign-in attempt (which the project disables → confusing error).
+  function validCreds(){
+    const em = emailEl.value.trim();
+    if(!em || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ showErr("Enter a valid email address."); return null; }
+    if(!passEl.value || passEl.value.length < 6){ showErr("Enter your password (at least 6 characters)."); return null; }
+    return { email: em, password: passEl.value };
+  }
+
   document.getElementById("bw-auth-signin").addEventListener("click", async () => {
     msg.style.display="none";
+    const c = validCreds(); if(!c) return;
     try {
-      await window.BW_AUTH.signIn(emailEl.value.trim(), passEl.value);
+      await window.BW_AUTH.signIn(c.email, c.password);
     } catch(e){ showErr(e.message || "Sign in failed"); }
   });
   forgotEl.addEventListener("click", async (e) => {
@@ -1450,8 +1460,9 @@ body.nav-open #ruler-readout{
   });
   document.getElementById("bw-auth-signup").addEventListener("click", async () => {
     msg.style.display="none";
+    const c = validCreds(); if(!c) return;
     try {
-      const res = await window.BW_AUTH.signUp(emailEl.value.trim(), passEl.value);
+      const res = await window.BW_AUTH.signUp(c.email, c.password);
       if(res.session) return;
       showErr("Check your email to confirm your account, then sign in.");
     } catch(e){ showErr(e.message || "Sign up failed"); }
@@ -10907,6 +10918,34 @@ const WP_TYPE_STYLE = {
 
 function wpData(){ return (window.BW_WAYPOINTS && window.BW_WAYPOINTS.wp) ? window.BW_WAYPOINTS.wp : []; }
 
+// ── Entitlement / freemium gating ────────────────────────────────────────────
+// The charted "Fishing Waypoints" dataset is the paid product (per-port packs).
+// Owners and active subscribers see the full set; everyone else sees a small
+// teaser (the nearest few) with an upgrade nudge. Owners are flagged server-side
+// (profiles.is_owner / has_premium()); the two owner emails are also fast-pathed
+// here so they unlock instantly. NOTE: this is UI-level gating — hardening it
+// fully requires the server-side pack RPC (supabase-m5-billing).
+const BW_OWNER_EMAILS = ["rnovakwvu@gmail.com", "natalienovakm@gmail.com"];
+const WP_TEASER_COUNT = 10;        // free accounts: nearest N charted waypoints
+let BW_PREMIUM = false;            // owner or active subscriber
+let _wpTeaserActive = false;       // last waypoint draw was capped to a teaser
+
+async function refreshEntitlement(){
+  let premium = false;
+  try {
+    const u = (window.BW_AUTH && window.BW_AUTH.getUser) ? window.BW_AUTH.getUser() : null;
+    const email = (u && u.email) ? u.email.toLowerCase() : "";
+    if(email && BW_OWNER_EMAILS.includes(email)){
+      premium = true;                                  // owner fast-path
+    } else if(u && window.BW_AUTH && window.BW_AUTH.isPremium){
+      premium = !!(await window.BW_AUTH.isPremium());   // server-evaluated
+    }
+  } catch(e){ premium = false; }
+  BW_PREMIUM = premium;
+  if(typeof drawWaypoints === "function" && layerVis.waypoints) drawWaypoints();
+}
+window.refreshEntitlement = refreshEntitlement;
+
 // Great-circle distance in nautical miles.
 // Returns waypoints within wpRadiusNm of the active port, honoring the type filter.
 // Each item: {name, lat, lng, t, nm}. Sorted nearest-first.
@@ -10971,15 +11010,24 @@ async function drawWaypoints(){
   const p = PORTS[activePort];
   // Show a loading state in the panel while the query is in flight.
   updateWaypointPanel(-1, -1); // -1 => "loading…"
-  const { rows, status } = await window.BW_DATA.waypointsWithin(
+  let { rows, status } = await window.BW_DATA.waypointsWithin(
     p.lat, p.lng, wpRadiusNm, wpTypeFilter
   );
   // A newer draw started while we were awaiting — discard this stale result.
   if(seq !== _wpDrawSeq) return;
+  // Freemium gate: non-premium accounts see only the nearest few charted
+  // waypoints (rows are nearest-first). Owners/subscribers get the full set.
+  const fullCount = rows.length;
+  if(!BW_PREMIUM && rows.length > WP_TEASER_COUNT){
+    rows = rows.slice(0, WP_TEASER_COUNT);
+    _wpTeaserActive = true;
+  } else {
+    _wpTeaserActive = false;
+  }
   _wpInRangeCache = rows;
   renderWaypointMarkers(true);
   updateWaypointPanel(
-    rows.length,
+    fullCount,
     Math.min(rows.length, WP_MAX_DRAW),
     status
   );
@@ -11259,6 +11307,9 @@ function mceUpdate(){
 
 function mceExport(){
   if(!mcePort || !PORTS[mcePort]){ alert("Select a home port first."); return; }
+  // Charted-waypoint export is part of the paid waypoint packs — gate it so free
+  // accounts can't bulk-export the full charted set (only personal waypoints).
+  if(!BW_PREMIUM){ alert("Exporting the full charted waypoint set is a premium feature. Owners and subscribers can export waypoint packs; free accounts can still export their own personal waypoints."); return; }
   const items = mceWaypointsInRange(mcePort, mceRangeNm);
   if(!items.length){ alert("No waypoints within "+mceRangeNm+" nm of "+mcePort+"."); return; }
   const gpx = mceBuildGpx(items, mcePort, mceRangeNm);
@@ -11311,9 +11362,14 @@ function updateWaypointPanel(total, drawn, status){
   else if(status === "unavailable"){ el.textContent = "waypoints unavailable offline — reconnect to load"; return; }
   if(total === undefined){
     const items = waypointsInRange();
-    total = items.length; drawn = Math.min(total, 1200);
+    total = items.length;
+    drawn = _wpTeaserActive ? Math.min(total, WP_TEASER_COUNT) : Math.min(total, 1200);
   }
   if(total === 0){ el.textContent = `none within ${wpRadiusNm} nm of ${PORTS[activePort]?.short||activePort}${tag}`; return; }
+  if(_wpTeaserActive && drawn < total){
+    el.innerHTML = `${total} within ${wpRadiusNm} nm — showing nearest ${drawn} <span style="color:#fbbf24;font-weight:700">· Upgrade for full access</span>${tag}`;
+    return;
+  }
   const capped = drawn < total ? ` (showing nearest ${drawn})` : "";
   el.textContent = `${total} within ${wpRadiusNm} nm${capped}${tag}`;
 }
@@ -12411,6 +12467,9 @@ window.bwOnSignedIn = async function (user) {
     setTimeout(() => window.bwOnSignedIn(user), 0);
     return;
   }
+  // Resolve premium/owner entitlement before drawing gated data so owners see
+  // the full waypoint set immediately and free accounts get the teaser.
+  try { await refreshEntitlement(); } catch(e){ console.error("entitlement check failed", e); }
   try {
     const profile = await window.BW_AUTH.fetchProfile();
     if(profile && profile.home_port && typeof selectPort === "function"){

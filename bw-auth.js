@@ -63,10 +63,40 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   }
 
   async function signUp(email, password) {
-    const { data, error } = await client.auth.signUp({ email, password });
+    const { data, error } = await client.auth.signUp({
+      email,
+      password,
+      // Send the confirmation link back to the app's own origin (must be in the
+      // project's Auth redirect allow-list). Without this the link used the
+      // project Site URL (was localhost) and 404'd.
+      options: { emailRedirectTo: window.location.origin },
+    });
     if (error) throw error;
     if (data.user) emit(data.user);
     return data;
+  }
+
+  // True when the signed-in user has premium access (owner flag, or an active
+  // subscription/trial). Server-evaluated via has_premium(); falls back to a
+  // direct profile read. Free accounts resolve to false.
+  async function isPremium() {
+    try {
+      const { data, error } = await client.rpc("has_premium");
+      if (!error && typeof data === "boolean") return data;
+    } catch (e) { /* fall through to profile read */ }
+    try {
+      const { data } = await client
+        .from("profiles")
+        .select("is_owner, subscription_status, current_period_end, trial_end")
+        .maybeSingle();
+      if (!data) return false;
+      if (data.is_owner) return true;
+      if (["trialing", "active"].includes(data.subscription_status)) return true;
+      const now = Date.now();
+      if (data.current_period_end && new Date(data.current_period_end).getTime() > now) return true;
+      if (data.trial_end && new Date(data.trial_end).getTime() > now) return true;
+      return false;
+    } catch (e) { return false; }
   }
 
   async function signOut() {
@@ -255,6 +285,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     signUp,
     signOut,
     isSignedIn,
+    isPremium,
     fetchProfile,
     saveProfile,
     resetPassword,
