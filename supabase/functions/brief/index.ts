@@ -29,7 +29,9 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-const MODEL = Deno.env.get("BRIEF_MODEL") ?? "claude-sonnet-4-6";
+// Claude Haiku 4.5 — fastest + cheapest tier ($1/$5 per MTok). Cheaper still
+// with prompt caching of the static system prompt below.
+const MODEL = Deno.env.get("BRIEF_MODEL") ?? "claude-haiku-4-5-20251001";
 
 function corsHeaders(origin: string | null) {
   const allow = origin && (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) ? origin : (ALLOWED_ORIGINS[0] ?? "*");
@@ -170,7 +172,10 @@ Cover: (1) the run from port — restate the real bearing and distance; (2) the 
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 900,
-        system,
+        // Prompt caching: the system prompt is identical on every brief, so mark
+        // it cacheable. After the first call, repeat calls within the cache
+        // window reuse it at ~90% lower input cost.
+        system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content: user }],
       }),
       signal: AbortSignal.timeout(30000),
