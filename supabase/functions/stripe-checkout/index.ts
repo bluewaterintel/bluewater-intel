@@ -61,6 +61,7 @@ Deno.serve(async (req) => {
   const kind = String(body.kind ?? "subscription");
   const interval = String(body.interval ?? "month");
   const port = typeof body.port === "string" ? body.port.slice(0, 80) : "";
+  const trial = body.trial === true || body.trial === "true";
 
   // Resolve the price + checkout mode for the requested product.
   let price = "", mode: "subscription" | "payment" = "subscription";
@@ -103,7 +104,14 @@ Deno.serve(async (req) => {
       cancel_url: `${APP_URL}/?checkout=cancel`,
       metadata: meta,
       ...(mode === "subscription"
-        ? { subscription_data: { metadata: meta } }
+        ? {
+            subscription_data: {
+              metadata: meta,
+              // 7-day free trial (card still collected by Checkout; billed after
+              // the trial unless the user cancels). Only on subscriptions.
+              ...(trial ? { trial_period_days: 7 } : {}),
+            },
+          }
         : { payment_intent_data: { metadata: meta } }),
     });
 

@@ -1483,10 +1483,16 @@ body.nav-open #ruler-readout{
     </div>
     <div id="pricing-msg" style="display:none;font-size:12px;color:#fca5a5;margin-bottom:8px"></div>
 
-    <div style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:12px 0 6px">Subscription — full app, 2 AI briefs/day</div>
-    <div style="font-size:11px;color:#9ec5e8;margin-bottom:8px">Everything in the app except charted fishing waypoints.</div>
+    <div style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:12px;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:800;color:#86efac;margin-bottom:3px">Start your 7-day free trial</div>
+      <div style="font-size:11px;color:#cfe5ff;line-height:1.45;margin-bottom:9px">Full app — predictive heat map, ocean &amp; wind layers, forecasts and more. (The AI Captain's Brief is excluded during the trial.) A card is required; you'll be billed $12.99/mo after 7 days unless you cancel first.</div>
+      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month',trial:true})" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start free trial</button>
+    </div>
+
+    <div style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:12px 0 6px">Subscription — full app + 2 AI briefs/day</div>
+    <div style="font-size:11px;color:#9ec5e8;margin-bottom:8px">Everything in the app. Charted waypoints are sold separately as packs.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month'})">Monthly — $14.99/mo</button>
+      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month'})">Monthly — $12.99/mo</button>
       <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'year'})">Annual — $109.99/yr</button>
     </div>
 
@@ -1573,7 +1579,7 @@ body.nav-open #ruler-readout{
   // Renders the plan status + Upgrade/Manage buttons inside the nav account block.
   window.renderNavPlan = async function(){
     const el = document.getElementById("nav-plan"); if(!el) return;
-    let tier = "Free", detail = "Charted waypoints locked · no AI briefs";
+    let tier = "Free", detail = "Maps, ports, catches & your waypoints only";
     try {
       const s = sb();
       if(s){
@@ -1581,10 +1587,11 @@ body.nav-open #ruler-readout{
         const st = p && p.subscription_status;
         if(p && p.is_owner){ tier="Owner"; detail="Full access · unlimited"; }
         else if(st==="lifetime"){ tier="Lifetime"; detail="All waypoints + 2 AI briefs/day"; }
-        else if(st==="active"||st==="trialing"){ tier="Subscriber"; detail="Full app + 2 AI briefs/day · waypoints via packs"; }
+        else if(st==="active"){ tier="Subscriber"; detail="Full app + 2 AI briefs/day · waypoints via packs"; }
+        else if(st==="trialing"){ tier="Free trial"; detail="Full app (AI brief excluded) · waypoints via packs"; }
       }
     } catch(e){ /* show free */ }
-    const showManage = (tier==="Subscriber"||tier==="Lifetime");
+    const showManage = (tier==="Subscriber"||tier==="Lifetime"||tier==="Free trial");
     el.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(7,17,33,.5);border:1px solid rgba(107,191,234,.18);border-radius:9px;padding:8px 10px">
         <div style="min-width:0">
@@ -8851,6 +8858,13 @@ function openSubPanel(kind){
 // LAYER CONTROLS
 // ════════════════════════════════════════════════════════════════════════════
 function toggleLayer(key){
+  // Premium gate: heat map, SST, chlorophyll, wind and radar require a trial or
+  // subscription. Turning one ON while not premium opens the upgrade modal.
+  if(BW_PREMIUM_LAYERS.includes(key) && !layerVis[key] && !BW_PREMIUM){
+    const c=document.getElementById("chk-"+key); if(c)c.checked=false;
+    if(typeof openPricing === "function") openPricing();
+    return;
+  }
   layerVis[key]=!layerVis[key];
   const chk=document.getElementById("chk-"+key);
   if(chk)chk.checked=layerVis[key];
@@ -11067,26 +11081,70 @@ function wpData(){ return (window.BW_WAYPOINTS && window.BW_WAYPOINTS.wp) ? wind
 // here so they unlock instantly. NOTE: this is UI-level gating — hardening it
 // fully requires the server-side pack RPC (supabase-m5-billing).
 const BW_OWNER_EMAILS = ["rnovakwvu@gmail.com", "natalienovakm@gmail.com"];
-const WP_TEASER_COUNT = 10;        // free accounts: nearest N charted waypoints
-let BW_PREMIUM = false;            // owner or active subscriber
+const WP_TEASER_COUNT = 10;        // teaser size for trial/subscribers
 let _wpTeaserActive = false;       // last waypoint draw was capped to a teaser
+// BW_PREMIUM = app features (heat map, ocean/wind layers, forecast, etc.) —
+//   granted to a 7-day trial, active subscription, lifetime, or owner.
+// BW_PAID    = the AI Captain's Brief — active subscription / lifetime / owner
+//   only (the trial does NOT include the brief).
+let BW_PREMIUM = false;
+let BW_PAID = false;
+// Premium-gated map layers (everything outside the free baseline).
+const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "radar"];
 
 async function refreshEntitlement(){
-  let premium = false;
+  let premium = false, paid = false;
   try {
     const u = (window.BW_AUTH && window.BW_AUTH.getUser) ? window.BW_AUTH.getUser() : null;
     const email = (u && u.email) ? u.email.toLowerCase() : "";
     if(email && BW_OWNER_EMAILS.includes(email)){
-      premium = true;                                  // owner fast-path
-    } else if(u && window.BW_AUTH && window.BW_AUTH.isPremium){
-      premium = !!(await window.BW_AUTH.isPremium());   // server-evaluated
+      premium = true; paid = true;                     // owner fast-path
+    } else if(u && window.BW_AUTH && window.BW_AUTH._sb){
+      const { data: p } = await window.BW_AUTH._sb
+        .from("profiles").select("is_owner, subscription_status, current_period_end").maybeSingle();
+      if(p){
+        const st = p.subscription_status;
+        const cpe = p.current_period_end ? new Date(p.current_period_end).getTime() : 0;
+        if(p.is_owner || st === "lifetime"){ premium = true; paid = true; }
+        else if(st === "active"){ premium = true; paid = true; }
+        else if(st === "trialing"){ premium = true; paid = false; }   // trial: app yes, brief no
+        else if(cpe > Date.now() && st !== "canceled"){ premium = true; paid = true; } // grace period
+      }
     }
-  } catch(e){ premium = false; }
-  BW_PREMIUM = premium;
+  } catch(e){ premium = false; paid = false; }
+  BW_PREMIUM = premium; BW_PAID = paid;
+  applyEntitlementGating();
   if(typeof drawWaypoints === "function" && layerVis.waypoints) drawWaypoints();
   if(typeof renderNavPlan === "function") renderNavPlan();
 }
 window.refreshEntitlement = refreshEntitlement;
+
+// Gate helpers — call at premium feature entry points. Returns true if allowed,
+// otherwise opens the upgrade/trial modal and returns false.
+function requirePremium(){ if(BW_PREMIUM) return true; if(typeof openPricing === "function") openPricing(); return false; }
+function requirePaid(){ if(BW_PAID) return true; if(typeof openPricing === "function") openPricing(); return false; }
+
+// If access lapses (or never existed), make sure premium map layers aren't left
+// on. Free baseline (maps, ports, catches, personal/owned waypoints) stays.
+function applyEntitlementGating(){
+  if(BW_PREMIUM) return;
+  let changed = false;
+  for(const k of BW_PREMIUM_LAYERS){
+    if(layerVis[k]){
+      layerVis[k] = false;
+      const c = document.getElementById("chk-" + k); if(c) c.checked = false;
+      changed = true;
+      try {
+        if(k === "predict"){ _predictUserOff = true; if(typeof drawPrediction === "function") drawPrediction(); }
+        else if(k === "wind" && typeof drawWind === "function") drawWind();
+        else if(k === "sst" && typeof MAP !== "undefined" && typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
+        else if(k === "chlor" && typeof MAP !== "undefined" && typeof chlorLayer !== "undefined" && chlorLayer && MAP.hasLayer(chlorLayer)) MAP.removeLayer(chlorLayer);
+        else if(k === "radar" && typeof drawRadar === "function") drawRadar();
+      } catch(e){}
+    }
+  }
+  if(changed && typeof updateOceanLegend === "function") updateOceanLegend();
+}
 
 // Great-circle distance in nautical miles.
 // Returns waypoints within wpRadiusNm of the active port, honoring the type filter.
@@ -12019,6 +12077,9 @@ function structureNear(lat, lng, maxNm = 15, limit = 3){
 }
 async function runBrief(){
   if(!pinLL||aiLoading)return;
+  // AI Captain's Brief is a PAID feature (active subscription / lifetime / owner)
+  // — not included in the 7-day trial. The server also enforces this + 2/day.
+  if(!requirePaid()) return;
   aiLoading=true;aiCOA="";renderBrief();
 
   const sp = briefSp.length ? briefSp : (activeSpId==="all" ? [] : [activeSpId]);
@@ -12502,6 +12563,8 @@ function ensurePredictLayerOn(){
   if(!activePort || !activeSpId || activeSpId === "all") return;
   // Respect an explicit user opt-out — don't silently re-check the box.
   if(_predictUserOff) return;
+  // The predictive heat map is premium — don't auto-enable it for free accounts.
+  if(!BW_PREMIUM) return;
   layerVis.predict = true;
   const chk = document.getElementById("chk-predict");
   if(chk) chk.checked = true;
@@ -21592,6 +21655,8 @@ function bwiWeatherIcon(code, precip){
 }
 
 function showForecast(lat, lng, name){
+  // The 6-day forecast is a premium feature (trial or subscription).
+  if(!requirePremium()) return;
   // Build (or reuse) the modal shell.
   let modal = document.getElementById("forecast-modal");
   if(!modal){
