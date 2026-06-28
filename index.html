@@ -2650,6 +2650,7 @@ const PORTS={
   "Reedville, VA":     {lat:37.84,  lng:-76.28,  short:"Reedville"},
   "Solomons, MD":      {lat:38.32,  lng:-76.45,  short:"Solomons"},
   "Colonial Beach, VA":{lat:38.255, lng:-76.96,  short:"Colonial Beach"},
+  "Coles Point, VA":   {lat:38.157, lng:-76.625, short:"Coles Point"},
   "Annapolis, MD":     {lat:38.978, lng:-76.49,  short:"Annapolis"},
   "Baltimore, MD":     {lat:39.27,  lng:-76.58,  short:"Baltimore"},
   "Delaware City, DE": {lat:39.575, lng:-75.588, short:"Delaware City"},
@@ -2956,6 +2957,22 @@ const CANYONS=[
   {name:"Chesapeake Light Tower", type:"reef", color:"#16a34a", lat:36.91, lng:-75.71,
    desc:"~13nm off Virginia Beach. Tower structure & nearby wrecks — cobia, red drum, flounder, sea bass.",
    fish:["cobia","flounder","blackseabass","redfish"]},
+  // ── CHESAPEAKE BAY STRUCTURE ─────────────────────────────────────────
+  {name:"CBBT", type:"structure", color:"#16a34a", lat:36.97, lng:-76.08,
+   desc:"Chesapeake Bay Bridge-Tunnel — the bay mouth's premier structure. Cobia sight-casting in summer, plus trophy striped bass, flounder, sheepshead and sea bass on the pilings and islands.",
+   fish:["cobia","striper","flounder","sheepshead","blackseabass","redfish"]},
+  {name:"Smith Point", type:"reef", color:"#16a34a", lat:37.88, lng:-76.18,
+   desc:"Mouth of the Potomac where it meets the Chesapeake. Summer cobia and red drum on the shoals, big striped bass, croaker and spot. Strong tide rips concentrate bait.",
+   fish:["cobia","striper","redfish","flounder"]},
+  {name:"Latimer Shoal", type:"lump", color:"#16a34a", lat:37.05, lng:-76.00,
+   desc:"Lower-bay shoal NE of the CBBT. Classic summer cobia and red drum structure; striped bass and flounder work the edges where it drops into the channel.",
+   fish:["cobia","redfish","striper","flounder"]},
+  {name:"Nine Foot Shoal", type:"lump", color:"#16a34a", lat:37.12, lng:-75.98,
+   desc:"Shallow shoal off Cape Charles guarding the bay-mouth channels. Cobia and red drum cruise the rim in summer; flounder and sea bass on the slopes.",
+   fish:["cobia","redfish","flounder","blackseabass"]},
+  {name:"Windmill Point", type:"lump", color:"#16a34a", lat:37.61, lng:-76.27,
+   desc:"Mid-bay shoal at the mouth of the Rappahannock. Summer cobia, big red drum and striped bass stack on the bar where the river current meets the bay.",
+   fish:["cobia","redfish","striper","flounder"]},
   {name:"The Cigar", type:"lump", color:"#0ea5a5", lat:36.6333, lng:-74.9167,
    desc:"36°38.00N 74°55.0W — elongated lump on the 30-fathom line off VA. Yellowfin, bluefin, dolphin stage here in season.",
    fish:["yellowfin","bluefin","mahi"]},
@@ -4706,6 +4723,12 @@ const REGIONAL_SEASONS = {
     {centerLat: 37.0, centerLng: -76.0, radiusNm: 130, label: "Chesapeake Bay run",
      // CBBT, mouth of bay — peak May-Aug, off Nov-Apr (fish gone south)
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 39.2, centerLng: -74.4, radiusNm: 140, label: "DelMarVa/NJ summer",
+     // Summer push up the coast to Delaware Bay and the NJ shore
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 36.0, centerLng: -75.9, radiusNm: 90, label: "Albemarle/Outer Banks sounds",
+     // Summer fish in Albemarle/Pamlico sounds + Oregon Inlet
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
     {centerLat: 34.5, centerLng: -76.5, radiusNm: 180, label: "NC/SC coast",
      // Year-round-ish with spring/summer peak
      seasons:{Jan:0,Feb:0,Mar:1,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:2,Nov:1,Dec:0}},
@@ -5647,6 +5670,17 @@ function predictDepth(lat, lng){
   const real = realDepthAt(lat, lng);
   if(real != null) return real;
   return seaDepth(lat, lng);
+}
+
+// Water test for the prediction heat map. Prefers REAL bathymetry (ETOPO), so
+// land inside bays/rivers — where the static model's coarse bay rectangles bleed
+// across land (e.g. the whole Chesapeake box) — is correctly excluded and the
+// heat map no longer paints over land. ETOPO stores land as depth 0, water > 0.
+// Falls back to the static model only outside the fetched bathy grid.
+function isPredictWater(lat, lng){
+  const real = realDepthAt(lat, lng);
+  if(real != null) return real > 0;
+  return (typeof isFishableWater === "function") ? isFishableWater(lat, lng) : false;
 }
 
 function decimateOceanPts(pts, max){
@@ -7386,7 +7420,7 @@ const SPECIES_LAT_RANGE = {
   tripletail:    [25.0, 35.0],   // Gulf + FL east + occasional NC/VA in summer
   pompano:       [25.0, 36.5],   // FL through NC beaches
   gaggrouper:    [25.0, 34.5],   // Gulf + FL east + GA/SC
-  cobia:         [25.0, 38.5],   // FL through Chesapeake (continuous)
+  cobia:         [25.0, 40.5],   // FL through Chesapeake/DelMarVa up to NJ (summer)
   spanishmack:   [27.0, 41.0],   // FL through NJ
   // ── MID-ATLANTIC + NEW ENGLAND ───────────────────────────────────────
   bluelinetile:  [33.0, 40.5],   // Mid-Atlantic deepwater specialist
@@ -7535,7 +7569,7 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
     let rows = 0;
     for(; lat <= LAT_MAX && rows < ROWS_PER_FRAME; lat += step, rows++){
       for(let lng = LNG_MIN; lng <= LNG_MAX; lng += step){
-        if(!isFishableWater(lat, lng)) continue;
+        if(!isPredictWater(lat, lng)) continue;
         const waterType = classifyWaterType(lat, lng);
         if(!speciesAllowedInWater(speciesId, waterType)) continue;
         if(!speciesAllowedAtLat(speciesId, lat, lng)) continue;
