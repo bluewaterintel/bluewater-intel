@@ -74,14 +74,35 @@ Deno.serve(async (req) => {
 
   // ── Require a signed-in user (accounts are required as of Milestone 2) ──────
   const authHeader = req.headers.get("Authorization") ?? "";
+  let supa;
   try {
-    const supa = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+    supa = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
     const { data: { user }, error } = await supa.auth.getUser();
     if (error || !user) {
       return new Response(JSON.stringify({ error: "Sign in required." }), { status: 401, headers: { ...cors, "Content-Type": "application/json" } });
     }
   } catch {
     return new Response(JSON.stringify({ error: "Auth check failed." }), { status: 401, headers: { ...cors, "Content-Type": "application/json" } });
+  }
+
+  // ── Premium gate + daily limit (2/day; owners unlimited; free = none) ───────
+  // Enforced server-side and atomically via brief_consume() so it can't be
+  // bypassed from the client. Only counts against the quota once we're past
+  // validation and about to actually generate the brief (consumed below).
+  try {
+    const { data: gate, error: gerr } = await supa.rpc("brief_consume", { p_limit: 2 });
+    if (gerr) {
+      return new Response(JSON.stringify({ error: "Could not verify your brief allowance." }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+    if (!gate || !gate.allowed) {
+      const reason = gate?.reason;
+      const msg = reason === "premium"
+        ? "The AI Captain's Brief is a premium feature. Subscribe (or go Lifetime) to unlock up to 2 briefs per day."
+        : "You've used both AI Captain's Briefs for today — they reset tomorrow.";
+      return new Response(JSON.stringify({ error: msg, reason: reason || "limit" }), { status: 402, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+  } catch {
+    return new Response(JSON.stringify({ error: "Could not verify your brief allowance." }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
   }
 
   // ── Validate inputs (REAL data only) ────────────────────────────────────────
