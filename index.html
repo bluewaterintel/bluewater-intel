@@ -5332,9 +5332,10 @@ async function buildWindFieldForMap(){
 
   WIND_FIELD.status = "loading";
   updateOceanLegend();
-  // Fetch a GENEROUS box around the view so subsequent pans/zooms stay inside the
-  // cached grid (one request; the server caches and auto-picks resolution).
-  const b = view.pad(0.75);
+  // Fetch a GENEROUS box (≈3× the view) so subsequent pans and zoom-ins stay
+  // inside the cached grid — the field then holds steady without refetching.
+  // (One request; the server caches and auto-picks resolution for the box.)
+  const b = view.pad(1.0);
   const data = await BW_OCEAN.fetchWindGrid(b.getSouth(), b.getNorth(), b.getWest(), b.getEast(), WIND_FORECAST_HOUR);
   if(seq !== WIND_FIELD.seq) return WIND_FIELD;
   applyWindGrid(data);
