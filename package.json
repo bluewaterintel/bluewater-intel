@@ -20,6 +20,6 @@
   },
   "devDependencies": {
     "netlify-cli": "^23.0.0",
-    "supabase": "^2.20.0"
+    "supabase": "^2.108.0"
   }
 }
