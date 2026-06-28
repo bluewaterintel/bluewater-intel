@@ -158,5 +158,35 @@
     }
   }
 
-  root.BW_OCEAN = { fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs };
+  // Gridded wind field for a bounding box — one cached request returns a fixed
+  // grid {stepDeg, rows:[[lat,lng,speedKt,dirDeg],…], hour}. Rendered identically
+  // at every zoom (Windy-style) instead of re-sampling per viewport.
+  const windGridCache = new Map();
+  async function fetchWindGrid(latMin, latMax, lngMin, lngMax, hours) {
+    const h = Math.round((Number(hours) || 0) / 3) * 3;
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)},${h}`;
+    const hit = windGridCache.get(k);
+    if (hit && Date.now() - hit.atMs < 20 * 60 * 1000) return hit.data;
+    try {
+      const params = new URLSearchParams({
+        mode: "windgrid",
+        latMin: String(latMin), latMax: String(latMax),
+        lngMin: String(lngMin), lngMax: String(lngMax),
+        hours: String(h),
+      });
+      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+        headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !Array.isArray(data.rows) || !data.rows.length) return null;
+      windGridCache.set(k, { data, atMs: Date.now() });
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  root.BW_OCEAN = { fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs, fetchWindGrid };
 })(typeof globalThis !== "undefined" ? globalThis : this);

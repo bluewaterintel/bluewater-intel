@@ -5204,15 +5204,68 @@ function setWindForecastHour(hours){
 
 function stepWindForecast(delta){ setWindForecastHour(WIND_FORECAST_HOUR + delta); }
 
+// ── Fixed wind GRID (Windy-style) ────────────────────────────────────────────
+// Wind is rendered from a fixed-resolution geographic grid fetched once per
+// region and cached, NOT re-sampled per viewport. Because the grid is fixed
+// absolute data, the field is IDENTICAL at every zoom/pan (no colour jumping,
+// no IDW "blobs") and re-renders instantly from cache. Each node stores the
+// real GFS wind as u/v (m/s) so bilinear interpolation is smooth.
+let WIND_GRID = null;
+
+function applyWindGrid(data){
+  WIND_GRID = null;
+  if(!data || !Array.isArray(data.rows) || !data.rows.length || !window.BW_WIND) return;
+  const step = data.stepDeg || 0.25;
+  let mnLa=Infinity,mxLa=-Infinity,mnLn=Infinity,mxLn=-Infinity;
+  for(const r of data.rows){ const la=r[0],ln=r[1]; if(la<mnLa)mnLa=la; if(la>mxLa)mxLa=la; if(ln<mnLn)mnLn=ln; if(ln>mxLn)mxLn=ln; }
+  const nLat=Math.max(1,Math.round((mxLa-mnLa)/step)+1);
+  const nLng=Math.max(1,Math.round((mxLn-mnLn)/step)+1);
+  const u=new Float32Array(nLat*nLng).fill(NaN);
+  const v=new Float32Array(nLat*nLng).fill(NaN);
+  for(const r of data.rows){
+    const vec = window.BW_WIND.vectorFromObservation({ value:r[2], dir:r[3] });
+    if(!vec) continue;
+    const i=Math.round((r[0]-mnLa)/step), j=Math.round((r[1]-mnLn)/step);
+    if(i>=0&&i<nLat&&j>=0&&j<nLng){ u[i*nLng+j]=vec.u; v[i*nLng+j]=vec.v; }
+  }
+  WIND_GRID = { step, minLat:mnLa, minLng:mnLn, nLat, nLng, u, v,
+    bounds:{ s:mnLa, n:mxLa, w:mnLn, e:mxLn },
+    hour:(data.hour!=null ? data.hour : WIND_FORECAST_HOUR) };
+}
+
+// Does the cached grid box fully contain the current view? If so we can reuse it
+// (no refetch) — the field then stays identical through pans/zooms inside it.
+function windGridCoversView(view){
+  const g = WIND_GRID; if(!g) return false;
+  return g.bounds.s <= view.getSouth()+1e-9 && g.bounds.n >= view.getNorth()-1e-9
+      && g.bounds.w <= view.getWest()+1e-9  && g.bounds.e >= view.getEast()-1e-9;
+}
+
+const _WIND_MS_TO_KT = 1.943844;
 function getWindField(lat, lng){
-  if(!window.BW_WIND) return null;
-  // Limit interpolation to nearby lattice nodes (~5 steps) so the rendered field
-  // is determined by LOCAL samples rather than averaging the whole viewport. This
-  // keeps a location's wind consistent regardless of how far you're zoomed out
-  // (a wide view no longer smears distant wind into a calm spot, and vice-versa).
-  const stepDeg = WIND_FIELD.stepDeg || 0.2;
-  const maxNm = Math.max(45, stepDeg * 60 * 5);
-  return window.BW_WIND.interpolateWind(WIND_FIELD.samples, lat, lng, maxNm);
+  const g = WIND_GRID; if(!g || !g.nLat) return null;
+  const fi=(lat-g.minLat)/g.step, fj=(lng-g.minLng)/g.step;
+  if(fi < -0.001 || fj < -0.001 || fi > g.nLat-1+0.001 || fj > g.nLng-1+0.001) return null;
+  const i0=Math.max(0,Math.min(g.nLat-2,Math.floor(fi)));
+  const j0=Math.max(0,Math.min(g.nLng-2,Math.floor(fj)));
+  const di=Math.max(0,Math.min(1,fi-i0)), dj=Math.max(0,Math.min(1,fj-j0));
+  const idx=(i,j)=>i*g.nLng+j;
+  // Bilinear over the (up to 4) corners that have data — NaN corners (land / no
+  // model value) are skipped so the field stays continuous along coastlines.
+  let su=0,sv=0,sw=0;
+  const corners=[[i0,j0,(1-di)*(1-dj)],[i0,j0+1,(1-di)*dj],[i0+1,j0,di*(1-dj)],[i0+1,j0+1,di*dj]];
+  for(const c of corners){
+    const ci=c[0], cj=c[1], wt=c[2];
+    if(ci<0||cj<0||ci>=g.nLat||cj>=g.nLng) continue;
+    const uu=g.u[idx(ci,cj)], vv=g.v[idx(ci,cj)];
+    if(!isFinite(uu)||!isFinite(vv)) continue;
+    su+=uu*wt; sv+=vv*wt; sw+=wt;
+  }
+  if(sw<=0) return null;
+  const u=su/sw, v=sv/sw;
+  const speedKts=Math.hypot(u,v)*_WIND_MS_TO_KT;
+  const dirTo=(Math.atan2(u,v)*180/Math.PI+360)%360;
+  return { u, v, speedKts, dirDeg:(dirTo+180)%360, sources:1 };
 }
 
 // Snap a raw degree step to a fixed "nice" ladder so the wind sampling lattice
@@ -5261,47 +5314,39 @@ function windSampleGridForMap(){
 
 async function buildWindFieldForMap(){
   const seq = ++WIND_FIELD.seq;
-  if(typeof BW_OCEAN === "undefined" || !window.BW_WIND || !MAP){
+  if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchWindGrid || !window.BW_WIND || !MAP){
+    WIND_GRID = null;
     WIND_FIELD = { samples: [], builtAtMs: Date.now(), status: "unavailable", seq, boundsKey: "", forecastHour: WIND_FORECAST_HOUR };
     updateOceanLegend();
     return WIND_FIELD;
   }
 
-  WIND_FIELD.status = "loading";
-  updateOceanLegend();
-  const pts = windSampleGridForMap();
-  const CONCURRENCY = 6;
-  const samples = [];
-  let next = 0;
-
-  async function worker(){
-    while(next < pts.length){
-      const i = next++;
-      const [lat, lng] = pts[i];
-      const p = await BW_OCEAN.fetchOcean(lat, lng, { mode: "wind", hours: WIND_FORECAST_HOUR });
-      const vector = window.BW_WIND.vectorFromObservation(p?.wind);
-      if(vector){
-        samples.push({
-          lat, lng, vector,
-          wind: p.wind,
-          source: p.sources?.buoy || null,
-          cache: p._cache || null,
-        });
-      }
-    }
+  // REUSE the cached grid when it still covers the view and the forecast hour is
+  // unchanged — this is what makes the wind field hold steady (and render
+  // instantly) through pans and zooms instead of re-fetching/re-sampling.
+  const view = MAP.getBounds();
+  if(WIND_GRID && WIND_GRID.hour === WIND_FORECAST_HOUR && windGridCoversView(view)){
+    if(WIND_FIELD.status !== "live"){ WIND_FIELD.status = "live"; updateOceanLegend(); }
+    return WIND_FIELD;
   }
 
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pts.length) }, worker));
+  WIND_FIELD.status = "loading";
+  updateOceanLegend();
+  // Fetch a GENEROUS box (≈3× the view) so subsequent pans and zoom-ins stay
+  // inside the cached grid — the field then holds steady without refetching.
+  // (One request; the server caches and auto-picks resolution for the box.)
+  const b = view.pad(1.0);
+  const data = await BW_OCEAN.fetchWindGrid(b.getSouth(), b.getNorth(), b.getWest(), b.getEast(), WIND_FORECAST_HOUR);
   if(seq !== WIND_FIELD.seq) return WIND_FIELD;
-  const usedCached = samples.some(s => s.cache && s.cache !== "fresh-cache");
+  applyWindGrid(data);
   WIND_FIELD = {
-    samples,
+    samples: [],
     builtAtMs: Date.now(),
-    status: samples.length ? (usedCached ? "cached" : "live") : "unavailable",
+    status: WIND_GRID ? "live" : "unavailable",
     forecastHour: WIND_FORECAST_HOUR,
     seq,
-    boundsKey: MAP.getBounds().toBBoxString(),
-    stepDeg: windLatticeStep(),
+    boundsKey: WIND_GRID ? `${WIND_GRID.bounds.s},${WIND_GRID.bounds.n},${WIND_GRID.bounds.w},${WIND_GRID.bounds.e}` : "",
+    stepDeg: WIND_GRID ? WIND_GRID.step : 0,
   };
   updateOceanLegend();
   return WIND_FIELD;
@@ -8141,15 +8186,35 @@ const WindParticleLayer = L.Layer.extend({
     map.getPanes().overlayPane.appendChild(this._canvas);
     map.on('moveend zoomend viewreset resize', this._reset, this);
     map.on('movestart zoomstart', this._pause, this);
+    // Keep the shade pinned to geography DURING a pan drag (not just at the end),
+    // so the wind field moves with the map like Windy instead of appearing glued
+    // to the screen until release. Throttled to one repaint per animation frame;
+    // skipped during zoom animation (zoomend → _reset handles that).
+    map.on('move', this._onMove, this);
     this._reset();
   },
   onRemove: function(map){
     this._dataReq++;
     this._stop();
+    if(this._moveRAF){ cancelAnimationFrame(this._moveRAF); this._moveRAF = null; }
     if(this._shadeCanvas && this._shadeCanvas.parentNode) this._shadeCanvas.parentNode.removeChild(this._shadeCanvas);
     if(this._canvas && this._canvas.parentNode) this._canvas.parentNode.removeChild(this._canvas);
     map.off('moveend zoomend viewreset resize', this._reset, this);
     map.off('movestart zoomstart', this._pause, this);
+    map.off('move', this._onMove, this);
+  },
+  _onMove: function(){
+    if(!this._map || !this._shadeCanvas) return;
+    if(this._map._animatingZoom) return;          // zoom is handled at zoomend
+    if(this._moveRAF) return;
+    this._moveRAF = requestAnimationFrame(() => {
+      this._moveRAF = null;
+      if(!this._map) return;
+      const topLeft = this._map.containerPointToLayerPoint([0, 0]);
+      L.DomUtil.setPosition(this._shadeCanvas, topLeft);
+      L.DomUtil.setPosition(this._canvas, topLeft);
+      this._drawShade();                           // cheap bilinear repaint for the live view
+    });
   },
   _pause: function(){ this._stop(); if(this._canvas){ this._canvas.getContext('2d').clearRect(0,0,this._canvas.width,this._canvas.height);} },
   _reset: function(){
@@ -8198,7 +8263,7 @@ const WindParticleLayer = L.Layer.extend({
     const ctx = this._shadeCanvas.getContext('2d');
     const w = this._shadeCanvas.width, h = this._shadeCanvas.height;
     ctx.clearRect(0,0,w,h);
-    if(!WIND_FIELD.samples.length || !window.BW_WIND || !this._map) return;
+    if(!WIND_GRID || !window.BW_WIND || !this._map) return;
     const cell = this._opts.shadeCellPx;
     const sw = Math.max(1, Math.ceil(w / cell));
     const sh = Math.max(1, Math.ceil(h / cell));
@@ -8253,7 +8318,7 @@ const WindParticleLayer = L.Layer.extend({
     ctx.fillRect(0,0,w,h);
     ctx.globalCompositeOperation = 'source-over';
 
-    if(!WIND_FIELD.samples.length) return;
+    if(!WIND_GRID) return;
     const map = this._map;
     const zoom = map.getZoom();
     // Per-frame step is PROPORTIONAL to wind speed, so calm (blue/green) water

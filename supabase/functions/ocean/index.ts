@@ -236,6 +236,60 @@ async function fetchModelWind(lat: number, lng: number, hoursAhead = 0): Promise
   return p;
 }
 
+// ── Gridded wind field for a bounding box (Open-Meteo bulk, ONE request) ──────
+// Returns a FIXED-resolution grid { stepDeg, rows:[[lat,lng,speedKt,dirDeg],…] }
+// snapped to absolute multiples of stepDeg, so the field is identical regardless
+// of how the box was framed (stable across pan/zoom on the client). Resolution
+// auto-coarsens to keep the point count bounded for large (zoomed-out) boxes.
+const windGridCache = new Map<string, { atMs: number; p: Promise<{ stepDeg: number; rows: number[][] }> }>();
+async function fetchWindGrid(latMin: number, latMax: number, lngMin: number, lngMax: number, hoursAhead = 0) {
+  const hour = Math.round(clamp(hoursAhead, 0, 96) / 3) * 3;
+  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+  const CAP = 240; // Open-Meteo bulk + URL length budget
+  const STEPS = [0.1, 0.15, 0.2, 0.25, 0.35, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0];
+  const count = (s: number) => (Math.floor((a1 - a0) / s) + 1) * (Math.floor((o1 - o0) / s) + 1);
+  let step = STEPS[STEPS.length - 1];
+  for (const s of STEPS) { if (count(s) <= CAP) { step = s; break; } }
+  const i0 = Math.floor(a0 / step), i1 = Math.ceil(a1 / step);
+  const j0 = Math.floor(o0 / step), j1 = Math.ceil(o1 / step);
+  const key = `${i0},${i1},${j0},${j1},${step},${hour}`;
+  const now = Date.now();
+  const hit = windGridCache.get(key);
+  if (hit && now - hit.atMs < 20 * 60 * 1000) return hit.p;
+  const lats: number[] = [], lngs: number[] = [];
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+    lats.push(Math.round(i * step * 1000) / 1000);
+    lngs.push(Math.round(j * step * 1000) / 1000);
+  }
+  const p = (async () => {
+    const url = `${OPEN_METEO_FORECAST}?latitude=${lats.join(",")}&longitude=${lngs.join(",")}`
+      + "&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&timezone=UTC&forecast_days=5";
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(12000), headers: ERDDAP_HEADERS });
+      if (!r.ok) return { stepDeg: step, rows: [] as number[][] };
+      const d = await r.json();
+      const arr = Array.isArray(d) ? d : [d];
+      const targetMs = Date.now() + hour * 3600000;
+      const rows: number[][] = [];
+      for (let n = 0; n < arr.length && n < lats.length; n++) {
+        const e = arr[n];
+        const times: string[] = e?.hourly?.time ?? [];
+        if (!times.length) continue;
+        const idx = nearestHourlyIndex(times, targetMs);
+        const spd = num(e?.hourly?.wind_speed_10m?.[idx]);
+        const dir = num(e?.hourly?.wind_direction_10m?.[idx]);
+        if (spd != null && dir != null) rows.push([lats[n], lngs[n], Math.round(spd * 10) / 10, Math.round(dir)]);
+      }
+      return { stepDeg: step, rows };
+    } catch {
+      return { stepDeg: step, rows: [] as number[][] };
+    }
+  })();
+  windGridCache.set(key, { atMs: now, p });
+  return p;
+}
+
 async function fetchBuoy(lat: number, lng: number) {
   // Pull the nearest few buoys in parallel, then take EACH field (wind, waves,
   // water temp, pressure) from the nearest buoy that actually reports it. A single
@@ -606,6 +660,24 @@ Deno.serve(async (req) => {
     const out = await fetchBathyRows(latMin, latMax, lngMin, lngMax);
     return new Response(JSON.stringify(out), {
       headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=604800" },
+    });
+  }
+
+  // ── Gridded wind field for a bounding box (one request, cached) ────────────
+  // A fixed-resolution wind grid the client renders identically at every zoom —
+  // Windy-style stability — instead of re-sampling per viewport.
+  if (mode === "windgrid") {
+    const latMin = num(u.searchParams.get("latMin"));
+    const latMax = num(u.searchParams.get("latMax"));
+    const lngMin = num(u.searchParams.get("lngMin"));
+    const lngMax = num(u.searchParams.get("lngMax"));
+    if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+    }
+    const hoursAhead = num(u.searchParams.get("hours")) ?? 0;
+    const out = await fetchWindGrid(latMin, latMax, lngMin, lngMax, hoursAhead);
+    return new Response(JSON.stringify({ ...out, hour: Math.round(clamp(hoursAhead, 0, 96) / 3) * 3 }), {
+      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=900" },
     });
   }
 
