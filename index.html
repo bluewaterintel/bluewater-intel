@@ -1485,7 +1485,7 @@ body.nav-open #ruler-readout{
 
     <div style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:12px;margin-bottom:14px">
       <div style="font-size:14px;font-weight:800;color:#86efac;margin-bottom:3px">Start your 7-day free trial</div>
-      <div style="font-size:11px;color:#cfe5ff;line-height:1.45;margin-bottom:9px">Full app — predictive heat map, ocean &amp; wind layers, forecasts and more. (The AI Captain's Brief is excluded during the trial.) A card is required; you'll be billed $12.99/mo after 7 days unless you cancel first.</div>
+      <div style="font-size:11px;color:#cfe5ff;line-height:1.45;margin-bottom:9px">Full app — the Bite Map, ocean &amp; wind layers, forecasts and more. (The AI Captain's Brief is excluded during the trial.) A card is required; you'll be billed $12.99/mo after 7 days unless you cancel first.</div>
       <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month',trial:true})" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start free trial</button>
     </div>
 
@@ -1686,7 +1686,7 @@ body.nav-open #ruler-readout{
       </div>
       <div class="wx-cell" id="hdr-tide-cell" style="display:none">
         <div class="wx-cell-label">Tide</div>
-        <div class="wx-cell-value" style="color:#93c5fd">
+        <div class="wx-cell-value" style="color:#93c5fd;white-space:nowrap">
           <span id="hdr-tide">—</span>
         </div>
       </div>
@@ -2226,18 +2226,18 @@ body.nav-open #ruler-readout{
 
     <!-- PREDICTIONS — the hero feature -->
     <div class="layers-section">PREDICTIONS</div>
-    <label class="layer-row" style="background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.12)">
+    <label class="layer-row" title="Color-coded bite forecast for your chosen Target Species (top bar). Green = decent → red = best. Tap any colored area for the why." style="background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.12)">
       <input type="checkbox" id="chk-predict" onchange="toggleLayer('predict')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:linear-gradient(135deg,#65a30d 0%,#eab308 35%,#f59e0b 65%,#dc2626 100%);width:18px;height:8px;border-radius:50%;box-shadow:0 0 6px rgba(220,38,38,.4)"></span>
-        <span>🎯 Predictive Heat Map</span>
+        <span>🎯 Bite Map</span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
 
     <!-- MAP MARKERS — reference geography, usually left on -->
     <div class="layers-section">MAP MARKERS</div>
-    <label class="layer-row" title="Canyons, wrecks, reefs, lumps and shoals near your port — the 15 closest productive structures. Great starting points that complement the heat map.">
+    <label class="layer-row" title="Canyons, wrecks, reefs, lumps and shoals near your port — the 15 closest productive structures. Great starting points that complement the Bite Map.">
       <input type="checkbox" id="chk-spots" checked onchange="toggleLayer('spots')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -4316,7 +4316,7 @@ const PREDICT_SPECIES_PREFS = {
   flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[5,80]],     breakPref:"stable"},
   blackseabass: {tempIdeal:[58,72], tempWorking:[52,76], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable"},
   tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable"},
-  tilefish:     {tempIdeal:[48,60], tempWorking:[42,64], chlorPref:"any",     depthBands:[[200,500]],  breakPref:"any"  },
+  tilefish:     {tempIdeal:[48,60], tempWorking:[42,64], chlorPref:"any",     depthBands:[[150,500]],  breakPref:"any", bottom:true },
   snapper:      {tempIdeal:[68,78], tempWorking:[62,82], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any"  },
   grouper:      {tempIdeal:[64,76], tempWorking:[58,80], chlorPref:"any",     depthBands:[[30,200]],   breakPref:"any"  },
   sheepshead:   {tempIdeal:[60,76], tempWorking:[55,82], chlorPref:"high",    depthBands:[[2,30]],     breakPref:"stable"},
@@ -4346,7 +4346,7 @@ const PREDICT_SPECIES_PREFS = {
   hogfish:      {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[10,40]],    breakPref:"any"  },
   muttonsnap:   {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any"  },
   // ── GULF COAST + DEEP REEF SPECIES ─────────────────────────────────
-  bluelinetile: {tempIdeal:[55,68], tempWorking:[50,72], chlorPref:"any",     depthBands:[[240,700]],  breakPref:"any"  },
+  bluelinetile: {tempIdeal:[55,68], tempWorking:[50,72], chlorPref:"any",     depthBands:[[120,700]],  breakPref:"any", bottom:true },
   gaggrouper:   {tempIdeal:[66,76], tempWorking:[60,82], chlorPref:"any",     depthBands:[[20,150]],   breakPref:"any"  },
   amberjack:    {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any"  },
   tripletail:   {tempIdeal:[72,84], tempWorking:[68,88], chlorPref:"any",     depthBands:[[5,40]],     breakPref:"any"  },
@@ -4659,6 +4659,31 @@ const REGIONAL_SEASONS = {
     {centerLat: 28.5, centerLng: -88.5, radiusNm: 200, label: "Gulf spawning",
      // Mississippi/Desoto Canyons, East Breaks — spring spawning Apr-Jun
      seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:1,Aug:0,Sep:0,Oct:0,Nov:0,Dec:1}},
+  ],
+
+  // ── BLACKFIN TUNA ────────────────────────────────────────────────────
+  // A WARM-WATER, Gulf-Stream species. Genuinely abundant only along the
+  // SE US (Cape Hatteras south) and through FL/Gulf, where the Stream runs
+  // close to the shelf. North of Hatteras they thin out fast and are a rare
+  // stray off VA/the Mid-Atlantic — and essentially never on the inner shelf.
+  // Regions below deliberately give NO coverage to the Chesapeake/VA Beach
+  // nearshore zone, so the season gate suppresses the inshore red bloom seen
+  // there. (A blackfin off VA Beach in July is not a real fishery.)
+  blackfin: [
+    {centerLat: 35.0, centerLng: -75.0, radiusNm: 70, label: "Outer Banks (Hatteras) edge",
+     // Reliable along the OBX Gulf-Stream edge, warm months best; tight radius
+     // keeps influence on the Hatteras Stream and OFF the VA inner shelf.
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 33.5, centerLng: -77.0, radiusNm: 160, label: "Carolinas Gulf Stream",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+    {centerLat: 30.5, centerLng: -80.0, radiusNm: 180, label: "GA/N. FL Stream",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 26.5, centerLng: -79.8, radiusNm: 170, label: "SE FL / Keys",
+     // Closest blue water on the coast — year-round, winter peak.
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Gulf of Mexico",
+     // Rigs/canyons — year-round resident, warm-season best.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
   ],
 
   // ── BLUEFISH ─────────────────────────────────────────────────────────
@@ -5849,21 +5874,46 @@ function scoreCell(lat, lng, speciesId){
   // past the working edge approaches 0 (lethal/uninhabitable). The cold
   // and warm sides decay independently because species often have very
   // different tolerances on each side (cold typically more lethal than warm).
+  //
+  // BOTTOM-DWELLER CORRECTION: deep demersal species (golden & blueline
+  // tilefish) live on the bottom in 150-700m where the water is cold and
+  // STABLE year-round — completely decoupled from the summer-warm surface.
+  // Scoring them on surface SST was zeroing them out everywhere in summer
+  // (78°F surface vs a 48-60°F preference), which is exactly why golden
+  // tilefish wasn't populating Norfolk Canyon or the Mid-Atlantic deep. For
+  // these species we estimate a BOTTOM temperature from depth and score on
+  // that instead of the surface skin. NOTE: this is a depth→temp APPROXIMATION
+  // for this region's slope water, not a measured value — replace with a real
+  // subsurface/bottom-temp feed (e.g. HYCOM/GLORYS reanalysis) when available.
+  //   ~100m ≈ 60°F, ~200m ≈ 54°F, ~350m ≈ 50°F, ~500m+ ≈ 47°F.
+  const _isBottom = !!prefs.bottom;
+  let tempForScore = sst;
+  if(_isBottom && depth != null && depth > 0){
+    // Piecewise-linear bottom-temp estimate (°F) from depth (m).
+    let bt;
+    if(depth <= 50)       bt = 68;
+    else if(depth <= 100) bt = 68 - (depth - 50) / 50 * 8;     // 68→60
+    else if(depth <= 200) bt = 60 - (depth - 100) / 100 * 6;   // 60→54
+    else if(depth <= 350) bt = 54 - (depth - 200) / 150 * 4;   // 54→50
+    else if(depth <= 600) bt = 50 - (depth - 350) / 250 * 3;   // 50→47
+    else                  bt = 47;
+    tempForScore = bt;
+  }
   let tempScore = 0;
-  if(sst != null && sst >= prefs.tempIdeal[0] && sst <= prefs.tempIdeal[1]){
+  if(tempForScore != null && tempForScore >= prefs.tempIdeal[0] && tempForScore <= prefs.tempIdeal[1]){
     tempScore = 1.0;
-  } else if(sst != null && sst < prefs.tempIdeal[0]){
+  } else if(tempForScore != null && tempForScore < prefs.tempIdeal[0]){
     // COLD side — falloff from ideal_min down to working_min and beyond.
     // Sigma chosen so that score ≈ 0.05 exactly at the working edge.
     const buffer = Math.max(0.5, prefs.tempIdeal[0] - prefs.tempWorking[0]);
     const sigma = buffer / 2.355;  // 2.355σ ≈ score 0.05
-    const delta = prefs.tempIdeal[0] - sst;
+    const delta = prefs.tempIdeal[0] - tempForScore;
     tempScore = Math.exp(-(delta * delta) / (2 * sigma * sigma));
-  } else if(sst != null) {
+  } else if(tempForScore != null) {
     // WARM side — falloff from ideal_max up to working_max and beyond.
     const buffer = Math.max(0.5, prefs.tempWorking[1] - prefs.tempIdeal[1]);
     const sigma = buffer / 2.355;
-    const delta = sst - prefs.tempIdeal[1];
+    const delta = tempForScore - prefs.tempIdeal[1];
     tempScore = Math.exp(-(delta * delta) / (2 * sigma * sigma));
   }
   // Floor at 0 (Math.exp is always > 0 but small values are effectively zero;
@@ -5877,7 +5927,9 @@ function scoreCell(lat, lng, speciesId){
   // lethal working edge — warm water is GOOD, the fish just go deeper — and
   // (b) add a warm-side bias so the bite concentrates toward the warmest fishable
   // SST (the Stream edge, e.g. The Point) rather than the cool inshore side.
-  if(speciesCat === "offshore" && sst != null){
+  // Bottom-dwellers (tilefish) are scored on bottom temp above and have NO
+  // relationship to the warm surface skin, so they are excluded here.
+  if(speciesCat === "offshore" && !_isBottom && sst != null){
     const warmEdge = prefs.tempWorking[1];
     if(sst >= prefs.tempIdeal[1]){
       // Warm side: full credit through the ideal/working band; only fall off once
@@ -5964,6 +6016,7 @@ function scoreCell(lat, lng, speciesId){
   //   Species with neither override get their unshifted default curve.
   let seasonScore = 0.5;
   let _seasonGateActive = false;   // only gate when a real seasonal curve exists
+  let _seasonOutOfRange = false;   // species has a regional map but cell is outside it
   if(typeof ENC_SPECIES !== "undefined"){
     const spEnc = ENC_SPECIES.find(s => s.id === speciesId);
     if(spEnc && spEnc.seasons){
@@ -5974,9 +6027,26 @@ function scoreCell(lat, lng, speciesId){
       const calMonth = now.getMonth() + dayOfMonth / daysInMonth;
 
       // ── Path A: regional seasons (if defined and cell is near a region) ──
+      const hasRegionalTable = (typeof REGIONAL_SEASONS !== "undefined")
+        && Array.isArray(REGIONAL_SEASONS[speciesId])
+        && REGIONAL_SEASONS[speciesId].length > 0;
       const regionalCurve = (typeof getRegionalSeasons === "function")
         ? getRegionalSeasons(speciesId, lat, lng) : null;
-      const curve = regionalCurve || spEnc.seasons;
+
+      // OUT-OF-RANGE GUARD: if a species HAS a regional fishery map but this
+      // cell sits outside every one of its regions, the fish isn't part of any
+      // known fishery here — that's a strong "not present" signal, NOT a reason
+      // to fall back to the generic peak curve. Falling back was the bug behind
+      // blackfin lighting up red off VA Beach: blackfin's real range is Hatteras
+      // south, VA Beach is outside all its regions, yet the generic Jul:3 curve
+      // made it look like peak season. We instead score it near-zero so the
+      // season gate suppresses it everywhere out of range.
+      if(hasRegionalTable && !regionalCurve){
+        seasonScore = 0.04;          // effectively out of range
+        _seasonGateActive = true;
+        _seasonOutOfRange = true;
+      } else {
+        const curve = regionalCurve || spEnc.seasons;
 
       // ── Path B: apply latitude shift ONLY when using the default curve ──
       let monthIdx = calMonth;
@@ -5996,6 +6066,7 @@ function scoreCell(lat, lng, speciesId){
       const v = v0 * (1 - frac) + v1 * frac;
       seasonScore = v / 3;
       _seasonGateActive = true;   // a real curve drove seasonScore — gate it
+      }
     }
   }
 
@@ -6122,6 +6193,33 @@ function scoreCell(lat, lng, speciesId){
   const depthGate = 0.22 + 0.78 * Math.pow(depthScore, 0.65);
   finalScore = finalScore * depthGate;
 
+  // ── BLUE-WATER GATE (offshore pelagics only) ───────────────────────────────
+  // GENERAL FIX for the "tuna lit up against the beach" glitch. True offshore
+  // pelagics (tuna, billfish, wahoo, mahi) live on the SHELF EDGE and the warm
+  // Gulf-Stream blue water beyond it — not on the inner shelf, even when the
+  // inner-shelf temperature happens to be tolerable. The depth gate alone wasn't
+  // enough: species like blackfin have a depth band starting at ~30m, which off
+  // VA Beach is reached only a few miles out, so warm July inner-shelf water
+  // scored red right up to shore.
+  //
+  // This gate requires genuine depth (a proxy for "you've reached the canyons /
+  // Stream") for offshore species. It does NOT touch inshore/nearshore species,
+  // and it intentionally EXEMPTS bluefin, which legitimately push onto the shelf
+  // in the cold months (their depth bands include 18-40m). It also exempts deep
+  // bottom-dwellers (tilefish), which live deep but aren't shelf-edge pelagics —
+  // their depth band requirement already places them correctly. Depth is meters.
+  const _bluewaterExempt = (speciesId === "bluefin") || !!prefs.bottom;
+  if(speciesCat === "offshore" && !_bluewaterExempt && depth != null && depth > 0){
+    // Ramp: <50m (inner shelf) heavily suppressed, ~50-180m (shelf edge)
+    // climbing, >180m (true blue water) full credit. Smooth so the heat map
+    // transitions cleanly from green inshore to red at the edge.
+    let bluewaterGate;
+    if(depth >= 180)      bluewaterGate = 1.0;
+    else if(depth >= 50)  bluewaterGate = 0.35 + 0.65 * ((depth - 50) / (180 - 50));
+    else                  bluewaterGate = 0.10 + 0.25 * (depth / 50);   // 0.10–0.35
+    finalScore = finalScore * bluewaterGate;
+  }
+
   // ── SEASON GATE ──
   // Seasonality, like temperature and depth, is DECISIVE, not a minor nudge.
   // As a plain weighted factor (W.season ≈ 0.04) a dead-wrong month only shaved
@@ -6184,11 +6282,15 @@ function scoreCell(lat, lng, speciesId){
   // Each adjustment also adds a one-line note to the "What's affecting
   // confidence" panel so the number is explainable.
 
-  // 1) OUT OF SEASON → HIGH confidence the bite is poor.
+  // 1) OUT OF SEASON / OUT OF RANGE → HIGH confidence the bite is poor.
   //    If the fish isn't in this region this month, that's one of the most
   //    reliable predictions we can make. We don't water it down — we RAISE
   //    confidence and say why. Strength scales with how far out of season it is.
-  if(_seasonGateActive && seasonScore < 0.2){
+  if(_seasonOutOfRange){
+    confidence = Math.max(confidence, 92);
+    freshnessAnnotations.push({ variable: "season",
+      message: "Outside this species' known range here — high confidence the bite is poor." });
+  } else if(_seasonGateActive && seasonScore < 0.2){
     confidence = Math.max(confidence, 90);
     freshnessAnnotations.push({ variable: "season",
       message: "Out of season here — high confidence the bite is poor this month." });
@@ -6239,10 +6341,20 @@ function scoreCell(lat, lng, speciesId){
   //    Tuna/marlin are temperature-locked; water well outside their tolerance is
   //    a near-disqualifier, so a low temp score on an offshore species is a
   //    high-confidence "no", not a maybe.
-  if(speciesCat === "offshore" && sst != null && tempScore < 0.25){
+  if(speciesCat === "offshore" && !_isBottom && sst != null && tempScore < 0.25){
     confidence = Math.max(confidence, 80);
     freshnessAnnotations.push({ variable: "temp",
       message: "Water is well outside this species' range — confidently poor." });
+  }
+
+  // 5) OFFSHORE PELAGIC IN SHALLOW SHELF WATER → confident it's poor.
+  //    Tuna/billfish hold at the shelf edge and beyond; inner-shelf water is the
+  //    wrong habitat regardless of temperature, so this is a high-confidence "no".
+  //    Excludes bluefin (shelf-feeders in season) and bottom-dwellers (tilefish).
+  if(speciesCat === "offshore" && !(speciesId === "bluefin") && !_isBottom && depth != null && depth > 0 && depth < 50){
+    confidence = Math.max(confidence, 82);
+    freshnessAnnotations.push({ variable: "depth",
+      message: "Too far inshore for an offshore species — the bite is at the shelf edge." });
   }
 
   confidence = Math.max(20, Math.min(95, Math.round(confidence)));
@@ -6258,7 +6370,7 @@ function scoreCell(lat, lng, speciesId){
   const wxLabel = "steady";
 
   const allFactors = [
-    {name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw:sst != null ? `${sst.toFixed(1)}°F` : "—"},
+    {name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: _isBottom ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
     {name:"Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
     {name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
     {name:"Chlorophyll edge",   weight:W.chlorophyll,   score:chlorScore,       raw:chlor != null ? `${chlor.toFixed(2)} mg/m³` : "—"},
@@ -12489,10 +12601,13 @@ function updateHeaderConditions(){
   updateHeaderTide();
 }
 
-// Tide for the header: shows the NEXT high and NEXT low tide, e.g.
-// "H 7:33 PM · L 1:18 AM". Uses the deployed ocean function to get the nearest
-// NOAA CO-OPS station id, then fetches that station's hi/lo predictions directly
-// (CO-OPS sends CORS *). Cached per-port for 15 min; degrades gracefully.
+// Tide for the header: shows the current STATE (Rising / Falling / Slack) plus
+// the next two tide events in CHRONOLOGICAL order, e.g.
+// "Falling · Low 1:37 AM → High 7:22 AM". This removes the old ambiguity where
+// the next high was always printed first even when a low came sooner. Uses the
+// deployed ocean function to get the nearest NOAA CO-OPS station id, then fetches
+// that station's hi/lo predictions directly (CO-OPS sends CORS *). Cached per-port
+// for 15 min; degrades gracefully.
 let _hdrTide = { key: "", text: "", atMs: 0 };
 async function updateHeaderTide(){
   const cell = document.getElementById("hdr-tide-cell");
@@ -12515,11 +12630,18 @@ async function updateHeaderTide(){
     if(station){
       const next = await fetchNextTideEvent(station);
       if(activePort !== portKey) return;
-      if(next){
-        const parts = [];
-        if(next.high) parts.push(`H ${next.high.timeTxt}`);
-        if(next.low)  parts.push(`L ${next.low.timeTxt}`);
-        if(parts.length) text = parts.join(" · ");
+      if(next && next.events && next.events.length){
+        // State prefix: Rising / Falling / Slack so it's instantly clear which
+        // way the water is moving right now.
+        const stateTxt = next.state === "rising"  ? "Rising"
+                       : next.state === "falling" ? "Falling"
+                       : next.state === "slack"   ? "Slack" : "";
+        // Next two events, in true chronological order (soonest first), each
+        // labeled High/Low so the sequence is unambiguous.
+        const seq = next.events.slice(0, 2)
+          .map(e => `${e.type === "H" ? "High" : "Low"} ${e.timeTxt}`)
+          .join(" → ");
+        text = stateTxt ? `${stateTxt} · ${seq}` : seq;
       }
     }
     el.textContent = text;
@@ -12529,14 +12651,23 @@ async function updateHeaderTide(){
   }
 }
 
-// Next HIGH and next LOW tide events after now for a CO-OPS station (hi/lo
-// predictions). Returns {high:{timeTxt}, low:{timeTxt}} — either may be null if
-// not found in the lookahead window.
+// Upcoming tide events for a CO-OPS station (hi/lo predictions), in
+// CHRONOLOGICAL order, plus the current tide STATE.
+//
+// Returns:
+//   { state: "rising" | "falling" | "slack" | null,
+//     events: [ { type: "H"|"L", timeTxt, atMs }, ... ] }  // soonest first
+//
+// State logic:
+//   • Next event is a High  → water is RISING toward it.
+//   • Next event is a Low    → water is FALLING toward it.
+//   • Within ~25 min of the previous OR next turn → SLACK (the tide is
+//     pausing at the top/bottom and barely moving).
 async function fetchNextTideEvent(station){
   const pad = (n)=>String(n).padStart(2,"0");
   const fmt = (d)=>`${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
   const now = Date.now();
-  const begin = new Date(now - 3600000), end = new Date(now + 48 * 3600000);
+  const begin = new Date(now - 6 * 3600000), end = new Date(now + 48 * 3600000);
   const url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
     + "?product=predictions&interval=hilo&datum=MLLW&units=english&time_zone=gmt&format=json&application=bluewaterintel"
     + `&station=${encodeURIComponent(station)}&begin_date=${encodeURIComponent(fmt(begin))}&end_date=${encodeURIComponent(fmt(end))}`;
@@ -12544,26 +12675,48 @@ async function fetchNextTideEvent(station){
   if(!r.ok) return null;
   const d = await r.json();
   const preds = (d && d.predictions) ? d.predictions : [];
-  let high = null, low = null;
+
+  // Parse all events to timestamps so we can split into past/future cleanly.
+  const all = [];
   for(const pr of preds){
-    const t = Date.parse(pr.t.replace(" ", "T") + "Z");  // CO-OPS gmt
-    if(!isFinite(t) || t <= now) continue;
-    const timeTxt = new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    if(pr.type === "H" && !high) high = { timeTxt };
-    else if(pr.type === "L" && !low) low = { timeTxt };
-    if(high && low) break;
+    const atMs = Date.parse(pr.t.replace(" ", "T") + "Z");  // CO-OPS gmt
+    if(!isFinite(atMs)) continue;
+    all.push({ type: pr.type, atMs });
   }
-  return { high, low };
+  all.sort((a, b) => a.atMs - b.atMs);
+
+  const future = all.filter(e => e.atMs > now);
+  const past   = all.filter(e => e.atMs <= now);
+  const prev   = past.length ? past[past.length - 1] : null;
+  const nextEv = future.length ? future[0] : null;
+
+  // Derive state.
+  let state = null;
+  if(nextEv){
+    state = nextEv.type === "H" ? "rising" : "falling";
+    const SLACK_MS = 25 * 60 * 1000;
+    const nearNext = (nextEv.atMs - now) <= SLACK_MS;
+    const nearPrev = prev ? (now - prev.atMs) <= SLACK_MS : false;
+    if(nearNext || nearPrev) state = "slack";
+  }
+
+  const events = future.slice(0, 4).map(e => ({
+    type: e.type,
+    atMs: e.atMs,
+    timeTxt: new Date(e.atMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+  }));
+
+  return { state, events };
 }
 
-// Turn the predictive heat map on once the user has picked both required inputs.
+// Turn the Bite Map on once the user has picked both required inputs.
 // The layer still stays off during the initial empty state, but selecting a home
 // port + target species should immediately show the fishing-spots heat map.
 function ensurePredictLayerOn(){
   if(!activePort || !activeSpId || activeSpId === "all") return;
   // Respect an explicit user opt-out — don't silently re-check the box.
   if(_predictUserOff) return;
-  // The predictive heat map is premium — don't auto-enable it for free accounts.
+  // The Bite Map is premium — don't auto-enable it for free accounts.
   if(!BW_PREMIUM) return;
   layerVis.predict = true;
   const chk = document.getElementById("chk-predict");
@@ -17600,14 +17753,14 @@ function ocRenderCharts(){
     <div class="tut-step">
       <div class="tut-step-num">3</div>
       <div class="tut-step-body">
-        <div class="tut-step-title">Read the heat map</div>
+        <div class="tut-step-title">Read the Bite Map</div>
         <div class="tut-step-desc">Colored areas show where your target species is most likely to be biting <em>right now</em>. The scale goes from green (decent) → yellow → orange → red (best). Tap any colored area for a breakdown of why that spot scored well — and tap the 🔊 button in that breakdown to have it read aloud.</div>
-        <div class="tut-step-desc" style="margin-top:10px">Use the <b>Forecast Time slider</b> at the bottom of the map to scrub the prediction forward — Now, +12h, +24h, +48h, or +72h. The heat map, conditions, and any open breakdown all update to that future moment, so you can plan which day and tide to run.</div>
+        <div class="tut-step-desc" style="margin-top:10px">Use the <b>Forecast Time slider</b> at the bottom of the map to scrub the prediction forward — Now, +12h, +24h, +48h, or +72h. The Bite Map, conditions, and any open breakdown all update to that future moment, so you can plan which day and tide to run.</div>
         <div class="tut-step-desc" style="margin-top:10px;background:rgba(107,191,234,.05);border:1px solid rgba(107,191,234,.15);border-radius:7px;padding:10px 12px">
           <b style="color:#f0f6ff">Two numbers, two meanings:</b><br>
           <span style="color:#dc2626;font-weight:700">Bite Score</span> = how favorable conditions are at that spot (the big colored number).<br>
-          <span style="color:#cfe5ff;font-weight:700">Confidence</span> = how many factors agree (the smaller number next to it).<br>
-          <span style="color:#a8c0d8;font-style:italic">A spot can have a high score with low confidence (one factor screaming hot, others quiet) or a moderate score with high confidence (everything modestly agreeing).</span>
+          <span style="color:#cfe5ff;font-weight:700">Confidence</span> = how sure the model is about that score — in <em>either</em> direction (the smaller number next to it).<br>
+          <span style="color:#a8c0d8;font-style:italic">Confidence rises when the major signals agree and falls when they conflict. It also climbs when we're confident a spot is <b>poor</b> — for example, a species that's out of season or out of its range here is a high-confidence "stay home," not a maybe. The "What's affecting confidence" panel in any breakdown explains what's driving the number.</span>
         </div>
       </div>
     </div>
@@ -17619,7 +17772,7 @@ function ocRenderCharts(){
         <div class="tut-step-title">Use the right-side icon column</div>
         <div class="tut-step-desc" style="line-height:1.7">
           <div style="margin:6px 0"><span class="tut-icon">🗺</span> <b>Base Map</b> — switch between Satellite, <b>Ocean Bathymetric</b>, or Street + SeaMarks. The Ocean Bathymetric basemap (Esri World Ocean Base, from GEBCO/NOAA/NGA) shows shaded depth relief and contours — the right basemap for depth reference.</div>
-          <div style="margin:6px 0"><span class="tut-icon">◆</span> <b>Layers</b> — iOS-style toggles grouped into Predictions, Map Markers, Ocean Data, and an Advanced section. Toggle the predictive heat map, <b>Major Fishing Areas</b> (canyons, wrecks, reefs, lumps and ledges — the 15 closest to your port), ports, your catches, satellite <b>SST &amp; Chlorophyll</b>, and the new animated <b>Wind</b> layer. Closures, Active Fishing Areas, and LORAN-C live under Advanced.</div>
+          <div style="margin:6px 0"><span class="tut-icon">◆</span> <b>Layers</b> — iOS-style toggles grouped into Predictions, Map Markers, Ocean Data, and an Advanced section. Toggle the <b>Bite Map</b> (the color-coded bite forecast for your target species), <b>Major Fishing Areas</b> (canyons, wrecks, reefs, lumps and ledges — the 15 closest to your port), ports, your catches, satellite <b>SST &amp; Chlorophyll</b>, and the new animated <b>Wind</b> layer. Closures, Active Fishing Areas, and LORAN-C live under Advanced.</div>
           <div style="margin:6px 0"><span class="tut-icon">📏</span> <b>Ruler</b> — tap to measure distance in nautical miles. Drop multiple points to plot a route.</div>
           <div style="margin:6px 0"><span class="tut-icon">⚙</span> <b>Settings</b> — set defaults like home port, species, base map, and account preferences.</div>
         </div>
@@ -17639,12 +17792,21 @@ function ocRenderCharts(){
     <div class="tut-section-header">New Features</div>
     <div class="tut-section-subhead">Recent additions worth knowing about.</div>
 
+    <!-- FEATURE: Plans & Subscription -->
+    <div class="tut-feature">
+      <div class="tut-feature-icon">⭐</div>
+      <div class="tut-feature-body">
+        <div class="tut-feature-title">Plans &amp; subscription</div>
+        <div class="tut-feature-desc">Bluewater Intel offers a free tier plus a paid <b>Subscription</b> that unlocks the full app — the Bite Map, ocean &amp; wind layers, forecasts, and more. Pick <b>monthly</b> or a discounted <b>annual</b> plan, and you can start with a <b>7-day free trial</b> (a card is required; you're billed only if you don't cancel before the trial ends). Checkout and billing are handled securely by <b>Stripe</b> — we never see or store your card number. Manage or cancel anytime from <b>Menu → your account → Manage billing</b>, which opens the Stripe customer portal. Subscriptions auto-renew until canceled; see <b>Menu → Legal &amp; Privacy</b> for the full subscription, payment, and refund terms.</div>
+      </div>
+    </div>
+
     <!-- FEATURE: Catch Logging -->
     <div class="tut-feature">
       <div class="tut-feature-icon">🎣</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Catch logging with auto-filled conditions</div>
-        <div class="tut-feature-desc">Open <b>Menu → My Catches</b> and tap <b>Log a Catch</b> to record one. Choose species, size, time, and location (map center or GPS). The app reads SST, moon phase, tide stage, pressure trend, and wind direction from the same data sources driving the heat map — so your catch record is internally consistent with what the algorithm showed. Optionally attach a photo and opt in to share the catch as an anonymous fishing report (which then feeds back into predictions). Once you've logged a handful, a <b>Your Patterns</b> panel mines your catches for the conditions that produce fish — best moon phase, tide, pressure trend, wind, water-temp band, and time of day — and can break it down per species.</div>
+        <div class="tut-feature-desc">Open <b>Menu → My Catches</b> and tap <b>Log a Catch</b> to record one. Choose species, size, time, and location (map center or GPS). The app reads SST, moon phase, tide stage, pressure trend, and wind direction from the same data sources driving the Bite Map — so your catch record is internally consistent with what the algorithm showed. Optionally attach a photo and opt in to share the catch as an anonymous fishing report (which then feeds back into predictions). Once you've logged a handful, a <b>Your Patterns</b> panel mines your catches for the conditions that produce fish — best moon phase, tide, pressure trend, wind, water-temp band, and time of day — and can break it down per species.</div>
       </div>
     </div>
 
@@ -17686,7 +17848,7 @@ function ocRenderCharts(){
 
     <!-- ──────────────────────────────────────────────────────────────── -->
     <div class="tut-section-header">What Data Drives the Predictions</div>
-    <div class="tut-section-subhead">The heat map combines all of these — none of them by itself.</div>
+    <div class="tut-section-subhead">The Bite Map combines all of these — none of them by itself.</div>
 
     <div class="tut-data">
       <div class="tut-data-icon">🌡</div>
@@ -17708,7 +17870,7 @@ function ocRenderCharts(){
       <div class="tut-data-icon">⬇</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Water depth (bathymetry)</div>
-        <div class="tut-data-desc">Depth determines what's possible — yellowfin won't be in 30 ft of water no matter how warm it is. Each species has preferred depth bands. Flexible species like bluefin have multiple bands (shallow shelf for NC fall blitz, deeper canyon water for summer giants, Gulf canyons for Apr-Jun spawners).</div>
+        <div class="tut-data-desc">Depth determines what's possible — yellowfin won't be in 30 ft of water no matter how warm it is. Each species has preferred depth bands. Flexible species like bluefin have multiple bands (shallow shelf for NC fall blitz, deeper canyon water for summer giants, Gulf canyons for Apr-Jun spawners). Offshore pelagics are also held to <b>blue water</b>: the map keeps tuna and billfish out on the shelf edge and beyond instead of lighting up the inner shelf just because the surface is warm. And deep <b>bottom species</b> like golden tilefish are scored on an estimated <b>bottom</b> temperature for their depth — not the warm surface — so they correctly show up over deep structure (e.g. Norfolk Canyon) year-round.</div>
       </div>
     </div>
 
@@ -17748,7 +17910,7 @@ function ocRenderCharts(){
       <div class="tut-data-icon">📅</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Seasonal patterns with regional shifts</div>
-        <div class="tut-data-desc">Every species has known seasonal patterns by region. Striped bass run south to NC in winter and back to MA in summer. Tuna show up in mid-Atlantic canyons starting in late spring. Tarpon migration runs Florida → Carolinas → Chesapeake on a known schedule. Latitude-shifted seasons account for the same species running 4-6 weeks later as you move north.</div>
+        <div class="tut-data-desc">Every species has known seasonal patterns by region. Striped bass run south to NC in winter and back to MA in summer. Tuna show up in mid-Atlantic canyons starting in late spring. Tarpon migration runs Florida → Carolinas → Chesapeake on a known schedule. Latitude-shifted seasons account for the same species running 4-6 weeks later as you move north. Crucially, season and range now act as a <b>gate</b>: if a species is out of season or simply outside its real range for your area (for example, blackfin tuna far north of their Gulf-Stream grounds), the map suppresses it and the breakdown flags it with high confidence — rather than lighting up spots where the fish wouldn't actually be.</div>
       </div>
     </div>
 
@@ -18023,7 +18185,7 @@ function ocRenderCharts(){
 
     <label class="rp-post-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
       <input id="rp-post-useloc" type="checkbox" style="width:15px;height:15px"/>
-      <span>Include approximate location (helps the heat map) — uses current map center</span>
+      <span>Include approximate location (helps the Bite Map) — uses current map center</span>
     </label>
     <div id="rp-post-loc-note" style="font-size:10px;color:#6bbfea;margin:-2px 0 8px">Your exact spot is never published — coordinates are rounded to ~6 nm.</div>
 
@@ -18255,7 +18417,7 @@ function renderCatchInsights(speciesFilter){
       ${chips ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">${chips}</div>`
               : `<div style="font-size:12px;color:#9ca3af;padding:4px 0">No strong patterns yet — your catches are spread evenly across conditions. Keep logging.</div>`}
       ${summaryBits.length ? `<div style="font-size:11px;color:#aab8c8;margin-top:10px;line-height:1.5">${summaryBits.join(" &nbsp;·&nbsp; ")}</div>` : ""}
-      <div style="font-size:9px;color:#667;margin-top:8px;font-style:italic">Patterns reflect your logged data only — more catches sharpen them. Conditions are from the same model driving the heat map.</div>
+      <div style="font-size:9px;color:#667;margin-top:8px;font-style:italic">Patterns reflect your logged data only — more catches sharpen them. Conditions are from the same model driving the Bite Map.</div>
     </div>`;
 }
 
@@ -18461,34 +18623,46 @@ const LEGAL_TERMS_HTML = `
   <div style="${_LEGAL_H}">8. Advertising &amp; Use of Data</div>
   <p style="${_LEGAL_P}">The Services may be supported by advertising, and we reserve the right to display advertising within them. We also reserve the right to generate, use, share, and sell <b>aggregated and de-identified information</b> derived from usage and from the data you provide — information combined and stripped so that it cannot reasonably be used to identify you — for any purpose, including analytics, research, and commercial data products. <b>We do not sell or share the personal information that identifies you</b>, and we will not publicly identify you. Our handling of your information is governed by our Privacy Policy, which controls in the event of any conflict on privacy matters.</p>
 
-  <div style="${_LEGAL_H}">9. Disclaimer of Warranties</div>
+  <div style="${_LEGAL_H}">9. Subscriptions, Payments &amp; Refunds</div>
+  <p style="${_LEGAL_P}">Some features of the Services are offered on a <b>paid subscription</b> basis. By starting a subscription you authorize us and our payment processor to charge the applicable fees and any taxes to your selected payment method, on a recurring basis, until you cancel.</p>
+  <p style="${_LEGAL_P}"><b>Payment processing.</b> Payments are processed by <b>Stripe, Inc.</b>, our third-party payment processor. By subscribing you also agree to Stripe's terms and authorize Stripe to store and charge your payment method. We do <b>not</b> collect or store your full payment-card number; that information is handled directly by Stripe under its own terms and privacy policy. You are responsible for providing accurate, current payment information and for keeping it up to date.</p>
+  <p style="${_LEGAL_P}"><b>Plans and pricing.</b> Current plans and prices are shown in the app at the point of purchase (for example, a monthly plan and a discounted annual plan). Prices are stated in U.S. dollars and exclude any applicable taxes, which may be added. We may change prices prospectively; any price change will not take effect until your next renewal after we provide notice, and your continued subscription after a price change takes effect constitutes acceptance of the new price.</p>
+  <p style="${_LEGAL_P}"><b>Free trial.</b> If we offer a free trial, you may be required to provide a valid payment method to start it. Unless you cancel before the trial ends, your subscription will automatically convert to a paid subscription and your payment method will be charged the then-current fee. The trial length and terms are shown at sign-up. Only one trial per customer unless we state otherwise; we may modify or withdraw trial offers at any time.</p>
+  <p style="${_LEGAL_P}"><b>Automatic renewal.</b> Subscriptions <b>renew automatically</b> at the end of each billing period (monthly or annually, as selected) at the then-current rate, and your payment method will be charged at the start of each new period, until you cancel. By subscribing you acknowledge and consent to this automatic, recurring billing.</p>
+  <p style="${_LEGAL_P}"><b>Cancellation.</b> You may cancel at any time through the billing/account management portal in the app (which opens our payment processor's customer portal) or by contacting us at info@bluewaterintel.com. When you cancel, your subscription remains active through the end of the current paid period and then does not renew; access to paid features ends when that period ends. Canceling stops future charges but does not, by itself, generate a refund of amounts already paid.</p>
+  <p style="${_LEGAL_P}"><b>Refunds.</b> Except where required by law, all charges are <b>non-refundable</b> and we do not provide refunds or credits for partial billing periods, unused time, or features you did not use. We may, in our sole discretion, offer a refund, discount, or credit in a particular case, which does not entitle you or anyone else to the same in any other case. If you purchased through a third-party app store, that store's refund policies and procedures may also apply.</p>
+  <p style="${_LEGAL_P}"><b>App-store purchases.</b> If you purchase a subscription through a third-party platform (such as the Apple App Store or Google Play), the purchase, billing, renewal, and cancellation are also subject to that platform's terms, and you must manage or cancel the subscription through that platform's account settings. The platform — not the Company — handles those payments.</p>
+  <p style="${_LEGAL_P}"><b>Failed payments.</b> If a charge is declined or a payment method fails, we (through our processor) may retry the charge and may suspend or downgrade your access to paid features until payment is successfully made. You remain responsible for any amounts owed.</p>
+  <p style="${_LEGAL_P}"><b>Chargebacks.</b> If you initiate a chargeback or payment dispute, we may suspend or terminate your access pending resolution. Please contact us first so we can try to resolve any billing concern.</p>
+
+  <div style="${_LEGAL_H}">10. Disclaimer of Warranties</div>
   <p style="${_LEGAL_P}">THE SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY, AND NON-INFRINGEMENT. We do not warrant that the Services will be accurate, reliable, uninterrupted, error-free, or secure, that defects will be corrected, or that any data (including weather, sea-surface temperature, chlorophyll, depth, waypoint, or location information) is accurate, complete, or current. Any reliance you place on the Services is strictly at your own risk. This does not affect any warranties that cannot be excluded or limited under applicable law.</p>
 
-  <div style="${_LEGAL_H}">10. Limitation of Liability</div>
+  <div style="${_LEGAL_H}">11. Limitation of Liability</div>
   <p style="${_LEGAL_P}">TO THE FULLEST EXTENT PERMITTED BY LAW, the Company and its owners, members, employees, licensors, suppliers, and partners will not be liable for any injury, death, property damage, or loss, or for any indirect, incidental, consequential, special, exemplary, or punitive damages, arising out of or relating to your access to or use of (or inability to use) the Services, including any reliance on any prediction, waypoint, data, or content, even if advised of the possibility of such damages. To the extent any liability cannot be excluded, our total aggregate liability will not exceed one hundred U.S. dollars ($100) or the amount you paid us, if any, for the Services in the twelve months before the claim, whichever is greater. Your sole and exclusive remedy for dissatisfaction with the Services is to stop using them.</p>
 
-  <div style="${_LEGAL_H}">11. Assumption of Risk</div>
+  <div style="${_LEGAL_H}">12. Assumption of Risk</div>
   <p style="${_LEGAL_P}">Boating and offshore fishing are inherently hazardous. By using the Services you acknowledge these risks and agree that you participate at your own risk and are solely responsible for your own decisions on the water.</p>
 
-  <div style="${_LEGAL_H}">12. Indemnification</div>
+  <div style="${_LEGAL_H}">13. Indemnification</div>
   <p style="${_LEGAL_P}">You agree to defend, indemnify, and hold harmless the Company and its owners, members, employees, licensors, suppliers, and agents from and against any claims, liabilities, damages, judgments, losses, costs, or expenses (including reasonable attorneys' fees) arising out of or relating to your use of the Services, your violation of these Terms, or your violation of any law or the rights of any third party.</p>
 
-  <div style="${_LEGAL_H}">13. Governing Law &amp; Jurisdiction</div>
+  <div style="${_LEGAL_H}">14. Governing Law &amp; Jurisdiction</div>
   <p style="${_LEGAL_P}">These Terms and any dispute arising out of or relating to them or the Services are governed by the laws of the Commonwealth of Virginia, without regard to its conflict-of-law rules. Any suit, action, or proceeding shall be brought exclusively in the state or federal courts located in Virginia, and you consent to the personal jurisdiction and venue of those courts.</p>
 
-  <div style="${_LEGAL_H}">14. Limitation on Time to File Claims</div>
+  <div style="${_LEGAL_H}">15. Limitation on Time to File Claims</div>
   <p style="${_LEGAL_P}">ANY CLAIM ARISING OUT OF OR RELATING TO THESE TERMS OR THE SERVICES MUST BE COMMENCED WITHIN ONE (1) YEAR AFTER THE CAUSE OF ACTION ACCRUES; OTHERWISE IT IS PERMANENTLY BARRED.</p>
 
-  <div style="${_LEGAL_H}">15. Changes to the Services &amp; Terms</div>
+  <div style="${_LEGAL_H}">16. Changes to the Services &amp; Terms</div>
   <p style="${_LEGAL_P}">We may modify, suspend, or discontinue all or part of the Services at any time without notice, and we will not be liable if the Services are unavailable. We may revise these Terms from time to time; changes are effective when posted. Your continued use of the Services after changes are posted means you accept the revised Terms.</p>
 
-  <div style="${_LEGAL_H}">16. Waiver &amp; Severability</div>
+  <div style="${_LEGAL_H}">17. Waiver &amp; Severability</div>
   <p style="${_LEGAL_P}">Our failure to enforce any provision is not a waiver of it. If any provision is held invalid or unenforceable, it will be limited or eliminated to the minimum extent necessary, and the remaining provisions will remain in full force and effect.</p>
 
-  <div style="${_LEGAL_H}">17. Entire Agreement</div>
+  <div style="${_LEGAL_H}">18. Entire Agreement</div>
   <p style="${_LEGAL_P}">These Terms and our Privacy Policy constitute the entire agreement between you and the Company regarding the Services and supersede all prior understandings.</p>
 
-  <div style="${_LEGAL_H}">18. Contact</div>
+  <div style="${_LEGAL_H}">19. Contact</div>
   <p style="${_LEGAL_P}">Questions about these Terms: info@bluewaterintel.com.</p>
 
   <p style="margin:16px 0 0;font-size:13px;color:#7a9ec0;font-style:italic">${_LEGAL_EFFECTIVE}</p>
@@ -18513,19 +18687,19 @@ const LEGAL_PRIVACY_HTML = `
   <p style="${_LEGAL_P}"><b>Location:</b> if you grant permission, approximate or precise device location, used on your device to show relevant conditions and predictions for your area. <b>Your location is never shared with anyone</b> and is not sold or included in aggregated data. You can decline or revoke this in your device settings.</p>
   <p style="${_LEGAL_P}"><b>Information collected automatically:</b> basic technical and usage information needed to operate and improve the Services and fix problems — for example, device and app version, general usage patterns, and, on the website, standard log data such as IP address and browser type. Where any of this is associated with you, we treat it as personal information under this policy.</p>
   <p style="${_LEGAL_P}"><b>App diagnostics &amp; performance data:</b> to keep the app reliable, we collect diagnostic, error/crash, and performance information — for example, app events (such as opening a screen or toggling a layer), error and crash reports, and performance metrics. This data is used <b>solely</b> to diagnose problems, fix bugs, and improve the app's performance and stability. It does not include your GPS location, saved spots, names, or email. Because this information is necessary to operate and maintain the Services, its collection is a required part of using the app and is <b>not optional</b>; if you do not wish for it to be collected, please do not use the Services. We continue to apply data-minimization and de-identification practices to this data.</p>
-  <p style="${_LEGAL_P}"><b>Account and payment information (future):</b> if and when we offer accounts or paid subscriptions, we will collect the information needed to provide them. Any payment-card details would be handled by a third-party payment processor under its own privacy policy; we would not collect or store full payment-card numbers ourselves. This policy will be updated before any such feature launches.</p>
+  <p style="${_LEGAL_P}"><b>Account and payment information:</b> when you create an account or purchase a paid subscription, we collect the information needed to provide it, such as your email address and subscription status. <b>Payments are processed by Stripe, Inc.</b>, our third-party payment processor, under Stripe's own privacy policy. Stripe collects and processes your payment-card and billing details directly; <b>we do not collect or store your full payment-card number</b>. We receive limited billing information from Stripe — such as your subscription plan, status, and the result of a charge — to manage your account and access. We do not use your payment information for advertising.</p>
 
   <div style="${_LEGAL_H}">3. Cookies &amp; Similar Technologies</div>
   <p style="${_LEGAL_P}">On the website we may use cookies or similar technologies to keep you signed in, remember your preferences, understand general usage, and support advertising. Where we serve ads, we expect to favor <b>contextual</b> ads (based on the content you're viewing) rather than ads targeted using your personal profile; if we ever use targeted advertising that involves sharing personal information with an ad network, we will provide the disclosures and opt-out choices required by law. You can set your browser to refuse some or all cookies, though parts of the website may then not function properly.</p>
 
   <div style="${_LEGAL_H}">4. How We Use Your Information</div>
-  <p style="${_LEGAL_P}">We use the information we collect to: provide and display the Services and generate predictions and conditions for your area; save your catches, waypoints, and settings; respond to your requests and support messages; operate, secure, maintain, and improve the Services, including diagnosing problems, fixing bugs, and monitoring and improving app performance and stability using the diagnostic, error, and performance data described in Section 2; show advertising within the Services; and comply with our legal obligations.</p>
+  <p style="${_LEGAL_P}">We use the information we collect to: provide and display the Services and generate predictions and conditions for your area; save your catches, waypoints, and settings; create and manage your account; process payments and manage your subscription, trial, billing, and renewals through our payment processor; respond to your requests and support messages; operate, secure, maintain, and improve the Services, including diagnosing problems, fixing bugs, and monitoring and improving app performance and stability using the diagnostic, error, and performance data described in Section 2; show advertising within the Services; and comply with our legal obligations.</p>
   <p style="${_LEGAL_P}">We may create <b>aggregated or de-identified information</b> from usage and the data you provide — combining and stripping it so it no longer identifies you — and use, share, or sell that aggregated information for any purpose, including analytics, research, and commercial products (for example, regional fishing-activity trends). We do not re-identify it, and we contractually require recipients not to attempt to re-identify it. We never use your personal information to publicly identify you.</p>
 
   <div style="${_LEGAL_H}">5. How We Share Information</div>
   <p style="${_LEGAL_P}"><b>We do not sell or share the personal information that identifies you.</b> We may share or sell only <b>aggregated or de-identified</b> information as described in Section 4. We disclose personal information only in these limited situations:</p>
   <p style="${_LEGAL_P}"><b>Advertising partners:</b> if we show ads, advertising providers may collect limited technical data (such as device or cookie identifiers) to deliver or measure ads. We do not give them the personal details that identify you, and where any such sharing would qualify as a "sale" or "sharing" under applicable law, we will provide the required opt-out.</p>
-  <p style="${_LEGAL_P}"><b>Service providers:</b> with vendors who perform services for us (such as hosting or, in the future, payment processing), under obligations to protect the information and use it only to provide those services to us.</p>
+  <p style="${_LEGAL_P}"><b>Service providers:</b> with vendors who perform services for us (such as hosting and payment processing — for example, Stripe, which processes subscription payments), under obligations to protect the information and use it only to provide those services to us.</p>
   <p style="${_LEGAL_P}"><b>Legal and safety:</b> to comply with a law, court order, or government or regulatory request; to enforce our Terms of Use or other agreements; or where we believe it is necessary to protect the rights, property, or safety of the Company, our users, or others.</p>
   <p style="${_LEGAL_P}"><b>Business transfer:</b> if the Company is involved in a merger, acquisition, financing, reorganization, or sale of assets, your information may be transferred as part of that transaction. We would seek to ensure it remains subject to protections consistent with this policy.</p>
 
