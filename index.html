@@ -8186,15 +8186,35 @@ const WindParticleLayer = L.Layer.extend({
     map.getPanes().overlayPane.appendChild(this._canvas);
     map.on('moveend zoomend viewreset resize', this._reset, this);
     map.on('movestart zoomstart', this._pause, this);
+    // Keep the shade pinned to geography DURING a pan drag (not just at the end),
+    // so the wind field moves with the map like Windy instead of appearing glued
+    // to the screen until release. Throttled to one repaint per animation frame;
+    // skipped during zoom animation (zoomend → _reset handles that).
+    map.on('move', this._onMove, this);
     this._reset();
   },
   onRemove: function(map){
     this._dataReq++;
     this._stop();
+    if(this._moveRAF){ cancelAnimationFrame(this._moveRAF); this._moveRAF = null; }
     if(this._shadeCanvas && this._shadeCanvas.parentNode) this._shadeCanvas.parentNode.removeChild(this._shadeCanvas);
     if(this._canvas && this._canvas.parentNode) this._canvas.parentNode.removeChild(this._canvas);
     map.off('moveend zoomend viewreset resize', this._reset, this);
     map.off('movestart zoomstart', this._pause, this);
+    map.off('move', this._onMove, this);
+  },
+  _onMove: function(){
+    if(!this._map || !this._shadeCanvas) return;
+    if(this._map._animatingZoom) return;          // zoom is handled at zoomend
+    if(this._moveRAF) return;
+    this._moveRAF = requestAnimationFrame(() => {
+      this._moveRAF = null;
+      if(!this._map) return;
+      const topLeft = this._map.containerPointToLayerPoint([0, 0]);
+      L.DomUtil.setPosition(this._shadeCanvas, topLeft);
+      L.DomUtil.setPosition(this._canvas, topLeft);
+      this._drawShade();                           // cheap bilinear repaint for the live view
+    });
   },
   _pause: function(){ this._stop(); if(this._canvas){ this._canvas.getContext('2d').clearRect(0,0,this._canvas.width,this._canvas.height);} },
   _reset: function(){
