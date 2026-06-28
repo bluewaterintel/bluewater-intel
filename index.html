@@ -2964,15 +2964,15 @@ const CANYONS=[
   {name:"Smith Point", type:"reef", color:"#16a34a", lat:37.88, lng:-76.18,
    desc:"Mouth of the Potomac where it meets the Chesapeake. Summer cobia and red drum on the shoals, big striped bass, croaker and spot. Strong tide rips concentrate bait.",
    fish:["cobia","striper","redfish","flounder"]},
-  {name:"Latimer Shoal", type:"lump", color:"#16a34a", lat:37.05, lng:-76.00,
-   desc:"Lower-bay shoal NE of the CBBT. Classic summer cobia and red drum structure; striped bass and flounder work the edges where it drops into the channel.",
-   fish:["cobia","redfish","striper","flounder"]},
-  {name:"Nine Foot Shoal", type:"lump", color:"#16a34a", lat:37.12, lng:-75.98,
-   desc:"Shallow shoal off Cape Charles guarding the bay-mouth channels. Cobia and red drum cruise the rim in summer; flounder and sea bass on the slopes.",
-   fish:["cobia","redfish","flounder","blackseabass"]},
+  {name:"Latimer Shoal", type:"lump", color:"#16a34a", lat:37.13181, lng:-75.99854,
+   desc:"Lower-bay shoal off Cape Charles guarding the bay-mouth channels. Classic summer cobia and red drum structure; striped bass, flounder and sea bass work the edges where it drops into the channel.",
+   fish:["cobia","redfish","striper","flounder","blackseabass"]},
   {name:"Windmill Point", type:"lump", color:"#16a34a", lat:37.61, lng:-76.27,
    desc:"Mid-bay shoal at the mouth of the Rappahannock. Summer cobia, big red drum and striped bass stack on the bar where the river current meets the bay.",
    fish:["cobia","redfish","striper","flounder"]},
+  {name:"Northern Neck Reef", type:"reef", color:"#16a34a", lat:37.80115, lng:-76.15488,
+   desc:"Artificial reef off Virginia's Northern Neck, near the mouth of the Potomac. Holds striped bass, cobia, red drum, flounder, black sea bass and spadefish through the warm months — work the structure edges on a moving tide.",
+   fish:["striper","cobia","redfish","flounder","blackseabass"]},
   {name:"The Cigar", type:"lump", color:"#0ea5a5", lat:36.6333, lng:-74.9167,
    desc:"36°38.00N 74°55.0W — elongated lump on the 30-fathom line off VA. Yellowfin, bluefin, dolphin stage here in season.",
    fish:["yellowfin","bluefin","mahi"]},
@@ -10080,57 +10080,41 @@ function loadMapView(){
   } catch(e){}
   return null;
 }
+// Re-assert the saved center/zoom REPEATEDLY for a short window after returning
+// to the app. Browsers fire several resize/layout passes when a tab or window is
+// restored (mobile address bar, minimize/restore, app switch), and ANY one of
+// them can make Leaflet re-measure and snap to a different zoom. A single
+// re-pin fired too early gets undone by a later pass — so we re-pin a few times
+// across ~600ms to keep the view frozen exactly where the user left it. Each
+// re-pin also re-saves the (correct) view, so the stored value can't drift.
+function restoreMapView(){
+  if(typeof MAP === "undefined" || !MAP) return;
+  const v = loadMapView();
+  if(!v) return;
+  const apply = () => {
+    try { MAP.invalidateSize({animate:false}); MAP.setView([v.lat, v.lng], v.zoom, {animate:false}); } catch(e){}
+  };
+  apply();
+  [100, 300, 600].forEach(ms => setTimeout(apply, ms));
+}
 function startMapViewPersistence(){
   if(typeof MAP === "undefined" || !MAP) return;
   // Save whenever the user finishes panning or zooming.
   MAP.on("moveend zoomend", saveMapView);
-  // Save when the tab is hidden or the page is being unloaded, so a
-  // background/return cycle restores the exact last view.
+  // Save when hidden/unloading; freeze the view back when returning.
   document.addEventListener("visibilitychange", () => {
-    if(document.visibilityState === "hidden"){
-      saveMapView();
-    } else {
-      // Returning to the tab. Some mobile browsers resize/reflow the map
-      // container while it was backgrounded, which can make Leaflet re-render
-      // at the wrong zoom. Fix the size WITHOUT changing the view, then
-      // re-assert the saved center/zoom on the next frame as a safety net so
-      // we never snap back to a default zoom.
-      try { MAP.invalidateSize({animate:false}); } catch(e){}
-      const v = loadMapView();
-      if(v){
-        requestAnimationFrame(() => {
-          try { MAP.setView([v.lat, v.lng], v.zoom, {animate:false}); } catch(e){}
-        });
-      }
-    }
+    if(document.visibilityState === "hidden") saveMapView();
+    else restoreMapView();
   });
-  window.addEventListener("pageshow", () => {
-    // Fired when returning via bfcache (no full reload). Re-assert saved view.
-    const v = loadMapView();
-    if(v){ try { MAP.invalidateSize({animate:false}); MAP.setView([v.lat, v.lng], v.zoom, {animate:false}); } catch(e){} }
-  });
+  window.addEventListener("pageshow", restoreMapView);   // bfcache return
   window.addEventListener("pagehide", saveMapView);
-
-  // Chrome (desktop) does NOT fire `visibilitychange` when you merely MINIMIZE
-  // and then restore the window — only on real tab switches. When the window is
-  // minimized the map container can drop to zero size; on restore Leaflet
-  // re-measures and can snap the view back to a default zoom. To prevent that,
-  // re-assert the exact saved center/zoom whenever the window regains focus or
-  // is resized. We fix the container size first, WITHOUT animating, then pin the
-  // saved view on the next frame.
+  // Chrome (desktop) doesn't fire visibilitychange on minimize/restore — cover
+  // it with focus + resize too.
+  window.addEventListener("focus", restoreMapView);
   let _reassertTimer = null;
-  function reassertSavedView(){
-    const v = loadMapView();
-    if(!v) return;
-    try { MAP.invalidateSize({animate:false}); } catch(e){}
-    requestAnimationFrame(() => {
-      try { MAP.setView([v.lat, v.lng], v.zoom, {animate:false}); } catch(e){}
-    });
-  }
-  window.addEventListener("focus", reassertSavedView);
   window.addEventListener("resize", () => {
     clearTimeout(_reassertTimer);
-    _reassertTimer = setTimeout(reassertSavedView, 120);
+    _reassertTimer = setTimeout(restoreMapView, 120);
   });
 }
 // ════════════════════════════════════════════════════════════════════════════
@@ -12545,7 +12529,7 @@ function selectSp(id){
 const PORT_GROUPS = [
   {label:"New England", ports:["Stonington, ME","Jonesport, ME","Portland, ME","Kennebunkport, ME","Portsmouth, NH","Gloucester, MA","Boston, MA","Cape Cod, MA","Point Judith, RI"]},
   {label:"Mid-Atlantic", ports:["Long Beach, NY","Freeport, NY","Montauk, NY","Toms River, NJ","Atlantic City, NJ","Cape May, NJ","Ocean City, MD","Chincoteague, VA","Virginia Beach, VA"]},
-  {label:"Chesapeake & Delaware Bay", ports:["Cape Charles, VA","Reedville, VA","Solomons, MD","Colonial Beach, VA","Annapolis, MD","Baltimore, MD","Delaware City, DE"]},
+  {label:"Chesapeake & Delaware Bay", ports:["Cape Charles, VA","Reedville, VA","Coles Point, VA","Solomons, MD","Colonial Beach, VA","Annapolis, MD","Baltimore, MD","Delaware City, DE"]},
   {label:"Carolinas", ports:["Oregon Inlet, NC","Hatteras, NC","Morehead City, NC","Oak Island, NC","Myrtle Beach, SC","Murrells Inlet, SC","Charleston, SC"]},
   {label:"South Atlantic", ports:["Savannah, GA","Brunswick, GA","St. Augustine, FL","Jacksonville, FL","Daytona Beach, FL","Port Canaveral, FL","Melbourne, FL","Vero Beach, FL"]},
   {label:"Florida East Coast", ports:["Stuart, FL","Palm Beach, FL","Fort Lauderdale, FL","Miami, FL"]},
@@ -15628,6 +15612,16 @@ function cmClearLog(){
 //   bestSeason: spring | summer | fall | winter | any (array)
 //
 const TB_TACKLE = [
+  // ── PELAGIC SPREAD — skirted trolling lures (work across marlin & tuna) ──
+  {id:"pelagic-ilander-seawitch",name:"Ilander / Sea Witch + Ballyhoo",icon:"🎏",cat:"Trolling Bait",
+   species:["bluemarlin","whitemarlin","sailfish","yellowfin","bigeye","bluefin","wahoo","mahi"],technique:["trolling"],
+   priority:{bluemarlin:1,whitemarlin:1,yellowfin:1,bigeye:1,bluefin:2,sailfish:2,wahoo:2,mahi:2},
+   waterClarity:["clear","green"],light:["bright","overcast","lowlight"],
+   speed:[6,9],sizeIn:9,
+   colors:["Blue/White","Pink/White","Black/Purple","Green/Yellow","Mean Joe Green"],
+   bestTemp:[68,84],bestSeason:["spring","summer","fall"],
+   tip:"The classic skirted trolling lure — an Ilander (or Sea Witch) pinned over a rigged ballyhoo. The skirt adds color, smoke and durability while the ballyhoo gives natural scent and profile, making it a do-everything offshore bait for marlin and tuna alike. Run on the short/long riggers and flat lines, 6-9 kt; blue/white and pink/white are the everyday workhorses, black/purple for low light."},
+
   // ── BLUE MARLIN ─────────────────────────────────────────────────────────
   {id:"bm-blackbart-rumcay",name:"Black Bart Rum Cay Candy",icon:"🪝",cat:"Trolling Lure",
    species:["bluemarlin"],technique:["trolling"],
