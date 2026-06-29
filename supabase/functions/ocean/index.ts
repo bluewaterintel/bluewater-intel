@@ -328,6 +328,74 @@ async function fetchBuoy(lat: number, lng: number) {
   };
 }
 
+// ── Distance- & freshness-weighted SST blend (grid base + buoy correction) ───
+// GOVERNING PRINCIPLE (unchanged): real data or an honest absence — never
+// synthetic. The high-res gridded SST (MUR) is the spatially-complete BASE; a
+// nearby NDBC buoy CORRECTS it, with influence that falls off as the buoy gets
+// farther (≈0 by 50 nm) or staler. Near dense buoys (New England / Gulf shelf)
+// the buoy dominates; in sparse, high-gradient water (Mid-Atlantic Gulf Stream
+// wall, Loop Current eddies) the high-res grid carries the cell — no hard region
+// switch. If neither side has a value, the result is { null, null }.
+const SST_BUOY_MAX_NM = Number(Deno.env.get("SST_BUOY_MAX_NM") ?? "60");
+type SstSrc = { value: number | null; observedAtMs: number | null };
+type BuoySst = { value: number; observedAtMs: number | null; distNm: number };
+type BuoyTemp = { lat: number; lng: number; value: number; observedAtMs: number | null };
+
+export function blendSst(grid: SstSrc | null, buoy: BuoySst | null): SstSrc {
+  const now = Date.now();
+  const ageH = (ms: number | null) => (ms != null ? Math.max(0, (now - ms) / 3600000) : null);
+  const gridOk = !!(grid && grid.value != null);
+  const buoyOk = !!(buoy && buoy.value != null && buoy.distNm <= SST_BUOY_MAX_NM);
+  // (a) BOTH present → distance/freshness blend.
+  if (gridOk && buoyOk) {
+    const g = grid as SstSrc, b = buoy as BuoySst;
+    let wDist = clamp(1 - b.distNm / 50, 0, 1); // 2nm→0.96, 20nm→0.60, 50nm→0
+    wDist = wDist * wDist;                       // soften: 2nm→~0.92, 20nm→~0.36, 50nm→0
+    const buoyFresh = clamp(1 - (ageH(b.observedAtMs) ?? 0) / 24, 0.1, 1); // buoy decays over 24h
+    const gridFresh = clamp(1 - (ageH(g.observedAtMs) ?? 0) / 48, 0.1, 1); // grid decays over 48h
+    let wBuoy = wDist * buoyFresh;
+    wBuoy = wBuoy / (wBuoy + gridFresh);         // normalize against grid freshness
+    const value = Math.round((wBuoy * b.value + (1 - wBuoy) * (g.value as number)) * 10) / 10;
+    // Age reflects the blend: weight-average the contributing observation times.
+    const observedAtMs = (b.observedAtMs != null && g.observedAtMs != null)
+      ? Math.round(wBuoy * b.observedAtMs + (1 - wBuoy) * g.observedAtMs)
+      : (b.observedAtMs ?? g.observedAtMs);
+    return { value, observedAtMs };
+  }
+  // (b) GRID only.
+  if (gridOk) return { value: (grid as SstSrc).value, observedAtMs: (grid as SstSrc).observedAtMs };
+  // (c) BUOY only (already constrained to ≤ max radius).
+  if (buoyOk) return { value: (buoy as BuoySst).value, observedAtMs: (buoy as BuoySst).observedAtMs };
+  // (d) NEITHER.
+  return { value: null, observedAtMs: null };
+}
+
+// Nearest WTMP-reporting buoy (within max radius) to a point, as an SST
+// correction source. Operates over a prefetched/cached list so a grid blend over
+// hundreds of cells fires NO extra NDBC requests.
+export function nearestBuoySst(lat: number, lng: number, buoyList: BuoyTemp[]): BuoySst | null {
+  let best: BuoySst | null = null;
+  for (const b of buoyList) {
+    const nm = nmBetween(lat, lng, b.lat, b.lng);
+    if (nm <= SST_BUOY_MAX_NM && (!best || nm < best.distNm)) {
+      best = { value: b.value, observedAtMs: b.observedAtMs, distNm: nm };
+    }
+  }
+  return best;
+}
+
+// Prefetch every buoy's live water temp ONCE per request. Deduped by station via
+// the 10-min buoy cache, so the 90-point grid build never refetches a buoy.
+async function buoyWtmpList(): Promise<BuoyTemp[]> {
+  const recs = await Promise.all(BUOYS.map(async (b) => {
+    const rec = await getBuoyCached(b.id);
+    return rec && rec.waterTemp.value != null
+      ? { lat: b.lat, lng: b.lng, value: rec.waterTemp.value, observedAtMs: rec.waterTemp.observedAtMs }
+      : null;
+  }));
+  return recs.filter((x): x is BuoyTemp => x != null);
+}
+
 // ── ERDDAP: latest gridded value at a point ──────────────────────────────────
 // griddap lets you ask for the most recent time slice nearest a lat/lng. We use
 // the "last" time index and the nearest grid cell, returning value + the time.
@@ -477,18 +545,23 @@ const CHL_LOOKBACK = Number(Deno.env.get("CHL_LOOKBACK") ?? "21");
 // the single-point GET and the batched predictinputs mode so values are IDENTICAL
 // regardless of how they're requested.
 async function assembleOcean(lat: number, lng: number) {
-  const [buoy, sst, chlorRaw, tide] = await Promise.all([
+  const [buoy, sst, chlorRaw, tide, buoyTemps] = await Promise.all([
     fetchBuoy(lat, lng),
     fetchGridPoint(SST_ERDDAP, SST_DATASET, SST_VAR, lat, lng, SST_HAS_ALTITUDE, SST_LOOKBACK),
     fetchGridPoint(CHL_ERDDAP, CHL_DATASET, CHL_VAR, lat, lng, CHL_HAS_ALTITUDE, CHL_LOOKBACK),
     fetchTide(lat, lng),
+    buoyWtmpList(),
   ]);
-  let sstF: { value: number | null; observedAtMs: number | null } = { value: null, observedAtMs: sst.observedAtMs };
+  // Gridded SST (MUR, °F) is the base; convert units (MUR analysed_sst is Kelvin).
+  let gridSstF: SstSrc = { value: null, observedAtMs: sst.observedAtMs };
   if (sst.value != null) {
     let c = sst.value;
     if (c > 200) c = c - 273.15;
-    sstF = { value: Math.round((c * 9 / 5 + 32) * 10) / 10, observedAtMs: sst.observedAtMs };
+    gridSstF = { value: Math.round((c * 9 / 5 + 32) * 10) / 10, observedAtMs: sst.observedAtMs };
   }
+  // Correct the grid with the nearest live buoy (distance/freshness weighted).
+  const buoySst = nearestBuoySst(lat, lng, buoyTemps);
+  const sstF = blendSst(gridSstF, buoySst);
   return {
     point: { lat, lng },
     fetchedAtMs: Date.now(),
@@ -501,22 +574,34 @@ async function assembleOcean(lat: number, lng: number) {
     pressure: buoy?.pressure ?? { value: null, observedAtMs: null },
     barometer: buoy?.barometer ?? { value: null, observedAtMs: null },
     tide: { value: tide.value, state: tide.state, observedAtMs: tide.observedAtMs },
-    sources: { sst: SST_DATASET, chlor: CHL_DATASET, buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null, tide: tide.station },
+    sources: {
+      sst: SST_DATASET,
+      sstBuoy: buoySst ? { nm: Math.round(buoySst.distNm), observedAtMs: buoySst.observedAtMs } : null,
+      chlor: CHL_DATASET,
+      buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
+      tide: tide.station,
+    },
   };
 }
 
-// SST grid (MUR L4, gap-filled) for a box → { stepDeg, rows:[[lat,lng,°F,ms],…] }.
-// MUR L4 is daily and fully gap-filled, so a single latest slice on a coarse grid
-// is equivalent to per-point queries — same data, far fewer requests.
+// High-res gridded SST (GHRSST MUR L4, 1 km daily) for a box →
+// { stepDeg, rows:[[lat,lng,°F,observedAtMs],…] }. We request the last few daily
+// slices and keep, per cell, the FRESHEST real (non-fill) value with its real
+// observation time — i.e. step back day-by-day until that cell has valid data,
+// rather than trusting one fixed slice. MUR is the high-res source that resolves
+// sharp fronts (Gulf Stream wall) that coarse products smear. Units: analysed_sst
+// is Kelvin → converted to °F to match the app. Never synthesized.
 async function fetchSstRows(latMin: number, latMax: number, lngMin: number, lngMax: number) {
   const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
   const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
   const native = Number(Deno.env.get("SST_STEP_DEG") ?? "0.01");
   const targetDeg = Number(Deno.env.get("SSTGRID_DEG") ?? "0.05");
   const strideIdx = Math.max(1, Math.round(targetDeg / native));
+  const lookback = Math.max(0, Number(Deno.env.get("SSTGRID_LOOKBACK") ?? "4"));
   const altIdx = SST_HAS_ALTITUDE ? "%5B(0.0)%5D" : "";
+  const timeIdx = lookback > 0 ? `%5Blast-${lookback}:last%5D` : "%5B(last)%5D";
   const url = `${SST_ERDDAP}/${SST_DATASET}.json`
-    + `?${SST_VAR}%5B(last)%5D${altIdx}`
+    + `?${SST_VAR}${timeIdx}${altIdx}`
     + `%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(20000), headers: ERDDAP_HEADERS });
@@ -525,7 +610,8 @@ async function fetchSstRows(latMin: number, latMax: number, lngMin: number, lngM
     const cols: string[] = d?.table?.columnNames ?? [];
     const rawRows: unknown[][] = d?.table?.rows ?? [];
     const ti = cols.indexOf("time"), li = cols.indexOf("latitude"), gi = cols.indexOf("longitude"), vi = cols.indexOf(SST_VAR);
-    const rows: unknown[][] = [];
+    // Freshest non-fill value per cell across the lookback window.
+    const best = new Map<string, { lat: number; lng: number; f: number; ms: number }>();
     for (const row of rawRows) {
       let c = num(row[vi]);
       if (c == null) continue;
@@ -533,9 +619,13 @@ async function fetchSstRows(latMin: number, latMax: number, lngMin: number, lngM
       const f = Math.round((c * 9 / 5 + 32) * 10) / 10;
       const la = num(row[li]), ln = num(row[gi]);
       if (la == null || ln == null) continue;
-      const ms = ti >= 0 && typeof row[ti] === "string" ? Date.parse(row[ti] as string) : null;
-      rows.push([Math.round(la * 1000) / 1000, Math.round(ln * 1000) / 1000, f, ms]);
+      const ms = ti >= 0 && typeof row[ti] === "string" ? Date.parse(row[ti] as string) : 0;
+      const k = `${la.toFixed(3)},${ln.toFixed(3)}`;
+      const cur = best.get(k);
+      if (!cur || ms > cur.ms) best.set(k, { lat: la, lng: ln, f, ms });
     }
+    const rows = [...best.values()].map((c) =>
+      [Math.round(c.lat * 1000) / 1000, Math.round(c.lng * 1000) / 1000, c.f, c.ms || null]);
     return { stepDeg: strideIdx * native, rows };
   } catch {
     return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
@@ -641,7 +731,7 @@ async function pool<T, R>(items: T[], limit: number, fn: (it: T) => Promise<R>):
   return out;
 }
 
-Deno.serve(async (req) => {
+export const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const u = new URL(req.url);
   const mode = u.searchParams.get("mode") || "ocean";
@@ -718,11 +808,23 @@ Deno.serve(async (req) => {
     const maxPoints = Math.max(20, Math.min(120, Math.round(num(u.searchParams.get("maxPoints")) ?? 90)));
     // All three grids in parallel (each ONE ERDDAP box request). Bathy also tells
     // us which field points are water so we don't fetch buoy/tide over land.
-    const [bathy, chlor, sst] = await Promise.all([
+    const [bathy, chlor, sstGrid, buoyTemps] = await Promise.all([
       fetchBathyRows(latMin, latMax, lngMin, lngMax),
       fetchChlorRows(latMin, latMax, lngMin, lngMax),
       fetchSstRows(latMin, latMax, lngMin, lngMax),
+      buoyWtmpList(),
     ]);
+    // Correct the high-res SST grid with the nearest live buoy per cell (distance/
+    // freshness weighted). Buoys are prefetched once and shared, so this adds no
+    // upstream requests. Row shape stays [lat,lng,°F,observedAtMs] for the client.
+    const sst = {
+      stepDeg: sstGrid.stepDeg,
+      rows: (sstGrid.rows as number[][]).map((row) => {
+        const b = nearestBuoySst(row[0], row[1], buoyTemps);
+        const out = blendSst({ value: row[2], observedAtMs: (row[3] as number) ?? null }, b);
+        return [row[0], row[1], out.value, out.observedAtMs];
+      }),
+    };
     // Pick water field points (depth > 0) spread across the box, capped. These
     // only carry wind/tide (buoy + CO-OPS) — SST/chlor come from the grids.
     const water = (bathy.rows as number[][]).filter((r) => typeof r[2] === "number" && (r[2] as number) > 0);
@@ -776,4 +878,9 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify(payload), {
     headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
   });
-});
+};
+
+// Serve only when run as the entry module (Supabase edge runtime). Guarding this
+// lets the pure helpers (blendSst, nearestBuoySst) be imported by tests without
+// starting a server.
+if (import.meta.main) Deno.serve(handler);
