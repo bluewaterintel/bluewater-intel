@@ -10120,22 +10120,31 @@ function prefSet(key, val){
 // follow the user across devices. We never persist the `account` object here.
 const PREFS_KEY = "bwi.prefs";
 function prefSave(){
+  const out = {
+    defaultPort:    USER_PREFS.defaultPort,
+    defaultSpecies: USER_PREFS.defaultSpecies,
+    defaultBaseMap: USER_PREFS.defaultBaseMap,
+    autozoomPort:   USER_PREFS.autozoomPort,
+    persistLoran:   USER_PREFS.persistLoran,
+  };
   try {
-    const out = {
-      defaultPort:    USER_PREFS.defaultPort,
-      defaultSpecies: USER_PREFS.defaultSpecies,
-      defaultBaseMap: USER_PREFS.defaultBaseMap,
-      autozoomPort:   USER_PREFS.autozoomPort,
-      persistLoran:   USER_PREFS.persistLoran,
-    };
     localStorage.setItem(PREFS_KEY, JSON.stringify(out));
   } catch(e){ /* storage unavailable — prefs stay in-memory for this session */ }
-  // When signed in, also persist to the account so settings follow the user.
+  // When signed in, also persist to the ACCOUNT so ALL settings (not just the
+  // home port) follow the user across every device. We write two things:
+  //   • home_port  — the dedicated column the login flow already reads, kept in
+  //                  sync so older logic and any SQL that reads it still works.
+  //   • prefs_json — a JSON blob of the FULL settings object, so every
+  //                  preference (species, basemap, autozoom, LORAN, port) syncs.
+  // NOTE: this requires a text column `prefs_json` on the Supabase `profiles`
+  // table. If that column doesn't exist yet, Supabase will reject the unknown
+  // field and the account write is a no-op (device localStorage still works) —
+  // add the column to enable full cross-device sync.
   try {
     if(typeof BW_AUTH !== "undefined" && BW_AUTH.isSignedIn && BW_AUTH.isSignedIn() && BW_AUTH.saveProfile){
       BW_AUTH.saveProfile({
-        home_port: USER_PREFS.defaultPort || null,
-        // extend with other columns if/when the profile schema carries them
+        home_port:  USER_PREFS.defaultPort || null,
+        prefs_json: JSON.stringify(out),
       }).catch(()=>{});
     }
   } catch(e){}
@@ -10163,20 +10172,16 @@ function prefLoad(){
 // where they left off, instead of snapping back to the default home-port zoom.
 const MAP_VIEW_KEY = "bwi.mapview";
 // In-memory snapshot of the last user-driven view. This is the source of truth
-// for restoring after a tab switch / refocus — it's instant, never blocked by
-// storage sandboxing, and can't be clobbered by a stray layout pass the way the
-// localStorage value could. localStorage is still written as a cross-reload
-// backup, but in-session restores read from this variable.
+// for restoring on a fresh page LOAD (a reload reopens where you left off).
+// localStorage is the cross-reload backup; the in-memory snapshot is the
+// authoritative value within a session. We no longer re-apply this on tab
+// focus — the map keeps its own position across a tab switch, so there's
+// nothing to restore mid-session (and doing so caused a recenter flicker).
 let _lastUserView = null;
-// While we're actively re-pinning the view, suppress saving, otherwise the
-// setView()->moveend->saveMapView feedback loop can capture a transient
-// snapped-out state and overwrite the good view.
-let _restoringView = false;
 
 function saveMapView(){
   try {
     if(typeof MAP === "undefined" || !MAP) return;
-    if(_restoringView) return;   // don't record our own restore-driven moves
     const c = MAP.getCenter();
     const view = { lat: c.lat, lng: c.lng, zoom: MAP.getZoom(), at: Date.now() };
     _lastUserView = view;
@@ -10197,48 +10202,34 @@ function loadMapView(){
   } catch(e){}
   return null;
 }
-// Re-assert the saved center/zoom REPEATEDLY for a short window after returning
-// to the app. Browsers fire several resize/layout passes when a tab or window is
-// restored (mobile address bar, minimize/restore, app switch), and ANY one of
-// them can make Leaflet re-measure and snap to a different zoom. A single
-// re-pin fired too early gets undone by a later pass — so we re-pin a few times
-// across ~600ms to keep the view frozen exactly where the user left it. Saving
-// is suppressed (via _restoringView) for the whole window so these re-pins can't
-// feed a transient view back into the stored value.
-function restoreMapView(){
-  if(typeof MAP === "undefined" || !MAP) return;
-  const v = loadMapView();
-  if(!v) return;
-  _restoringView = true;
-  const apply = () => {
-    try { MAP.invalidateSize({animate:false}); MAP.setView([v.lat, v.lng], v.zoom, {animate:false}); } catch(e){}
-  };
-  apply();
-  [100, 300, 600].forEach(ms => setTimeout(apply, ms));
-  // Release the save-suppression just after the last re-pin so genuine user
-  // moves are recorded again.
-  setTimeout(() => { _restoringView = false; }, 750);
-}
 function startMapViewPersistence(){
   if(typeof MAP === "undefined" || !MAP) return;
-  // Save whenever the user finishes panning or zooming.
+  // Save whenever the user finishes panning or zooming, so a full page RELOAD
+  // can reopen where they left off. (This is the only thing the saved view is
+  // still used for — see below.)
   MAP.on("moveend zoomend", saveMapView);
-  // Capture the view the instant the tab is hidden (before any teardown), and
-  // freeze it back when returning.
-  document.addEventListener("visibilitychange", () => {
-    if(document.visibilityState === "hidden") saveMapView();
-    else restoreMapView();
-  });
-  window.addEventListener("pageshow", restoreMapView);   // bfcache return
   window.addEventListener("pagehide", saveMapView);
-  // Chrome (desktop) doesn't fire visibilitychange on minimize/restore — cover
-  // it with focus + resize too. Capture on blur so we always have a fresh view.
-  window.addEventListener("blur", saveMapView);
-  window.addEventListener("focus", restoreMapView);
-  let _reassertTimer = null;
+
+  // We deliberately DO NOT re-center / re-pin the map when the tab regains
+  // focus. Leaflet already preserves the map's center and zoom across a tab
+  // switch or window blur on its own, so the map simply stays where the user
+  // left it. The previous focus/visibility "restore" pass was both unnecessary
+  // and actively harmful: calling setView() (and invalidateSize) on return made
+  // the map flash to the home port for a frame and then snap back to the real
+  // location — the jarring recenter the user asked to remove. Removing those
+  // handlers eliminates the flicker; the map no longer auto-recenters on return.
+  //
+  // The one thing we still need to handle is a genuine container RESIZE (window
+  // resize, phone rotation, browser-chrome show/hide), which can leave Leaflet's
+  // tiles mismatched to the new size. For that we call invalidateSize() ONLY —
+  // never setView — so the map refills the container in place without moving the
+  // center or zoom.
+  let _resizeTimer = null;
   window.addEventListener("resize", () => {
-    clearTimeout(_reassertTimer);
-    _reassertTimer = setTimeout(restoreMapView, 120);
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(() => {
+      try { MAP.invalidateSize({animate:false}); } catch(e){}
+    }, 150);
   });
 }
 // ════════════════════════════════════════════════════════════════════════════
@@ -11235,7 +11226,26 @@ function drawCanyons(){
     const badgeColor = type === "rock" ? "#8a8f98" : c.color;
     const spList=c.fish && c.fish[0]!=="all"
       ?`<div style="font-size:12px;opacity:.85;margin-top:6px"><b>Key species:</b> ${c.fish.map(id=>SPECIES.find(s=>s.id===id)?.name||id).join(", ")}</div>`:"";
-    const popup=`<div style="max-width:300px;font-family:Arial,sans-serif"><div style="font-weight:bold;font-size:16px;color:${badgeColor};margin-bottom:2px">${c.name}</div><div style="font-size:11px;color:#9ab;letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px">${typeLabel}</div><div style="font-size:13.5px;line-height:1.55;margin:0;padding:0">${c.desc}</div>${spList}</div>`;
+    const cSafeName = (c.name || "Spot").replace(/'/g, "\\'");
+    // ONE combined bubble: name + type + description + key species + the
+    // 6-Day Forecast button, all in a single interactive popup. Previously the
+    // description was a hover tooltip and the forecast button was a SEPARATE
+    // popup, so on tap both opened and overlapped (see mobile). Now there's just
+    // one popup, and the forecast button lives inside it under the description.
+    const fcBtn =
+      `<button onclick="showForecast(${c.lat},${c.lng},'${cSafeName}')" style="
+        margin-top:11px;width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
+        padding:11px 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Segoe UI',Arial,sans-serif;
+        display:flex;align-items:center;justify-content:center;gap:7px">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0 0-9 6 6 0 0 0-11.6-2A4.5 4.5 0 0 0 6.5 19Z"/><path d="M8 13l-1.5 3M12 13l-1.5 3M16 13l-1.5 3"/></svg>
+        6-Day Forecast
+      </button>`;
+    const combined =
+      `<div style="max-width:300px;font-family:Arial,sans-serif">
+        <div style="font-weight:bold;font-size:16px;color:${badgeColor};margin-bottom:2px">${c.name}</div>
+        <div style="font-size:11px;color:#9ab;letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px">${typeLabel}</div>
+        <div style="font-size:13.5px;line-height:1.55;margin:0;padding:0">${c.desc}</div>${spList}${fcBtn}
+      </div>`;
     const mk=L.marker([c.lat,c.lng],{
       icon:L.divIcon({
         className:"",
@@ -11267,23 +11277,7 @@ function drawCanyons(){
         iconAnchor:[13,-2],
       }),
       zIndexOffset:100,
-    }).bindTooltip(popup,{sticky:false,direction:"top",opacity:.97,className:"canyon-tt"}).addTo(MAP);
-    // Tap a major fishing area to get a 6-day forecast for that spot.
-    const cSafeName = (c.name || "Spot").replace(/'/g, "\\'");
-    mk.bindPopup(
-      `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:180px">
-        <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:15px;padding:0 18px">${c.name}</div>
-        <div style="font-size:12px;color:#cfe5ff;margin-bottom:9px">${typeLabel}</div>
-        <button onclick="showForecast(${c.lat},${c.lng},'${cSafeName}')" style="
-          width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
-          padding:11px 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
-          display:flex;align-items:center;justify-content:center;gap:7px">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0 0-9 6 6 0 0 0-11.6-2A4.5 4.5 0 0 0 6.5 19Z"/><path d="M8 13l-1.5 3M12 13l-1.5 3M16 13l-1.5 3"/></svg>
-          6-Day Forecast
-        </button>
-      </div>`,
-      {offset:[0,-46], className:"wp-fc-popup"}
-    );
+    }).bindPopup(combined, {offset:[0,-46], className:"wp-fc-popup", maxWidth:320}).addTo(MAP);
     canyonLayers.push(mk);
   });
 }
@@ -11658,19 +11652,16 @@ function renderWaypointMarkers(force){
     const s = WP_TYPE_STYLE[w.t] || {label:"Spot"};
     const latStr = Math.abs(w.lat).toFixed(5) + (w.lat>=0 ? "° N" : "° S");
     const lngStr = Math.abs(w.lng).toFixed(5) + (w.lng>=0 ? "° E" : "° W");
-    const m = L.marker([w.lat, w.lng], {icon: wpIcon(w.t)})
-      .bindTooltip(
-        `<b>${w.name}</b><br>${s.label} · ${w.nm.toFixed(1)} nm<br><span style="font-size:10px;opacity:.85">${latStr}, ${lngStr}</span>`,
-        {direction:"top", offset:[0,-8]}
-      );
-    // Tap a fishing waypoint to get a 6-day forecast for that spot — same
-    // behavior as Major Fishing Areas. Escape single quotes so names like
-    // "JOANIE'S REEF" don't break the inline onclick handler.
     const wpSafeName = (w.name || "Spot").replace(/'/g, "\\'");
+    // ONE combined bubble: name + label/distance + coordinates + the forecast
+    // button, in a single interactive popup (previously a hover tooltip plus a
+    // separate forecast popup that overlapped on tap).
+    const m = L.marker([w.lat, w.lng], {icon: wpIcon(w.t)});
     m.bindPopup(
       `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:180px">
         <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:15px;padding:0 18px">${w.name}</div>
-        <div style="font-size:12px;color:#cfe5ff;margin-bottom:9px">${s.label} · ${w.nm.toFixed(1)} nm</div>
+        <div style="font-size:12px;color:#cfe5ff;margin-bottom:2px">${s.label} · ${w.nm.toFixed(1)} nm</div>
+        <div style="font-size:10.5px;color:#8fb4d8;margin-bottom:9px">${latStr}, ${lngStr}</div>
         <button onclick="showForecast(${w.lat},${w.lng},'${wpSafeName}')" style="
           width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
           padding:11px 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
@@ -12797,10 +12788,13 @@ function closePortDd(){
 
 function selectPort(name){
   activePort=name;
-  // Persist the choice to the account so it restores on next sign-in.
-  if(window.BW_AUTH && window.BW_AUTH.isSignedIn && window.BW_AUTH.isSignedIn()){
-    window.BW_AUTH.saveProfile({ home_port: activePort }).catch(e => console.error("save port", e));
-  }
+  // NOTE: selecting a port from the dropdown is a SESSION-ONLY action — it does
+  // NOT change the user's saved default. The default home port is set in
+  // Settings (USER_PREFS.defaultPort) and is the only thing persisted to the
+  // account. So on the next login the Home Port resets to the Settings default,
+  // not to whatever port was last tapped. (Previously this wrote activePort to
+  // the account's home_port, which made the last-tapped port "stick" across
+  // logout/login — the bug we're fixing.)
   const lbl=document.getElementById("port-name");
   lbl.textContent=name;
   lbl.style.opacity="1";
@@ -13108,9 +13102,48 @@ window.bwOnSignedIn = async function (user) {
   try { await refreshEntitlement(); } catch(e){ console.error("entitlement check failed", e); }
   try {
     const profile = await window.BW_AUTH.fetchProfile();
-    if(profile && profile.home_port && typeof selectPort === "function"){
-      // Restore the saved port as the active port.
-      selectPort(profile.home_port);
+    // ── Sync ALL account settings down to this device ────────────────────────
+    // If the account carries a full prefs blob (prefs_json), apply every setting
+    // so the user's species, basemap, autozoom and LORAN choices follow them to
+    // any device — not just the home port. The account is the source of truth on
+    // login; we then write the merged result back to device localStorage. We do
+    // this BEFORE resolving the port below so home_port (authoritative column)
+    // can still override the port field if they ever differ.
+    if(profile && profile.prefs_json){
+      try {
+        const acct = JSON.parse(profile.prefs_json);
+        if(acct && typeof acct === "object"){
+          if("defaultPort"    in acct) USER_PREFS.defaultPort    = acct.defaultPort;
+          if("defaultSpecies" in acct) USER_PREFS.defaultSpecies = acct.defaultSpecies;
+          if("defaultBaseMap" in acct) USER_PREFS.defaultBaseMap = acct.defaultBaseMap || "satellite";
+          if("autozoomPort"   in acct) USER_PREFS.autozoomPort   = !!acct.autozoomPort;
+          if("persistLoran"   in acct) USER_PREFS.persistLoran   = !!acct.persistLoran;
+        }
+      } catch(e){ /* malformed blob — ignore, fall back to device prefs */ }
+    }
+    // On LOGIN, reset the Home Port to the user's DEFAULT (set in Settings),
+    // not to whatever port was last tapped in a previous session. The account's
+    // home_port column stores the Settings default (written by prefSave); we
+    // prefer it, then fall back to the on-device default, then the hard
+    // fallback. This deliberately OVERRIDES any transient session selection so
+    // a fresh login always starts at the configured default port.
+    const loginDefault =
+      (profile && profile.home_port && PORTS[profile.home_port] && profile.home_port) ||
+      (USER_PREFS.defaultPort && PORTS[USER_PREFS.defaultPort] && USER_PREFS.defaultPort) ||
+      null;
+    // Keep USER_PREFS.defaultPort in sync with the account default so the
+    // Settings dropdown and the in-app label agree after login.
+    if(profile && profile.home_port && PORTS[profile.home_port]){
+      USER_PREFS.defaultPort = profile.home_port;
+      if(typeof prefSave === "function") prefSave();
+      const pp = document.getElementById("pref-port");
+      if(pp) pp.value = profile.home_port;
+    }
+    // Refresh the Settings modal controls so the synced values are reflected.
+    if(typeof refreshSettingsModal === "function") refreshSettingsModal();
+
+    if(loginDefault && typeof selectPort === "function"){
+      selectPort(loginDefault);
     }
   } catch(e){ console.error("profile load failed", e); }
   try {
@@ -21629,18 +21662,16 @@ function drawUserWaypoints(){
     const t = wpType(iconKey);
     const latStr = Math.abs(p.lat).toFixed(5) + (p.lat>=0 ? "° N" : "° S");
     const lngStr = Math.abs(p.lng).toFixed(5) + (p.lng>=0 ? "° E" : "° W");
-    const m = L.marker([p.lat, p.lng], {icon: userWpMarkerIcon(p), zIndexOffset: 800})
-      .bindTooltip(
-        `<b>${p.name}</b><br>${t.name}${p.depth ? " · " + p.depth : ""}<br><span style="font-size:12px;opacity:.85">${latStr}, ${lngStr}</span>`,
-        {direction:"top", offset:[0,-10]}
-      );
-    // Tap a personal waypoint on the map to get its 6-day forecast (and quick
-    // actions). This is the on-map equivalent of the Forecast button on the card.
     const safeName = (p.name || "Waypoint").replace(/'/g, "\\'");
+    // ONE combined bubble: name + type/depth + coordinates + the forecast
+    // button, in a single interactive popup (was a hover tooltip plus a
+    // separate overlapping forecast popup).
+    const m = L.marker([p.lat, p.lng], {icon: userWpMarkerIcon(p), zIndexOffset: 800});
     m.bindPopup(
       `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:170px">
         <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:15px;padding:0 18px">${p.name || "Waypoint"}</div>
-        <div style="font-size:12px;color:#cfe5ff;margin-bottom:9px">${t.name}${p.depth ? " · " + p.depth : ""}</div>
+        <div style="font-size:12px;color:#cfe5ff;margin-bottom:2px">${t.name}${p.depth ? " · " + p.depth : ""}</div>
+        <div style="font-size:10.5px;color:#8fb4d8;margin-bottom:9px">${latStr}, ${lngStr}</div>
         <button onclick="showForecast(${p.lat},${p.lng},'${safeName}')" style="
           width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
           padding:11px 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
