@@ -4792,115 +4792,11 @@ function gibsRecentDate(daysBack){
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Synthetic SST: warmer in south, Gulf Stream warm tongue offshore, seasonal bias.
-// Now also drifts with forecast time so a "next 24h" view shows slightly different
-// values than "now" — captures the realistic day-to-day SST variation.
-function synthSST(lat, lng){
-  const tMs = forecastTimeMs();
-  const month = new Date(tMs).getMonth();
-  // Seasonal swing — stronger than before to reflect real seasonal range.
-  // Winter deeply cold, summer warm. Northern waters swing more than southern,
-  // but a single curve is a reasonable synthetic approximation.
-  //   Jan-Feb: -13   Mar-May: -5   Jun-Aug: +8   Sep-Nov: +1
-  const seasonal = month < 2 ? -13 : month < 5 ? -5 : month < 8 ? 8 : month < 11 ? 1 : -8;
-  // Latitudinal gradient (warmer south). Anchored at lat 30 = 78°F baseline,
-  // steeper 2.1°F/degree falloff so the Northeast gets properly cold.
-  //   lat 25 (Miami):     78 + 5*2.1 = 88.5 → seasonal brings to realistic
-  //   lat 30 (Pensacola): 78
-  //   lat 42 (Cape Cod):  78 - 12*2.1 = 52.8
-  const latTemp = 78 - (lat - 30) * 2.1;
-
-  // Daily SST drift — models the real-world variation as a slow sinusoid.
-  // Realistic day-to-day SST changes are ±0.4-0.6°F, but for the SYNTHETIC
-  // preview we use ±1.5°F amplitude so the heat map visibly shifts when
-  // users scrub the forecast slider. When real NOAA forecast data is
-  // integrated, this exaggeration goes away — real SST has its own day-to-day
-  // variation we won't need to manufacture.
-  const daysSinceEpoch = tMs / 86400000;
-  const sstDrift = Math.sin(daysSinceEpoch * 2.0) * 1.0      // ~12h cycle, ±1°F
-                 + Math.sin(daysSinceEpoch * 0.7) * 1.5;     // ~2 day cycle, ±1.5°F
-
-  // ── Gulf Stream warm tongue: sharp WESTERN EDGE, gradual eastern fade ──
-  // The real GS western edge shifts 8-10°F over 5-15 nm — a near-step
-  // function. We model this with a sigmoid (tanh) so the gradient maxes
-  // out near the edge instead of being smeared evenly across the tongue.
-  const sbLng = -76 + (lat - 35) * 0.55;
-  const gsOffset = lng - sbLng;  // negative = west of GS center (inshore)
-  // Sigmoid centered at the western edge (~0.15° west of "center"):
-  //   far west (inshore):  gsBoost ≈ 0
-  //   right at edge:       rapid transition (~7°F shift over 0.2°)
-  //   far east (in stream): gsBoost ≈ +7°F
-  // Math.tanh transitions smoothly from -1 to +1 with steep slope at 0.
-  const edgeX = (gsOffset + 0.15) / 0.10;   // 0.10° transition width = ~6nm
-  const gsBoost = 3.5 + 3.5 * Math.tanh(edgeX);  // 0..7°F
-  // Gentle fade beyond the stream (~1.5° east → back toward background)
-  const fadeBeyond = gsOffset > 1.5 ? -(gsOffset - 1.5) * 2 : 0;
-
-  // ── Gulf of Mexico: Loop Current + river plume thermal features ──
-  let gulfFeature = 0;
-  if(isGulfContext(lat, lng)){
-    // The Gulf is a semi-enclosed, shallow-shelf basin that runs warmer than
-    // the Atlantic at the same latitude — typically 6-8°F warmer in season.
-    // The latitude formula alone would make it too cold for its warm-water
-    // fisheries (cobia, king mackerel, blue marlin), so add a warm baseline.
-    gulfFeature += 6.5;
-    // Loop Current: warm core roughly centered near (25-27N, -85W),
-    // shedding eddies that drift NW. The northern edge is sharp where the
-    // current meets cooler shelf water — 6-8°F over ~10nm.
-    const lcDistN = lat - 26.5;   // distance north of Loop Current axis
-    const lcEdge = Math.tanh(-lcDistN / 0.15);  // sharp transition (~9nm wide)
-    gulfFeature += 3.5 * lcEdge;
-    // Mississippi River plume cold/fresh signature near the delta
-    const dmDist = Math.sqrt((lat - 29.0)**2 + (lng + 89.3)**2);
-    if(dmDist < 1.5){
-      gulfFeature -= 4.5 * Math.exp(-dmDist * 1.5);  // sharp localized cooling
-    }
-  }
-
-  // ── Inshore cool bias (shallow nearshore water cooler than offshore) ──
-  const coastDist = Math.abs(gsOffset) - 1;
-  const inshoreCool = coastDist < 0 ? coastDist * 2 : 0;
-
-  return Math.max(34, Math.min(86,
-    latTemp + seasonal + gsBoost + fadeBeyond + gulfFeature + inshoreCool + sstDrift));
-}
-
-// Synthetic chlorophyll: high near coast, low offshore, edges along shelf break
-// Synthetic bathymetry depth (m) using simple linear shelf model
-function synthDepth(lat, lng){
-  // Use the unified seaDepth function so scoring and rendering agree on
-  // depth values. Returns 0 (effectively) for land — score will reject it.
-  return Math.max(0, seaDepth(lat, lng));
-}
-
-// ── Thermal break detector ──
-// Returns the local SST gradient magnitude (°F per degree of position).
-// HIGH gradient = sharp temperature break / color line — exactly what
-// pelagic fish target. This replaces the old "distance to Gulf Stream"
-// factor for two reasons:
-//   1. Temperature itself is already a separate factor. Encoding Gulf
-//      Stream position as a SECOND factor double-counts the same signal.
-//   2. The old "distance to Gulf Stream" used an East-Coast-specific
-//      shelf-break line, which gave nonsense values in the Gulf of Mexico.
-//
-// The thermal gradient is a real fish-finding signal that works EVERYWHERE:
-//   - East Coast: captures the Gulf Stream's western edge ("the wall")
-//   - Gulf of Mexico: captures Loop Current edges and river plume fronts
-//     (e.g., Mississippi River discharge creates massive thermal breaks)
-//   - New England: captures the cold/warm interface south of Cape Cod
-function thermalBreak(lat, lng){
-  // Sample SST at 4 points ~0.15° away (≈ 9nm) in each cardinal direction.
-  // Returns the maximum N-S vs E-W gradient magnitude in °F.
-  const d = 0.15;
-  const tN = synthSST(lat + d, lng);
-  const tS = synthSST(lat - d, lng);
-  const tE = synthSST(lat, lng + d);
-  const tW = synthSST(lat, lng - d);
-  const dT_dy = Math.abs(tN - tS);   // vertical (N-S) gradient
-  const dT_dx = Math.abs(tE - tW);   // horizontal (E-W) gradient
-  // Total gradient magnitude — gives the strength of the break
-  return Math.sqrt(dT_dy * dT_dy + dT_dx * dT_dx);
-}
+// SST is sourced ONLY from real data (MUR grid + NDBC buoy hybrid via the ocean
+// backend), resolved in scoreCell as: cell's own real sample → nearest real
+// sample → regional real median → null. The old synthSST/synthDepth/thermalBreak
+// synthetic models were removed — no fabricated SST anywhere. Thermal breaks are
+// measured from the real SST grid/field by thermalBreakReal/thermalBreakGrid.
 
 // Reports proximity boost — looks at SOCIAL feed if recent posts mention nearby canyons/spots
 function reportsBoost(lat, lng, speciesId){
@@ -4931,24 +4827,8 @@ function reportsBoost(lat, lng, speciesId){
 
 // AIS dwell — boost cells where vessel zones report this species
 // ── CORE SCORING FUNCTION ────────────────────────────────────────────────────
-// ════════════════════════════════════════════════════════════════════════════
-// HIGH-IMPACT SYNTHETIC DATA GENERATORS
-// All produce realistic values; replaced with API calls when backend is live.
-// ════════════════════════════════════════════════════════════════════════════
-
-// ── Barometric pressure trend (24h delta in hPa) ───────────────────────────
-// Negative = falling pressure = front coming = fish feed hard.
-// Positive = rising pressure = post-front high = slow bite.
-// In synthetic mode, use a sine-wave time series so the trend is consistent
-// across the whole map but varies day to day.
-function synthPressureTrend(){
-  const hoursSinceEpoch = forecastTimeMs() / 3600000;
-  // Slow oscillation: roughly weekly weather pattern
-  const trend = Math.sin(hoursSinceEpoch / 84) * 6;  // -6 to +6 hPa over a week
-  // Add a small random offset that's consistent within the same hour
-  const dailyOffset = Math.sin(hoursSinceEpoch / 12) * 2;
-  return trend + dailyOffset;
-}
+// Barometric pressure trend comes ONLY from real NDBC buoy data (the ocean
+// backend computes latest-minus-~24h pressure). No synthetic pressure model.
 
 // ── Moon phase (0 = new, 0.5 = full, 1 = new again) ────────────────────────
 // ════════════════════════════════════════════════════════════════════════════
@@ -5066,29 +4946,10 @@ function solunarScore(lat, lng){
   return Math.min(1.0, score + phaseBoost);
 }
 
-// ── Tide stage (synthetic semi-diurnal) ────────────────────────────────────
-// Fish bite hardest on moving water (incoming or outgoing). Dead slack = dead bite.
-// Returns 0-1 where 1 = strong moving water, 0 = slack tide.
-function tideStage(lat, lng){
-  // Tide period: ~12h25m (semi-diurnal). Phase shifts slightly with longitude.
-  const tidePeriodMs = 12.42 * 3600 * 1000;
-  const lngOffset = lng * 60 * 1000; // very rough phase offset by longitude
-  const t = (forecastTimeMs() + lngOffset) % tidePeriodMs;
-  const phase = (t / tidePeriodMs) * 2 * Math.PI;
-  // Tide height = sin(phase). Tide VELOCITY = cos(phase). We want velocity magnitude.
-  const velocity = Math.abs(Math.cos(phase));
-  return velocity;  // 0 at slack high/low, 1 at peak flood/ebb
-}
-
-// ── Wind direction relative to structure (offshore/onshore) ────────────────
-// For offshore species: onshore wind (E→W) pushes bait/structure together = good.
-// For inshore species: offshore wind clears the water = mostly good.
-// Synthetic wind direction rotates slowly over time.
-function synthWindDir(){
-  const hours = forecastTimeMs() / 3600000;
-  // Slowly rotating prevailing wind
-  return (Math.sin(hours / 36) * 180 + 180) % 360;  // degrees, 0=N, 90=E, 180=S, 270=W
-}
+// Tide stage and wind direction come ONLY from real data: tide from NOAA CO-OPS
+// and wind from NDBC buoys / forecast model, both via the ocean backend. The old
+// synthetic semi-diurnal tide model and rotating-wind model were removed — no
+// fabricated tide or wind anywhere; missing values resolve to "no data".
 
 // ════════════════════════════════════════════════════════════════════════════
 // REAL WIND FIELD — single source of truth for the animated wind layer.
@@ -10428,14 +10289,23 @@ function nearestPortTo(lat, lng){
   return best;
 }
 
-// Auto-fill conditions for a given location and time. Reads from the same
-// synthetic data sources used by the prediction algorithm so the catch
-// record is internally consistent with what the heat map showed at that
-// moment. In production these would be cached or fetched from a backend.
+// Auto-fill conditions for a given location and time. Uses ONLY real data already
+// loaded on the client — never synthetic. SST resolves cell's own real sample →
+// nearest real sample → regional real median → null; tide/wind/pressure come from
+// the nearest real ocean-field sample; moon phase is an exact astronomical value.
+// Any value without real data is omitted (the catch record shows "—" for it).
 function catchAutoFillConditions(lat, lng /*, timestamp */){
   const conditions = {};
   try {
-    if(typeof synthSST === "function")          conditions.sst = Math.round(synthSST(lat, lng) * 10) / 10;
+    // SST: real grid → nearest real sample → regional real median → null.
+    let sstObj = (typeof sstGridAt === "function") ? sstGridAt(lat, lng) : null;
+    if((!sstObj || sstObj.value == null) && typeof nearestFieldSample === "function") sstObj = nearestFieldSample(lat, lng, "sst");
+    if(!sstObj || sstObj.value == null){
+      if(typeof SST_GRID !== "undefined" && SST_GRID && SST_GRID.median != null) sstObj = { value: SST_GRID.median };
+      else if(typeof OCEAN_FIELD !== "undefined" && OCEAN_FIELD && OCEAN_FIELD.medianSst != null) sstObj = { value: OCEAN_FIELD.medianSst };
+    }
+    if(sstObj && sstObj.value != null) conditions.sst = Math.round(sstObj.value * 10) / 10;
+
     if(typeof moonPhase === "function"){
       const p = moonPhase();
       // Translate 0-1 phase to a human label
@@ -10448,23 +10318,16 @@ function catchAutoFillConditions(lat, lng /*, timestamp */){
       else if(p < 0.81)             conditions.moon = "Last Quarter";
       else                          conditions.moon = "Waning Crescent";
     }
-    if(typeof tideStage === "function"){
-      // tideStage returns velocity 0-1 (0 = slack, 1 = peak current).
-      // We translate to a human label. We can't easily tell flood vs ebb from
-      // this synthetic model, so use generic "moving" / "slack" categories.
-      const v = tideStage(lat, lng);
-      if(v < 0.2)       conditions.tide = "slack";
-      else if(v < 0.6)  conditions.tide = "moving";
-      else              conditions.tide = "ripping";
+    // Tide / wind / pressure: nearest REAL ocean-field sample only (no synthetic).
+    if(typeof nearestFieldSample === "function"){
+      const tideF = nearestFieldSample(lat, lng, "tide");
+      if(tideF && tideF.state) conditions.tide = tideF.state;
+      const windF = nearestFieldSample(lat, lng, "wind");
+      if(windF && windF.dir != null) conditions.windDir = Math.round(windF.dir);
+      const presF = nearestFieldSample(lat, lng, "pressure");
+      if(presF && presF.value != null) conditions.pressureTrend = presF.value > 1 ? "rising" : presF.value < -1 ? "falling" : "steady";
     }
-    if(typeof synthPressureTrend === "function"){
-      const t = synthPressureTrend();
-      conditions.pressureTrend = t > 1 ? "rising" : t < -1 ? "falling" : "steady";
-    }
-    if(typeof synthWindDir === "function"){
-      conditions.windDir = Math.round(synthWindDir());
-    }
-  } catch(e){ /* swallow — conditions are best-effort */ }
+  } catch(e){ /* swallow — conditions are best-effort, real-only */ }
   return conditions;
 }
 
@@ -11089,47 +10952,10 @@ async function startLivePolling(){
   if(livePollTimer){ clearInterval(livePollTimer); livePollTimer = null; }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// WEATHER (simulated — replace with NOAA API call in production)
-// ════════════════════════════════════════════════════════════════════════════
-function calcWx(lat,lng){
-  const nm=nmOffshore(lat,lng);
-  // Use the time-aware synthetic models so forecast horizon affects values.
-  // (When deployed online, these will be replaced by real NOAA NWS / NDBC /
-  // Open-Meteo Marine API calls with the user's selected forecast hour.)
-  const wt = synthSST(lat, lng);
-  const gs=55-nm;
-  const buoy=lat>39?"44025 NY/NJ Offshore":lat>36?"44014 Virginia Beach":lat>34.5?"41025 Diamond Shoals":"41004 Edisto SC";
-  // Wind speed varies with the synoptic-scale wind cycle (synthWindDir is
-  // already on a multi-day cycle). Tie speed to position in the cycle so
-  // that wind shift and wind strength move coherently.
-  const hours = forecastTimeMs() / 3600000;
-  const windCycle = Math.sin(hours / 36);             // -1 to 1
-  const windSpeedKt = Math.max(6, 13 + nm*0.04 + windCycle * 5);
-  // Wave height depends on wind speed and fetch (offshore distance is a
-  // reasonable proxy for fetch). Higher wind → bigger seas.
-  const waveHt = Math.max(1, 2.0 + nm*0.025 + Math.max(0, windSpeedKt - 12) * 0.18);
-  // Wave period scales with wave height but slower
-  const wavePer = Math.max(5, 7 + nm*0.015 + Math.max(0, waveHt - 3) * 0.4);
-  // Pressure includes the synthetic trend so falling/rising shows over time
-  const pressure = 1015 + synthPressureTrend();
-  return{
-    buoy,nm,
-    waterTempF:Math.round(wt*10)/10,
-    airTempF:Math.round((wt+6)*10)/10,
-    waveHt:Math.round(waveHt*10)/10,
-    wavePer:Math.round(wavePer),
-    windKt:Math.round(windSpeedKt),
-    windDir:Math.round(synthWindDir()),
-    pressure:Math.round(pressure),
-    pressureTrend:Math.round(synthPressureTrend()*10)/10,  // hPa change over 24h
-    gsNote:gs>0?`~${Math.round(gs)}nm to Gulf Stream edge`:"NEAR GULF STREAM EDGE",
-    // The forecast time this snapshot represents — used by panels to label
-    // whether they're showing "Now" vs "+24h" etc.
-    forecastHour:FORECAST_HOUR_OFFSET,
-    forecastDisplay:forecastTimeDisplay(),
-  };
-}
+// Weather conditions (water temp, wind, waves, pressure) are sourced ONLY from
+// real data via BW_OCEAN.fetchOcean (NDBC buoys + forecast model + ERDDAP).
+// The old synthetic calcWx() generator was removed; callers now read real values
+// and render "—" / "No data" when a value is unavailable — never synthetic.
 
 // ════════════════════════════════════════════════════════════════════════════
 // CANYONS
@@ -12179,23 +12005,9 @@ let wxAutoRefreshTimer = null;
 function fmtTime(d){return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}
 
 // Synthesize tide data (demo) — replaced by NOAA tides API when backend is live
-function calcTides(lat, lng){
-  const now = Date.now();
-  const period = 6.21 * 3600 * 1000; // semi-diurnal ~6h13m
-  const phase = (now % (period*2)) / (period*2);
-  const cur = Math.sin(phase * 2 * Math.PI);
-  const heightFt = 1.5 + cur * 1.4;
-  const rising = Math.cos(phase * 2 * Math.PI) > 0;
-  const next = new Date(now + period * (rising?0.5:1.0) * (Math.random()*0.4+0.8));
-  const after = new Date(now + period * (rising?1.5:2.0));
-  return {
-    height: heightFt.toFixed(1),
-    state: rising ? "Rising" : "Falling",
-    nextHigh: rising ? fmtTime(next) : fmtTime(after),
-    nextLow:  rising ? fmtTime(after) : fmtTime(next),
-    station: lat>38?"Atlantic City NJ":lat>36?"Wachapreague VA":lat>34?"Oregon Inlet NC":"Charleston SC",
-  };
-}
+// Tide for the conditions panel comes ONLY from real NOAA CO-OPS data (via the
+// ocean backend). The old synthetic calcTides() (random next-event times,
+// hardcoded stations) was removed — renderWX reads the real tide state below.
 
 async function renderWX(lat,lng){
   pbody(`<div style="padding:30px 20px;text-align:center;color:#9a7030;font-size:11px">
@@ -12204,12 +12016,14 @@ async function renderWX(lat,lng){
   </div><style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>`);
 
   // Pull REAL conditions from the ocean data function (NDBC buoys + ERDDAP).
-  // Falls back to the modeled values (labeled DEMO) only if no real data.
+  // No synthetic fallback: any value without real data renders as "—" (No data).
   let wx = null;
   let isLive = false;
+  let oceanData = null;
   if(typeof BW_OCEAN !== "undefined"){
     try {
-      const o = await BW_OCEAN.fetchOcean(lat, lng);
+      oceanData = await BW_OCEAN.fetchOcean(lat, lng);
+      const o = oceanData;
       const hasReal = o && (o.wind?.value != null || o.sst?.value != null || o.waterTemp?.value != null);
       if(hasReal){
         const nm = (typeof nmOffshore === "function") ? Math.round(nmOffshore(lat, lng)) : 0;
@@ -12227,23 +12041,39 @@ async function renderWX(lat,lng){
         };
         isLive = true;
       }
-    } catch(e){ /* fall through to modeled */ }
+    } catch(e){ /* no real data → render "—" */ }
   }
-  if(!wx) wx = calcWx(lat, lng);
-  const tide = calcTides(lat, lng);
+  if(!wx){
+    // No real data available — render everything as "—" instead of synthesizing.
+    const nm = (typeof nmOffshore === "function") ? Math.round(nmOffshore(lat, lng)) : 0;
+    wx = { buoy: "No live data", nm, waterTempF: null, airTempF: null, waveHt: null, wavePer: null, windKt: null, windDir: null, pressure: null };
+  }
+  // Tide from REAL data only (NOAA CO-OPS via the ocean backend) — never synthetic.
+  const _tideState = oceanData?.tide?.state || null;
+  const tide = {
+    state: _tideState ? _tideState.charAt(0).toUpperCase() + _tideState.slice(1) : null,
+    height: null, nextHigh: null, nextLow: null,
+    station: oceanData?.sources?.tide || null,
+  };
   const windDir = wx.windDir || "—";
   const lastUpdate = new Date();
 
   // Bite quality assessment
   const biteScore = ()=>{
     let s = 50;
-    if(wx.waterTempF >= 68 && wx.waterTempF <= 78) s += 25;
-    else if(wx.waterTempF >= 65 && wx.waterTempF <= 82) s += 12;
-    if(wx.waveHt <= 4) s += 15;
-    else if(wx.waveHt <= 6) s += 5;
-    else s -= 15;
-    if(wx.windKt <= 15) s += 10;
-    else if(wx.windKt > 25) s -= 20;
+    if(wx.waterTempF != null){
+      if(wx.waterTempF >= 68 && wx.waterTempF <= 78) s += 25;
+      else if(wx.waterTempF >= 65 && wx.waterTempF <= 82) s += 12;
+    }
+    if(wx.waveHt != null){
+      if(wx.waveHt <= 4) s += 15;
+      else if(wx.waveHt <= 6) s += 5;
+      else s -= 15;
+    }
+    if(wx.windKt != null){
+      if(wx.windKt <= 15) s += 10;
+      else if(wx.windKt > 25) s -= 20;
+    }
     return Math.max(0, Math.min(100, s));
   };
   const bite = biteScore();
@@ -12270,13 +12100,13 @@ async function renderWX(lat,lng){
   const tempScore  = wx.waterTempF == null ? 0.5 : (wx.waterTempF >= 68 && wx.waterTempF <= 78 ? 1.0 : wx.waterTempF >= 65 && wx.waterTempF <= 82 ? 0.7 : 0.3);
   const waveScore  = wx.waveHt == null ? 0.5 : (wx.waveHt <= 3 ? 1.0 : wx.waveHt <= 5 ? 0.7 : wx.waveHt <= 7 ? 0.4 : 0.15);
   const windScore  = wx.windKt == null ? 0.5 : (wx.windKt <= 12 ? 1.0 : wx.windKt <= 18 ? 0.7 : wx.windKt <= 25 ? 0.4 : 0.15);
-  const tideScore  = tide.state === "Rising" || tide.state === "Falling" ? 0.85 : 0.4;
+  const tideScore  = tide.state ? ((tide.state === "Rising" || tide.state === "Falling") ? 0.85 : 0.4) : 0.5;
   const presScore  = wx.pressure == null ? 0.5 : (wx.pressure >= 1015 && wx.pressure <= 1022 ? 0.85 : 0.65);
 
   pbody(`
     <!-- Status bar -->
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(107,191,234,.15);font-size:10px;font-family:monospace;flex-wrap:wrap">
-      <span style="color:${isLive?'#10b981':'#fbbf24'};font-weight:bold">${isLive?'● LIVE':'● DEMO'}</span>
+      <span style="color:${isLive?'#10b981':'#fbbf24'};font-weight:bold">${isLive?'● LIVE':'● NO DATA'}</span>
       <span style="color:#9ec5e8">${lat.toFixed(3)}°N ${Math.abs(lng).toFixed(3)}°W · ${wx.nm}nm offshore</span>
       <span style="margin-left:auto;color:#7dd3fc">${wx.buoy} · ${fmtTime(lastUpdate)}</span>
     </div>
@@ -12310,17 +12140,17 @@ async function renderWX(lat,lng){
     ${factor("〰 Wave Height",        wx.waveHt,    waveScore, wx.waveHt != null ? `${wx.waveHt}ft${wx.wavePer ? ` @ ${wx.wavePer}s` : ""}` : "—")}
     ${factor("💨 Wind",               wx.windKt,    windScore, wx.windKt != null ? `${wx.windKt}kt ${windDir}` : "—")}
     ${factor("📊 Pressure",           wx.pressure,  presScore, wx.pressure != null ? `${wx.pressure} hPa` : "—")}
-    ${factor(`🌙 Tide (${tide.station})`, tide.height, tideScore, `${tide.height}ft ${tide.state==="Rising"?"↑":"↓"}`)}
+    ${factor(`🌙 Tide${tide.station ? ` (${tide.station})` : ""}`, null, tideScore, tide.state ? `${tide.state}${tide.state==="Rising"?" ↑":tide.state==="Falling"?" ↓":""}` : "—")}
 
     <!-- Tide times row -->
     <div style="display:flex;gap:10px;margin-top:6px;padding:8px 10px;background:rgba(107,191,234,.08);border:1px solid rgba(107,191,234,.15);border-radius:6px">
       <div style="flex:1">
         <div style="font-size:9px;color:#7dd3fc;letter-spacing:.05em;font-weight:600">NEXT HIGH</div>
-        <div style="font-size:13px;font-weight:700;color:#f0f6ff">${tide.nextHigh}</div>
+        <div style="font-size:13px;font-weight:700;color:#f0f6ff">${tide.nextHigh || "—"}</div>
       </div>
       <div style="flex:1">
         <div style="font-size:9px;color:#7dd3fc;letter-spacing:.05em;font-weight:600">NEXT LOW</div>
-        <div style="font-size:13px;font-weight:700;color:#f0f6ff">${tide.nextLow}</div>
+        <div style="font-size:13px;font-weight:700;color:#f0f6ff">${tide.nextLow || "—"}</div>
       </div>
       <div style="flex:1">
         <div style="font-size:9px;color:#7dd3fc;letter-spacing:.05em;font-weight:600">☀ AIR TEMP</div>
@@ -12828,7 +12658,7 @@ function selectPort(name){
 // Populate the header Water/Air/Seas/Wind cells from the active port's location.
 // With no port selected there is no location to source conditions from, so the
 // cells stay blank ("—") rather than showing misleading placeholder numbers.
-function updateHeaderConditions(){
+async function updateHeaderConditions(){
   const water = document.getElementById("hdr-water");
   const air   = document.getElementById("hdr-air");
   const seas  = document.getElementById("hdr-seas");
@@ -12840,14 +12670,27 @@ function updateHeaderConditions(){
     updateHeaderTide();
     return;
   }
-  // Sample conditions a short distance offshore from the port (where you'd fish),
-  // not at the dock. ~10nm SE is a reasonable nearshore proxy.
-  const wx = calcWx(p.lat + 0.05, p.lng + 0.05);
-  water.innerHTML = `${Math.round(wx.waterTempF)}<span class="wx-deg">°</span>F`;
-  air.innerHTML   = `${Math.round(wx.airTempF)}<span class="wx-deg">°</span>F`;
-  seas.textContent  = `${wx.waveHt}ft`;
-  wind.textContent  = `${wx.windKt}kt`;
   updateHeaderTide();
+  // REAL conditions only (NDBC buoy + forecast model + ERDDAP via the ocean
+  // backend), sampled a short distance offshore from the port (where you'd fish).
+  // Cells show "—" until/unless real data is available — never synthetic.
+  if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchOcean){
+    water.textContent = air.textContent = seas.textContent = wind.textContent = "—";
+    return;
+  }
+  const lat = p.lat + 0.05, lng = p.lng + 0.05;
+  try {
+    const o = await BW_OCEAN.fetchOcean(lat, lng);
+    // A different port may have been selected while awaiting — bail if so.
+    if(!activePort || PORTS[activePort] !== p) return;
+    const waterF = (o?.waterTemp?.value != null) ? o.waterTemp.value : (o?.sst?.value != null ? o.sst.value : null);
+    water.innerHTML  = waterF != null ? `${Math.round(waterF)}<span class="wx-deg">°</span>F` : "—";
+    air.innerHTML    = (o?.airTemp?.value != null) ? `${Math.round(o.airTemp.value)}<span class="wx-deg">°</span>F` : "—";
+    seas.textContent = (o?.waves?.value != null) ? `${Math.round(o.waves.value * 10) / 10}ft` : "—";
+    wind.textContent = (o?.wind?.value != null) ? `${Math.round(o.wind.value)}kt` : "—";
+  } catch(e){
+    water.textContent = air.textContent = seas.textContent = wind.textContent = "—";
+  }
 }
 
 // Tide for the header: shows the current STATE (Rising / Falling / Slack) plus
