@@ -8031,6 +8031,21 @@ const HeatCanvasLayer = L.Layer.extend({
       for(let x = 0; x < w; x += PIX_STRIDE){
         const ll = { lat: _lat, lng: _lngAtX[x] };
 
+        // ── REAL bathymetry land mask (authoritative when loaded) ──
+        // ETOPO stores land as depth 0 and water as depth > 0. When the bathy
+        // grid is loaded for this area (it is during a prediction render), this
+        // is a precise, basemap-independent land cut for coastlines, bays,
+        // sounds and rivers everywhere from Maine to Texas — so the heat never
+        // paints over land even when the satellite basemap pixel is ambiguous
+        // (turbid bay water, shadows, vegetation reading as "water").
+        if(typeof realDepthAt === "function"){
+          const _rd = realDepthAt(ll.lat, ll.lng);
+          if(_rd != null && _rd <= 0){
+            this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
+            continue;
+          }
+        }
+
         // ── Water/land mask — basemap pixel first, polygon fallback ──
         // Pixel sampling against the rendered basemap is pixel-perfect for
         // every coastline, bay, inlet, sound, lagoon, and barrier island —
