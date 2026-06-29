@@ -4323,9 +4323,9 @@ const PREDICT_SPECIES_PREFS = {
   // shelf edge. Two bands: ride-along on Gulf Stream (deep) + shelf
   // weed-line patches (shallower).
   mahi:         {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"edge",    depthBands:[[30,150],[200,1000]], breakPref:"any"},
-  cobia:        {tempIdeal:[68,78], tempWorking:[64,82], chlorPref:"high",    depthBands:[[5,40]],     breakPref:"stable"},
+  cobia:        {tempIdeal:[68,78], tempWorking:[64,82], chlorPref:"high",    salinityPref:"high", depthBands:[[2,40]],     breakPref:"stable"},
   redfish:      {tempIdeal:[62,78], tempWorking:[58,84], chlorPref:"high",    depthBands:[[1,15]],     breakPref:"stable"},
-  flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[5,80]],     breakPref:"stable"},
+  flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable"},
   blackseabass: {tempIdeal:[58,72], tempWorking:[52,76], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable"},
   tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable"},
   tilefish:     {tempIdeal:[48,60], tempWorking:[42,64], chlorPref:"any",     depthBands:[[150,500]],  breakPref:"any", bottom:true },
@@ -4344,8 +4344,8 @@ const PREDICT_SPECIES_PREFS = {
   bigeye:       {tempIdeal:[64,74], tempWorking:[58,78], chlorPref:"low",     depthBands:[[300,2000]], breakPref:"edge"  },
   // ── INSHORE / NEARSHORE EAST COAST ─────────────────────────────────────
   speckledtrout:{tempIdeal:[62,75], tempWorking:[55,82], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,20]],     breakPref:"stable"},
-  spadefish:    {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[15,80]],    breakPref:"any"  },
-  croaker:      {tempIdeal:[60,75], tempWorking:[55,82], chlorPref:"high",    depthBands:[[5,60]],     breakPref:"stable"},
+  spadefish:    {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[6,80]],     breakPref:"any"  },
+  croaker:      {tempIdeal:[60,75], tempWorking:[55,82], chlorPref:"high",    depthBands:[[2,60]],     breakPref:"stable"},
   spanishmack:  {tempIdeal:[68,80], tempWorking:[62,84], chlorPref:"edge",    depthBands:[[5,40]],     breakPref:"any"  },
   kingmack:     {tempIdeal:[70,82], tempWorking:[66,85], chlorPref:"edge",    depthBands:[[15,80]],    breakPref:"any"  },
   triggerfish:  {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any"  },
@@ -4361,7 +4361,7 @@ const PREDICT_SPECIES_PREFS = {
   bluelinetile: {tempIdeal:[55,68], tempWorking:[50,72], chlorPref:"any",     depthBands:[[120,700]],  breakPref:"any", bottom:true },
   gaggrouper:   {tempIdeal:[66,76], tempWorking:[60,82], chlorPref:"any",     depthBands:[[20,150]],   breakPref:"any"  },
   amberjack:    {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any"  },
-  tripletail:   {tempIdeal:[72,84], tempWorking:[68,88], chlorPref:"any",     depthBands:[[5,40]],     breakPref:"any"  },
+  tripletail:   {tempIdeal:[72,84], tempWorking:[68,88], chlorPref:"any",     depthBands:[[2,40]],     breakPref:"any"  },
   pompano:      {tempIdeal:[68,78], tempWorking:[62,82], chlorPref:"any",     depthBands:[[2,15]],     breakPref:"stable"},
   vermilion:    {tempIdeal:[66,78], tempWorking:[60,82], chlorPref:"any",     depthBands:[[50,200]],   breakPref:"any"  },
   lanesnap:     {tempIdeal:[70,82], tempWorking:[66,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any"  },
@@ -5923,17 +5923,37 @@ function scoreCell(lat, lng, speciesId){
   // with multiple bands) get full credit in any of their preferred zones.
   let depthScore = 0;
   const bands = prefs.depthBands || [[0, 2000]];
+  // HARD SHALLOW FLOOR: regardless of species, water shallower than ~1.5 m
+  // (~5 ft) is not a place we recommend a fishing hotspot — it's tidal flat /
+  // skinny water you'd run aground in, and a pin there (like the 3 ft cobia
+  // spot) is never right. Inshore species that genuinely use very skinny water
+  // (redfish tailing flats) can be exempted later via a prefs flag, but the
+  // current species set is all boat-fished, so a 5 ft floor is safe and kills
+  // the nonsensical flats hotspots at the source.
+  const MIN_FISHABLE_DEPTH_M = 1.5;
+  if(depth != null && depth >= 0 && depth < MIN_FISHABLE_DEPTH_M){
+    depthScore = 0;
+  } else {
   for(const [bMin, bMax] of bands){
     let bandScore;
     if(depth >= bMin && depth <= bMax){
       bandScore = 1.0;
+    } else if(depth < bMin){
+      // TOO SHALLOW: decay STEEPLY. Being well shallower than a species' minimum
+      // depth is disqualifying, not a minor penalty — a 3 ft flat is not "almost"
+      // cobia water. The old gentle 1/120 m decay let 0.9 m (3 ft) score ~0.97
+      // for a [5,40] m species, which put hotspots on tidal flats. We decay over
+      // ~12 m on the shallow side so a spot a few meters under the floor falls
+      // off fast and anything truly skinny (a few feet) is near zero.
+      const below = bMin - depth;
+      bandScore = Math.max(0, 1 - below / 12);
     } else {
-      const distFromBand = depth < bMin ? (bMin - depth) : (depth - bMax);
-      // Steeper decay (was 1/200 → now 1/120 m) so wrong-depth water
-      // doesn't score nearly as well as right-depth water.
-      bandScore = Math.max(0, 1 - distFromBand / 120);
+      // TOO DEEP: gentler decay (a species can stray a bit deeper than ideal).
+      const above = depth - bMax;
+      bandScore = Math.max(0, 1 - above / 120);
     }
     if(bandScore > depthScore) depthScore = bandScore;
+  }
   }
   // Canyon-edge bonus only applies if at least one band actually wants
   // canyon-depth water (otherwise we'd be giving a free boost to flounder
@@ -7714,6 +7734,9 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
         onProgress && onProgress({
           heatGrid: heatGrid.slice().sort((a,b)=>b.score-a.score),
           hotspots: hotspotGrid.slice().sort((a,b)=>b.score-a.score),
+          gridStep: step,
+          gridOriginLat: latMin,
+          gridOriginLng: lngMin,
         }, myGen);
         requestAnimationFrame(step_frame);
       } else {
@@ -7738,6 +7761,9 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
       onDone && onDone({
         heatGrid: heatGrid.sort((a,b)=>b.score-a.score),
         hotspots: refineList.sort((a,b)=>b.score-a.score),
+        gridStep: step,
+        gridOriginLat: latMin,
+        gridOriginLng: lngMin,
       }, myGen);
     }
   }
@@ -8034,21 +8060,29 @@ const HeatCanvasLayer = L.Layer.extend({
     // ════════════════════════════════════════════════════════════════════════
 
     const map = this._map;
-    const GRID_STEP = 0.25;
+    // The interpolation grid MUST match BOTH the spacing AND the origin of the
+    // computed data grid. The grid is adaptive: 0.1° (~6nm) over a port's bbox
+    // (whose origin is an arbitrary latMin/lngMin, NOT a clean 0.1° multiple),
+    // or 0.25° on the whole-coast fallback (origin LAT_MIN=24.0). Snapping to
+    // the absolute round(x/step)*step lattice (as before) only worked for the
+    // 0.25° case where the origin happened to align; for the port-scoped 0.1°
+    // grid the points sit at origin+n·step (e.g. 35.0333, 35.1333…) and missed
+    // every key — reading score 0 and shattering the field into blobs. We snap
+    // RELATIVE to the real origin instead.
+    const GRID_STEP = this._opts.gridStep || 0.25;
+    const ORIGIN = this._opts.gridOrigin && this._opts.gridOrigin.lat != null
+      ? this._opts.gridOrigin : { lat: 0, lng: 0 };
+    const snap = (v, origin) => origin + Math.round((v - origin) / GRID_STEP) * GRID_STEP;
+    const floorTo = (v, origin) => origin + Math.floor((v - origin) / GRID_STEP) * GRID_STEP;
+    const keyOf = (lat, lng) => `${snap(lat, ORIGIN.lat).toFixed(4)},${snap(lng, ORIGIN.lng).toFixed(4)}`;
 
     // Build a sparse hash map of {lat, lng} → score for O(1) lookup
     const cellScores = new Map();
     for(const p of this._points){
-      // Snap to the grid: cells are at multiples of 0.25°
-      const key = `${p.lat.toFixed(2)},${p.lng.toFixed(2)}`;
-      cellScores.set(key, p.intensity);
+      cellScores.set(keyOf(p.lat, p.lng), p.intensity);
     }
     const lookupScore = (lat, lng) => {
-      // Round to nearest grid cell. Computed grid uses lat += 0.25 starting
-      // at lat 24.0; so cell centers are at 24.00, 24.25, 24.50, ...
-      const gLat = Math.round(lat / GRID_STEP) * GRID_STEP;
-      const gLng = Math.round(lng / GRID_STEP) * GRID_STEP;
-      const v = cellScores.get(`${gLat.toFixed(2)},${gLng.toFixed(2)}`);
+      const v = cellScores.get(keyOf(lat, lng));
       return v == null ? 0 : v;
     };
 
@@ -8171,9 +8205,11 @@ const HeatCanvasLayer = L.Layer.extend({
 
         // ── Bilinear interpolation of the 4 surrounding grid cells ──
         // The pixel sits inside a [latLo, latHi] × [lngLo, lngHi] grid cell.
-        const latLo = Math.floor(ll.lat / GRID_STEP) * GRID_STEP;
+        // Corners are computed RELATIVE to the grid origin (see snap/floorTo
+        // above) so they line up with the actual data points at origin+n·step.
+        const latLo = floorTo(ll.lat, ORIGIN.lat);
         const latHi = latLo + GRID_STEP;
-        const lngLo = Math.floor(ll.lng / GRID_STEP) * GRID_STEP;
+        const lngLo = floorTo(ll.lng, ORIGIN.lng);
         const lngHi = lngLo + GRID_STEP;
         const fLat = (ll.lat - latLo) / GRID_STEP;  // 0..1 weight toward latHi
         const fLng = (ll.lng - lngLo) / GRID_STEP;  // 0..1 weight toward lngHi
@@ -8642,9 +8678,11 @@ function drawPrediction(){
       if(gen !== _predictGen || !layerVis.predict){ return; }
       const heatGrid = Array.isArray(full) ? full : (full && full.heatGrid) || [];
       const hotspots = Array.isArray(full) ? full : (full && full.hotspots) || [];
+      const gridStep = (full && full.gridStep) || 0.25;
+      const gridOrigin = full ? { lat: full.gridOriginLat, lng: full.gridOriginLng } : null;
       if(!heatGrid.length){ _predictGrid = null; updateForecastSliderVisibility(); return; }
       predictionData = hotspots;
-      renderPrediction(hotspots, species, true, heatGrid);
+      renderPrediction(hotspots, species, true, heatGrid, gridStep, gridOrigin);
     }
   );
 }
@@ -8653,9 +8691,11 @@ function drawPrediction(){
 // layer instance across calls (via setPoints) so re-rendering doesn't churn
 // Leaflet panes. `final` controls whether the badges are drawn.
 let _heatLayer = null;
-function renderPrediction(grid, species, final, heatGridOverride){
+function renderPrediction(grid, species, final, heatGridOverride, gridStep, gridOrigin){
   const hotspots = grid || [];
   const heatGrid = heatGridOverride || hotspots;
+  const step = gridStep || 0.25;
+  const origin = gridOrigin || null;
   if(!heatGrid || heatGrid.length === 0) return;
   // Remove only the badge markers (not the heat layer — we reuse it).
   predictLayers.forEach(l => { if(l !== _heatLayer) MAP.removeLayer(l); });
@@ -8669,9 +8709,11 @@ function renderPrediction(grid, species, final, heatGridOverride){
   const heatPoints = heatGrid.map(cell => ({ lat: cell.lat, lng: cell.lng, intensity: heatDisplayIntensity(cell.score) }));
   if(_heatLayer && MAP.hasLayer(_heatLayer)){
     _heatLayer._opts.speciesId = activeSpId;  // mask follows the active species
+    _heatLayer._opts.gridStep = step;          // keep interpolation grid matched to data grid
+    _heatLayer._opts.gridOrigin = origin;
     _heatLayer.setPoints(heatPoints);          // cheap data swap + one redraw
   } else {
-    _heatLayer = heatCanvasLayer(heatPoints, {radiusPx: 55, minOpacity: 0.68, speciesId: activeSpId});
+    _heatLayer = heatCanvasLayer(heatPoints, {radiusPx: 55, minOpacity: 0.68, speciesId: activeSpId, gridStep: step, gridOrigin: origin});
     _heatLayer.addTo(MAP);
   }
   predictLayers.push(_heatLayer);
@@ -8679,7 +8721,29 @@ function renderPrediction(grid, species, final, heatGridOverride){
   if(!final) return;
 
   // ── Top 3 hotspot badges (final paint only) ──
-  hotspots.slice(0, 3).forEach((cell, i) => {
+  // Pick the 3 strongest hotspots that are also SPACED OUT, so the badges
+  // represent three genuinely different areas an angler would choose between —
+  // not three pins stacked on the same hot zone (which wastes two slots). We go
+  // down the score-sorted list and accept a spot only if it's at least
+  // minSepNm from every spot already chosen. Separation scales with how far
+  // offshore the run is (a hotspot's distNm from port): inshore spots only need
+  // ~5 nm of separation to feel distinct, but offshore canyon spots that you'd
+  // run 10-15 nm between should be spread wider. If we can't find 3 adequately
+  // separated spots above threshold, we show however many we found (2, or even
+  // 1) rather than forcing a third pin onto redundant or mediocre water.
+  const chosen = [];
+  const sepFor = (cell) => {
+    const d = (typeof cell.distNm === "number") ? cell.distNm : 20;
+    // 5 nm inshore → up to ~13 nm well offshore.
+    return Math.min(13, Math.max(5, d * 0.18));
+  };
+  for(const cell of hotspots){
+    if(chosen.length >= 3) break;
+    const minSep = sepFor(cell);
+    const farEnough = chosen.every(c => nmBetween(c.lat, c.lng, cell.lat, cell.lng) >= minSep);
+    if(farEnough) chosen.push(cell);
+  }
+  chosen.forEach((cell, i) => {
     const badge = L.marker([cell.lat, cell.lng], {
       icon: L.divIcon({
         className: "predict-badge",
