@@ -3596,8 +3596,16 @@ let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satellit
 // Satellite layers (SST/chlor) are OBSERVED data — they only go backward. This
 // is days back from the most-recent expected image (GIBS lags ~2 days). The
 // forecast slider drives the algorithm FORWARD; this slider steps imagery BACK.
-let satDayOffset = 0;   // 0 = most recent (gibsRecentDate's default 2-day lag)
+let satDayOffset = 0;   // 0 = most recent (the resolved freshest published date)
 const SAT_MAX_DAYS_BACK = 14;
+// Resolved "freshest available" GIBS publish lag per product (days back from UTC
+// today) and the real date string being shown. Defaults to 1 day (these products
+// typically publish within ~24h); ensureFreshestSatDates() probes GIBS and tightens
+// this to today / yesterday / 2-days-back as soon as it confirms which date is
+// actually published, so imagery is as fresh as possible and its REAL date is
+// shown — never silently presented as "current".
+let SAT_FRESH_BACK = { sst: 1, chlor: 1 };
+let SAT_FRESH_DATE = { sst: null, chlor: null };
 // Per-layer display opacity for the ocean overlays, driven by the vertical
 // opacity slider on the right of the map. Defaults match the values the layers
 // were originally built with (SST .65, chlor .55). Persisted so a user's
@@ -3784,9 +3792,9 @@ async function initMap(){
   // ══════════════════════════════════════════════════════════════════════
   // Factory builders for the satellite layers, so initial creation and the
   // date-slider rebuild share ONE definition (URLs/options can't drift).
-  // satDayOffset = extra days back beyond GIBS's ~2-day processing lag.
+  // satDayOffset = extra days back beyond the resolved freshest published date.
   window.buildSstLayer = function(dayOffset){
-    const date = gibsRecentDate(2 + (dayOffset||0));
+    const date = gibsRecentDate(SAT_FRESH_BACK.sst + (dayOffset||0));
     const lyr = L.tileLayer(
       // GAMSSA — GHRSST L4, gap-filled, global daily SST (~28km). L4 = complete
       // coverage, no cloud holes. maxNativeZoom keeps it visible (upscaled) past z6.
@@ -3797,7 +3805,7 @@ async function initMap(){
     return attachTileSmoothing(lyr);
   };
   window.buildChlorLayer = function(dayOffset){
-    const date = gibsRecentDate(2 + (dayOffset||0));
+    const date = gibsRecentDate(SAT_FRESH_BACK.chlor + (dayOffset||0));
     const lyr = L.tileLayer(
       `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Aqua_L2_Chlorophyll_A/default/${date}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`,
       { maxZoom:18, maxNativeZoom:7, minZoom:0, opacity:oceanOpacity.chlor, crossOrigin:'anonymous',
@@ -3807,6 +3815,10 @@ async function initMap(){
   };
   sstLayer   = window.buildSstLayer(0);
   chlorLayer = window.buildChlorLayer(0);
+  // Probe GIBS for the freshest published SST/chlor dates and tighten the lag
+  // (and on-screen date label) as soon as it resolves. Fire-and-forget so init
+  // isn't blocked; until it resolves the conservative 1-day-back default applies.
+  if(typeof ensureFreshestSatDates === "function") ensureFreshestSatDates();
 
   // ── Live weather radar (NOAA nowCOAST MRMS base reflectivity) ──
   // NOAA retired the old /arcgis/ radar service; nowCOAST moved to a GeoServer
@@ -4779,13 +4791,13 @@ function getRegionalSeasons(speciesId, lat, lng){
 // All produce realistic East Coast values keyed to lat/lng.
 
 // ── NASA GIBS DATE HELPER ──
-// Returns a YYYY-MM-DD date string for use in GIBS tile URLs. Defaults to
-// 2 days back from UTC today to account for the satellite processing lag
-// (MODIS/MUR SST data typically becomes available ~24-36 hours after the
-// satellite pass). If you want today's data, pass 0; for yesterday, 1.
+// Returns a YYYY-MM-DD (UTC) date string for use in GIBS tile URLs. Defaults to
+// 1 day back (these products usually publish within ~24h). The exact freshest
+// date is resolved at runtime by ensureFreshestSatDates() below — this helper is
+// just the date-math. If you want today's data, pass 0; for yesterday, 1.
 function gibsRecentDate(daysBack){
   const d = new Date();
-  d.setUTCDate(d.getUTCDate() - (typeof daysBack === "number" ? daysBack : 2));
+  d.setUTCDate(d.getUTCDate() - (typeof daysBack === "number" ? daysBack : 1));
   const yyyy = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(d.getUTCDate()).padStart(2, "0");
@@ -4797,6 +4809,80 @@ function gibsRecentDate(daysBack){
 // sample → regional real median → null. The old synthSST/synthDepth/thermalBreak
 // synthetic models were removed — no fabricated SST anywhere. Thermal breaks are
 // measured from the real SST grid/field by thermalBreakReal/thermalBreakGrid.
+
+// ── Freshest-available GIBS date resolver ──
+// GIBS 404s (image onerror) for dates it hasn't published yet, and serves a real
+// 200 tile (even if transparent over a swath gap) for dates it HAS. We probe a
+// low-zoom tile for today, then step back day-by-day, and use the most recent
+// date whose tile actually exists. Nothing is fabricated: if the freshest real
+// imagery is still a couple days old, that real date is what we resolve + display.
+const _gibsDateCache = {}; // layerId -> { date, daysBack, atMs }
+function probeGibsTile(layerId, tileSet, ext, date){
+  return new Promise((resolve) => {
+    // A low-zoom (z2) tile so any published date returns a real (200) tile.
+    const url = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layerId}/default/${date}/${tileSet}/2/1/1.${ext}`;
+    const img = new Image();
+    let settled = false;
+    const done = (ok) => { if(settled) return; settled = true; resolve(ok); };
+    img.onload  = () => done(true);   // date is published
+    img.onerror = () => done(false);  // 404 — not published yet
+    setTimeout(() => done(false), 4500); // network stall → treat as unavailable
+    img.src = url;
+  });
+}
+// Resolve the freshest published date for one layer, trying today..maxBack days
+// back. Cached ~30 min. Returns { date, daysBack, atMs }; atMs===0 means the
+// probe could not confirm anything (e.g. offline) and the caller should keep its
+// conservative default.
+async function resolveFreshestGibsDate(layerId, tileSet, ext, maxBack){
+  const cap = (typeof maxBack === "number") ? maxBack : 3;
+  const hit = _gibsDateCache[layerId];
+  if(hit && Date.now() - hit.atMs < 30 * 60 * 1000) return hit;
+  for(let b = 0; b <= cap; b++){
+    const date = gibsRecentDate(b);
+    /* eslint-disable no-await-in-loop */
+    const ok = await probeGibsTile(layerId, tileSet, ext, date);
+    if(ok){
+      const res = { date, daysBack: b, atMs: Date.now() };
+      _gibsDateCache[layerId] = res;
+      return res;
+    }
+  }
+  return { date: gibsRecentDate(1), daysBack: 1, atMs: 0 }; // unconfirmed — keep default
+}
+// Re-point an SST/chlor overlay to the current date. A visible layer crossfades
+// smoothly to the new date; a hidden one is just rebuilt so it carries the right
+// date the moment it's toggled on (toggleLayer reuses the stored layer object).
+function refreshSatLayerDate(which){
+  const visible = (typeof layerVis !== "undefined") && layerVis[which];
+  if(visible && typeof crossfadeLayer === "function"){ crossfadeLayer(which); return; }
+  if(which === "sst"   && typeof window.buildSstLayer   === "function") sstLayer   = window.buildSstLayer(satDayOffset);
+  if(which === "chlor" && typeof window.buildChlorLayer === "function") chlorLayer = window.buildChlorLayer(satDayOffset);
+}
+// Probe SST (GAMSSA L4) + chlor (MODIS Aqua L2), tighten SAT_FRESH_BACK/DATE to
+// the freshest confirmed date, re-point the overlays to it, and refresh the label.
+let _ensuringFreshDates = false;
+async function ensureFreshestSatDates(){
+  if(_ensuringFreshDates) return;
+  _ensuringFreshDates = true;
+  try {
+    const [sst, chl] = await Promise.all([
+      resolveFreshestGibsDate("GHRSST_L4_GAMSSA_GDS2_Sea_Surface_Temperature", "GoogleMapsCompatible_Level6", "png", 3),
+      resolveFreshestGibsDate("MODIS_Aqua_L2_Chlorophyll_A", "GoogleMapsCompatible_Level7", "png", 3),
+    ]);
+    let sstChanged = false, chlChanged = false;
+    if(sst && sst.atMs){ sstChanged = SAT_FRESH_BACK.sst   !== sst.daysBack; SAT_FRESH_BACK.sst   = sst.daysBack; SAT_FRESH_DATE.sst   = sst.date; }
+    if(chl && chl.atMs){ chlChanged = SAT_FRESH_BACK.chlor !== chl.daysBack; SAT_FRESH_BACK.chlor = chl.daysBack; SAT_FRESH_DATE.chlor = chl.date; }
+    // Only re-point when viewing the freshest frame (satDayOffset 0); if the user
+    // has stepped back in history, leave their chosen frame alone.
+    if(satDayOffset === 0){
+      if(sstChanged) refreshSatLayerDate("sst");
+      if(chlChanged) refreshSatLayerDate("chlor");
+    }
+    if(typeof updateSatDateDisplay === "function") updateSatDateDisplay();
+  } catch(e){ /* leave conservative defaults in place */ }
+  finally { _ensuringFreshDates = false; }
+}
 
 // Reports proximity boost — looks at SOCIAL feed if recent posts mention nearby canyons/spots
 function reportsBoost(lat, lng, speciesId){
@@ -9141,15 +9227,30 @@ function crossfadeLayer(which){
   setTimeout(go, 1200); // fallback: don't hang if a few tiles 404
 }
 
+// Days-back from UTC today for the imagery currently shown, using the resolved
+// freshest base lag of whichever overlay is visible (SST preferred when both on).
+function satCurrentDaysBack(){
+  let base = SAT_FRESH_BACK.sst;
+  if(typeof layerVis !== "undefined"){
+    if(layerVis.sst)        base = SAT_FRESH_BACK.sst;
+    else if(layerVis.chlor) base = SAT_FRESH_BACK.chlor;
+  }
+  return base + satDayOffset;
+}
 function satDateLabel(){
-  if(satDayOffset === 0) return "Latest";
   const d = new Date();
-  d.setUTCDate(d.getUTCDate() - (2 + satDayOffset));
+  d.setUTCDate(d.getUTCDate() - satCurrentDaysBack());
   return d.toLocaleDateString(undefined, {month:"short", day:"numeric"});
 }
 function updateSatDateDisplay(){
   const el = document.getElementById("sat-date-display");
-  if(el) el.textContent = satDayOffset === 0 ? "Latest imagery" : satDateLabel() + " (" + satDayOffset + "d ago)";
+  // Always show the REAL observed date + age so staleness is transparent — never
+  // a bare "Latest" that could silently present old imagery as current.
+  if(el){
+    const back = satCurrentDaysBack();
+    const age = back <= 0 ? "today" : back === 1 ? "1 day ago" : back + " days ago";
+    el.textContent = `Observed ${satDateLabel()} · ${age}`;
+  }
   const inp = document.getElementById("sat-date-input");
   // Slider is left→right = OLDER→NEWER (intuitive: rightward = forward in time).
   // The input value is "days back", so the thumb position is the inverse.
@@ -9174,6 +9275,12 @@ function updateSatDateControlVisibility(){
   if(!box) return;
   const show = !!(layerVis.sst || layerVis.chlor);
   box.style.display = show ? "block" : "none";
+  if(show){
+    // Confirm/refresh the freshest published date when an overlay is turned on,
+    // and show its real observed date/age right away.
+    if(typeof ensureFreshestSatDates === "function") ensureFreshestSatDates();
+    updateSatDateDisplay();
+  }
   restackBottomControls();
 }
 
