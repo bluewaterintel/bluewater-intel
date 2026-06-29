@@ -7653,74 +7653,157 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
 
   const port = (typeof activePort !== "undefined" && activePort) ? PORTS[activePort] : null;
   const maxRange = maxRangeForPort(port);
-  const step = 0.25;
+  // Full-coast extent — used only as the fallback when no port is selected.
   const LAT_MIN = 24.0, LAT_MAX = 43.5, LNG_MIN = -97.5, LNG_MAX = -68.5;
-  // Rows of latitude scored per frame. ~6 rows × ~116 lng ≈ 700 cells/frame,
-  // which keeps each frame well under the ~16ms budget on typical hardware.
-  const ROWS_PER_FRAME = 6;
+
+  // ── Scope the fine grid to the active port's fishing range ──────────────────
+  // Scoring the whole coast at a fine step would cover tens of thousands of
+  // cells. When a port is active we restrict the grid to a bounding box around
+  // the port that covers its max range, which shrinks the cell count enough to
+  // afford a ~6 nm (0.1°) step. With no port we keep the full extent at 0.25°.
+  let step, latMin, latMax, lngMin, lngMax, ROWS_PER_FRAME;
+  let bboxLatMin = LAT_MIN, bboxLatMax = LAT_MAX, bboxLngMin = LNG_MIN, bboxLngMax = LNG_MAX;
+  if(port){
+    const degLat = (maxRange / 60) + 0.15;
+    const degLng = (maxRange / (60 * Math.cos(port.lat * Math.PI / 180))) + 0.15;
+    bboxLatMin = Math.max(LAT_MIN, port.lat - degLat);
+    bboxLatMax = Math.min(LAT_MAX, port.lat + degLat);
+    bboxLngMin = Math.max(LNG_MIN, port.lng - degLng);
+    bboxLngMax = Math.min(LNG_MAX, port.lng + degLng);
+    latMin = bboxLatMin; latMax = bboxLatMax; lngMin = bboxLngMin; lngMax = bboxLngMax;
+    step = 0.1;          // ≈6 nm — fine field, but only over the port's bbox
+    ROWS_PER_FRAME = 6;  // ~6 rows × ≈50 lng over water keeps each frame <16ms
+  } else {
+    latMin = LAT_MIN; latMax = LAT_MAX; lngMin = LNG_MIN; lngMax = LNG_MAX;
+    step = 0.25;
+    ROWS_PER_FRAME = 6;
+  }
+
   const heatGrid = [];
   const hotspotGrid = [];
-  let lat = LAT_MIN;
+  let lat = latMin;
+  const penaltyStart = maxRange / 3;
 
-  function step_frame(){
-    // Abort if a newer run started (species/port changed).
-    if(myGen !== _predictGen) return;
-    let rows = 0;
-    for(; lat <= LAT_MAX && rows < ROWS_PER_FRAME; lat += step, rows++){
-      for(let lng = LNG_MIN; lng <= LNG_MAX; lng += step){
-        if(!isPredictWater(lat, lng)) continue;
-        const waterType = classifyWaterType(lat, lng);
-        if(!speciesAllowedInWater(speciesId, waterType)) continue;
-        if(!speciesAllowedAtLat(speciesId, lat, lng)) continue;
-        let distNm = 0;
-        if(port){
-          distNm = nmBetween(port.lat, port.lng, lat, lng);
-          if(distNm > maxRange) continue;
-        }
-        const result = scoreCell(lat, lng, speciesId);
-        if(!result) continue;
-        const penaltyStart = maxRange / 3;
-        if(port && distNm > penaltyStart){
-          const penalty = ((distNm - penaltyStart) / (maxRange - penaltyStart)) * 0.15;
-          result.score = result.score * (1 - penalty);
-        }
-        if(result.score < PREDICT_HEAT_SCORE_MIN) continue;
-        const cell = {lat, lng, distNm: Math.round(distNm), ...result};
-        heatGrid.push(cell);
-        if(result.score >= PREDICT_HOTSPOT_SCORE_MIN) hotspotGrid.push(cell);
+  // ── Local hotspot refinement (snap each top hotspot to its true peak) ───────
+  // The fine grid still snaps coordinates to the step (0.1°). For the handful of
+  // strongest hotspots we re-score a 5×5 micro-grid at 0.02° (~1.2 nm) around
+  // each and move it to the highest-scoring point, so hotspot coordinates are
+  // precise rather than grid-snapped — without paying that cost across the field.
+  const REFINE_TOP_N = 40;     // strongest hotspots only (badges + likely clicks)
+  const REFINE_STEP = 0.02;    // ≈1.2 nm micro-grid
+  const REFINE_HALF = 2;       // 5×5 window
+  const REFINE_PER_FRAME = 4;  // hotspots refined per frame (×24 scoreCell ≈ 96/frame)
+
+  // Score one point with the SAME water/species/range/penalty rules as the grid,
+  // so micro-grid scores are directly comparable to the cell being refined.
+  function scoreWithPenalty(la, ln){
+    if(!isPredictWater(la, ln)) return null;
+    if(!speciesAllowedInWater(speciesId, classifyWaterType(la, ln))) return null;
+    if(!speciesAllowedAtLat(speciesId, la, ln)) return null;
+    let d = 0;
+    if(port){
+      d = nmBetween(port.lat, port.lng, la, ln);
+      if(d > maxRange) return null;
+    }
+    const r = scoreCell(la, ln, speciesId);
+    if(!r) return null;
+    if(port && d > penaltyStart){
+      const penalty = ((d - penaltyStart) / (maxRange - penaltyStart)) * 0.15;
+      r.score = r.score * (1 - penalty);
+    }
+    return { result: r, distNm: Math.round(d) };
+  }
+  // Re-score a micro-grid around a hotspot and return a NEW cell at the local
+  // peak (a fresh object, so the shared heatGrid copy is left untouched).
+  function refinePeak(cell){
+    let bestScore = cell.score, best = null;
+    for(let di = -REFINE_HALF; di <= REFINE_HALF; di++){
+      for(let dj = -REFINE_HALF; dj <= REFINE_HALF; dj++){
+        if(di === 0 && dj === 0) continue;  // center is the cell we already have
+        const la = cell.lat + di * REFINE_STEP;
+        const ln = cell.lng + dj * REFINE_STEP;
+        const s = scoreWithPenalty(la, ln);
+        if(s && s.result.score > bestScore){ bestScore = s.result.score; best = { la, ln, s }; }
       }
     }
-    if(lat <= LAT_MAX){
-      // More rows remain — paint what we have so far, then continue next frame.
-      onProgress && onProgress({
-        heatGrid: heatGrid.slice().sort((a,b)=>b.score-a.score),
-        hotspots: hotspotGrid.slice().sort((a,b)=>b.score-a.score),
-      }, myGen);
+    if(!best) return cell;  // already the local peak — keep its coordinate
+    return { lat: best.la, lng: best.ln, distNm: best.s.distNm, ...best.s.result };
+  }
+
+  let phase = "grid";
+  let refineList = null, refineIdx = 0;
+
+  function step_frame(){
+    // Abort if a newer run started (species/port changed) — cancels BOTH phases.
+    if(myGen !== _predictGen) return;
+
+    if(phase === "grid"){
+      let rows = 0;
+      for(; lat <= latMax && rows < ROWS_PER_FRAME; lat += step, rows++){
+        for(let lng = lngMin; lng <= lngMax; lng += step){
+          if(!isPredictWater(lat, lng)) continue;
+          const waterType = classifyWaterType(lat, lng);
+          if(!speciesAllowedInWater(speciesId, waterType)) continue;
+          if(!speciesAllowedAtLat(speciesId, lat, lng)) continue;
+          let distNm = 0;
+          if(port){
+            distNm = nmBetween(port.lat, port.lng, lat, lng);
+            if(distNm > maxRange) continue;
+          }
+          const result = scoreCell(lat, lng, speciesId);
+          if(!result) continue;
+          if(port && distNm > penaltyStart){
+            const penalty = ((distNm - penaltyStart) / (maxRange - penaltyStart)) * 0.15;
+            result.score = result.score * (1 - penalty);
+          }
+          if(result.score < PREDICT_HEAT_SCORE_MIN) continue;
+          const cell = {lat, lng, distNm: Math.round(distNm), ...result};
+          heatGrid.push(cell);
+          if(result.score >= PREDICT_HOTSPOT_SCORE_MIN) hotspotGrid.push(cell);
+        }
+      }
+      if(lat <= latMax){
+        // More rows remain — paint what we have so far, then continue next frame.
+        onProgress && onProgress({
+          heatGrid: heatGrid.slice().sort((a,b)=>b.score-a.score),
+          hotspots: hotspotGrid.slice().sort((a,b)=>b.score-a.score),
+        }, myGen);
+        requestAnimationFrame(step_frame);
+      } else {
+        // Grid finished → begin the chunked hotspot refinement phase.
+        refineList = hotspotGrid.slice().sort((a,b)=>b.score-a.score);
+        refineIdx = 0;
+        phase = "refine";
+        requestAnimationFrame(step_frame);
+      }
+      return;
+    }
+
+    // phase === "refine": snap the strongest hotspots to their true local peak.
+    const limit = Math.min(refineList.length, REFINE_TOP_N);
+    let n = 0;
+    for(; refineIdx < limit && n < REFINE_PER_FRAME; refineIdx++, n++){
+      refineList[refineIdx] = refinePeak(refineList[refineIdx]);
+    }
+    if(refineIdx < limit){
       requestAnimationFrame(step_frame);
     } else {
       onDone && onDone({
         heatGrid: heatGrid.sort((a,b)=>b.score-a.score),
-        hotspots: hotspotGrid.sort((a,b)=>b.score-a.score),
+        hotspots: refineList.sort((a,b)=>b.score-a.score),
       }, myGen);
     }
   }
   (async () => {
     if(myGen !== _predictGen) return;
     try {
-      // Build the REAL ocean field over the port's local fishing area (not the
-      // whole coast) so SST/chlorophyll come from nearby pixels and a real
-      // temperature break can be measured. Fall back to the full extent only if
-      // no port is selected.
+      // Build the REAL ocean field over the SAME port-scoped bbox we score, so
+      // SST/chlorophyll come from nearby pixels and a real temperature break can
+      // be measured. Full extent only if no port is selected.
       if(port){
-        const degLat = (maxRange / 60) + 0.15;
-        const degLng = (maxRange / (60 * Math.cos(port.lat * Math.PI / 180))) + 0.15;
-        const bLatMin = Math.max(LAT_MIN, port.lat - degLat);
-        const bLatMax = Math.min(LAT_MAX, port.lat + degLat);
-        const bLngMin = Math.max(LNG_MIN, port.lng - degLng);
-        const bLngMax = Math.min(LNG_MAX, port.lng + degLng);
         // One combined request returns bathymetry grid + chlorophyll composite +
         // the batched ocean field (same data as ~90 separate calls).
-        await buildPredictInputs(bLatMin, bLatMax, bLngMin, bLngMax);
+        await buildPredictInputs(bboxLatMin, bboxLatMax, bboxLngMin, bboxLngMax);
       } else {
         await buildOceanField(LAT_MIN, LAT_MAX, LNG_MIN, LNG_MAX, { maxPoints: 60 });
       }
