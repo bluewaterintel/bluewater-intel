@@ -39,7 +39,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     const user = await requireUser();
     const { data, error } = await client
       .from("profiles")
-      .select("display_name, home_port, units")
+      .select("display_name, home_port, units, prefs_json")
       .eq("id", user.id)
       .maybeSingle();
     if (error) throw error;
