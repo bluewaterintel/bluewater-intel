@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
 <title>BlueWater Intel — East Coast Offshore Fishing</title>
 <link rel="manifest" href="/manifest.json"/>
 <meta name="theme-color" content="#2979b5"/>
@@ -38,7 +38,22 @@ window.BW_WAYPOINTS={"version":6,"types":{"wk":"Wreck","rf":"Reef","st":"Structu
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;font-family:Arial,sans-serif}
-body{display:flex;flex-direction:column;height:100vh;background:#0a1628;color:#f0e8d0}
+/* height:100dvh (dynamic viewport height) instead of 100vh so the layout fits
+   the ACTUALLY-visible viewport on mobile. With 100vh, mobile browsers size to
+   the viewport INCLUDING the area behind the address bar / bottom toolbar, which
+   pushed the top header (home port / target species / conditions) up behind the
+   browser chrome and out of view. 100dvh tracks the visible area as the chrome
+   shows/hides. 100vh is kept first as a fallback for older browsers. Safe-area
+   insets keep content clear of notches / the iOS home indicator. */
+body{
+  display:flex;flex-direction:column;
+  height:100vh;
+  height:100dvh;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  box-sizing:border-box;
+  background:#0a1628;color:#f0e8d0;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    HEADER — Modern professional design
@@ -902,32 +917,6 @@ body.nav-open #ruler-readout{
 .layers-divider{border:none;border-top:1px solid rgba(255,255,255,.10);margin:14px 0 8px}
 .layers-section{font-size:10px;color:rgba(240,200,60,.75);letter-spacing:.14em;margin:4px 0 8px;font-weight:bold}
 
-/* Collapsible Advanced section */
-.layers-expander{
-  display:flex;align-items:center;justify-content:space-between;
-  width:100%;
-  background:rgba(255,255,255,.03);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:10px;
-  padding:11px 14px;
-  cursor:pointer;
-  color:#9ec5e8;font-size:12px;font-weight:600;
-  letter-spacing:.08em;text-transform:uppercase;
-  transition:background .15s,border-color .15s;
-  margin-top:4px;
-}
-.layers-expander:hover{background:rgba(255,255,255,.06);border-color:rgba(125,211,252,.25)}
-.layers-expander .exp-arrow{
-  font-size:11px;transition:transform .25s cubic-bezier(.4,0,.2,1);color:#6bbfea;
-}
-.layers-expander.open .exp-arrow{transform:rotate(180deg)}
-#advanced-layers{
-  overflow:hidden;
-  max-height:0;
-  transition:max-height .3s cubic-bezier(.4,0,.2,1);
-}
-#advanced-layers.open{max-height:280px}
-
 /* Legend rows (now living inside the merged panel) */
 .leg-row{display:flex;align-items:center;gap:9px;font-size:12px;color:#d8d0b8;margin-bottom:4px;padding:3px 0}
 .leg-line{display:block;width:24px;height:3px;border-radius:2px;flex-shrink:0}
@@ -1469,7 +1458,6 @@ body.nav-open #ruler-readout{
   });
 })();
 </script>
-
 
 <!-- PRICING / UPGRADE MODAL ------------------------------------------------- -->
 <div id="pricing-modal" style="display:none;position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.62);
@@ -2961,9 +2949,6 @@ const CANYONS=[
   {name:"CBBT", type:"structure", color:"#16a34a", lat:36.97, lng:-76.08,
    desc:"Chesapeake Bay Bridge-Tunnel — the bay mouth's premier structure. Cobia sight-casting in summer, plus trophy striped bass, flounder, sheepshead and sea bass on the pilings and islands.",
    fish:["cobia","striper","flounder","sheepshead","blackseabass","redfish"]},
-  {name:"Smith Point", type:"reef", color:"#16a34a", lat:37.88, lng:-76.18,
-   desc:"Mouth of the Potomac where it meets the Chesapeake. Summer cobia and red drum on the shoals, big striped bass, croaker and spot. Strong tide rips concentrate bait.",
-   fish:["cobia","striper","redfish","flounder"]},
   {name:"Latimer Shoal", type:"lump", color:"#16a34a", lat:37.13181, lng:-75.99854,
    desc:"Lower-bay shoal off Cape Charles guarding the bay-mouth channels. Classic summer cobia and red drum structure; striped bass, flounder and sea bass work the edges where it drops into the channel.",
    fish:["cobia","redfish","striper","flounder","blackseabass"]},
@@ -3781,7 +3766,6 @@ async function initMap(){
     return layer;
   }
 
-
   // ══════════════════════════════════════════════════════════════════════
   // SATELLITE OCEAN OVERLAYS — NASA GIBS WMTS service.
   //
@@ -4133,7 +4117,7 @@ async function refreshCacheStats(){
 // ── Pre-fetch tiles for the current map view (zoom levels 6 to 12) ──
 async function prefetchCurrentView(){
   if(!navigator.serviceWorker.controller){
-    alert("Cache not yet active. Reload the page and try again.");
+    showToast("Cache not yet active. Reload the page and try again.", "warning");
     return;
   }
   const btn = document.getElementById("offline-prefetch-btn");
@@ -4286,7 +4270,6 @@ function showDiagnostics(){
   BWI.track("diag_open");
 }
 
-
 // ════════════════════════════════════════════════════════════════════════════
 // PREDICTIVE HEAT MAP ENGINE
 // Combines SST, chlorophyll, bathymetry, reports, AIS dwell, and Gulf Stream
@@ -4340,23 +4323,23 @@ const PREDICT_SPECIES_PREFS = {
   // ── NEW ENGLAND / NORTHEAST SPECIES ───────────────────────────────────
   // Striper — also multimodal. Surf + back-bay (shallow) AND offshore
   // bunker schools (40-80m) in summer/fall.
-  striper:      {tempIdeal:[55,68], tempWorking:[48,72], chlorPref:"high",    depthBands:[[1,15],[20,80]], breakPref:"stable"},
+  striper:      {tempIdeal:[55,68], tempWorking:[48,72], chlorPref:"high",    salinityPref:"moderate", depthBands:[[1,15],[20,80]], breakPref:"stable"},
   cod:          {tempIdeal:[40,52], tempWorking:[36,58], chlorPref:"high",    depthBands:[[50,300]],   breakPref:"stable"},
   haddock:      {tempIdeal:[42,52], tempWorking:[38,58], chlorPref:"high",    depthBands:[[60,250]],   breakPref:"stable"},
   pollock:      {tempIdeal:[44,54], tempWorking:[40,60], chlorPref:"high",    depthBands:[[80,300]],   breakPref:"stable"},
   bonito:       {tempIdeal:[64,72], tempWorking:[60,76], chlorPref:"edge",    depthBands:[[10,80]],    breakPref:"any"  },
-  bluefish:     {tempIdeal:[60,72], tempWorking:[55,78], chlorPref:"high",    depthBands:[[1,60]],     breakPref:"stable"},
+  bluefish:     {tempIdeal:[60,72], tempWorking:[55,78], chlorPref:"high",    salinityPref:"moderate", depthBands:[[1,60]],     breakPref:"stable"},
   bigeye:       {tempIdeal:[64,74], tempWorking:[58,78], chlorPref:"low",     depthBands:[[300,2000]], breakPref:"edge"  },
   // ── INSHORE / NEARSHORE EAST COAST ─────────────────────────────────────
-  speckledtrout:{tempIdeal:[62,75], tempWorking:[55,82], chlorPref:"high",    depthBands:[[2,20]],     breakPref:"stable"},
+  speckledtrout:{tempIdeal:[62,75], tempWorking:[55,82], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,20]],     breakPref:"stable"},
   spadefish:    {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[15,80]],    breakPref:"any"  },
   croaker:      {tempIdeal:[60,75], tempWorking:[55,82], chlorPref:"high",    depthBands:[[5,60]],     breakPref:"stable"},
   spanishmack:  {tempIdeal:[68,80], tempWorking:[62,84], chlorPref:"edge",    depthBands:[[5,40]],     breakPref:"any"  },
   kingmack:     {tempIdeal:[70,82], tempWorking:[66,85], chlorPref:"edge",    depthBands:[[15,80]],    breakPref:"any"  },
   triggerfish:  {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any"  },
   // ── FLORIDA / TROPICAL SPECIES ──────────────────────────────────────────
-  tarpon:       {tempIdeal:[72,84], tempWorking:[68,88], chlorPref:"high",    depthBands:[[3,40]],     breakPref:"stable"},
-  snook:        {tempIdeal:[70,84], tempWorking:[64,88], chlorPref:"high",    depthBands:[[2,30]],     breakPref:"stable"},
+  tarpon:       {tempIdeal:[72,84], tempWorking:[68,88], chlorPref:"high",    salinityPref:"moderate", depthBands:[[3,40]],     breakPref:"stable"},
+  snook:        {tempIdeal:[70,84], tempWorking:[64,88], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,30]],     breakPref:"stable"},
   bonefish:     {tempIdeal:[74,84], tempWorking:[70,88], chlorPref:"high",    depthBands:[[1,6]],      breakPref:"stable"},
   permit:       {tempIdeal:[74,84], tempWorking:[70,88], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable"},
   ceromack:     {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"edge",    depthBands:[[10,80]],    breakPref:"any"  },
@@ -4883,15 +4866,6 @@ function synthSST(lat, lng){
 }
 
 // Synthetic chlorophyll: high near coast, low offshore, edges along shelf break
-function synthChlor(lat, lng){
-  const sbLng = -76 + (lat - 35) * 0.55;
-  const offshoreDist = sbLng - lng; // negative = offshore of shelf break
-  if(offshoreDist > 1.5) return 1.5 + Math.random()*0.6;     // coastal: high
-  if(offshoreDist > 0.3) return 0.6 + Math.random()*0.4;     // shelf: medium
-  if(offshoreDist > -0.3) return 0.18 + Math.random()*0.15;  // edge: green/blue boundary (the magic)
-  return 0.05 + Math.random()*0.05;                           // bluewater: low
-}
-
 // Synthetic bathymetry depth (m) using simple linear shelf model
 function synthDepth(lat, lng){
   // Use the unified seaDepth function so scoring and rendering agree on
@@ -4956,19 +4930,6 @@ function reportsBoost(lat, lng, speciesId){
 }
 
 // AIS dwell — boost cells where vessel zones report this species
-function aisBoost(lat, lng, speciesId){
-  if(typeof VESSELS === "undefined") return 0;
-  let boost = 0;
-  VESSELS.forEach(v => {
-    if(!v.reports.includes(speciesId)) return;
-    const dist = Math.sqrt((v.lat - lat)**2 + (v.lng - lng)**2);
-    if(dist < 0.3) boost += 0.18;
-    else if(dist < 0.6) boost += 0.10;
-    else if(dist < 1.0) boost += 0.04;
-  });
-  return Math.min(boost, 0.30);
-}
-
 // ── CORE SCORING FUNCTION ────────────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════════
 // HIGH-IMPACT SYNTHETIC DATA GENERATORS
@@ -5467,29 +5428,6 @@ function predictWeightsFor(speciesId){
 // storm, big temperature swing). Right after the change = scattered, slow bite.
 // 24-72 hours after = best (fish re-orient, feed aggressively to recover).
 // Steady conditions for many days = neutral.
-function synthWeatherChange(){
-  // Track recent temperature/pressure deltas using simulated 48h history
-  const hoursSinceEpoch = forecastTimeMs() / 3600000;
-  // Synthesize a recent "shift event" intensity: ranges from 0 (stable) to 1 (major shift)
-  const shiftIntensity = Math.abs(Math.sin(hoursSinceEpoch / 60));  // weekly weather cycles
-  // Synthesize how long ago the shift happened (0-72h)
-  const hoursSinceShift = ((Math.cos(hoursSinceEpoch / 60) + 1) / 2) * 72;
-  return { shiftIntensity, hoursSinceShift };
-}
-function weatherChangeScore(){
-  const { shiftIntensity, hoursSinceShift } = synthWeatherChange();
-  // No major shift recently = neutral score
-  if(shiftIntensity < 0.3) return 0.6;
-  // Major shift currently happening or just happened (0-12h) = slow bite
-  if(hoursSinceShift < 12) return 0.3;
-  // 12-24h post-shift = picking back up
-  if(hoursSinceShift < 24) return 0.65;
-  // 24-72h post-shift = PEAK bite window (fish recovering, feeding aggressively)
-  if(hoursSinceShift < 72) return 0.95;
-  // After 72h = back to steady neutral
-  return 0.65;
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // SCORE NORMALIZATION
 //
@@ -6332,7 +6270,55 @@ function scoreCell(lat, lng, speciesId){
     }
   }
 
-  // Cap at 1.0 so we don't exceed the heat-map's full-intensity range
+  // ── SALINITY GATE (salinity-sensitive species) ─────────────────────────────
+  // The model classifies water by depth/geography but has no salinity field, so
+  // brackish, low-salinity water up inside rivers and the upper bay was scoring
+  // as good habitat for species that actually need higher salinity. Cobia and
+  // redfish, for example, hold near the bay MOUTH and lower river — not up the
+  // brackish James/upper Chesapeake. We apply a salinity proxy: estimate
+  // relative salinity (0 = fresh, 1 = full-strength ocean) from how far a point
+  // sits up an estuary, then penalize species that want salt when salinity is
+  // low. This pulls the recommended cobia/redfish spots down to the saltier
+  // lower/mid bay where they belong, instead of up the river.
+  const _salPref = prefs.salinityPref || (prefs.chlorPref === "high" ? "high" : "any");
+  if(_salPref !== "any" && typeof estuarySalinity === "function"){
+    const sal = estuarySalinity(lat, lng);   // 0..1, 1 = ocean
+    if(sal != null){
+      // "high"   → needs salt (cobia, redfish, flounder, drum, sheepshead…)
+      // "moderate" → tolerant but still wants brackish-to-salty (striper, snook)
+      let salScore;
+      if(_salPref === "high"){
+        // Below ~18 ppt (sal ~0.5) these fish thin out fast; below ~10 ppt rare.
+        salScore = Math.max(0, Math.min(1, (sal - 0.28) / (0.85 - 0.28)));
+      } else { // moderate / brackish-tolerant
+        salScore = Math.max(0, Math.min(1, (sal - 0.08) / (0.55 - 0.08)));
+      }
+      // Gate: salinity is decisive for these fish. Floor keeps a faint trace.
+      const salGate = 0.10 + 0.90 * Math.pow(salScore, 0.7);
+      finalScore = finalScore * salGate;
+    }
+  }
+
+  // ── STRUCTURE-PROXIMITY BONUS (structure-oriented species) ─────────────────
+  // Open flat bay/sound bottom was scoring as well as nearby ledges, rips, and
+  // shoals. For structure-oriented fish (those whose breakPref is "stable" —
+  // reef/ledge/wreck holders like sea bass, tog, sheepshead, cobia on shoals)
+  // proximity to mapped structure should lift the score so the ledges read
+  // hotter than the open sound (e.g. Cape Cod: the rips/ledges should beat
+  // open Nantucket Sound). We give a smooth bonus that decays with distance to
+  // the nearest mapped structure of interest, capped so it shapes — not
+  // dominates — the field.
+  if(prefs.breakPref === "stable" && typeof nearestStructureNm === "function"){
+    const dNm = nearestStructureNm(lat, lng, speciesId);
+    if(dNm != null){
+      // Full bonus within ~2nm of structure, fading to none by ~12nm.
+      const prox = Math.max(0, Math.min(1, (12 - dNm) / (12 - 2)));
+      finalScore = finalScore * (1 + 0.35 * prox);   // up to +35% on structure
+    }
+  }
+
+  // Cap at 1.0 so we don't exceed the heat-map's full-intensity range (the
+  // structure-proximity bonus above can push slightly past 1.0).
   finalScore = Math.min(1.0, finalScore);
 
   // ── SCORE NORMALIZATION ──
@@ -7433,6 +7419,74 @@ function speciesAllowedInWater(speciesId, waterType){
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// ESTUARY SALINITY PROXY
+//
+// The app has no live salinity field, but salinity is decisive for many bay
+// species (cobia, redfish, drum, sheepshead want salt; they aren't up the
+// brackish rivers). We approximate RELATIVE salinity (0 = fresh river water,
+// 1 = full-strength ocean) for the major estuaries from geometry: salinity is
+// highest at the ocean mouth and falls as you move up-bay and up the rivers.
+//
+// Each estuary entry defines a "mouth" point (where ocean salt enters) and a
+// length scale (nm) over which salinity decays to brackish. A point's salinity
+// is a function of its distance from that mouth, clamped to [0,1]. Points not
+// inside any estuary are treated as full ocean salinity (1) — the open coast
+// and shelf are always salty.
+//
+// This is a coarse proxy, not measured PSU. It exists to stop the map from
+// recommending low-salinity river water for high-salinity species. Replace
+// with a real salinity layer (e.g. NOAA CBOFS for the Chesapeake) when wired.
+const ESTUARY_SALINITY = [
+  // Chesapeake Bay: salt enters at the bay mouth (~37.0, -76.0, between Cape
+  // Henry and Cape Charles) and weakens going north up the bay and west up the
+  // James/York/Rappahannock/Potomac. ~150nm from mouth to fresh head of bay.
+  { name:"Chesapeake", mouthLat:37.00, mouthLng:-76.02, lengthNm:150,
+    box:[36.90, 39.60, -77.40, -75.90] },
+  // Delaware Bay: mouth near Cape May/Cape Henlopen (~38.8, -75.05), fresh up
+  // toward the Delaware River. ~90nm scale.
+  { name:"Delaware", mouthLat:38.80, mouthLng:-75.05, lengthNm:90,
+    box:[38.80, 40.20, -75.60, -74.85] },
+  // Pamlico/Albemarle (NC): these sounds are naturally LOW salinity (barrier-
+  // island enclosed, big river input), salt enters at the inlets. Short scale
+  // so most of the sound reads brackish.
+  { name:"Albemarle", mouthLat:35.90, mouthLng:-75.65, lengthNm:55,
+    box:[35.80, 36.50, -76.70, -75.55] },
+];
+function estuarySalinity(lat, lng){
+  for(const e of ESTUARY_SALINITY){
+    const [laMin, laMax, lnMin, lnMax] = e.box;
+    if(lat >= laMin && lat <= laMax && lng >= lnMin && lng <= lnMax){
+      const dNm = (typeof nmBetween === "function")
+        ? nmBetween(lat, lng, e.mouthLat, e.mouthLng)
+        : Math.hypot((lat - e.mouthLat) * 60, (lng - e.mouthLng) * 48);
+      // 1 at the mouth, decaying linearly to ~0 at lengthNm up-estuary.
+      return Math.max(0, Math.min(1, 1 - dNm / e.lengthNm));
+    }
+  }
+  return 1;  // open coast / shelf — full ocean salinity
+}
+
+// Nearest mapped structure (reef/wreck/lump/shoal/ledge) to a point, in nm,
+// considering only structures relevant to the species when fish info is given.
+// Used to lift structure-oriented species' scores near real structure so the
+// ledges/rips read hotter than open flat bottom. Returns null if none in range.
+function nearestStructureNm(lat, lng, speciesId){
+  if(typeof CANYONS === "undefined" || !Array.isArray(CANYONS)) return null;
+  let best = null;
+  for(const c of CANYONS){
+    if(c.lat == null || c.lng == null) continue;
+    // If the structure lists target species, prefer ones that include this
+    // species; otherwise any mapped structure counts.
+    if(speciesId && Array.isArray(c.fish) && c.fish.length && !c.fish.includes(speciesId)) continue;
+    const d = (typeof nmBetween === "function")
+      ? nmBetween(lat, lng, c.lat, c.lng)
+      : Math.hypot((lat - c.lat) * 60, (lng - c.lng) * 48);
+    if(best == null || d < best) best = d;
+  }
+  return best;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // SPECIES GEOGRAPHIC RANGE
 //
 // Latitude bounds where each species is actually caught. Most species range
@@ -8105,10 +8159,16 @@ const HeatCanvasLayer = L.Layer.extend({
         const sHi = s10 + (s11 - s10) * fLng;  // interp along lng at high lat
         const score = sLo + (sHi - sLo) * fLat;  // interp along lat
 
+        // Feathered score floor: instead of a hard on/off at the cutoff (which
+        // produces a stair-stepped outer boundary), fade the alpha across a
+        // small band just above the floor so the heat edge dissolves smoothly
+        // into the water. Below the band → fully transparent.
+        const FEATHER = 0.06;  // score units over which the edge fades in
         if(score < PREDICT_HEAT_SCORE_MIN){
           this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
           continue;
         }
+        const edgeFade = Math.min(1, (score - PREDICT_HEAT_SCORE_MIN) / FEATHER);
 
         // ── Look up the gradient color for this score ──
         const t = Math.min(1, score);
@@ -8126,13 +8186,47 @@ const HeatCanvasLayer = L.Layer.extend({
         const r = Math.round(c0[0] + (c1[0] - c0[0]) * frac);
         const gC = Math.round(c0[1] + (c1[1] - c0[1]) * frac);
         const b = Math.round(c0[2] + (c1[2] - c0[2]) * frac);
-        const aOut = Math.round(255 * Math.max(minOp, t));
+        const aOut = Math.round(255 * Math.max(minOp, t) * edgeFade);
 
         this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, r, gC, b, aOut);
       }
     }
 
     ctx.putImageData(imgData, 0, 0);
+
+    // ── EDGE-SMOOTHING PASS ───────────────────────────────────────────────
+    // The field itself is bilinearly interpolated (smooth color), but the
+    // MASKS (land, species habitat, lat-range) and the score-floor cutoff are
+    // applied as hard per-block on/off decisions, so the OUTER boundary of the
+    // heat comes out stair-stepped and pixelated (see the blocky edges along
+    // the bay). We soften that by compositing the painted field back through a
+    // light blur. Two safeguards keep it honest:
+    //   1) We blur the ALREADY-MASKED result, so color can't reach across the
+    //      species/land mask the way a pre-render CSS blur did.
+    //   2) After blurring we CLIP the result back to the original painted alpha
+    //      (destination-in), so the blur rounds the INTERIOR block edges but
+    //      can't smear heat outward onto land/coast beyond where the field
+    //      actually existed.
+    if(typeof ctx.filter !== "undefined"){
+      const snap = document.createElement("canvas");
+      snap.width = w; snap.height = h;
+      const sctx = snap.getContext("2d");
+      sctx.drawImage(this._canvas, 0, 0);   // crisp masked field (keeps its alpha)
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.imageSmoothingEnabled = true;
+      const blurPx = Math.max(5, PIX_STRIDE * 1.6);
+      ctx.filter = `blur(${blurPx}px)`;
+      ctx.drawImage(snap, 0, 0);            // soft, de-blocked (bleeds a bit past edges)
+      ctx.filter = "none";
+      ctx.globalAlpha = 0.55;
+      ctx.drawImage(snap, 0, 0);            // re-stamp sharp cores so hot spots stay punchy
+      ctx.globalAlpha = 1;
+      // Clip everything back to where the field actually was — kills coastal bleed.
+      ctx.globalCompositeOperation = "destination-in";
+      ctx.drawImage(snap, 0, 0);
+      ctx.globalCompositeOperation = "source-over";
+    }
   },
   // Helper: paint a PIX_STRIDE×PIX_STRIDE block of pixels with the same RGBA.
   // This is how the 2x performance saving from PIX_STRIDE is realized — each
@@ -8943,7 +9037,7 @@ function speakExplainer(){
   if(!_explainerState) return;
   const synth = window.speechSynthesis;
   if(!synth){
-    alert("Read Aloud isn't supported on this browser.");
+    showToast("Read Aloud isn't supported on this browser.", "warning");
     return;
   }
   // If already speaking, tapping the button again stops it
@@ -9134,7 +9228,7 @@ function toggleLayer(key){
   else if(key==="ramps"){
     drawRamps();
     if(layerVis.ramps && !activePort){
-      alert("Select a home port first to see boat ramps within range.");
+      showToast("Select a home port first to see boat ramps within range.", "info");
     }
   }
 }
@@ -9800,15 +9894,6 @@ function toggleLayersPanel(){
 
 // Expand/collapse the "Advanced overlays" group (Closures, Active Fishing
 // Areas, LORAN-C). Collapsed by default so the panel opens clean.
-function toggleAdvancedLayers(){
-  const exp = document.getElementById("advanced-expander");
-  const body = document.getElementById("advanced-layers");
-  if(!exp || !body) return;
-  const open = !body.classList.contains("open");
-  body.classList.toggle("open", open);
-  exp.classList.toggle("open", open);
-}
-
 function toggleBaseMapPanel(){
   const modal = document.getElementById("basemap-modal");
   modal.classList.toggle("open");
@@ -9893,7 +9978,7 @@ function catchLocFromMapCenter(){
 
 function catchLocFromDevice(){
   if(!navigator.geolocation){
-    alert("Your browser doesn't support GPS location.");
+    showToast("Your browser doesn't support GPS location.", "warning");
     return;
   }
   navigator.geolocation.getCurrentPosition(
@@ -9909,7 +9994,7 @@ function catchLocFromDevice(){
       const msg = location.protocol === "https:" || location.hostname === "localhost"
         ? "Couldn't get your location. Make sure GPS is enabled and you've granted permission."
         : "GPS requires HTTPS. Try the 'Use map center' button instead.";
-      alert(msg);
+      showToast(msg, "error");
     },
     {enableHighAccuracy: true, timeout: 10000, maximumAge: 60000}
   );
@@ -9968,9 +10053,9 @@ async function catchPhotoPreview(file){
 // map pins, and closes the modal.
 function saveCatchFromForm(){
   const species = document.getElementById("catch-species").value;
-  if(!species){ alert("Please select a species."); return; }
+  if(!species){ showToast("Please select a species.", "warning"); return; }
   if(_catchPendingLat == null || _catchPendingLng == null){
-    alert("Please set a location for the catch (use map center or GPS).");
+    showToast("Please set a location for the catch (use map center or GPS).", "warning");
     return;
   }
   const dtVal = document.getElementById("catch-datetime").value;
@@ -10077,14 +10162,31 @@ function prefLoad(){
 // Remember the last map center + zoom so returning to the page keeps the user
 // where they left off, instead of snapping back to the default home-port zoom.
 const MAP_VIEW_KEY = "bwi.mapview";
+// In-memory snapshot of the last user-driven view. This is the source of truth
+// for restoring after a tab switch / refocus — it's instant, never blocked by
+// storage sandboxing, and can't be clobbered by a stray layout pass the way the
+// localStorage value could. localStorage is still written as a cross-reload
+// backup, but in-session restores read from this variable.
+let _lastUserView = null;
+// While we're actively re-pinning the view, suppress saving, otherwise the
+// setView()->moveend->saveMapView feedback loop can capture a transient
+// snapped-out state and overwrite the good view.
+let _restoringView = false;
+
 function saveMapView(){
   try {
     if(typeof MAP === "undefined" || !MAP) return;
+    if(_restoringView) return;   // don't record our own restore-driven moves
     const c = MAP.getCenter();
-    localStorage.setItem(MAP_VIEW_KEY, JSON.stringify({ lat: c.lat, lng: c.lng, zoom: MAP.getZoom(), at: Date.now() }));
+    const view = { lat: c.lat, lng: c.lng, zoom: MAP.getZoom(), at: Date.now() };
+    _lastUserView = view;
+    localStorage.setItem(MAP_VIEW_KEY, JSON.stringify(view));
   } catch(e){}
 }
 function loadMapView(){
+  // Prefer the in-memory snapshot (authoritative within a session); fall back
+  // to localStorage on a fresh load.
+  if(_lastUserView) return _lastUserView;
   try {
     const raw = localStorage.getItem(MAP_VIEW_KEY);
     if(!raw) return null;
@@ -10100,23 +10202,29 @@ function loadMapView(){
 // restored (mobile address bar, minimize/restore, app switch), and ANY one of
 // them can make Leaflet re-measure and snap to a different zoom. A single
 // re-pin fired too early gets undone by a later pass — so we re-pin a few times
-// across ~600ms to keep the view frozen exactly where the user left it. Each
-// re-pin also re-saves the (correct) view, so the stored value can't drift.
+// across ~600ms to keep the view frozen exactly where the user left it. Saving
+// is suppressed (via _restoringView) for the whole window so these re-pins can't
+// feed a transient view back into the stored value.
 function restoreMapView(){
   if(typeof MAP === "undefined" || !MAP) return;
   const v = loadMapView();
   if(!v) return;
+  _restoringView = true;
   const apply = () => {
     try { MAP.invalidateSize({animate:false}); MAP.setView([v.lat, v.lng], v.zoom, {animate:false}); } catch(e){}
   };
   apply();
   [100, 300, 600].forEach(ms => setTimeout(apply, ms));
+  // Release the save-suppression just after the last re-pin so genuine user
+  // moves are recorded again.
+  setTimeout(() => { _restoringView = false; }, 750);
 }
 function startMapViewPersistence(){
   if(typeof MAP === "undefined" || !MAP) return;
   // Save whenever the user finishes panning or zooming.
   MAP.on("moveend zoomend", saveMapView);
-  // Save when hidden/unloading; freeze the view back when returning.
+  // Capture the view the instant the tab is hidden (before any teardown), and
+  // freeze it back when returning.
   document.addEventListener("visibilitychange", () => {
     if(document.visibilityState === "hidden") saveMapView();
     else restoreMapView();
@@ -10124,7 +10232,8 @@ function startMapViewPersistence(){
   window.addEventListener("pageshow", restoreMapView);   // bfcache return
   window.addEventListener("pagehide", saveMapView);
   // Chrome (desktop) doesn't fire visibilitychange on minimize/restore — cover
-  // it with focus + resize too.
+  // it with focus + resize too. Capture on blur so we always have a fresh view.
+  window.addEventListener("blur", saveMapView);
   window.addEventListener("focus", restoreMapView);
   let _reassertTimer = null;
   window.addEventListener("resize", () => {
@@ -10137,6 +10246,67 @@ function startMapViewPersistence(){
 // Build a mailto: link with the right subject + a small device-info footer
 // to make troubleshooting easier. No PII collected — just user agent and
 // the page URL the user was on when they hit the button.
+// ════════════════════════════════════════════════════════════════════════════
+// TOAST NOTIFICATIONS
+//
+// Lightweight, non-blocking, themed notifications that replace native alert()
+// dialogs (which are jarring, block the JS thread, and look out of place on a
+// dark map UI). Call showToast(message, type) where type ∈ info|success|error|
+// warning. Toasts stack at the bottom-center, auto-dismiss, and are dismissable
+// by tap. Mobile-safe: positioned above the bottom browser chrome and width-
+// capped so they never overflow a phone screen.
+// ════════════════════════════════════════════════════════════════════════════
+function showToast(message, type){
+  if(!message) return;
+  type = type || "info";
+  let host = document.getElementById("toast-host");
+  if(!host){
+    host = document.createElement("div");
+    host.id = "toast-host";
+    host.setAttribute("aria-live", "polite");
+    host.style.cssText =
+      "position:fixed;left:50%;transform:translateX(-50%);" +
+      "bottom:calc(28px + env(safe-area-inset-bottom,0px));" +
+      "z-index:100000;display:flex;flex-direction:column;align-items:center;" +
+      "gap:8px;width:min(420px,calc(100vw - 32px));pointer-events:none;";
+    document.body.appendChild(host);
+  }
+  const palette = {
+    info:    { bg:"rgba(23,37,60,.97)",  bd:"#2979b5", fg:"#dce8f6", icon:"ℹ️" },
+    success: { bg:"rgba(8,40,28,.97)",   bd:"#16a34a", fg:"#bbf7d0", icon:"✓"  },
+    error:   { bg:"rgba(48,16,16,.97)",  bd:"#dc2626", fg:"#fecaca", icon:"⚠️" },
+    warning: { bg:"rgba(48,38,8,.97)",   bd:"#d97706", fg:"#fde68a", icon:"⚠️" },
+  };
+  const p = palette[type] || palette.info;
+  const el = document.createElement("div");
+  el.setAttribute("role", type === "error" ? "alert" : "status");
+  el.style.cssText =
+    "pointer-events:auto;cursor:pointer;max-width:100%;box-sizing:border-box;" +
+    `background:${p.bg};border:1px solid ${p.bd};color:${p.fg};` +
+    "border-radius:12px;padding:12px 15px;font-size:14px;line-height:1.4;" +
+    "font-family:'Segoe UI',Arial,sans-serif;font-weight:600;" +
+    "box-shadow:0 8px 28px rgba(0,0,0,.45);display:flex;align-items:flex-start;gap:10px;" +
+    "opacity:0;transform:translateY(10px);transition:opacity .2s ease,transform .2s ease;" +
+    "-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);";
+  el.innerHTML =
+    `<span style="flex-shrink:0;font-size:15px;line-height:1.3">${p.icon}</span>` +
+    `<span style="flex:1;min-width:0">${String(message).replace(/</g,"&lt;").replace(/>/g,"&gt;")}</span>`;
+  host.appendChild(el);
+  // Animate in on next frame.
+  requestAnimationFrame(() => { el.style.opacity = "1"; el.style.transform = "translateY(0)"; });
+  // Auto-dismiss: longer for longer messages, capped.
+  const ms = Math.min(7000, Math.max(3000, String(message).length * 55));
+  const dismiss = () => {
+    if(el._gone) return; el._gone = true;
+    el.style.opacity = "0"; el.style.transform = "translateY(10px)";
+    setTimeout(() => { if(el.parentNode) el.parentNode.removeChild(el); }, 220);
+  };
+  const timer = setTimeout(dismiss, ms);
+  el.addEventListener("click", () => { clearTimeout(timer); dismiss(); });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// HELP & CONTACT (continued)
 // ════════════════════════════════════════════════════════════════════════════
 const CONTACT_EMAIL = "info@bluewaterintel.com";
 
@@ -10506,7 +10676,6 @@ function catchAnalytics(speciesFilter){
     topPort,
   };
 }
-
 
 // Share a logged catch to the community forum as a REAL first-party report.
 // De-identified by the backend (public view shows only a hashed handle + rounded
@@ -11119,7 +11288,6 @@ function drawCanyons(){
   });
 }
 
-
 // ════════════════════════════════════════════════════════════════════════════
 // CATCH PIN MARKERS
 // User's logged catches appear as small fish-icon pins colored by species.
@@ -11280,8 +11448,6 @@ const WP_TYPE_STYLE = {
   pf: {label:"Platform",  type:"platform",  color:"#f97316"},
   rg: {label:"Rig",       type:"rig",       color:"#14b8a6"},
 };
-
-function wpData(){ return (window.BW_WAYPOINTS && window.BW_WAYPOINTS.wp) ? window.BW_WAYPOINTS.wp : []; }
 
 // ── Entitlement / freemium gating ────────────────────────────────────────────
 // The charted "Fishing Waypoints" dataset is the paid product (per-port packs).
@@ -11561,22 +11727,7 @@ function bindWaypointRedraw(){
 let rampLayers = [];
 let rampLayerGroup = null;
 
-function rampData(){ return (window.BW_RAMPS && window.BW_RAMPS.rp) ? window.BW_RAMPS.rp : []; }
-
 // Ramps within wpRadiusNm of the active port. Each item: {name, lat, lng, nm}. Nearest-first.
-function rampsInRange(){
-  if(!activePort || !PORTS[activePort]) return [];
-  const p = PORTS[activePort];
-  const out = [];
-  for(const r of rampData()){
-    const [name, lat, lng] = r;
-    const nm = nmBetween(p.lat, p.lng, lat, lng);
-    if(nm <= wpRadiusNm) out.push({name, lat, lng, nm});
-  }
-  out.sort((a,b)=>a.nm-b.nm);
-  return out;
-}
-
 // Distinct ramp marker: teal rounded-square badge with a white launch-ramp glyph
 // (a slipway descending into water). Visually distinct from fishing-spot badges.
 // The ramp marker is identical for every ramp, so build it once and share the
@@ -11732,14 +11883,14 @@ async function mceUpdate(){
 }
 
 async function mceExport(){
-  if(!mcePort || !PORTS[mcePort]){ alert("Select a home port first."); return; }
+  if(!mcePort || !PORTS[mcePort]){ showToast("Select a home port first.", "info"); return; }
   const { rows, gated } = await mceChartedRows(mcePort, mceRangeNm);
   // Charted export requires waypoint access (a pack for this port, Lifetime, or
   // owner). Non-entitled users get gated rows only → send them to upgrade.
   if(gated || rows.length === 0){
-    if(rows.length === 0 && !gated){ alert("No waypoints within "+mceRangeNm+" nm of "+mcePort+"."); return; }
+    if(rows.length === 0 && !gated){ showToast("No waypoints within "+mceRangeNm+" nm of "+mcePort+".", "info"); return; }
     if(typeof openPricing === "function") openPricing();
-    else alert("Buy this port's waypoint pack (or go Lifetime) to export charted waypoints.");
+    else showToast("Buy this port's waypoint pack (or go Lifetime) to export charted waypoints.", "info");
     return;
   }
   const items = rows.filter(r => !r.gated);
@@ -11754,7 +11905,6 @@ async function mceExport(){
   document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url), 4000);
 }
-
 
 function gpxEscape(s){
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
@@ -11871,7 +12021,6 @@ function toggleWpLegend(){
 // Re-evaluate desktop-vs-phone legend behavior when the viewport crosses the
 // breakpoint (rotate/resize), so it doesn't get stuck in the wrong mode.
 window.addEventListener("resize", () => { refreshWpLegendDisplay(); restackBottomControls(); });
-
 
 function drawVesselZones(){
   vesselLayers.forEach(l=>MAP.removeLayer(l));vesselLayers=[];
@@ -12659,9 +12808,17 @@ function selectPort(name){
   buildPortDropdown();
   // Re-center on the new port and re-draw canyons/ports so the 200nm
   // proximity filter follows the new home location.
+  //
+  // IMPORTANT: pan to the port but PRESERVE the user's current zoom. Forcing a
+  // fixed HOME_PORT_ZOOM here was yanking the map way out every time a port was
+  // picked, which is jarring if you're zoomed in working an area. We keep the
+  // current zoom and only zoom IN to frame the port when the user is currently
+  // more zoomed out than the default home view — we never zoom OUT on them.
   const p = PORTS[name];
   if (p && MAP) {
-    MAP.setView([p.lat, p.lng], HOME_PORT_ZOOM);
+    const curZoom = MAP.getZoom();
+    const targetZoom = Math.max(curZoom, HOME_PORT_ZOOM);  // never below current
+    MAP.setView([p.lat, p.lng], targetZoom, { animate: true });
   }
   drawCanyons();
   drawPortMarkers();
@@ -14649,9 +14806,6 @@ document.addEventListener('keydown', e => {
   }
 });
 </script>
-
-
-
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      AI CATCH MEASURE — fully offline-capable
@@ -17226,7 +17380,6 @@ function tbClearFavs(){
 }
 </script>
 
-
 <!-- ═══════════════════════════════════════════════════════════════════════════
      OCEAN CONDITIONS — SST, chlorophyll, satellite & oceanographic charts
      ═══════════════════════════════════════════════════════════════════════════ -->
@@ -17794,7 +17947,6 @@ function ocRenderCharts(){
 //  future work, which is no longer accurate.)
 </script>
 
-
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TUTORIAL — how to use the app + what data drives predictions
      ═══════════════════════════════════════════════════════════════════════════ -->
@@ -18056,7 +18208,6 @@ function ocRenderCharts(){
 
   </div>
 </div>
-
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      MY CATCHES — personal catch log page
@@ -18588,7 +18739,6 @@ function confirmDeleteCatch(id){
   renderMyCatches();
 }
 
-
 // ════════════════════════════════════════════════════════════════════════════
 // REGULATIONS PAGE
 // Links to official federal and state regulatory sources. Port-aware: if
@@ -19037,7 +19187,7 @@ function rpRender(){
 // ── Post a report ──
 function rpOpenPost(){
   if(!(window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser())){
-    alert("Please sign in to post a report.");
+    showToast("Please sign in to post a report.", "warning");
     return;
   }
   const regSel = document.getElementById("rp-post-region");
@@ -19092,15 +19242,6 @@ function rpFmtTime(hours){
   if(hours < 24) return `${Math.round(hours)}h ago`;
   const days = Math.round(hours/24);
   return `${days}d ago`;
-}
-function rpFocusArea(area, port){
-  // Close the reports overlay and try to zoom map to area/port
-  closeReports();
-  if(typeof MAP === "undefined") return;
-  // Use PORTS data if available
-  if(port && typeof PORTS !== "undefined" && PORTS[port]){
-    MAP.flyTo([PORTS[port].lat, PORTS[port].lng], 7, {duration: 1.0});
-  }
 }
 </script>
 
@@ -20486,7 +20627,6 @@ function knRenderData(){
 .wp-pack-count{font-size:11px;color:#9ec5e8}
 .wp-pack-empty{font-size:11px;color:#a9b6cc;line-height:1.6;padding-top:4px}
 
-
 .wp-modal{
   position:fixed;inset:0;background:rgba(0,0,0,.7);
   z-index:6000;display:flex;align-items:center;justify-content:center;
@@ -20975,7 +21115,7 @@ function wpInstallPack(pack){
   if(!pack || !Array.isArray(pack.waypoints)) return 0;
   const already = WP_state.userPoints.some(p => p.pack && p.pack.id === pack.id);
   if(already){
-    alert(`"${pack.name}" is already in your waypoints.`);
+    showToast(`"${pack.name}" is already in your waypoints.`, "info");
     return 0;
   }
   const now = new Date().toISOString();
@@ -21012,7 +21152,7 @@ function wpLoadDemoPack(){
     WP_state.tab = "mine";
     document.querySelectorAll(".wp-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "mine"));
     wpRender();
-    alert(`Added ${n} waypoints from "${pack.name}" to My Waypoints. They're now in your personal database — show them on the map, edit, or delete any of them just like your own.`);
+    showToast(`Added ${n} waypoints from "${pack.name}" to My Waypoints.`, "success");
   }
 }
 
@@ -21600,7 +21740,7 @@ function wpCopyToMine(p){
   wpSaveUser();
   if(window.BW_AUTH) window.BW_AUTH.saveWaypoint(newPoint).catch(e => console.error("waypoint sync", e));
   drawUserWaypoints();
-  alert(`"${p.name}" saved to your waypoints and shown on the map.`);
+  showToast(`"${p.name}" saved to your waypoints and shown on the map.`, "success");
 }
 
 function wpNewWaypoint(){
@@ -21711,10 +21851,10 @@ function wpSaveEditor(isNew){
   const name = get("wp-edit-name");
   const lat  = parseFloat(get("wp-edit-lat"));
   const lng  = parseFloat(get("wp-edit-lng"));
-  if(!name){ alert("Name is required"); return; }
-  if(isNaN(lat) || isNaN(lng)){ alert("Latitude and longitude must be valid numbers"); return; }
-  if(lat < -90 || lat > 90){ alert("Latitude must be between -90 and 90"); return; }
-  if(lng < -180 || lng > 180){ alert("Longitude must be between -180 and 180"); return; }
+  if(!name){ showToast("Name is required.", "warning"); return; }
+  if(isNaN(lat) || isNaN(lng)){ showToast("Latitude and longitude must be valid numbers.", "warning"); return; }
+  if(lat < -90 || lat > 90){ showToast("Latitude must be between -90 and 90.", "warning"); return; }
+  if(lng < -180 || lng > 180){ showToast("Longitude must be between -180 and 180.", "warning"); return; }
 
   const updated = {
     id: WP_state.editing.id,
@@ -21834,7 +21974,7 @@ function wpImportGPX(e){
 
 function wpExportGPX(){
   if(WP_state.userPoints.length === 0){
-    alert("You haven't saved any personal waypoints yet. Add waypoints in the Waypoints tab, or switch the export source to \"Fishing Waypoints by Port & Range\".");
+    showToast("You haven't saved any personal waypoints yet — add some in the Waypoints tab, or switch the export source to Fishing Waypoints by Port & Range.", "info");
     return;
   }
   const now = new Date().toISOString();
