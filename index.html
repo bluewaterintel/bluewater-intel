@@ -2056,18 +2056,17 @@ body.nav-open #ruler-readout{
       oninput="onForecastSliderInput(this.value)"
       onchange="onForecastSliderChange(this.value)">
     <!-- Reference marks beneath the slider — clickable shortcuts to key horizons.
-         The slider is LINEAR in time (0–72h), but the marks are at non-linear
-         values (0,12,24,48,72 — gaps double after +24h). Positioning them with
-         even spacing made the knob and labels disagree (e.g. +17h sat under the
-         "+12h" label). We position each mark ABSOLUTELY at its true track
-         percentage (hours/72) so the knob always lines up with its label.
-         translateX(-50%) centers each label on its tick; the first/last are
-         nudged so they don't clip the edges. -->
+         The slider is LINEAR in time (0–72h) and the marks are at even 12-hour
+         increments (0,12,24,36,48,60,72), so each mark sits at hours/72 along the
+         track and the knob always lines up with its label. translateX(-50%)
+         centers each label on its tick; the first/last are nudged off the edges. -->
     <div style="position:relative;height:20px;margin-top:2px">
       <button onclick="setForecastHour(0)"  type="button" class="fc-mark" style="position:absolute;left:0%;transform:translateX(0)">Now</button>
       <button onclick="setForecastHour(12)" type="button" class="fc-mark" style="position:absolute;left:16.7%;transform:translateX(-50%)">+12h</button>
       <button onclick="setForecastHour(24)" type="button" class="fc-mark" style="position:absolute;left:33.3%;transform:translateX(-50%)">+24h</button>
+      <button onclick="setForecastHour(36)" type="button" class="fc-mark" style="position:absolute;left:50%;transform:translateX(-50%)">+36h</button>
       <button onclick="setForecastHour(48)" type="button" class="fc-mark" style="position:absolute;left:66.7%;transform:translateX(-50%)">+48h</button>
+      <button onclick="setForecastHour(60)" type="button" class="fc-mark" style="position:absolute;left:83.3%;transform:translateX(-50%)">+60h</button>
       <button onclick="setForecastHour(72)" type="button" class="fc-mark" style="position:absolute;right:0%;left:auto;transform:translateX(0)">+72h</button>
     </div>
   </div>
@@ -5069,7 +5068,9 @@ const FORECAST_OPTIONS = [
   { hours:  0, label: "Now",   short: "Now"   },
   { hours: 12, label: "+12 h", short: "+12h"  },
   { hours: 24, label: "+24 h", short: "+24h"  },
+  { hours: 36, label: "+36 h", short: "+36h"  },
   { hours: 48, label: "+48 h", short: "+48h"  },
+  { hours: 60, label: "+60 h", short: "+60h"  },
   { hours: 72, label: "+72 h", short: "+72h"  },
 ];
 
@@ -6600,6 +6601,45 @@ function isGulfContext(lat, lng){
   return false;
 }
 
+// ── Florida peninsula coast constraint ──────────────────────────────────────
+// The FL peninsula separates the Gulf (west) from the Atlantic (east). A boat
+// out of a Gulf-coast port (e.g. Naples) will NOT run around the tip to fish the
+// Atlantic side, and vice-versa — so the bite map / hotspots must stay on the
+// SAME coast as the departure port. The Keys (south of the tip) are exempt: from
+// there a captain can run either direction. Outside the peninsula (panhandle, GA
+// and north) the coastline is continuous and the fishing range can't reach the
+// opposite ocean, so no constraint is applied there.
+
+// Approx longitude of the peninsula land "spine" by latitude. Water WEST of this
+// is the Gulf side; water EAST is the Atlantic side. (Water cells sit well to one
+// side of land, so the threshold need only be roughly down the middle.)
+function flPeninsulaDivide(lat){
+  if(lat >= 30.0) return -82.4;
+  if(lat >= 29.0) return -82.0;
+  if(lat >= 28.0) return -81.7;
+  if(lat >= 27.0) return -81.5;
+  if(lat >= 26.0) return -81.1;
+  return -80.9; // 25.3 .. 26.0
+}
+// Which FL coast a port sits on: "gulf", "atlantic", or null (no constraint —
+// Keys ports, panhandle/west of the peninsula, and everything north of FL).
+function portCoastSide(port){
+  if(!port || typeof port.lat !== "number" || typeof port.lng !== "number") return null;
+  if(port.lat < 25.3 || port.lat > 30.9) return null;  // Keys / non-peninsula
+  if(port.lng < -88.0) return null;                    // panhandle (Gulf only)
+  return port.lng < flPeninsulaDivide(port.lat) ? "gulf" : "atlantic";
+}
+// True if a candidate cell is reachable from the port without rounding the tip of
+// Florida. Only constrains the peninsula band; Keys-band cells and ports without
+// a coast side are always reachable.
+function reachableFromPort(port, lat, lng){
+  const side = portCoastSide(port);
+  if(!side) return true;                 // no peninsula constraint for this port
+  if(lat < 25.3 || lat > 30.9) return true;  // Keys / outside the peninsula band
+  const cellSide = lng < flPeninsulaDivide(lat) ? "gulf" : "atlantic";
+  return cellSide === side;
+}
+
 // Gulf-side shoreline reference: returns the LATITUDE of the shore for a
 // given longitude. Water lies SOUTH of (lat < return value). 28 bands from
 // Brownsville TX east to Naples FL.
@@ -7820,6 +7860,7 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
     if(!isPredictWater(la, ln)) return null;
     if(!speciesAllowedInWater(speciesId, classifyWaterType(la, ln))) return null;
     if(!speciesAllowedAtLat(speciesId, la, ln)) return null;
+    if(port && !reachableFromPort(port, la, ln)) return null;  // stay on the port's coast
     let d = 0;
     if(port){
       d = nmBetween(port.lat, port.lng, la, ln);
@@ -7865,6 +7906,9 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
           const waterType = classifyWaterType(lat, lng);
           if(!speciesAllowedInWater(speciesId, waterType)) continue;
           if(!speciesAllowedAtLat(speciesId, lat, lng)) continue;
+          // Keep the bite map on the port's coast — don't recommend Atlantic spots
+          // for a Gulf port (or vice-versa) across the FL peninsula.
+          if(port && !reachableFromPort(port, lat, lng)) continue;
           let distNm = 0;
           if(port){
             distNm = nmBetween(port.lat, port.lng, lat, lng);
@@ -18422,7 +18466,7 @@ function ocRenderCharts(){
       <div class="tut-step-body">
         <div class="tut-step-title">Read the Bite Map</div>
         <div class="tut-step-desc">Colored areas show where your target species is most likely to be biting <em>right now</em>. The scale goes from green (decent) → yellow → orange → red (best). Tap any colored area for a breakdown of why that spot scored well — and tap the 🔊 button in that breakdown to have it read aloud.</div>
-        <div class="tut-step-desc" style="margin-top:10px">Use the <b>Forecast Time slider</b> at the bottom of the map to scrub the prediction forward — Now, +12h, +24h, +48h, or +72h. The Bite Map, conditions, and any open breakdown all update to that future moment, so you can plan which day and tide to run.</div>
+        <div class="tut-step-desc" style="margin-top:10px">Use the <b>Forecast Time slider</b> at the bottom of the map to scrub the prediction forward — Now through +72h in 12-hour steps. The Bite Map, conditions, and any open breakdown all update to that future moment, so you can plan which day and tide to run.</div>
         <div class="tut-step-desc" style="margin-top:10px;background:rgba(107,191,234,.05);border:1px solid rgba(107,191,234,.15);border-radius:7px;padding:10px 12px">
           <b style="color:#f0f6ff">Two numbers, two meanings:</b><br>
           <span style="color:#dc2626;font-weight:700">Bite Score</span> = how favorable conditions are at that spot (the big colored number).<br>
