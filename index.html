@@ -7661,11 +7661,16 @@ const SPECIES_LAT_RANGE = {
   permit:        [24.0, 28.0],   // FL Keys, S. FL
   ceromack:      [24.0, 28.5],   // FL Keys, S. FL
   hogfish:       [24.0, 32.0],   // FL east + Gulf coast
-  muttonsnap:    [24.0, 30.0],   // S. FL, Keys, mid-FL east
-  yellowtail:    [24.0, 29.5],   // FL Keys, S. FL reefs
+  muttonsnap:    {atlantic: [24.0, 31.0], gulf: [24.5, 30.0, -84.0, -80.5]},  // S. FL/Keys/FL reefs + SE Atlantic; FL Gulf reefs only, not N. Gulf
+  yellowtail:    {atlantic: [24.0, 29.5], gulf: [24.5, 29.0, -84.0, -80.5]},  // FL Keys/S. FL reefs; FL Gulf reefs only, not N. Gulf
   lanesnap:      [24.0, 30.5],   // FL + Gulf
   tarpon:        [24.0, 32.5],   // FL through GA; rare strays to NC summer
-  snook:         [24.0, 30.0],   // S. FL east coast through northern FL
+  // Snook: a tropical inshore fish on BOTH Florida coasts, but NOT the northern
+  // Gulf (LA/MS/AL/TX). Latitude alone can't separate FL's Gulf coast from
+  // Louisiana (Venice LA at 29.3°N is the same latitude as FL's Big Bend), so
+  // the Gulf band carries a longitude bound (east of -84°W = FL west coast).
+  // Atlantic side: S. FL up past Canaveral, straying a bit north in warm years.
+  snook:         {atlantic: [24.0, 29.5], gulf: [25.0, 29.3, -84.0, -80.5]},
   // ── WARM-TEMPERATE — FL, Gulf, SE Atlantic ───────────────────────────
   tripletail:    [25.0, 35.0],   // Gulf + FL east + occasional NC/VA in summer
   pompano:       [25.0, 36.5],   // FL through NC beaches
@@ -7673,14 +7678,12 @@ const SPECIES_LAT_RANGE = {
   cobia:         [25.0, 40.5],   // FL through Chesapeake/DelMarVa up to NJ (summer)
   spanishmack:   [27.0, 41.0],   // FL through NJ
   // Blackfin: a warm-water / subtropical tuna. Common FL, Gulf, and the SE
-  // Atlantic; the OBX/Hatteras is a strong fishery and some are caught just
-  // SE of Oregon Inlet (~35.8°N) on the Stream — but they taper off fast north
-  // of there and aren't a Mid-Atlantic-canyon or New England fish. Northern
-  // bound 37.0°N keeps Hatteras + Oregon Inlet in range while cutting off the
-  // VA/MD canyons. Combined with breakPref:"edge" (so even within range it
-  // scores the Stream, not the inner shelf NW of it), this keeps blackfin
-  // realistic without erasing its true northern-edge presence.
-  blackfin:      [24.0, 37.0],
+  // Atlantic; the OBX/Hatteras is the northern stronghold. Northern bound 35.5°N
+  // puts the predominant bite SOUTH toward Hatteras (35.2°N) rather than at or
+  // north of Oregon Inlet (~35.8°N) — matching where blackfin are actually
+  // caught off NC. Combined with breakPref:"edge" (so even within range it
+  // scores the Stream, not the inner shelf), this keeps blackfin realistic.
+  blackfin:      [24.0, 35.5],
   // ── MID-ATLANTIC + NEW ENGLAND ───────────────────────────────────────
   bluelinetile:  [33.0, 40.5],   // Mid-Atlantic deepwater specialist
   bonito:        [33.0, 44.5],   // Mid-Atlantic + New England
@@ -7707,26 +7710,41 @@ const SPECIES_LAT_RANGE = {
 function speciesAllowedAtLat(speciesId, lat, lng){
   const range = SPECIES_LAT_RANGE[speciesId];
   if(!range) return true;
+  // A band is [minLat, maxLat] or, optionally, [minLat, maxLat, minLng, maxLng]
+  // when a species needs a longitude constraint too (e.g. snook occur on FL's
+  // Gulf coast but NOT the northern Gulf — same latitude as Louisiana, so lat
+  // alone can't separate them; the lng bound does).
+  const inBand = (band) => {
+    if(!band) return false;
+    if(lat < band[0] || lat > band[1]) return false;
+    if(band.length >= 4 && lng != null){
+      if(lng < band[2] || lng > band[3]) return false;
+    }
+    return true;
+  };
   // Per-region format: {atlantic:[...], gulf:[...]}
   if(!Array.isArray(range)){
-    // Need lng to determine which coast — if not provided, allow (caller bug)
-    if(lng == null) return true;
+    if(lng == null) return true;  // need lng to pick a coast — allow (caller bug)
     const inGulf = (typeof isGulfContext === "function") && isGulfContext(lat, lng);
-    const band = inGulf ? range.gulf : range.atlantic;
-    if(!band) return false;  // species absent from this coast
-    return lat >= band[0] && lat <= band[1];
+    return inBand(inGulf ? range.gulf : range.atlantic);
   }
-  // Flat array format: [minLat, maxLat]
-  return lat >= range[0] && lat <= range[1];
+  // Flat array format: [minLat, maxLat] (+ optional lng bounds)
+  return inBand(range);
 }
 
 // Maximum reasonable run distance from home port to fishing grounds.
-// Atlantic coast: 90nm is generous — most sport boats run 60-80nm one-way.
-// Gulf coast: 150nm — the shelf is much wider and the typical canyon/floater
-// runs are dramatically further (Midnight Lump from Venice LA is ~70nm, but
-// East Breaks from Galveston is ~120nm; Pulley Ridge from Naples is ~140nm).
-const MAX_PORT_RANGE_NM_ATLANTIC = 90;
-const MAX_PORT_RANGE_NM_GULF = 120;
+// Offshore range caps — how far from port the Bite Map scores. These must
+// reach the CANYONS, since canyon/floater fishing is the whole point offshore:
+//  • Atlantic: Northeast canyons (Hudson, Baltimore, Wilmington, Norfolk) sit
+//    ~70-100+ nm from port and boats run them routinely, so 90nm cut them off.
+//    140nm reaches the canyon edge from the major NE/Mid-Atlantic ports.
+//  • Gulf: the deepwater floaters, Midnight Lump-to-canyon runs out of Venice,
+//    East Breaks from Galveston (~120nm), and Pulley Ridge from Naples (~140nm)
+//    all need real reach. 160nm covers them.
+// A distance penalty still gently fades the score toward the cap so nearer water
+// is favored, but the canyons now stay in range instead of dropping off.
+const MAX_PORT_RANGE_NM_ATLANTIC = 140;
+const MAX_PORT_RANGE_NM_GULF = 160;
 const PREDICT_HEAT_SCORE_MIN = 0.01;
 const PREDICT_HOTSPOT_SCORE_MIN = 0.30;
 
