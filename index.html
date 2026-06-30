@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
-<title>BlueWater Intel — East Coast Offshore Fishing</title>
+<title>Bluewater Intel — East Coast Offshore Fishing</title>
 <link rel="manifest" href="/manifest.json"/>
 <meta name="theme-color" content="#2979b5"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -1362,7 +1362,7 @@ body.nav-open #ruler-readout{
   <div style="width:100%;max-width:380px;background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);
               border-radius:16px;padding:28px 24px;box-shadow:0 20px 60px rgba(0,0,0,.45)">
     <div style="text-align:center;margin-bottom:22px">
-      <div style="font-size:22px;font-weight:800;color:#f0f6ff;letter-spacing:.02em">BlueWater Intel</div>
+      <div style="font-size:22px;font-weight:800;color:#f0f6ff;letter-spacing:.02em">Bluewater Intel</div>
       <div style="font-size:12px;color:#9ec5e8;margin-top:6px">Sign in to sync your waypoints &amp; catches</div>
     </div>
     <div id="bw-auth-msg" style="display:none;font-size:12px;color:#fca5a5;margin-bottom:12px;text-align:center"></div>
@@ -2717,6 +2717,7 @@ const SPECIES=[
   {id:"sailfish",    name:"Sailfish",       color:"#5b4fcf",cat:"offshore"},
   {id:"swordfish",   name:"Swordfish",      color:"#7c2d8e",cat:"offshore"},
   {id:"yellowfin",   name:"Yellowfin Tuna", color:"#c47a0a",cat:"offshore"},
+  {id:"bigeye",      name:"Bigeye Tuna",    color:"#1a3060",cat:"offshore"},
   {id:"bluefin",     name:"Bluefin Tuna",   color:"#0d6ea8",cat:"offshore"},
   {id:"blackfin",    name:"Blackfin Tuna",  color:"#1a6b55",cat:"offshore"},
   {id:"falsealbacore",name:"False Albacore", color:"#3a8fa0",cat:"nearshore"},
@@ -4315,7 +4316,7 @@ const PREDICT_SPECIES_PREFS = {
   // Three bands so the species shows reasonable scores in all three
   // contexts depending on where you're fishing.
   bluefin:      {tempIdeal:[58,68], tempWorking:[52,72], chlorPref:"edge",    depthBands:[[18,40],[60,180],[200,600]], breakPref:"any"},
-  blackfin:     {tempIdeal:[72,80], tempWorking:[68,82], chlorPref:"edge",    depthBands:[[30,300]],   breakPref:"any"  },
+  blackfin:     {tempIdeal:[72,80], tempWorking:[68,82], chlorPref:"edge",    depthBands:[[60,400]],   breakPref:"edge" },
   falsealbacore:{tempIdeal:[69,74], tempWorking:[66,78], chlorPref:"edge",    depthBands:[[10,120]],   breakPref:"any"  },
   skipjack:     {tempIdeal:[76,82], tempWorking:[72,86], chlorPref:"edge",    depthBands:[[50,600]],   breakPref:"edge" },
   wahoo:        {tempIdeal:[72,82], tempWorking:[68,84], chlorPref:"low",     depthBands:[[60,500]],   breakPref:"edge"  },
@@ -5607,7 +5608,28 @@ function predictDepth(lat, lng){
 // across land (e.g. the whole Chesapeake box) — is correctly excluded and the
 // heat map no longer paints over land. ETOPO stores land as depth 0, water > 0.
 // Falls back to the static model only outside the fetched bathy grid.
+// Inland freshwater bodies that must NEVER be treated as fishable saltwater,
+// even though a global bathymetry/elevation grid (ETOPO) stores them as water
+// with a positive depth. Without this, hotspots appeared in places like Lake
+// Okeechobee — a pure freshwater lake — because realDepthAt() read a positive
+// depth there. Each entry is a lat/lng bounding box. Add others (large inland
+// lakes, reservoirs) here if they ever surface on the map.
+const FRESHWATER_EXCLUDE = [
+  // Lake Okeechobee, FL — big enough to dominate the South FL inland area.
+  { b: [26.68, 27.21, -81.12, -80.61], name: "Lake Okeechobee" },
+];
+function isInlandFreshwater(lat, lng){
+  for(const z of FRESHWATER_EXCLUDE){
+    const [laMin, laMax, lnMin, lnMax] = z.b;
+    if(lat >= laMin && lat <= laMax && lng >= lnMin && lng <= lnMax) return true;
+  }
+  return false;
+}
+
 function isPredictWater(lat, lng){
+  // Inland freshwater (Lake Okeechobee, etc.) is never a saltwater fishing
+  // spot, regardless of what the bathymetry grid says — exclude it first.
+  if(isInlandFreshwater(lat, lng)) return false;
   const real = realDepthAt(lat, lng);
   if(real != null) return real > 0;
   return (typeof isFishableWater === "function") ? isFishableWater(lat, lng) : false;
@@ -7235,6 +7257,7 @@ function seaDepth(lat, lng){
 // LAND/WATER DETECTION — uses bathymetry. Any point with depth > 0 is water.
 // ════════════════════════════════════════════════════════════════════════════
 function isFishableWater(lat, lng){
+  if(typeof isInlandFreshwater === "function" && isInlandFreshwater(lat, lng)) return false;
   return seaDepth(lat, lng) > 0;
 }
 
@@ -7488,6 +7511,15 @@ const SPECIES_LAT_RANGE = {
   gaggrouper:    [25.0, 34.5],   // Gulf + FL east + GA/SC
   cobia:         [25.0, 40.5],   // FL through Chesapeake/DelMarVa up to NJ (summer)
   spanishmack:   [27.0, 41.0],   // FL through NJ
+  // Blackfin: a warm-water / subtropical tuna. Common FL, Gulf, and the SE
+  // Atlantic; the OBX/Hatteras is a strong fishery and some are caught just
+  // SE of Oregon Inlet (~35.8°N) on the Stream — but they taper off fast north
+  // of there and aren't a Mid-Atlantic-canyon or New England fish. Northern
+  // bound 37.0°N keeps Hatteras + Oregon Inlet in range while cutting off the
+  // VA/MD canyons. Combined with breakPref:"edge" (so even within range it
+  // scores the Stream, not the inner shelf NW of it), this keeps blackfin
+  // realistic without erasing its true northern-edge presence.
+  blackfin:      [24.0, 37.0],
   // ── MID-ATLANTIC + NEW ENGLAND ───────────────────────────────────────
   bluelinetile:  [33.0, 40.5],   // Mid-Atlantic deepwater specialist
   bonito:        [33.0, 44.5],   // Mid-Atlantic + New England
@@ -22121,9 +22153,9 @@ function wpExportGPX(){
   }).join("\n");
 
   const gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Bluewater INTEL" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Bluewater Intel" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>Bluewater INTEL Waypoints</name>
+    <name>Bluewater Intel Waypoints</name>
     <time>${now}</time>
   </metadata>
 ${wpts}
