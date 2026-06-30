@@ -1382,7 +1382,7 @@ body.nav-open #ruler-readout{
     </div>
     <button id="bw-auth-signup" type="button" style="
       width:100%;padding:11px;border:1px solid rgba(107,191,234,.35);border-radius:9px;background:transparent;color:#6bbfea;
-      font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">Create Account</button>
+      font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">Create New Account</button>
   </div>
 </div>
 <script>
@@ -1408,7 +1408,23 @@ body.nav-open #ruler-readout{
     if(typeof window.bwOnSignedIn === "function"){
       try { await window.bwOnSignedIn(user); } catch(e){ console.error(e); }
     }
-    hideGate();
+    // REQUIRED PLAN: a signed-in user only reaches the app if they hold a valid
+    // plan (free trial, active subscription, lifetime, owner, or grace period).
+    // Make sure entitlement is current, then decide. If they have no plan — a
+    // brand-new account, or someone who created an account but never completed
+    // Stripe checkout — keep them on the plan-selection gate instead of the app.
+    let entitled = false;
+    try {
+      if(typeof refreshEntitlement === "function") await refreshEntitlement();
+      entitled = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
+    } catch(e){ entitled = false; }
+    if(entitled){
+      if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
+      hideGate();
+    } else {
+      // Signed in but no plan yet → require plan selection.
+      if(typeof window.openPostSignupPlans === "function") window.openPostSignupPlans();
+    }
   }
 
   function wireAuth(){
@@ -1417,7 +1433,9 @@ body.nav-open #ruler-readout{
       if(user) await onSignedIn(user);
       else showGate();
     });
-    if(window.BW_AUTH.getUser()) hideGate();
+    // Note: we intentionally do NOT hideGate() here on existing session. The
+    // onAuthChange handler above runs onSignedIn(), which checks entitlement and
+    // either drops the gate (valid plan) or shows the plan picker (no plan yet).
   }
   wireAuth();
 
@@ -1452,8 +1470,17 @@ body.nav-open #ruler-readout{
     const c = validCreds(); if(!c) return;
     try {
       const res = await window.BW_AUTH.signUp(c.email, c.password);
-      if(res.session) return;
-      showErr("Check your email to confirm your account, then sign in.");
+      if(res.session){
+        // Account created and signed in. Payment/plan selection is REQUIRED
+        // before reaching the app: open the plan picker in post-signup mode.
+        // bwCheckout() attaches the now-signed-in user's identity to the Stripe
+        // session, so whatever plan they pick is linked back to this account.
+        if(typeof window.openPostSignupPlans === "function"){
+          window.openPostSignupPlans();
+        }
+        return;
+      }
+      showErr("Check your email to confirm your account, then sign in to choose your plan.");
     } catch(e){ showErr(e.message || "Sign up failed"); }
   });
 })();
@@ -1504,6 +1531,56 @@ body.nav-open #ruler-readout{
 .bw-buy:hover{background:#3287c7}
 .bw-buy:disabled{opacity:.55;cursor:default}
 </style>
+
+<!-- POST-SIGNUP PLAN SELECTION (required before entering the app) ------------ -->
+<div id="plan-gate" style="display:none;position:fixed;inset:0;z-index:100003;
+     background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
+     align-items:center;justify-content:center;padding:18px;overflow-y:auto;
+     font-family:'Segoe UI',system-ui,sans-serif">
+  <div role="dialog" aria-label="Choose your plan" style="width:100%;max-width:480px;max-height:94vh;overflow-y:auto;
+       background:#0f2444;border:1px solid rgba(107,191,234,.25);border-radius:16px;padding:24px 20px;box-shadow:0 24px 70px rgba(0,0,0,.6)">
+    <div style="text-align:center;margin-bottom:6px">
+      <div style="font-size:20px;font-weight:800;color:#f0f6ff">Choose your plan</div>
+      <div style="font-size:12.5px;color:#9ec5e8;margin-top:5px">Your account is created. Pick a plan to start fishing.</div>
+    </div>
+    <div id="plan-gate-msg" style="display:none;font-size:12px;color:#fca5a5;margin:10px 0;text-align:center"></div>
+
+    <!-- Free trial -->
+    <div style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:14px;margin:16px 0 12px">
+      <div style="font-size:15px;font-weight:800;color:#86efac;margin-bottom:4px">7-day free trial</div>
+      <div style="font-size:11.5px;color:#cfe5ff;line-height:1.5;margin-bottom:10px">
+        Full app — the Bite Map, ocean &amp; wind layers, and forecasts. A card is required.
+        <b style="color:#fde68a">After your 7-day trial, your card is automatically charged $12.99/month</b>
+        and your subscription renews monthly until you cancel. You can cancel anytime before the
+        trial ends to avoid being charged, from Manage Billing.
+      </div>
+      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month',trial:true})"
+        style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start 7-day free trial</button>
+    </div>
+
+    <!-- Subscription (no trial) -->
+    <div style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:14px 0 6px">Subscribe now — full app + 2 AI briefs/day</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month'})">Monthly — $12.99/mo</button>
+      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'year'})">Annual — $109.99/yr</button>
+    </div>
+
+    <!-- Lifetime -->
+    <div style="font-size:11px;color:#fbbf24;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:18px 0 6px">Captain's Lifetime</div>
+    <div style="font-size:11px;color:#9ec5e8;margin-bottom:8px">All waypoints (Maine&nbsp;→&nbsp;Texas), 2 AI briefs/day, and every service — for life. One payment.</div>
+    <button class="bw-buy" type="button" onclick="bwCheckout('lifetime',{})" style="width:100%;border-color:rgba(251,191,36,.5);color:#fde68a">Go Lifetime — $899.99</button>
+
+    <div style="font-size:10px;color:#7d9bb8;margin-top:16px;line-height:1.5;text-align:center">
+      Secure checkout by Stripe. By continuing you agree to the
+      <a href="#" onclick="event.preventDefault();if(typeof openLegal==='function')openLegal();" style="color:#7dd3fc;text-decoration:none">Terms &amp; subscription policy</a>.
+      Test mode is active during setup.
+    </div>
+    <div style="margin-top:14px;text-align:center">
+      <a href="#" onclick="event.preventDefault();bwSignOutFromPlanGate()" style="color:#9ec5e8;font-size:12px;text-decoration:none">Sign out</a>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   // ── Client billing glue (talks to the deployed stripe-checkout / stripe-portal
@@ -1544,6 +1621,30 @@ body.nav-open #ruler-readout{
     m.style.display = "flex";
   };
   window.closePricing = function(){ const m=document.getElementById("pricing-modal"); if(m) m.style.display="none"; };
+
+  // Required post-signup plan selection. Shown immediately after a new account is
+  // created; the user must pick a plan (which routes into Stripe Checkout) before
+  // reaching the app. The auth gate stays underneath, so if they sign out here
+  // they're returned to the sign-in screen rather than into the app.
+  window.openPostSignupPlans = function(){
+    const g = document.getElementById("plan-gate");
+    const m = document.getElementById("plan-gate-msg");
+    if(m) m.style.display = "none";
+    // Keep the auth gate visible behind the plan gate so the app is never exposed
+    // until a plan is chosen and Stripe confirms entitlement.
+    const auth = document.getElementById("bw-auth-gate");
+    if(auth) auth.style.display = "flex";
+    if(g) g.style.display = "flex";
+  };
+  window.closePostSignupPlans = function(){
+    const g = document.getElementById("plan-gate"); if(g) g.style.display = "none";
+  };
+  window.bwSignOutFromPlanGate = async function(){
+    try { if(window.BW_AUTH && window.BW_AUTH.signOut) await window.BW_AUTH.signOut(); } catch(e){}
+    window.closePostSignupPlans();
+    // Fall back to a reload so auth state resets cleanly to the sign-in screen.
+    try { location.reload(); } catch(e){}
+  };
   window.bwCheckout = async function(kind, opts){
     const msg = document.getElementById("pricing-msg");
     try {
@@ -1600,8 +1701,21 @@ body.nav-open #ruler-readout{
     if(q.get("checkout")==="success"){
       const clean = location.origin + location.pathname;
       history.replaceState({}, "", clean);
-      const bump = (n)=>{ if(typeof refreshEntitlement==="function") refreshEntitlement(); if(typeof renderNavPlan==="function") renderNavPlan(); if(n>0) setTimeout(()=>bump(n-1), 2500); };
-      setTimeout(()=>bump(3), 1500);
+      // After returning from Stripe, the webhook that writes entitlement can lag
+      // a few seconds. Re-check entitlement a few times; as soon as the plan is
+      // active, drop the plan gate AND the auth gate so the user enters the app.
+      const bump = async (n)=>{
+        try { if(typeof refreshEntitlement==="function") await refreshEntitlement(); } catch(e){}
+        if(typeof renderNavPlan==="function") renderNavPlan();
+        const entitled = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
+        if(entitled){
+          if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
+          const auth = document.getElementById("bw-auth-gate"); if(auth) auth.style.display = "none";
+        } else if(n>0){
+          setTimeout(()=>bump(n-1), 2500);
+        }
+      };
+      setTimeout(()=>bump(4), 1500);
     }
   } catch(e){}
 })();
@@ -1941,13 +2055,20 @@ body.nav-open #ruler-readout{
     "
       oninput="onForecastSliderInput(this.value)"
       onchange="onForecastSliderChange(this.value)">
-    <!-- Reference marks beneath the slider — clickable shortcuts to key horizons -->
-    <div style="display:flex;justify-content:space-between;font-size:9px;color:#9ec5e8;margin-top:2px">
-      <button onclick="setForecastHour(0)"  type="button" class="fc-mark">Now</button>
-      <button onclick="setForecastHour(12)" type="button" class="fc-mark">+12h</button>
-      <button onclick="setForecastHour(24)" type="button" class="fc-mark">+24h</button>
-      <button onclick="setForecastHour(48)" type="button" class="fc-mark">+48h</button>
-      <button onclick="setForecastHour(72)" type="button" class="fc-mark">+72h</button>
+    <!-- Reference marks beneath the slider — clickable shortcuts to key horizons.
+         The slider is LINEAR in time (0–72h), but the marks are at non-linear
+         values (0,12,24,48,72 — gaps double after +24h). Positioning them with
+         even spacing made the knob and labels disagree (e.g. +17h sat under the
+         "+12h" label). We position each mark ABSOLUTELY at its true track
+         percentage (hours/72) so the knob always lines up with its label.
+         translateX(-50%) centers each label on its tick; the first/last are
+         nudged so they don't clip the edges. -->
+    <div style="position:relative;height:20px;margin-top:2px">
+      <button onclick="setForecastHour(0)"  type="button" class="fc-mark" style="position:absolute;left:0%;transform:translateX(0)">Now</button>
+      <button onclick="setForecastHour(12)" type="button" class="fc-mark" style="position:absolute;left:16.7%;transform:translateX(-50%)">+12h</button>
+      <button onclick="setForecastHour(24)" type="button" class="fc-mark" style="position:absolute;left:33.3%;transform:translateX(-50%)">+24h</button>
+      <button onclick="setForecastHour(48)" type="button" class="fc-mark" style="position:absolute;left:66.7%;transform:translateX(-50%)">+48h</button>
+      <button onclick="setForecastHour(72)" type="button" class="fc-mark" style="position:absolute;right:0%;left:auto;transform:translateX(0)">+72h</button>
     </div>
   </div>
 
@@ -3620,7 +3741,7 @@ try {
     if(typeof saved.chlor === "number") oceanOpacity.chlor = Math.max(0, Math.min(1, saved.chlor));
   }
 } catch(e){}
-let briefSp=[], aiCOA="", aiLoading=false;
+let briefSp=[], aiCOA="", aiLoading=false, briefDayOffset=0;  // briefDayOffset: 0=today,1=tomorrow,...
 let layersPanelOpen=false;
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -12517,19 +12638,34 @@ function renderReports(){
 }
 
 // ── BRIEF ─────────────────────────────────────────────────────────────────────
+function briefDayLabel(off){
+  const d = new Date(); d.setDate(d.getDate() + off);
+  if(off === 0) return "Today";
+  if(off === 1) return "Tomorrow";
+  return d.toLocaleDateString("en-US", { weekday: "short" });
+}
+function setBriefDay(off){ briefDayOffset = off; renderBrief(); }
 function renderBrief(){
   const pills=SPECIES.filter(s=>s.id!=="all").map(sp=>{
     const on=briefSp.includes(sp.id);
     return`<button class="sp-pill" style="border-color:${on?sp.color:"#c8b060"};background:${on?sp.color+"18":"white"};color:${on?sp.color:"#7a6030"}" onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
   }).join("");
+  // Day selector — lets the captain scope the brief to the day they'll fish
+  // (out to 6 days, the useful marine-forecast window).
+  const dayBtns = [0,1,2,3,4,5,6].map(off=>{
+    const on = briefDayOffset === off;
+    return `<button class="brief-day" style="border:1px solid ${on?'#7dd3fc':'#c8b060'};background:${on?'rgba(125,211,252,.16)':'white'};color:${on?'#1c5a86':'#7a6030'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap" onclick="setBriefDay(${off})">${briefDayLabel(off)}</button>`;
+  }).join("");
   const hasPin=!!pinLL;
   pbody(`
     ${!hasPin?`<p style="color:#9ec5e8;font-size:12px;margin-bottom:12px;line-height:1.5">Tap the chart to drop a weather pin first.</p>`:""}
+    <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">WHICH DAY ARE YOU FISHING?</div>
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px">${dayBtns}</div>
     <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">OPTIONAL — SELECT TARGET SPECIES:</div>
     <div class="sp-pills">${pills}</div>
     <button id="brief-btn" ${!hasPin||aiLoading?"disabled":""} onclick="runBrief()">
       ${aiLoading?"GENERATING BRIEF...":"GENERATE AI CAPTAIN'S BRIEF"}</button>
-    ${aiCOA?`<div id="brief-out"><div class="bout-hdr">AI CAPTAIN'S BRIEF · DEPARTING ${(activePort||"Oregon Inlet, NC").toUpperCase()}</div>${aiCOA}</div>`:""}
+    ${aiCOA?`<div id="brief-out"><div class="bout-hdr">AI CAPTAIN'S BRIEF · DEPARTING ${(activePort||"Oregon Inlet, NC").toUpperCase()} · ${briefDayLabel(briefDayOffset).toUpperCase()}</div>${aiCOA}</div>`:""}
   `);
 }
 function toggleBriefSp(id){briefSp=briefSp.includes(id)?briefSp.filter(x=>x!==id):[...briefSp,id];renderBrief();}
@@ -12553,6 +12689,75 @@ async function runBrief(){
   const port = activePort || null;
   const portObj = port && PORTS[port] ? PORTS[port] : null;
 
+  // ── Gather the REAL conditions the app already has for this pin, so the brief
+  //    is grounded in data instead of generic guesses. We pull live ocean/marine
+  //    data (NDBC buoys + forecast model + NOAA tide) via BW_OCEAN, the bite
+  //    score per selected species via scoreCell, and depth/structure context.
+  //    Everything is best-effort: any field we can't get is sent as null and the
+  //    prompt is instructed to omit what's missing rather than invent it.
+  let cond = null, tide = null;
+  try {
+    if(typeof BW_OCEAN !== "undefined" && BW_OCEAN.fetchOcean){
+      const o = await BW_OCEAN.fetchOcean(pinLL.lat, pinLL.lng);
+      if(o){
+        const waterF = (o.waterTemp?.value != null) ? o.waterTemp.value : o.sst?.value;
+        cond = {
+          waterTempF: waterF != null ? Math.round(waterF*10)/10 : null,
+          waterTempObservedAtMs: (o.waterTemp?.observedAtMs ?? o.sst?.observedAtMs) ?? null,
+          airTempF:   o.airTemp?.value != null ? Math.round(o.airTemp.value) : null,
+          airTempHiF: o.airTemp?.highF != null ? Math.round(o.airTemp.highF) : null,
+          airTempLoF: o.airTemp?.lowF  != null ? Math.round(o.airTemp.lowF)  : null,
+          waveHtFt:   o.waves?.value != null ? Math.round(o.waves.value*10)/10 : null,
+          wavePeriodS:o.waves?.periodS != null ? Math.round(o.waves.periodS) : null,
+          windKt:     o.wind?.value != null ? Math.round(o.wind.value) : null,
+          windDir:    o.wind?.dir != null ? (typeof bwiCompass16==="function"?bwiCompass16(o.wind.dir):o.wind.dir) : null,
+          windGustKt: o.wind?.gustKts != null ? Math.round(o.wind.gustKts) : null,
+          pressureMb: o.barometer?.value != null ? Math.round(o.barometer.value) : null,
+          pressureTrend: o.barometer?.trend || null,
+          chlorophyll: o.chlor?.value != null ? Math.round(o.chlor.value*100)/100 : null,
+          buoy: o.sources?.buoy?.id || null,
+          source: o.sources?.buoy?.id ? "NDBC buoy + model" : "forecast model",
+        };
+        if(o.tide){
+          tide = {
+            state: o.tide.state || null,
+            nextHigh: o.tide.nextHigh || null,
+            nextLow: o.tide.nextLow || null,
+            station: o.sources?.tide || null,
+          };
+        }
+      }
+    }
+  } catch(e){ /* conditions are best-effort */ }
+
+  // Depth at the pin (for sea-state / structure context).
+  let depthFt = null;
+  try { if(typeof realDepthAt === "function"){ const m = realDepthAt(pinLL.lat, pinLL.lng); if(m!=null) depthFt = Math.round(m*3.281); } } catch(e){}
+
+  // Per-species bite score + top factor + confidence at this exact pin, from the
+  // same engine that drives the Bite Map — so the brief's "why" matches the map.
+  const scored = [];
+  try {
+    if(typeof scoreCell === "function"){
+      for(const id of sp){
+        const r = scoreCell(pinLL.lat, pinLL.lng, id);
+        if(r){
+          scored.push({
+            species: SPECIES.find(s=>s.id===id)?.name || id,
+            score: r.score != null ? Math.round(r.score*100) : null,
+            topFactor: r.topFactor || null,
+            confidence: r.confidence != null ? Math.round(r.confidence*100) : null,
+            inSeason: r.inSeason !== false,
+          });
+        }
+      }
+    }
+  } catch(e){}
+
+  // The day the captain plans to fish (0=today..6), as both an offset and a date
+  // string, so the prompt can scope the forecast and reports to that day.
+  const fishDate = new Date(); fishDate.setDate(fishDate.getDate() + briefDayOffset);
+
   const payload = {
     lat: pinLL.lat,
     lng: pinLL.lng,
@@ -12560,8 +12765,16 @@ async function runBrief(){
     portLat: portObj ? portObj.lat : null,
     portLng: portObj ? portObj.lng : null,
     nmOffshore: (typeof nmOffshore === "function") ? Math.round(nmOffshore(pinLL.lat, pinLL.lng)) : null,
+    depthFt,
     nearbyStructure: structureNear(pinLL.lat, pinLL.lng),
     species: speciesNames,
+    // NEW: rich grounding data
+    fishDayOffset: briefDayOffset,                       // 0=today, 1=tomorrow…
+    fishDate: fishDate.toISOString().slice(0,10),         // YYYY-MM-DD
+    fishDayLabel: briefDayLabel(briefDayOffset),
+    conditions: cond,
+    tide,
+    biteScores: scored,
   };
 
   try {
