@@ -37,7 +37,7 @@
   //  • Bathymetry is static — never stale.
   const FRESHNESS = {
     sst:        { freshH: 24,  staleH: 72,  agingFloor: 0.6, label: "SST" },
-    chlor:      { freshH: 72,  staleH: 504, agingFloor: 0.55, label: "Chlorophyll" }, // color breaks are slow; satellite chlor is cloud-gapped, so a multi-week-old real composite is still meaningful (used as aging, never invented)
+    chlor:      { freshH: 96,  staleH: 504, agingFloor: 0.55, label: "Chlorophyll" }, // NRT gap-filled DINEOF publishes ~3 days back, so treat up to 4 days as fully fresh; color breaks change slowly, and an older real composite is still meaningful (used as aging, never invented)
     wind:       { freshH: 3,   staleH: 9,   agingFloor: 0.4, label: "Wind" },
     waves:      { freshH: 3,   staleH: 6,   agingFloor: 0.4, label: "Sea state" },
     waterTemp:  { freshH: 6,   staleH: 24,  agingFloor: 0.5, label: "Water temp (buoy)" },
