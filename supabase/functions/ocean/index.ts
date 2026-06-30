@@ -50,14 +50,16 @@ const SST_DATASET = Deno.env.get("SST_DATASET") ?? "jplMURSST41";
 const SST_VAR = Deno.env.get("SST_VAR") ?? "analysed_sst"; // verify exact var name on the dataset page
 // MUR SST is gridded by [time][lat][lng] — no altitude dimension.
 const SST_HAS_ALTITUDE = (Deno.env.get("SST_HAS_ALTITUDE") ?? "false") === "true";
-// Chlorophyll: NOAA CoastWatch VIIRS SNPP science-quality daily, real observed
-// chlor_a. (The previous default, noaacwNPPVIIRSchlaDaily, has been retired from
-// ERDDAP and now 404s, so chlorophyll came back null and contributed nothing to
-// scoring.) This product is gridded by [time][altitude][lat][lng], so the point
-// query MUST include an altitude index. Cloud-gap pixels return null and are
-// covered by the client's last-known-good fallback (best available REAL value —
-// never synthetic). Override via the CHL_DATASET/CHL_VAR/CHL_HAS_ALTITUDE secrets.
-const CHL_DATASET = Deno.env.get("CHL_DATASET") ?? "noaacwNPPVIIRSSQchlaDaily";
+// Chlorophyll: NOAA CoastWatch VIIRS NPP+NOAA-20 NEAR-REAL-TIME, GAP-FILLED
+// (DINEOF) daily, real observed chlor_a. We deliberately use the NRT gap-filled
+// product, not the science-quality one: the SQ feed (noaacwNPPVIIRSSQchlaDaily)
+// lags ~10 days at the source, which made the bite score's chlorophyll a week+
+// stale. This NRT DINEOF product publishes within ~3 days AND is gap-filled (no
+// cloud holes), so a single latest slice is spatially complete — fresher data and
+// a far smaller request than multi-day cloud compositing. Gridded by
+// [time][altitude][lat][lng], so the point query MUST include an altitude index.
+// Override via the CHL_DATASET/CHL_VAR/CHL_HAS_ALTITUDE secrets.
+const CHL_DATASET = Deno.env.get("CHL_DATASET") ?? "noaacwNPPN20VIIRSDINEOFDaily";
 const CHL_VAR = Deno.env.get("CHL_VAR") ?? "chlor_a";
 const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true";
 const OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast";
@@ -539,7 +541,9 @@ async function fetchTide(lat: number, lng: number) {
 
 // Per-point lookback windows (module-level so batch + point modes share them).
 const SST_LOOKBACK = Number(Deno.env.get("SST_LOOKBACK") ?? "3");
-const CHL_LOOKBACK = Number(Deno.env.get("CHL_LOOKBACK") ?? "21");
+// Gap-filled NRT chlor is spatially complete, so a tiny lookback is enough (just
+// a safety margin if the very newest daily slice hasn't fully posted yet).
+const CHL_LOOKBACK = Number(Deno.env.get("CHL_LOOKBACK") ?? "2");
 
 // Assemble one point's full ocean payload from the real sources. Used by both
 // the single-point GET and the batched predictinputs mode so values are IDENTICAL
@@ -684,10 +688,13 @@ async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, ln
 async function fetchChlorRows(latMin: number, latMax: number, lngMin: number, lngMax: number) {
   const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
   const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
-  const native = Number(Deno.env.get("CHL_STEP_DEG") ?? "0.0375");
+  const native = Number(Deno.env.get("CHL_STEP_DEG") ?? "0.0417"); // DINEOF NRT ~4km grid
   const targetDeg = Number(Deno.env.get("CHLGRID_DEG") ?? "0.08");
   const strideIdx = Math.max(1, Math.round(targetDeg / native));
-  const lookback = Number(Deno.env.get("CHLGRID_LOOKBACK") ?? "14");
+  // Gap-filled (DINEOF) product → the latest slice is complete, so we only need a
+  // tiny lookback as a safety margin for an unposted newest slice (was 14 for the
+  // cloud-gapped science-quality feed). This also shrinks the response ~10x.
+  const lookback = Number(Deno.env.get("CHLGRID_LOOKBACK") ?? "1");
   const altIdx = CHL_HAS_ALTITUDE ? "%5B(0.0)%5D" : "";
   const url = `${CHL_ERDDAP}/${CHL_DATASET}.json`
     + `?${CHL_VAR}%5Blast-${lookback}:last%5D${altIdx}`
