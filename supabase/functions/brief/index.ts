@@ -107,58 +107,57 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Could not verify your brief allowance." }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
   }
 
-  // ── Validate inputs (REAL data only) ────────────────────────────────────────
+  // ── Parse the rich payload (real data only; any field may be null) ───────────
+  // The client sends a structured payload (spot, port, day, conditions, tide,
+  // biteScores, etc.). We pass it through to the model as JSON without dropping
+  // fields; the prompt instructs the model to omit anything that is null.
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return new Response(JSON.stringify({ error: "Bad JSON." }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } }); }
 
   const spotLat = num(body.lat), spotLng = num(body.lng);
-  const portName = str(body.port).slice(0, 80);
-  const portLat = num(body.portLat), portLng = num(body.portLng);
-  // species: array of {name} or strings — real selections from the SPECIES registry
-  const speciesNames = Array.isArray(body.species)
-    ? (body.species as unknown[]).map((s) => (typeof s === "string" ? s : str((s as Record<string, unknown>)?.name))).filter(Boolean).slice(0, 6)
-    : [];
-  // nearbyStructure: array of real named features the client found near the spot
-  // e.g. [{name:"Norfolk Canyon", nm:4.2}] — REAL, from the verified CANYONS data.
-  const nearby = Array.isArray(body.nearbyStructure)
-    ? (body.nearbyStructure as unknown[]).map((f) => {
-        const o = f as Record<string, unknown>;
-        return { name: str(o?.name).slice(0, 60), nm: num(o?.nm) };
-      }).filter((f) => f.name).slice(0, 5)
-    : [];
-  const nmOffshore = num(body.nmOffshore);
-
   if (spotLat === null || spotLng === null) {
     return new Response(JSON.stringify({ error: "Spot coordinates required." }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
   }
 
-  // Compute REAL bearing/distance if we have the port coordinates.
+  // Real great-circle bearing + distance from port → spot, computed here from the
+  // real coordinates. DISTANCE ONLY — the prompt forbids converting it to time.
+  const portLat = num(body.portLat), portLng = num(body.portLng);
   let bd: { distNm: number; bearingDeg: number; compass: string } | null = null;
   if (portLat !== null && portLng !== null) bd = bearingDistance(portLat, portLng, spotLat, spotLng);
 
-  // ── Build the prompt from real inputs only ──────────────────────────────────
-  const facts: string[] = [];
-  facts.push(`Spot: ${spotLat.toFixed(3)}N ${Math.abs(spotLng).toFixed(3)}W`);
-  if (portName) facts.push(`Departure port: ${portName}`);
-  if (bd) facts.push(`From port to spot: ${bd.distNm} nm on a ${bd.bearingDeg}° (${bd.compass}) heading (great-circle, computed)`);
-  if (nmOffshore !== null) facts.push(`Distance offshore: ~${Math.round(nmOffshore)} nm`);
-  if (nearby.length) facts.push(`Named structure near the spot (real charted features): ${nearby.map((f) => f.nm !== null ? `${f.name} (~${Math.round(f.nm)} nm)` : f.name).join("; ")}`);
-  facts.push(`Target species: ${speciesNames.length ? speciesNames.join(", ") : "best species for this location and season"}`);
+  // Full payload, passed to the model as structured JSON (no fields dropped),
+  // augmented with the server-computed port→spot distance/heading for grounding.
+  const payloadForModel = { ...body, computedPortToSpot: bd };
 
-  const system = `You are an elite US East Coast and Gulf offshore fishing captain with 30+ years of experience from the Gulf of Maine through the Mid-Atlantic canyons, the Outer Banks, Florida, and the Gulf. You write tight, practical tactical briefs.
+  const system = `You are an experienced offshore and inshore fishing captain writing a concise, practical pre-trip brief for another captain. You are given structured JSON for a specific spot, departure port, the day they plan to fish, and target species. Write a brief grounded ONLY in the data provided. Never invent numbers or facts. If a field is null or missing, omit that point rather than guessing. Scope everything to fishDayLabel/fishDate.
 
-CRITICAL HONESTY RULES — follow exactly:
-- Use ONLY the facts provided below. They are real.
-- Do NOT state or invent live weather, water temperature, wind, sea state, currents, or "current bite"/fleet reports. None of that is provided and you must not fabricate it.
-- You MAY discuss general seasonal patterns and species behavior that are common knowledge for the region and time of year, framed as general guidance ("this time of year, X often…"), never as a live observation of present conditions.
-- If giving a safety note, frame it as a reminder to check real marine forecasts (NWS offshore, NDBC buoys) before departing — do NOT assert what the conditions are.
-- End with one short line noting that live conditions (SST, wind, seas) are not yet integrated and the captain should confirm them from official sources.`;
+ABSOLUTE RULES:
+- NEVER state how long it takes to travel anywhere. Never estimate travel time, ETA, arrival time, or boat speed — boat speeds vary too widely for any estimate to be valid. You may state distance in nautical miles, but never convert distance into time.
+- NEVER give a go/no-go call, a safety verdict, or tell the captain whether to leave the dock, cancel, or whether conditions are "safe." The decision to go is entirely the captain's. Present weather facts and trends only.
+- Predictions are guidance, not guarantees. Confident, plainspoken captain's tone — no hedging filler, no preamble, no sign-off.
+- Do not fabricate fishing reports or recent catch activity. You have no report data. Speak only to what is TYPICAL for this species, area, and season, and clearly frame it as general seasonal knowledge — never as a recent report.
 
-  const user = `Write a 4-6 sentence tactical captain's brief using these real facts:
+WEATHER SAFETY EMPHASIS:
+- If the conditions data shows significant or hazardous weather — strong or building winds, high or building seas, thunderstorms, fog, or a clearly deteriorating trend through the day — CALL IT OUT PROMINENTLY at the very TOP of the brief, before any other section, in plain language (e.g. "Heads up: winds building to 20-25 kt from the NE by afternoon, seas to 5-6 ft"). State what the conditions are and how they change through the day. Do NOT tell the captain what to do about it — just make the hazard impossible to miss. If conditions are mild, no callout is needed.
 
-${facts.join("\n")}
+Write these sections, in this order. Use short paragraphs or tight bullets. A captain reads this on a phone before leaving the dock.
 
-Cover: (1) the run from port — restate the real bearing and distance; (2) the top 1-2 species to target here and why, based on the location, structure, and season; (3) a specific, concrete technique and likely productive timing (tide/light) for those species in this kind of spot; (4) how to fish the named structure if any is listed. Direct, salty, no filler, no invented numbers.`;
+1. CONDITIONS — for the selected spot on the selected day: forecast high and low air temperature (airTempHiF/airTempLoF), general weather, wind (windKt, windDir, windGustKt), and sea state (waveHtFt and wavePeriodS). If only current values exist rather than a forecast for that day, say so briefly. Note the data source/buoy if present.
+
+2. WATER — waterTempF and what it means for the target species relative to their preferred range; any temperature-break or water-color context you can infer from chlorophyll; and tide (state plus nextHigh/nextLow if present). If waterTempObservedAtMs shows the reading is old, note that it may be dated.
+
+3. THE BITE — using biteScores[]: for each target species, state how favorable this spot looks (the score, the topFactor driving it, and confidence). If inSeason is false for a species, say plainly that it's out of season or out of range here. With no report data available, add a short, clearly-labeled note on what's typical for this species/area/season — framed as general knowledge, not a recent report.
+
+4. BAITS & LURES — recommend a few specific baits/lures for the target species, with recommended COLORS chosen for the actual water clarity/color and the light/weather in the data: darker, higher-contrast colors in dirty water or low light; natural and translucent patterns in clean water and bright sun. Tie each choice to the conditions you were given.
+
+5. CAPTAIN'S TIPS — 3 to 5 specific, actionable tips for these species and conditions: working temperature breaks and color changes, suggested trolling speeds where relevant, structure and depth to target (use depthFt and nearbyStructure), how the wind and tide interact at this spot, and what to watch for on the water (bird activity, bait, rips, weed lines). Make them specific to the data, not generic filler.
+
+Keep the whole brief tight and scannable. No travel time. No go/no-go call. No preamble or sign-off.`;
+
+  const fishLabel = str(body.fishDayLabel) || str(body.fishDate) || "the selected day";
+  const user = `Structured trip data (JSON) for the brief below. Write the brief exactly per your system instructions, scoped to ${fishLabel}. Use ONLY these values, omit any point whose field is null or missing, and never invent numbers.
+
+${JSON.stringify(payloadForModel, null, 2)}`;
 
   // ── Call Anthropic (key stays here) ─────────────────────────────────────────
   try {
@@ -171,6 +170,7 @@ Cover: (1) the run from port — restate the real bearing and distance; (2) the 
       },
       body: JSON.stringify({
         model: MODEL,
+        // A tight 5-section brief fits comfortably in ~700-900 output tokens.
         max_tokens: 900,
         // Prompt caching: the system prompt is identical on every brief, so mark
         // it cacheable. After the first call, repeat calls within the cache
@@ -188,8 +188,7 @@ Cover: (1) the run from port — restate the real bearing and distance; (2) the 
     const d = await r.json();
     const brief = d?.content?.[0]?.text ?? null;
     if (!brief) return new Response(JSON.stringify({ error: "Empty brief." }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
-    // Echo the computed real bearing/distance so the client can display/verify it.
-    return new Response(JSON.stringify({ brief, computed: bd }), { headers: { ...cors, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ brief }), { headers: { ...cors, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("Brief exception", (e as Error)?.message);
     return new Response(JSON.stringify({ error: "Brief generation failed." }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });

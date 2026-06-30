@@ -12730,6 +12730,38 @@ async function runBrief(){
     }
   } catch(e){ /* conditions are best-effort */ }
 
+  // Overlay the FORECAST for the day the captain plans to fish. BW_OCEAN above
+  // gives "now" (buoy + model), but the brief is scoped to fishDate, and we want
+  // the forecasted high/low air temp for that day. fetchForecast() returns a
+  // per-day forecast (air hi/lo, wind, gusts, seas) indexed by day offset, so we
+  // fill the hi/lo for the fish date and, for FUTURE days, swap the live wind/seas
+  // for that day's forecast. Best-effort — any failure just leaves nulls.
+  try {
+    if(typeof fetchForecast === "function"){
+      const days = await fetchForecast(pinLL.lat, pinLL.lng);
+      const fd = Array.isArray(days) ? days[briefDayOffset] : null;
+      if(fd){
+        cond = cond || {};
+        if(fd.airHiF != null) cond.airTempHiF = fd.airHiF;
+        if(fd.airLoF != null) cond.airTempLoF = fd.airLoF;
+        if(briefDayOffset > 0){
+          // Future day → the live buoy reading isn't for that day; use the forecast.
+          if(fd.windKt  != null) cond.windKt      = fd.windKt;
+          if(fd.windDir != null) cond.windDir     = (typeof bwiCompass16==="function"?bwiCompass16(fd.windDir):fd.windDir);
+          if(fd.gustKt  != null) cond.windGustKt  = fd.gustKt;
+          if(fd.waveFt  != null) cond.waveHtFt    = fd.waveFt;
+          if(fd.wavePer != null) cond.wavePeriodS = fd.wavePer;
+          cond.source = "Open-Meteo forecast";
+        } else {
+          // Today → keep the live values; only fill gaps from the forecast.
+          if(cond.windGustKt  == null && fd.gustKt  != null) cond.windGustKt  = fd.gustKt;
+          if(cond.waveHtFt    == null && fd.waveFt  != null) cond.waveHtFt    = fd.waveFt;
+          if(cond.wavePeriodS == null && fd.wavePer != null) cond.wavePeriodS = fd.wavePer;
+        }
+      }
+    }
+  } catch(e){ /* forecast overlay is best-effort */ }
+
   // Depth at the pin (for sea-state / structure context).
   let depthFt = null;
   try { if(typeof realDepthAt === "function"){ const m = realDepthAt(pinLL.lat, pinLL.lng); if(m!=null) depthFt = Math.round(m*3.281); } } catch(e){}
