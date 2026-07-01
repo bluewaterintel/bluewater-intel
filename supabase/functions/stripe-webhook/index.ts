@@ -48,10 +48,12 @@ async function applySubscription(sub: Stripe.Subscription) {
   if (!userId) { console.warn("no user for subscription", sub.id); return; }
   // Map Stripe statuses → our gate. active/trialing unlock; everything else locks.
   const status = ["active", "trialing"].includes(sub.status) ? sub.status : "canceled";
+  const interval = sub.items?.data?.[0]?.price?.recurring?.interval ?? null;
   await admin.from("profiles").upsert({
     id: userId,
     stripe_customer_id: customerId ?? undefined,
     subscription_status: status,
+    subscription_interval: interval,
     current_period_end: isoFromUnix(sub.current_period_end),
     updated_at: new Date().toISOString(),
   }, { onConflict: "id" });

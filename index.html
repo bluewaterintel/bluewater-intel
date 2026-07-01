@@ -912,6 +912,7 @@ body.nav-open #ruler-readout{
 }
 /* Layer label text grows to fill, pushing the toggle to the right edge */
 .layer-row .lyr-label{flex:1;min-width:0;display:flex;align-items:center;gap:10px}
+.layer-row.pro-locked{opacity:.45}
 
 .layer-swatch{width:18px;height:8px;border-radius:2px;flex-shrink:0}
 .layers-divider{border:none;border-top:1px solid rgba(255,255,255,.10);margin:14px 0 8px}
@@ -1808,21 +1809,54 @@ body.nav-open #ruler-readout{
     const nm = document.getElementById("acct-name"); if(nm) nm.textContent = name;
     const em = document.getElementById("acct-email"); if(em) em.textContent = email;
     // Fill plan section based on entitlement
-    const isOwner = false; // owner detail comes from renderNavPlan/refreshEntitlement copy
     const label = document.getElementById("acct-plan-label");
     const detail = document.getElementById("acct-plan-detail");
     const actions = document.getElementById("acct-plan-actions");
     const paid = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
+    const badgeStyle = "flex:1;text-align:center;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.45);color:#86efac;font-size:12px;font-weight:700;padding:10px 12px;border-radius:8px";
     if(label && detail && actions){
-      if(paid){
-        label.textContent = "Pro";
-        detail.textContent = "Full app — Bite Map, ocean & weather layers, all waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.";
-        actions.innerHTML = `<button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
-      } else {
-        label.textContent = "Free";
-        detail.textContent = "You're on the free version — maps, ports, catches, and your own waypoints. Upgrade to Pro to unlock the Bite Map, ocean intel, waypoints, and the AI Captain's Brief.";
-        actions.innerHTML = `<button class="bw-buy" type="button" style="flex:1;background:#16a34a;border-color:rgba(134,239,172,.55)" onclick="closeAccountPage();openPricing()">Upgrade to Pro</button>`;
+      let planLabel = "Free", planDetail = "You're on the free version — maps, ports, catches, and your own waypoints. Upgrade to Pro to unlock the Bite Map, ocean intel, waypoints, and the AI Captain's Brief.";
+      let actionsHtml = `<button class="bw-buy" type="button" style="flex:1;background:#16a34a;border-color:rgba(134,239,172,.55)" onclick="closeAccountPage();openPricing()">Upgrade to Pro</button>`;
+      const fillPlan = (p) => {
+        const st = p && p.subscription_status;
+        const interval = p && p.subscription_interval;
+        if(p && p.is_owner){
+          planLabel = "Owner";
+          planDetail = "Full access · unlimited";
+          actionsHtml = `<span style="${badgeStyle}">Owner</span>`;
+        } else if(st === "lifetime"){
+          planLabel = "Pro";
+          planDetail = "Lifetime access · all features";
+          actionsHtml = `<span style="${badgeStyle}">PRO Lifetime</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
+        } else if(st === "active"){
+          planLabel = interval === "year" ? "PRO Annual" : "PRO Monthly";
+          planDetail = "Full app — Bite Map, ocean & weather layers, all waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.";
+          actionsHtml = `<span style="${badgeStyle}">${planLabel}</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
+        } else if(st === "trialing"){
+          planLabel = "Free Trial";
+          planDetail = "Full app · all waypoints (AI brief excluded)";
+          actionsHtml = `<span style="${badgeStyle}">Free Trial</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
+        } else if(paid){
+          planLabel = "Pro";
+          planDetail = "Full app — Bite Map, ocean & weather layers, all waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.";
+          actionsHtml = `<button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
+        }
+      };
+      try {
+        const s = sb();
+        if(s){
+          s.from("profiles").select("is_owner, subscription_status, subscription_interval").maybeSingle()
+            .then(({ data:p }) => { fillPlan(p); label.textContent = planLabel; detail.textContent = planDetail; actions.innerHTML = actionsHtml; })
+            .catch(() => { if(paid){ fillPlan(null); label.textContent = planLabel; detail.textContent = planDetail; actions.innerHTML = actionsHtml; } });
+        } else if(paid){
+          fillPlan(null);
+        }
+      } catch(e){
+        if(paid) fillPlan(null);
       }
+      label.textContent = planLabel;
+      detail.textContent = planDetail;
+      actions.innerHTML = actionsHtml;
     }
     const dmsg = document.getElementById("acct-delete-msg"); if(dmsg){ dmsg.style.display="none"; dmsg.textContent=""; }
     page.style.display = "block";
@@ -1898,17 +1932,33 @@ body.nav-open #ruler-readout{
   window.renderNavPlan = async function(){
     const el = document.getElementById("nav-plan"); if(!el) return;
     let tier = "Free", detail = "Maps, ports, catches & your own waypoints";
+    let st = "none", interval = null, isOwner = false;
     try {
       const s = sb();
       if(s){
-        const { data:p } = await s.from("profiles").select("is_owner, subscription_status").maybeSingle();
-        const st = p && p.subscription_status;
-        if(p && p.is_owner){ tier="Owner"; detail="Full access · unlimited"; }
+        const { data:p } = await s.from("profiles").select("is_owner, subscription_status, subscription_interval").maybeSingle();
+        st = (p && p.subscription_status) || "none";
+        interval = p && p.subscription_interval;
+        isOwner = !!(p && p.is_owner);
+        if(isOwner){ tier="Owner"; detail="Full access · unlimited"; }
+        else if(st==="lifetime"){ tier="Pro"; detail="Lifetime access · all features"; }
         else if(st==="active"){ tier="Pro"; detail="Full app · all waypoints · 2 AI briefs/day"; }
         else if(st==="trialing"){ tier="Free trial"; detail="Full app · all waypoints (AI brief excluded)"; }
       }
     } catch(e){ /* show free */ }
-    const showManage = (tier==="Pro"||tier==="Free trial");
+    const badgeStyle = "font-family:inherit;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.45);color:#86efac;font-size:11px;font-weight:700;padding:7px 12px;border-radius:7px;white-space:nowrap;text-align:center";
+    let actionHtml = `<button type="button" onclick="openPricing()" style="font-family:inherit;background:#2979b5;border:none;color:#fff;font-size:11px;font-weight:700;padding:7px 12px;border-radius:7px;cursor:pointer">Upgrade</button>`;
+    if(isOwner){
+      actionHtml = `<span style="${badgeStyle}">Owner</span>`;
+    } else if(st==="lifetime"){
+      actionHtml = `<span style="${badgeStyle}">PRO Lifetime</span>`;
+    } else if(st==="active"){
+      const planLabel = interval === "year" ? "PRO Annual" : "PRO Monthly";
+      actionHtml = `<span style="${badgeStyle}">${planLabel}</span>`;
+    } else if(st==="trialing"){
+      actionHtml = `<span style="${badgeStyle}">Free Trial</span>`;
+    }
+    const showManage = !isOwner && (st==="active" || st==="trialing" || st==="lifetime");
     el.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(7,17,33,.5);border:1px solid rgba(107,191,234,.18);border-radius:9px;padding:8px 10px">
         <div style="min-width:0">
@@ -1917,7 +1967,7 @@ body.nav-open #ruler-readout{
           <div style="font-size:10px;color:#7d9bb8;line-height:1.35">${detail}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
-          <button type="button" onclick="openPricing()" style="font-family:inherit;background:#2979b5;border:none;color:#fff;font-size:11px;font-weight:700;padding:7px 12px;border-radius:7px;cursor:pointer">${tier==="Free"?"Upgrade":"Buy / Upgrade"}</button>
+          ${actionHtml}
           ${showManage?`<button type="button" onclick="bwManageBilling()" style="font-family:inherit;background:transparent;border:1px solid rgba(107,191,234,.35);color:#6bbfea;font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;cursor:pointer">Manage</button>`:""}
         </div>
       </div>`;
@@ -2593,6 +2643,14 @@ body.nav-open #ruler-readout{
       </span>
       <span class="lyr-toggle"></span>
     </label>
+    <label class="layer-row" title="Marine sanctuaries, no-take reserves, and Habitat Areas of Particular Concern. Tap a closure on the map for rules and official regulation links.">
+      <input type="checkbox" id="chk-closures" onchange="toggleLayer('closures')">
+      <span class="lyr-label">
+        <span class="layer-swatch" style="background:rgba(220,38,38,.15);border:2px solid #dc2626;border-radius:2px;width:10px;height:10px"></span>
+        <span>Closures &amp; Sanctuaries</span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
     <label class="layer-row" title="Your logged catches — shown as fish-icon pins colored by species">
       <input type="checkbox" id="chk-catches" onchange="toggleLayer('catches')">
       <span class="lyr-label">
@@ -2614,14 +2672,6 @@ body.nav-open #ruler-readout{
       <span class="lyr-label">
         <span class="layer-swatch" style="width:0;height:0;border-style:solid;border-width:0 0 11px 13px;border-color:transparent transparent #0ea5e9 transparent;background:none"></span>
         <span>Boat Ramps</span>
-      </span>
-      <span class="lyr-toggle"></span>
-    </label>
-    <label class="layer-row" title="Marine sanctuaries, no-take reserves, and Habitat Areas of Particular Concern. Tap a closure on the map for rules and official regulation links.">
-      <input type="checkbox" id="chk-closures" onchange="toggleLayer('closures')">
-      <span class="lyr-label">
-        <span class="layer-swatch" style="background:rgba(220,38,38,.15);border:2px solid #dc2626;border-radius:2px;width:10px;height:10px"></span>
-        <span>Closures &amp; Sanctuaries</span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -4354,54 +4404,6 @@ let livePollTimer = null;
 // visible map area at zoom levels 6-12 so users can prep before a trip.
 // ════════════════════════════════════════════════════════════════════════════
 const TILE_CACHE_NAME = "bwi-tiles-v1";
-const TILE_HOSTS = [
-  "server.arcgisonline.com",
-  "tile.openstreetmap.org",
-  "tiles.openseamap.org"];
-
-// The Service Worker is created as a Blob URL at runtime so the entire app
-// stays in a single HTML file. The SW intercepts fetch events for tile hosts
-// and uses a cache-first strategy: serve from cache if available, otherwise
-// fetch from network and cache the result.
-function getServiceWorkerSource(){
-  return `
-    const CACHE = "${TILE_CACHE_NAME}";
-    const TILE_HOSTS = ${JSON.stringify(TILE_HOSTS)};
-    self.addEventListener("install", e => self.skipWaiting());
-    self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
-    self.addEventListener("fetch", event => {
-      const url = new URL(event.request.url);
-      const isTile = TILE_HOSTS.some(h => url.hostname.endsWith(h));
-      if(!isTile) return;
-      event.respondWith((async () => {
-        const cache = await caches.open(CACHE);
-        const cached = await cache.match(event.request);
-        if(cached) return cached;
-        try {
-          const fresh = await fetch(event.request);
-          if(fresh.ok) cache.put(event.request, fresh.clone());
-          return fresh;
-        } catch(err) {
-          // Offline and no cache hit — return a transparent 1x1 PNG
-          return new Response(
-            atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgAAIAAAUAAeImBZsAAAAASUVORK5CYII="),
-            {headers:{"Content-Type":"image/png"}}
-          );
-        }
-      })());
-    });
-    self.addEventListener("message", async event => {
-      if(event.data && event.data.type === "STATS"){
-        const cache = await caches.open(CACHE);
-        const keys = await cache.keys();
-        event.source.postMessage({type:"STATS_RESULT", count:keys.length});
-      } else if(event.data && event.data.type === "CLEAR"){
-        await caches.delete(CACHE);
-        event.source.postMessage({type:"CLEAR_DONE"});
-      }
-    });
-  `;
-}
 
 let swReg = null;
 
@@ -4424,10 +4426,7 @@ async function initOfflineCache(){
     return;
   }
   try {
-    // Build the SW from inline source and register it
-    const blob = new Blob([getServiceWorkerSource()], {type:"application/javascript"});
-    const swUrl = URL.createObjectURL(blob);
-    swReg = await navigator.serviceWorker.register(swUrl);
+    swReg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
     await navigator.serviceWorker.ready;
     stateEl.textContent = "✓ Offline cache active";
     refreshCacheStats();
@@ -12015,7 +12014,7 @@ let _wpTeaserActive = false;       // last waypoint draw was capped to a teaser
 let BW_PREMIUM = false;
 let BW_PAID = false;
 // Premium-gated map layers (everything outside the free baseline).
-const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "radar", "ramps", "loran"];
+const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "radar", "ramps", "loran", "waypoints"];
 
 async function refreshEntitlement(){
   let premium = false, paid = false;
@@ -12076,6 +12075,7 @@ function applyEntitlementGating(){
         else if(k === "closures" && typeof drawClosures === "function") drawClosures();
         else if(k === "loran" && typeof drawLoranLines === "function") drawLoranLines();
         else if(k === "ramps" && typeof drawRamps === "function") drawRamps();
+        else if(k === "waypoints" && typeof drawWaypoints === "function") drawWaypoints();
       } catch(e){}
     }
   }
@@ -12119,7 +12119,11 @@ function applyProMenuBadges(){
           lbadge.textContent = "★ PRO";
           label.appendChild(lbadge);
         }
-      } else if(lbadge){ lbadge.remove(); }
+        label.classList.add("pro-locked");
+      } else {
+        if(lbadge) lbadge.remove();
+        label.classList.remove("pro-locked");
+      }
     }
   } catch(e){}
 }
