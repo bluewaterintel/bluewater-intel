@@ -19638,13 +19638,9 @@ function showLegalTab(which){
 // documents render consistently).
 const _LEGAL_H = 'font-size:18px;font-weight:700;color:#f0f6ff;margin:18px 0 6px';
 const _LEGAL_P = 'margin:0 0 10px';
-const _LEGAL_EFFECTIVE = "This version is a template effective as of the date shown in-app. Replace bracketed placeholders before launch.";
+const _LEGAL_EFFECTIVE = "Effective as of the date shown in-app.";
 
 const LEGAL_TERMS_HTML = `
-  <div style="background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:13.5px;color:#fde68a;line-height:1.5">
-    <b style="color:#fbbf24">Template notice:</b> This is plain-language boilerplate, <b>not legal advice</b>. Have a licensed attorney review and adapt it (including app-store and state-law requirements) before public release.
-  </div>
-
   <div style="${_LEGAL_H}">Terms of Use</div>
   <p style="${_LEGAL_P}">These Terms of Use ("Terms") are entered into between you and Bluewater Intel LLC ("Company," "we," "us," or "our") and govern your access to and use of the Bluewater Intel application, website, and any related services (collectively, the "Services"). Please read them carefully. <b>By accessing or using the Services, you accept and agree to be bound by these Terms and our Privacy Policy. If you do not agree, do not access or use the Services.</b></p>
 
@@ -19719,10 +19715,6 @@ const LEGAL_TERMS_HTML = `
 `;
 
 const LEGAL_PRIVACY_HTML = `
-  <div style="background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:13.5px;color:#fde68a;line-height:1.5">
-    <b style="color:#fbbf24">Template notice:</b> This is plain-language boilerplate, <b>not legal advice</b>. A privacy policy must accurately describe your <i>actual</i> data practices and may need to satisfy laws like CCPA/GDPR and app-store rules. Have an attorney review it and confirm it matches what the App really does before launch.
-  </div>
-
   <div style="${_LEGAL_H}">Privacy Policy</div>
   <p style="${_LEGAL_P}">Bluewater Intel LLC ("Company," "we," "us") respects your privacy and is committed to protecting it. This policy describes the information we collect through the Bluewater Intel application, website, and related services (the "Services"), how we use and protect it, and your choices. By using the Services, you agree to this policy. If you do not agree, do not use the Services.</p>
 
