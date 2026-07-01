@@ -62,17 +62,22 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     return data.user;
   }
 
-  async function signUp(email, password) {
+  const EMAIL_CONFIRM_REDIRECT = "https://app.bluewaterintel.com/?confirmed=1";
+
+  async function signUp(email, password, meta) {
     const { data, error } = await client.auth.signUp({
       email,
       password,
-      // Send the confirmation link back to the app's own origin (must be in the
-      // project's Auth redirect allow-list). Without this the link used the
-      // project Site URL (was localhost) and 404'd.
-      options: { emailRedirectTo: window.location.origin },
+      // Confirmation link must match Supabase Auth redirect allow-list.
+      options: {
+        data: meta || {},
+        emailRedirectTo: EMAIL_CONFIRM_REDIRECT,
+      },
     });
     if (error) throw error;
-    if (data.user) emit(data.user);
+    // With "Confirm email" enabled, signUp returns user but no session until
+    // the user clicks the link — do not emit an unconfirmed user as signed in.
+    if (data.session?.user) emit(data.session.user);
     return data;
   }
 

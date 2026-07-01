@@ -1408,7 +1408,8 @@ body.nav-open #ruler-readout{
   const passEl = document.getElementById("bw-auth-password");
   const forgotEl = document.getElementById("bw-auth-forgot");
 
-  function showErr(t){ msg.textContent=t; msg.style.display="block"; }
+  function showErr(t){ msg.textContent=t; msg.style.color="#fca5a5"; msg.style.display="block"; }
+  function showOk(t){ msg.textContent=t; msg.style.color="#86efac"; msg.style.display="block"; }
   function hideGate(){ if(gate) gate.style.display="none"; }
   function showGate(){ if(gate) gate.style.display="flex"; }
 
@@ -1448,6 +1449,20 @@ body.nav-open #ruler-readout{
     // either drops the gate (valid plan) or shows the plan picker (no plan yet).
   }
   wireAuth();
+
+  // Returning from the email-confirmation link (?confirmed=1). Supabase may
+  // auto-establish a session from the URL hash; if not, prompt sign-in.
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get("confirmed") === "1") {
+      history.replaceState({}, "", location.origin + location.pathname);
+      setTimeout(() => {
+        if (window.BW_AUTH && window.BW_AUTH.getUser()) return;
+        showGate();
+        showOk("Email confirmed! Sign in to choose your plan.");
+      }, 600);
+    }
+  } catch (e) {}
 
   // Basic field validation so an empty submit can't fall through to an
   // anonymous sign-in attempt (which the project disables → confusing error).
