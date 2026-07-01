@@ -2639,11 +2639,11 @@ body.nav-open #ruler-readout{
     <div style="font-size:10px;color:#9ec5e8;line-height:1.45;margin:-2px 0 8px;padding:0 2px">
       Daily satellite data — works on any basemap. 1-2 day processing lag.
     </div>
-    <label class="layer-row" title="NASA MUR Sea Surface Temperature — 1km resolution. Cool blue = cold, warm red = warm. Shows the Gulf Stream wall, upwelling zones, and temp breaks.">
+    <label class="layer-row" title="NASA GHRSST GAMSSA Sea Surface Temperature (L4, gap-filled, ~25km) via NASA GIBS. Cool blue = cold, warm red = warm. Shows the Gulf Stream wall, upwelling zones, and temp breaks.">
       <input type="checkbox" id="chk-sst" onchange="toggleLayer('sst')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:linear-gradient(90deg,#0a2e6b 0%,#0e72b5 25%,#4dbed5 45%,#8fd96b 60%,#e8d65a 75%,#c83520 100%);width:18px;height:8px;border-radius:2px"></span>
-        <span>Sea Surface Temp <span style="font-size:8px;color:#fbbf24;opacity:.85">(MUR SST)</span></span>
+        <span>Sea Surface Temp <span style="font-size:8px;color:#fbbf24;opacity:.85">(GAMSSA SST)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -4127,7 +4127,7 @@ async function initMap(){
   // SATELLITE OCEAN OVERLAYS — NASA GIBS WMTS service.
   //
   // SST (sea surface temperature):
-  //   GHRSST L4 MUR Sea Surface Temperature — 1km resolution, daily.
+  //   GHRSST L4 GAMSSA Sea Surface Temperature — gap-filled global daily SST (~25km).
   //   Color scale: dark blue (40°F) → cyan → green → yellow → red (84°F+).
   //
   // Chlorophyll-a (water color / productivity):
@@ -9404,6 +9404,9 @@ function renderExplainerMain(){
           <span style="flex:1;text-align:left">Reports near here</span>
           <span style="color:#34d399;opacity:.6">→</span>
         </button>
+      </div>
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.07);font-size:9px;color:#6b8bab;line-height:1.5;text-align:center">
+        Environmental data: sea-surface temperature &amp; chlorophyll courtesy NASA GIBS (GHRSST, MODIS Aqua); marine &amp; weather data from NOAA/NDBC. Predictions are estimates for planning only.
       </div>
     </div>
   `;
@@ -18873,7 +18876,7 @@ function ocRenderCharts(){
       <div class="tut-feature-icon">🛰</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Satellite ocean data overlays</div>
-        <div class="tut-feature-desc">Two NASA satellite layers, toggleable in the Layers panel under "OCEAN DATA": <b>Sea Surface Temp</b> (MUR SST — 1km resolution, shows the Gulf Stream wall and temp breaks visually) and <b>Chlorophyll-A</b> (MODIS Aqua — shows water color/productivity, where bait stacks along the green-to-blue boundary). Both work on any basemap. The color legend appears at top-left when active. 1-2 day processing lag is normal for satellite ocean data.</div>
+        <div class="tut-feature-desc">Two NASA satellite layers, toggleable in the Layers panel under "OCEAN DATA": <b>Sea Surface Temp</b> (GAMSSA SST — gap-filled L4, shows the Gulf Stream wall and temp breaks visually) and <b>Chlorophyll-A</b> (MODIS Aqua — shows water color/productivity, where bait stacks along the green-to-blue boundary). Both work on any basemap. The color legend appears at top-left when active. 1-2 day processing lag is normal for satellite ocean data.</div>
       </div>
     </div>
 
