@@ -62,14 +62,17 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     return data.user;
   }
 
-  async function signUp(email, password) {
+  async function signUp(email, password, meta) {
     const { data, error } = await client.auth.signUp({
       email,
       password,
       // Send the confirmation link back to the app's own origin (must be in the
       // project's Auth redirect allow-list). Without this the link used the
       // project Site URL (was localhost) and 404'd.
-      options: { emailRedirectTo: window.location.origin },
+      options: {
+        data: meta || {},
+        emailRedirectTo: window.location.origin,
+      },
     });
     if (error) throw error;
     if (data.user) emit(data.user);
