@@ -1168,6 +1168,20 @@ body.nav-open #ruler-readout{
 }
 .nav-row:active{background:rgba(125,211,252,.12)}
 @media (hover:hover){ .nav-row:hover{background:rgba(125,211,252,.08)} }
+/* PRO gating (free tier): locked rows are dimmed and carry a yellow PRO badge
+   so free users can see exactly what a subscription unlocks. */
+.nav-row.pro-locked .nav-ico,
+.nav-row.pro-locked .nav-row-title,
+.nav-row.pro-locked .nav-row-sub{ opacity:.45; }
+.pro-badge{
+  display:inline-flex;align-items:center;gap:3px;
+  background:rgba(251,191,36,.16);border:1px solid rgba(251,191,36,.5);
+  color:#fbbf24;font-size:9px;font-weight:800;letter-spacing:.08em;
+  padding:2px 7px;border-radius:6px;margin-left:8px;flex-shrink:0;
+  text-transform:uppercase;
+}
+.nav-row .pro-badge{ margin-left:auto; }
+.nav-row.pro-locked .nav-chevron{ display:none; }
 /* Icon chip — tinted rounded square holding the emoji/glyph */
 .nav-ico{
   width:30px;height:30px;flex-shrink:0;
@@ -1363,7 +1377,8 @@ body.nav-open #ruler-readout{
               border-radius:16px;padding:28px 24px;box-shadow:0 20px 60px rgba(0,0,0,.45)">
     <div style="text-align:center;margin-bottom:22px">
       <div style="font-size:22px;font-weight:800;color:#f0f6ff;letter-spacing:.02em">Bluewater Intel</div>
-      <div style="font-size:12px;color:#9ec5e8;margin-top:6px">Sign in to sync your waypoints &amp; catches</div>
+      <div style="font-size:13px;color:#cfe5ff;margin-top:8px;font-weight:600;line-height:1.4">Know where the fish are before you leave the dock.</div>
+      <div style="font-size:11.5px;color:#9ec5e8;margin-top:8px;line-height:1.5">AI-powered bite forecasts, live ocean &amp; weather intel, canyon and structure waypoints, and your personal catch log — from Maine to Texas.</div>
     </div>
     <div id="bw-auth-msg" style="display:none;font-size:12px;color:#fca5a5;margin-bottom:12px;text-align:center"></div>
     <label style="display:block;font-size:11px;color:#9ec5e8;margin-bottom:4px">Email</label>
@@ -1408,23 +1423,18 @@ body.nav-open #ruler-readout{
     if(typeof window.bwOnSignedIn === "function"){
       try { await window.bwOnSignedIn(user); } catch(e){ console.error(e); }
     }
-    // REQUIRED PLAN: a signed-in user only reaches the app if they hold a valid
-    // plan (free trial, active subscription, lifetime, owner, or grace period).
-    // Make sure entitlement is current, then decide. If they have no plan — a
-    // brand-new account, or someone who created an account but never completed
-    // Stripe checkout — keep them on the plan-selection gate instead of the app.
-    let entitled = false;
+    // FREE TIER (Model B): every signed-in user reaches the app. Entitlement
+    // (trial / active subscription / owner) unlocks the PRO features — the Bite
+    // Map, ocean layers, waypoints, fishing reports, and the AI brief — while
+    // free users get the baseline app (maps, major areas, ports, catches,
+    // closures, catch-measure, regs) with those PRO features shown but locked.
+    // We still refresh entitlement so the correct gating is applied, but we no
+    // longer trap unentitled users on the plan picker.
     try {
       if(typeof refreshEntitlement === "function") await refreshEntitlement();
-      entitled = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
-    } catch(e){ entitled = false; }
-    if(entitled){
-      if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
-      hideGate();
-    } else {
-      // Signed in but no plan yet → require plan selection.
-      if(typeof window.openPostSignupPlans === "function") window.openPostSignupPlans();
-    }
+    } catch(e){}
+    if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
+    hideGate();
   }
 
   function wireAuth(){
@@ -1465,23 +1475,8 @@ body.nav-open #ruler-readout{
       showErr("Password reset email sent. Check your inbox.");
     } catch(err){ showErr(err?.message || "Could not send reset email."); }
   });
-  document.getElementById("bw-auth-signup").addEventListener("click", async () => {
-    msg.style.display="none";
-    const c = validCreds(); if(!c) return;
-    try {
-      const res = await window.BW_AUTH.signUp(c.email, c.password);
-      if(res.session){
-        // Account created and signed in. Payment/plan selection is REQUIRED
-        // before reaching the app: open the plan picker in post-signup mode.
-        // bwCheckout() attaches the now-signed-in user's identity to the Stripe
-        // session, so whatever plan they pick is linked back to this account.
-        if(typeof window.openPostSignupPlans === "function"){
-          window.openPostSignupPlans();
-        }
-        return;
-      }
-      showErr("Check your email to confirm your account, then sign in to choose your plan.");
-    } catch(e){ showErr(e.message || "Sign up failed"); }
+  document.getElementById("bw-auth-signup").addEventListener("click", () => {
+    if(typeof window.openCreateAccount === "function") window.openCreateAccount();
   });
 })();
 </script>
@@ -1510,14 +1505,7 @@ body.nav-open #ruler-readout{
       <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month'})">Monthly — $12.99/mo</button>
       <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'year'})">Annual — $109.99/yr</button>
     </div>
-
-    <div style="font-size:11px;color:#34d399;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:16px 0 6px">Waypoint Pack — one-time</div>
-    <div id="pricing-pack-note" style="font-size:11px;color:#9ec5e8;margin-bottom:8px">Charted waypoints within 120&nbsp;nm of your home port.</div>
-    <button class="bw-buy" type="button" id="pricing-pack-btn" onclick="bwCheckout('pack',{})" style="width:100%">Buy this port's pack — $49.99</button>
-
-    <div style="font-size:11px;color:#fbbf24;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:16px 0 6px">Captain's Lifetime</div>
-    <div style="font-size:11px;color:#9ec5e8;margin-bottom:8px">All waypoints (Maine&nbsp;→&nbsp;Texas), 2 AI briefs/day, and every service — for life.</div>
-    <button class="bw-buy" type="button" onclick="bwCheckout('lifetime',{})" style="width:100%;border-color:rgba(251,191,36,.5);color:#fde68a">Go Lifetime — $899.99</button>
+    <div style="font-size:10px;color:#7d9bb8;margin-top:10px;line-height:1.5;text-align:center">Pro includes everything: the Bite Map, ocean &amp; wind layers, all charted waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.</div>
 
     <div style="margin-top:16px;text-align:center">
       <a href="#" onclick="event.preventDefault();bwManageBilling()" style="color:#7dd3fc;font-size:12.5px;text-decoration:none">Manage billing / cancel</a>
@@ -1532,6 +1520,93 @@ body.nav-open #ruler-readout{
 .bw-buy:disabled{opacity:.55;cursor:default}
 </style>
 
+<!-- CREATE ACCOUNT PAGE ------------------------------------------------------- -->
+<div id="create-account-page" style="display:none;position:fixed;inset:0;z-index:100005;
+     background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
+     overflow-y:auto;padding:0;font-family:'Segoe UI',system-ui,sans-serif">
+  <div style="max-width:420px;margin:0 auto;padding:24px 20px 40px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding-top:6px">
+      <div style="font-size:20px;font-weight:800;color:#f0f6ff">Create your account</div>
+      <button type="button" onclick="closeCreateAccount()" aria-label="Close" style="background:rgba(255,255,255,.06);border:1px solid rgba(107,191,234,.25);color:#9ec5e8;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="font-size:12.5px;color:#9ec5e8;line-height:1.5;margin-bottom:20px">Join Bluewater Intel — then choose Free or Pro. You can start on the free version anytime.</div>
+
+    <div id="ca-msg" style="display:none;font-size:12px;color:#fca5a5;margin-bottom:12px;text-align:center"></div>
+
+    <label style="display:block;font-size:11px;color:#9ec5e8;margin-bottom:4px">Name</label>
+    <input id="ca-name" type="text" autocomplete="name" placeholder="Captain name" style="width:100%;box-sizing:border-box;margin-bottom:12px;padding:11px 12px;border-radius:8px;border:1px solid rgba(107,191,234,.3);background:#0a1628;color:#f0f6ff;font-size:14px;font-family:inherit"/>
+
+    <label style="display:block;font-size:11px;color:#9ec5e8;margin-bottom:4px">Email</label>
+    <input id="ca-email" type="email" autocomplete="email" placeholder="you@example.com" style="width:100%;box-sizing:border-box;margin-bottom:12px;padding:11px 12px;border-radius:8px;border:1px solid rgba(107,191,234,.3);background:#0a1628;color:#f0f6ff;font-size:14px;font-family:inherit"/>
+
+    <label style="display:block;font-size:11px;color:#9ec5e8;margin-bottom:4px">Password</label>
+    <input id="ca-password" type="password" autocomplete="new-password" placeholder="At least 6 characters" style="width:100%;box-sizing:border-box;margin-bottom:16px;padding:11px 12px;border-radius:8px;border:1px solid rgba(107,191,234,.3);background:#0a1628;color:#f0f6ff;font-size:14px;font-family:inherit"/>
+
+    <!-- Required T&C consent -->
+    <label style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:#cfe5ff;line-height:1.5;margin-bottom:20px;cursor:pointer">
+      <input id="ca-terms" type="checkbox" style="margin-top:2px;flex-shrink:0;width:16px;height:16px;accent-color:#2979b5"/>
+      <span>I agree to the
+        <a href="#" onclick="event.preventDefault();if(typeof openLegal==='function'){closeCreateAccount();openLegal();}" style="color:#7dd3fc;text-decoration:none">Terms &amp; Conditions and Privacy Policy</a>.
+      </span>
+    </label>
+
+    <button id="ca-submit" type="button" onclick="submitCreateAccount()" style="width:100%;padding:13px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:15px;cursor:pointer;font-family:inherit;margin-bottom:14px">Create Account &amp; Choose Plan</button>
+
+    <div style="text-align:center">
+      <a href="#" onclick="event.preventDefault();closeCreateAccount()" style="color:#9ec5e8;font-size:12.5px;text-decoration:none">Already have an account? Sign in</a>
+    </div>
+    <div style="font-size:10px;color:#7d9bb8;margin-top:18px;line-height:1.5;text-align:center">After creating your account you'll pick a plan. Pro payment is handled securely by Stripe. A welcome email will be on its way.</div>
+  </div>
+</div>
+
+<!-- ACCOUNT MANAGEMENT PAGE ---------------------------------------------------- -->
+<div id="account-page" style="display:none;position:fixed;inset:0;z-index:100004;
+     background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
+     overflow-y:auto;padding:0;font-family:'Segoe UI',system-ui,sans-serif">
+  <div style="max-width:540px;margin:0 auto;padding:20px 18px 40px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-top:8px">
+      <div style="font-size:20px;font-weight:800;color:#f0f6ff">Account</div>
+      <button type="button" onclick="closeAccountPage()" aria-label="Close" style="background:rgba(255,255,255,.06);border:1px solid rgba(107,191,234,.25);color:#9ec5e8;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;line-height:1">×</button>
+    </div>
+
+    <!-- PROFILE -->
+    <div style="background:rgba(15,35,60,.7);border:1px solid rgba(107,191,234,.18);border-radius:14px;padding:18px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div id="acct-avatar" style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#2979b5,#6bbfea);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:22px;flex-shrink:0">?</div>
+        <div style="min-width:0;flex:1">
+          <div id="acct-name" style="font-size:16px;font-weight:700;color:#f0f6ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Captain</div>
+          <div id="acct-email" style="font-size:12px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLAN / SUBSCRIPTION -->
+    <div style="background:rgba(15,35,60,.7);border:1px solid rgba(107,191,234,.18);border-radius:14px;padding:18px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px">Your plan</div>
+      <div id="acct-plan-label" style="font-size:17px;font-weight:800;color:#f0f6ff;margin-bottom:4px">Free</div>
+      <div id="acct-plan-detail" style="font-size:12px;color:#9ec5e8;line-height:1.5;margin-bottom:14px">Maps, ports, catches &amp; your own waypoints.</div>
+      <div id="acct-plan-actions" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+    </div>
+
+    <!-- HELP / LEGAL -->
+    <div style="background:rgba(15,35,60,.7);border:1px solid rgba(107,191,234,.18);border-radius:14px;padding:6px 6px;margin-bottom:14px">
+      <button type="button" onclick="closeAccountPage();if(typeof openLegal==='function')openLegal();" style="width:100%;text-align:left;background:transparent;border:none;color:#cfe5ff;font-family:inherit;font-size:13px;padding:12px 14px;cursor:pointer;border-radius:8px">Terms &amp; Privacy Policy</button>
+      <button type="button" onclick="closeAccountPage();if(typeof openHelp==='function')openHelp();" style="width:100%;text-align:left;background:transparent;border:none;color:#cfe5ff;font-family:inherit;font-size:13px;padding:12px 14px;cursor:pointer;border-radius:8px;border-top:1px solid rgba(255,255,255,.06)">Help &amp; Contact</button>
+    </div>
+
+    <!-- SIGN OUT -->
+    <button type="button" onclick="closeAccountPage();signOut()" style="width:100%;background:transparent;border:1px solid rgba(107,191,234,.35);color:#6bbfea;font-family:inherit;font-weight:700;font-size:14px;padding:13px;border-radius:10px;cursor:pointer;margin-bottom:22px">Sign Out</button>
+
+    <!-- DANGER ZONE -->
+    <div style="border:1px solid rgba(220,38,38,.3);border-radius:14px;padding:18px;background:rgba(220,38,38,.05)">
+      <div style="font-size:11px;font-weight:700;color:#f87171;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Danger zone</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.5;margin-bottom:12px">Deleting your account permanently removes your profile, saved waypoints, and catch log. If you have an active subscription, cancel it first from Manage Billing. This cannot be undone.</div>
+      <button type="button" onclick="deleteAccountFlow()" style="width:100%;background:transparent;border:1px solid rgba(220,38,38,.55);color:#f87171;font-family:inherit;font-weight:700;font-size:13px;padding:12px;border-radius:9px;cursor:pointer">Delete my account</button>
+      <div id="acct-delete-msg" style="display:none;font-size:12px;margin-top:10px;line-height:1.5"></div>
+    </div>
+  </div>
+</div>
+
 <!-- POST-SIGNUP PLAN SELECTION (required before entering the app) ------------ -->
 <div id="plan-gate" style="display:none;position:fixed;inset:0;z-index:100003;
      background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
@@ -1540,8 +1615,8 @@ body.nav-open #ruler-readout{
   <div role="dialog" aria-label="Choose your plan" style="width:100%;max-width:480px;max-height:94vh;overflow-y:auto;
        background:#0f2444;border:1px solid rgba(107,191,234,.25);border-radius:16px;padding:24px 20px;box-shadow:0 24px 70px rgba(0,0,0,.6)">
     <div style="text-align:center;margin-bottom:6px">
-      <div style="font-size:20px;font-weight:800;color:#f0f6ff">Choose your plan</div>
-      <div style="font-size:12.5px;color:#9ec5e8;margin-top:5px">Your account is created. Pick a plan to start fishing.</div>
+      <div style="font-size:20px;font-weight:800;color:#f0f6ff">Go Pro</div>
+      <div style="font-size:12.5px;color:#9ec5e8;margin-top:5px">Unlock the Bite Map, ocean layers, waypoints, fishing reports &amp; the AI Captain's Brief. Or keep using the free version.</div>
     </div>
     <div id="plan-gate-msg" style="display:none;font-size:12px;color:#fca5a5;margin:10px 0;text-align:center"></div>
 
@@ -1565,18 +1640,13 @@ body.nav-open #ruler-readout{
       <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'year'})">Annual — $109.99/yr</button>
     </div>
 
-    <!-- Lifetime -->
-    <div style="font-size:11px;color:#fbbf24;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:18px 0 6px">Captain's Lifetime</div>
-    <div style="font-size:11px;color:#9ec5e8;margin-bottom:8px">All waypoints (Maine&nbsp;→&nbsp;Texas), 2 AI briefs/day, and every service — for life. One payment.</div>
-    <button class="bw-buy" type="button" onclick="bwCheckout('lifetime',{})" style="width:100%;border-color:rgba(251,191,36,.5);color:#fde68a">Go Lifetime — $899.99</button>
-
     <div style="font-size:10px;color:#7d9bb8;margin-top:16px;line-height:1.5;text-align:center">
       Secure checkout by Stripe. By continuing you agree to the
       <a href="#" onclick="event.preventDefault();if(typeof openLegal==='function')openLegal();" style="color:#7dd3fc;text-decoration:none">Terms &amp; subscription policy</a>.
       Test mode is active during setup.
     </div>
     <div style="margin-top:14px;text-align:center">
-      <a href="#" onclick="event.preventDefault();bwSignOutFromPlanGate()" style="color:#9ec5e8;font-size:12px;text-decoration:none">Sign out</a>
+      <a href="#" onclick="event.preventDefault();window.closePostSignupPlans()" style="color:#9ec5e8;font-size:12px;text-decoration:none">Continue with the free version →</a>
     </div>
   </div>
 </div>
@@ -1636,8 +1706,134 @@ body.nav-open #ruler-readout{
     if(auth) auth.style.display = "flex";
     if(g) g.style.display = "flex";
   };
-  window.closePostSignupPlans = function(){
-    const g = document.getElementById("plan-gate"); if(g) g.style.display = "none";
+  // ── Create account page ──────────────────────────────────────────────────
+  window.openCreateAccount = function(){
+    const p = document.getElementById("create-account-page");
+    const m = document.getElementById("ca-msg"); if(m){ m.style.display="none"; m.textContent=""; }
+    // Prefill email if they typed it on the sign-in screen
+    const em = document.getElementById("bw-auth-email");
+    const caEm = document.getElementById("ca-email");
+    if(em && caEm && em.value) caEm.value = em.value.trim();
+    if(p) p.style.display = "block";
+  };
+  window.closeCreateAccount = function(){
+    const p = document.getElementById("create-account-page"); if(p) p.style.display = "none";
+  };
+  window.submitCreateAccount = async function(){
+    const msg = document.getElementById("ca-msg");
+    const show = (t) => { if(msg){ msg.style.display="block"; msg.textContent=t; } };
+    const name = (document.getElementById("ca-name").value || "").trim();
+    const email = (document.getElementById("ca-email").value || "").trim();
+    const pass = document.getElementById("ca-password").value || "";
+    const agreed = document.getElementById("ca-terms").checked;
+    if(!name){ show("Enter your name."); return; }
+    if(!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ show("Enter a valid email address."); return; }
+    if(!pass || pass.length < 6){ show("Password must be at least 6 characters."); return; }
+    if(!agreed){ show("Please agree to the Terms & Conditions and Privacy Policy to continue."); return; }
+    const btn = document.getElementById("ca-submit");
+    if(btn){ btn.disabled = true; btn.textContent = "Creating account…"; }
+    try {
+      // Pass the name + T&C acceptance timestamp as user metadata so the account
+      // record captures consent. BW_AUTH.signUp forwards metadata to Supabase.
+      const meta = { full_name: name, tos_accepted_at: new Date().toISOString() };
+      const res = await window.BW_AUTH.signUp(email, pass, meta);
+      if(res && res.session){
+        if(typeof refreshEntitlement === "function"){ try { await refreshEntitlement(); } catch(e){} }
+        closeCreateAccount();
+        hideGate();
+        // Go straight to plan selection (Free or Pro → Stripe).
+        if(typeof window.openPostSignupPlans === "function") window.openPostSignupPlans();
+      } else {
+        // Email-confirmation flow (no immediate session).
+        closeCreateAccount();
+        showGate();
+        const gmsg = document.getElementById("bw-auth-msg");
+        if(gmsg){ gmsg.style.display="block"; gmsg.style.color="#86efac"; gmsg.textContent="Account created — check your email to confirm, then sign in to choose your plan."; }
+      }
+    } catch(e){
+      show(e && e.message ? e.message : "Could not create account. Try again.");
+    } finally {
+      if(btn){ btn.disabled = false; btn.textContent = "Create Account & Choose Plan"; }
+    }
+  };
+
+  // ── Account management page ──────────────────────────────────────────────
+  window.openAccountPage = function(){
+    if(typeof closeNav === "function") closeNav();
+    const page = document.getElementById("account-page");
+    if(!page) return;
+    // Fill profile
+    let acct = (typeof USER_PREFS !== "undefined") ? USER_PREFS.account : null;
+    if((!acct || !acct.name) && window.BW_AUTH && window.BW_AUTH.getUser){
+      const u = window.BW_AUTH.getUser();
+      if(u) acct = { name: (u.user_metadata && u.user_metadata.full_name) || (u.email ? u.email.split("@")[0] : "Captain"), email: u.email || "" };
+    }
+    const name = (acct && acct.name) || "Captain";
+    const email = (acct && acct.email) || "";
+    const av = document.getElementById("acct-avatar"); if(av) av.textContent = (name[0]||"?").toUpperCase();
+    const nm = document.getElementById("acct-name"); if(nm) nm.textContent = name;
+    const em = document.getElementById("acct-email"); if(em) em.textContent = email;
+    // Fill plan section based on entitlement
+    const isOwner = false; // owner detail comes from renderNavPlan/refreshEntitlement copy
+    const label = document.getElementById("acct-plan-label");
+    const detail = document.getElementById("acct-plan-detail");
+    const actions = document.getElementById("acct-plan-actions");
+    const paid = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
+    if(label && detail && actions){
+      if(paid){
+        label.textContent = "Pro";
+        detail.textContent = "Full app — Bite Map, ocean & weather layers, all waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.";
+        actions.innerHTML = `<button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
+      } else {
+        label.textContent = "Free";
+        detail.textContent = "You're on the free version — maps, ports, catches, and your own waypoints. Upgrade to Pro to unlock the Bite Map, ocean intel, waypoints, and the AI Captain's Brief.";
+        actions.innerHTML = `<button class="bw-buy" type="button" style="flex:1;background:#16a34a;border-color:rgba(134,239,172,.55)" onclick="closeAccountPage();openPricing()">Upgrade to Pro</button>`;
+      }
+    }
+    const dmsg = document.getElementById("acct-delete-msg"); if(dmsg){ dmsg.style.display="none"; dmsg.textContent=""; }
+    page.style.display = "block";
+  };
+  window.closeAccountPage = function(){
+    const page = document.getElementById("account-page");
+    if(page) page.style.display = "none";
+  };
+  // Manage Billing → opens the Stripe customer portal (backend returns a URL).
+  window.bwManageBilling = async function(){
+    try {
+      const res = await fetch(`${fnBase()}/stripe-portal`, { method:"POST", headers: await authHeaders() });
+      const j = await res.json();
+      if(j && j.url){ window.location.href = j.url; return; }
+      throw new Error((j && j.error) || "Could not open billing portal.");
+    } catch(e){
+      if(typeof showToast === "function") showToast(e.message || "Billing portal unavailable.", "error");
+    }
+  };
+  // Account deletion — two-step confirm, then calls the backend delete endpoint.
+  window.deleteAccountFlow = async function(){
+    const msg = document.getElementById("acct-delete-msg");
+    const show = (t,color) => { if(msg){ msg.style.display="block"; msg.style.color=color||"#cbd5e1"; msg.textContent=t; } };
+    const ok = window.confirm("Permanently delete your account and all your data? This cannot be undone.");
+    if(!ok) return;
+    const typed = window.prompt('This is permanent. Type DELETE to confirm.');
+    if(!typed || typed.trim().toUpperCase() !== "DELETE"){ show("Deletion cancelled.", "#9ec5e8"); return; }
+    show("Deleting your account…", "#9ec5e8");
+    try {
+      const res = await fetch(`${fnBase()}/delete-account`, { method:"POST", headers: await authHeaders() });
+      if(!res.ok){ const j = await res.json().catch(()=>({})); throw new Error(j.error || `Delete failed (${res.status})`); }
+      // Sign out locally and reload to the signed-out state.
+      try { if(window.BW_AUTH && window.BW_AUTH.signOut) await window.BW_AUTH.signOut(); } catch(e){}
+      show("Account deleted. Signing you out…", "#86efac");
+      setTimeout(()=>{ try { location.reload(); } catch(e){} }, 1200);
+    } catch(e){
+      show(e.message || "Could not delete account. If you have an active subscription, cancel it first from Manage Billing.", "#f87171");
+    }
+  };
+
+  window.closePostSignupPlans = function(){    const g = document.getElementById("plan-gate"); if(g) g.style.display = "none";
+    // Dismissing the Pro upsell drops the auth gate too, landing the user in the
+    // free app (Model B). Premium features remain individually locked with PRO tags.
+    const auth = document.getElementById("bw-auth-gate"); if(auth) auth.style.display = "none";
+    if(typeof hideGate === "function"){ try { hideGate(); } catch(e){} }
   };
   window.bwSignOutFromPlanGate = async function(){
     try { if(window.BW_AUTH && window.BW_AUTH.signOut) await window.BW_AUTH.signOut(); } catch(e){}
@@ -1649,7 +1845,6 @@ body.nav-open #ruler-readout{
     const msg = document.getElementById("pricing-msg");
     try {
       const body = { kind, ...(opts||{}) };
-      if(kind === "pack"){ body.port = (typeof activePort !== "undefined") ? activePort : ""; if(!body.port) throw new Error("Select a home port first."); }
       const res = await fetch(`${fnBase()}/stripe-checkout`, { method:"POST", headers: await authHeaders(), body: JSON.stringify(body) });
       const j = await res.json();
       if(!res.ok) throw new Error(j.error || `Checkout failed (${res.status})`);
@@ -1668,19 +1863,18 @@ body.nav-open #ruler-readout{
   // Renders the plan status + Upgrade/Manage buttons inside the nav account block.
   window.renderNavPlan = async function(){
     const el = document.getElementById("nav-plan"); if(!el) return;
-    let tier = "Free", detail = "Maps, ports, catches & your waypoints only";
+    let tier = "Free", detail = "Maps, ports, catches & your own waypoints";
     try {
       const s = sb();
       if(s){
         const { data:p } = await s.from("profiles").select("is_owner, subscription_status").maybeSingle();
         const st = p && p.subscription_status;
         if(p && p.is_owner){ tier="Owner"; detail="Full access · unlimited"; }
-        else if(st==="lifetime"){ tier="Lifetime"; detail="All waypoints + 2 AI briefs/day"; }
-        else if(st==="active"){ tier="Subscriber"; detail="Full app + 2 AI briefs/day · waypoints via packs"; }
-        else if(st==="trialing"){ tier="Free trial"; detail="Full app (AI brief excluded) · waypoints via packs"; }
+        else if(st==="active"){ tier="Pro"; detail="Full app · all waypoints · 2 AI briefs/day"; }
+        else if(st==="trialing"){ tier="Free trial"; detail="Full app · all waypoints (AI brief excluded)"; }
       }
     } catch(e){ /* show free */ }
-    const showManage = (tier==="Subscriber"||tier==="Lifetime"||tier==="Free trial");
+    const showManage = (tier==="Pro"||tier==="Free trial");
     el.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(7,17,33,.5);border:1px solid rgba(107,191,234,.18);border-radius:9px;padding:8px 10px">
         <div style="min-width:0">
@@ -1856,7 +2050,7 @@ body.nav-open #ruler-readout{
           </span>
           <span class="nav-badge">ACTIVE</span>
         </button>
-        <button type="button" class="nav-row" onclick="navOpenFromMenu(openOcean)">
+        <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openOcean)">
           <span class="nav-ico">🛰</span>
           <span class="nav-row-body">
             <span class="nav-row-title">Weather &amp; Oceanography</span>
@@ -1864,7 +2058,7 @@ body.nav-open #ruler-readout{
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
-        <button type="button" class="nav-row" onclick="navOpenFromMenu(openReports)">
+        <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openReports)">
           <span class="nav-ico">📰</span>
           <span class="nav-row-body">
             <span class="nav-row-title">Fishing Reports</span>
@@ -1884,7 +2078,7 @@ body.nav-open #ruler-readout{
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
-        <button type="button" class="nav-row" onclick="navOpenFromMenu(openWaypoints)">
+        <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openWaypoints)">
           <span class="nav-ico">📍</span>
           <span class="nav-row-body">
             <span class="nav-row-title">Waypoints &amp; Structure</span>
@@ -2704,7 +2898,7 @@ body.nav-open #ruler-readout{
         <input type="checkbox" id="pref-autozoom-port" checked onchange="prefSet('autozoomPort', this.checked)">
         <span>Auto-zoom to port range on selection</span>
       </label>
-      <label class="layer-row">
+      <label class="layer-row" id="pref-loran-row">
         <input type="checkbox" id="pref-keep-loran-on" onchange="prefSet('persistLoran', this.checked)">
         <span>Keep LORAN-C lines on by default</span>
       </label>
@@ -10437,6 +10631,12 @@ function prefGet(key){
   return USER_PREFS[key];
 }
 function prefSet(key, val){
+  // Guard: LORAN-C is a Pro layer. Never let its "keep on by default" pref be
+  // set true without entitlement, regardless of how the call originates.
+  if(key === "persistLoran" && val && (typeof BW_PREMIUM === "undefined" || !BW_PREMIUM)){
+    val = false;
+    if(typeof openPricing === "function") openPricing();
+  }
   USER_PREFS[key] = val;
   prefSave();
   // Apply side effects of the change immediately where it makes sense
@@ -10706,6 +10906,29 @@ function refreshSettingsModal(){
   const cb = id => document.getElementById(id);
   if(cb("pref-autozoom-port"))    cb("pref-autozoom-port").checked    = !!USER_PREFS.autozoomPort;
   if(cb("pref-keep-loran-on"))    cb("pref-keep-loran-on").checked    = !!USER_PREFS.persistLoran;
+  // LORAN-C is a Pro layer, so the "keep it on by default" setting must not be
+  // usable by free users — otherwise they could set a default that auto-enables
+  // a Pro-only layer. Disable + dim the row and badge it PRO when unentitled.
+  const loranRow = document.getElementById("pref-loran-row");
+  const loranChk = cb("pref-keep-loran-on");
+  if(loranRow && loranChk){
+    if(!BW_PREMIUM){
+      loranChk.checked = false;      // never show it as defaulted-on for free
+      loranChk.disabled = true;
+      loranRow.style.opacity = "0.5";
+      loranRow.style.pointerEvents = "none";
+      if(!loranRow.querySelector(".pro-badge")){
+        const b = document.createElement("span");
+        b.className = "pro-badge"; b.textContent = "★ PRO";
+        loranRow.appendChild(b);
+      }
+    } else {
+      loranChk.disabled = false;
+      loranRow.style.opacity = "";
+      loranRow.style.pointerEvents = "";
+      const b = loranRow.querySelector(".pro-badge"); if(b) b.remove();
+    }
+  }
 }
 
 // (offline cache is now permanently visible in the layers modal — no
@@ -11749,13 +11972,13 @@ const BW_OWNER_EMAILS = ["rnovakwvu@gmail.com", "natalienovakm@gmail.com"];
 const WP_TEASER_COUNT = 10;        // teaser size for trial/subscribers
 let _wpTeaserActive = false;       // last waypoint draw was capped to a teaser
 // BW_PREMIUM = app features (heat map, ocean/wind layers, forecast, etc.) —
-//   granted to a 7-day trial, active subscription, lifetime, or owner.
-// BW_PAID    = the AI Captain's Brief — active subscription / lifetime / owner
+//   granted to a 7-day trial, active subscription, or owner.
+// BW_PAID    = the AI Captain's Brief — active subscription / owner
 //   only (the trial does NOT include the brief).
 let BW_PREMIUM = false;
 let BW_PAID = false;
 // Premium-gated map layers (everything outside the free baseline).
-const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "radar"];
+const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "radar", "ramps", "loran"];
 
 async function refreshEntitlement(){
   let premium = false, paid = false;
@@ -11770,7 +11993,7 @@ async function refreshEntitlement(){
       if(p){
         const st = p.subscription_status;
         const cpe = p.current_period_end ? new Date(p.current_period_end).getTime() : 0;
-        if(p.is_owner || st === "lifetime"){ premium = true; paid = true; }
+        if(p.is_owner){ premium = true; paid = true; }              // owner: full access
         else if(st === "active"){ premium = true; paid = true; }
         else if(st === "trialing"){ premium = true; paid = false; }   // trial: app yes, brief no
         else if(cpe > Date.now() && st !== "canceled"){ premium = true; paid = true; } // grace period
@@ -11792,7 +12015,15 @@ function requirePaid(){ if(BW_PAID) return true; if(typeof openPricing === "func
 // If access lapses (or never existed), make sure premium map layers aren't left
 // on. Free baseline (maps, ports, catches, personal/owned waypoints) stays.
 function applyEntitlementGating(){
+  applyProMenuBadges();  // always refresh Pro badges (both free and premium)
   if(BW_PREMIUM) return;
+  // LORAN is a Pro layer — make sure a free user can't carry a "keep it on by
+  // default" preference (e.g. set while subscribed, or from a synced blob) that
+  // would auto-enable it. Force the pref off for the unentitled.
+  if(typeof USER_PREFS !== "undefined" && USER_PREFS.persistLoran){
+    USER_PREFS.persistLoran = false;
+    try { if(typeof prefSave === "function") prefSave(); } catch(e){}
+  }
   let changed = false;
   for(const k of BW_PREMIUM_LAYERS){
     if(layerVis[k]){
@@ -11805,10 +12036,55 @@ function applyEntitlementGating(){
         else if(k === "sst" && typeof MAP !== "undefined" && typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
         else if(k === "chlor" && typeof MAP !== "undefined" && typeof chlorLayer !== "undefined" && chlorLayer && MAP.hasLayer(chlorLayer)) MAP.removeLayer(chlorLayer);
         else if(k === "radar" && typeof drawRadar === "function") drawRadar();
+        else if(k === "closures" && typeof drawClosures === "function") drawClosures();
+        else if(k === "loran" && typeof drawLoranLines === "function") drawLoranLines();
+        else if(k === "ramps" && typeof drawRamps === "function") drawRamps();
       } catch(e){}
     }
   }
   if(changed && typeof updateOceanLegend === "function") updateOceanLegend();
+}
+
+// Show/hide the PRO badge and locked styling on Pro menu rows based on
+// entitlement. Free users see a yellow "PRO" tag on Weather & Oceanography,
+// Fishing Reports, and Waypoints; Pro users see them normally.
+function applyProMenuBadges(){
+  const rows = document.querySelectorAll('.nav-row[data-pro="1"]');
+  rows.forEach(row => {
+    let badge = row.querySelector(".pro-badge");
+    if(!BW_PREMIUM){
+      row.classList.add("pro-locked");
+      if(!badge){
+        badge = document.createElement("span");
+        badge.className = "pro-badge";
+        badge.textContent = "★ PRO";
+        const chev = row.querySelector(".nav-chevron");
+        if(chev) row.insertBefore(badge, chev); else row.appendChild(badge);
+      }
+    } else {
+      row.classList.remove("pro-locked");
+      if(badge) badge.remove();
+    }
+  });
+  // Premium MAP LAYER rows (Bite Map, SST, chlorophyll, radar, wind): tag each
+  // label with a PRO badge for free users so it's clear they're subscription
+  // features. The toggle handler already opens the upgrade modal on tap.
+  try {
+    for(const key of BW_PREMIUM_LAYERS){
+      const chk = document.getElementById("chk-" + key);
+      const label = chk ? chk.closest(".layer-row") : null;
+      if(!label) continue;
+      let lbadge = label.querySelector(".pro-badge");
+      if(!BW_PREMIUM){
+        if(!lbadge){
+          lbadge = document.createElement("span");
+          lbadge.className = "pro-badge";
+          lbadge.textContent = "★ PRO";
+          label.appendChild(lbadge);
+        }
+      } else if(lbadge){ lbadge.remove(); }
+    }
+  } catch(e){}
 }
 
 // Great-circle distance in nautical miles.
@@ -11869,7 +12145,7 @@ async function drawWaypoints(){
   // Show a loading state in the panel while the query is in flight.
   updateWaypointPanel(-1, -1); // -1 => "loading…"
   // Charted waypoints come from the SERVER-ENFORCED gated RPC: entitled users
-  // (owner / lifetime / a pack for this port) get the full set; everyone else
+  // (owner or Pro subscriber) get the full set; everyone else
   // gets a nearest-10 teaser (rows flagged gated=true). This is real enforcement
   // — a plain subscription does NOT include waypoints, and the data is never
   // shipped to non-entitled clients.
@@ -12075,7 +12351,7 @@ let mcePort = null;            // selected port for export — no default; user 
 
 // Charted waypoints for an explicit port via the server-enforced gated RPC.
 // Returns { rows, gated, total } — rows are full only if the user is entitled
-// (owner / lifetime / a pack for this port); otherwise gated=true with a teaser.
+// (owner or Pro subscriber); otherwise gated=true with a teaser.
 async function mceChartedRows(portName, radiusNm){
   const p = PORTS[portName];
   const sbc = window.BW_AUTH && window.BW_AUTH._sb;
@@ -12153,7 +12429,7 @@ async function mceUpdate(){
   if(countEl) countEl.textContent = total.toLocaleString();
   if(breakdownEl){
     if(gated){
-      breakdownEl.innerHTML = `<span style="font-size:12px;color:#fbbf24">Locked — buy the <b>${mcePort}</b> waypoint pack ($49.99) or go Lifetime to export these ${total.toLocaleString()} charted waypoints.</span>`;
+      breakdownEl.innerHTML = `<span style="font-size:12px;color:#fbbf24">Locked — subscribe to Pro to export these ${total.toLocaleString()} charted waypoints.</span>`;
     } else {
       const counts = {};
       rows.forEach(w => { counts[w.t] = (counts[w.t]||0) + 1; });
@@ -12171,12 +12447,12 @@ async function mceUpdate(){
 async function mceExport(){
   if(!mcePort || !PORTS[mcePort]){ showToast("Select a home port first.", "info"); return; }
   const { rows, gated } = await mceChartedRows(mcePort, mceRangeNm);
-  // Charted export requires waypoint access (a pack for this port, Lifetime, or
-  // owner). Non-entitled users get gated rows only → send them to upgrade.
+  // Charted export requires waypoint access (Pro subscription or owner).
+  // Non-entitled users get gated rows only → send them to upgrade.
   if(gated || rows.length === 0){
     if(rows.length === 0 && !gated){ showToast("No waypoints within "+mceRangeNm+" nm of "+mcePort+".", "info"); return; }
     if(typeof openPricing === "function") openPricing();
-    else showToast("Buy this port's waypoint pack (or go Lifetime) to export charted waypoints.", "info");
+    else showToast("Subscribe to Pro to export charted waypoints.", "info");
     return;
   }
   const items = rows.filter(r => !r.gated);
@@ -12741,7 +13017,7 @@ function structureNear(lat, lng, maxNm = 15, limit = 3){
 }
 async function runBrief(){
   if(!pinLL||aiLoading)return;
-  // AI Captain's Brief is a PAID feature (active subscription / lifetime / owner)
+  // AI Captain's Brief is a PAID feature (active subscription / owner)
   // — not included in the 7-day trial. The server also enforces this + 2/day.
   if(!requirePaid()) return;
   aiLoading=true;aiCOA="";renderBrief();
@@ -13415,8 +13691,18 @@ function ensurePredictLayerOn(){
 // other items without having to reopen MENU. (Tapping outside the menu or
 // X-ing out a second time exits to the chart.)
 // ════════════════════════════════════════════════════════════════════════════
+// Menu items that require a Pro subscription (Model B). Free users see them
+// with a PRO badge; tapping opens the upgrade modal instead of the feature.
+const PRO_MENU_FNS = ["openOcean", "openReports", "openWaypoints"];
 function navOpenFromMenu(openFn){
   closeNav();
+  // If this is a Pro feature and the user isn't entitled, show the upgrade
+  // modal rather than the feature.
+  const fnName = (openFn && openFn.name) ? openFn.name : "";
+  if(PRO_MENU_FNS.includes(fnName) && !BW_PREMIUM){
+    if(typeof openPricing === "function") openPricing();
+    return;
+  }
   openFn();
 }
 
@@ -13481,9 +13767,9 @@ function renderAccountSection(){
           <div style="font-size:13px;font-weight:700;color:#f0f6ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(acct.name)}</div>
           ${email ? `<div style="font-size:10px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(email)}</div>` : ''}
         </div>
-        <button type="button" onclick="signOut()" style="font-family:inherit;background:transparent;border:1px solid rgba(107,191,234,.35);
+        <button type="button" onclick="openAccountPage()" style="font-family:inherit;background:transparent;border:1px solid rgba(107,191,234,.35);
                 color:#6bbfea;font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;cursor:pointer;flex-shrink:0">
-          Sign Out
+          Manage
         </button>
       </div>
       <div id="nav-plan" style="margin-top:12px"></div>`;
