@@ -1380,6 +1380,12 @@ body.nav-open #ruler-readout{
       <div style="font-size:13px;color:#cfe5ff;margin-top:8px;font-weight:600;line-height:1.4">Know where the fish are before you leave the dock.</div>
       <div style="font-size:11.5px;color:#9ec5e8;margin-top:8px;line-height:1.5">AI-powered bite forecasts, live ocean &amp; weather intel, canyon and structure waypoints, and your personal catch log — from Maine to Texas.</div>
     </div>
+    <div id="bw-auth-welcome" style="display:none;margin-bottom:14px;padding:12px 14px;border-radius:10px;
+         background:rgba(34,197,94,.12);border:1px solid rgba(134,239,172,.45);text-align:center">
+      <div style="font-size:13px;font-weight:700;color:#86efac;line-height:1.45">
+        ✓ Welcome to Bluewater Intel! Your email is confirmed — sign in to get started.
+      </div>
+    </div>
     <div id="bw-auth-msg" style="display:none;font-size:12px;color:#fca5a5;margin-bottom:12px;text-align:center"></div>
     <label style="display:block;font-size:11px;color:#9ec5e8;margin-bottom:4px">Email</label>
     <input id="bw-auth-email" type="email" autocomplete="email" placeholder="you@example.com" style="
@@ -1404,12 +1410,16 @@ body.nav-open #ruler-readout{
 (function(){
   const gate = document.getElementById("bw-auth-gate");
   const msg = document.getElementById("bw-auth-msg");
+  const welcome = document.getElementById("bw-auth-welcome");
   const emailEl = document.getElementById("bw-auth-email");
   const passEl = document.getElementById("bw-auth-password");
   const forgotEl = document.getElementById("bw-auth-forgot");
 
   function showErr(t){ msg.textContent=t; msg.style.color="#fca5a5"; msg.style.display="block"; }
-  function showOk(t){ msg.textContent=t; msg.style.color="#86efac"; msg.style.display="block"; }
+  function showWelcomeBanner(){
+    if(welcome) welcome.style.display="block";
+    showGate();
+  }
   function hideGate(){ if(gate) gate.style.display="none"; }
   function showGate(){ if(gate) gate.style.display="flex"; }
 
@@ -1450,17 +1460,26 @@ body.nav-open #ruler-readout{
   }
   wireAuth();
 
-  // Returning from the email-confirmation link (?confirmed=1). Supabase may
-  // auto-establish a session from the URL hash; if not, prompt sign-in.
+  // Email-confirmation return: ?confirmed=1 on the sign-in gate.
   try {
     const q = new URLSearchParams(location.search);
     if (q.get("confirmed") === "1") {
       history.replaceState({}, "", location.origin + location.pathname);
-      setTimeout(() => {
+      const handleConfirmedReturn = () => {
+        // Some Supabase flows auto-establish a session from the URL hash; if so,
+        // onAuthChange/onSignedIn will proceed into the app without this banner.
         if (window.BW_AUTH && window.BW_AUTH.getUser()) return;
-        showGate();
-        showOk("Email confirmed! Sign in to choose your plan.");
-      }, 600);
+        showWelcomeBanner();
+      };
+      if (window.BW_AUTH) {
+        setTimeout(handleConfirmedReturn, 600);
+      } else {
+        const waitAuth = setInterval(() => {
+          if (!window.BW_AUTH) return;
+          clearInterval(waitAuth);
+          setTimeout(handleConfirmedReturn, 400);
+        }, 100);
+      }
     }
   } catch (e) {}
 
