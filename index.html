@@ -1445,6 +1445,14 @@ body.nav-open #ruler-readout{
     try {
       if(typeof refreshEntitlement === "function") await refreshEntitlement();
     } catch(e){}
+    let showPlan = false;
+    try {
+      if(typeof window.needsPlanOnboarding === "function") showPlan = await window.needsPlanOnboarding();
+    } catch(e){}
+    if(showPlan && typeof window.openPostSignupPlans === "function"){
+      window.openPostSignupPlans();
+      return;
+    }
     if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
     hideGate();
   }
@@ -1585,12 +1593,12 @@ body.nav-open #ruler-readout{
       </span>
     </label>
 
-    <button id="ca-submit" type="button" onclick="submitCreateAccount()" style="width:100%;padding:13px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:15px;cursor:pointer;font-family:inherit;margin-bottom:14px">Create Account &amp; Choose Plan</button>
+    <button id="ca-submit" type="button" onclick="submitCreateAccount()" style="width:100%;padding:13px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:15px;cursor:pointer;font-family:inherit;margin-bottom:14px">Create Account</button>
 
     <div style="text-align:center">
       <a href="#" onclick="event.preventDefault();closeCreateAccount()" style="color:#9ec5e8;font-size:12.5px;text-decoration:none">Already have an account? Sign in</a>
     </div>
-    <div style="font-size:10px;color:#7d9bb8;margin-top:18px;line-height:1.5;text-align:center">After creating your account you'll pick a plan. Pro payment is handled securely by Stripe. A welcome email will be on its way.</div>
+    <div style="font-size:10px;color:#7d9bb8;margin-top:18px;line-height:1.5;text-align:center">After you create your account, we'll send a verification email to your inbox. Confirm your email, then sign in to choose a plan (Free or Pro).</div>
   </div>
 </div>
 
@@ -1650,12 +1658,21 @@ body.nav-open #ruler-readout{
   <div role="dialog" aria-label="Choose your plan" style="width:100%;max-width:480px;max-height:94vh;overflow-y:auto;
        background:#0f2444;border:1px solid rgba(107,191,234,.25);border-radius:16px;padding:24px 20px;box-shadow:0 24px 70px rgba(0,0,0,.6)">
     <div style="text-align:center;margin-bottom:6px">
-      <div style="font-size:20px;font-weight:800;color:#f0f6ff">Go Pro</div>
-      <div style="font-size:12.5px;color:#9ec5e8;margin-top:5px">Unlock the Bite Map, ocean layers, waypoints, fishing reports &amp; the AI Captain's Brief. Or keep using the free version.</div>
+      <div style="font-size:20px;font-weight:800;color:#f0f6ff">Choose your plan</div>
+      <div style="font-size:12.5px;color:#9ec5e8;margin-top:5px">Pick Free to use the baseline app, or upgrade for the Bite Map, ocean layers, charted waypoints, fishing reports &amp; the AI Captain's Brief.</div>
     </div>
     <div id="plan-gate-msg" style="display:none;font-size:12px;color:#fca5a5;margin:10px 0;text-align:center"></div>
 
-    <!-- Free trial -->
+    <!-- Free -->
+    <div style="background:rgba(107,191,234,.08);border:1px solid rgba(107,191,234,.28);border-radius:11px;padding:14px;margin:16px 0 12px">
+      <div style="font-size:15px;font-weight:800;color:#cfe5ff;margin-bottom:4px">Free</div>
+      <div style="font-size:11.5px;color:#9ec5e8;line-height:1.5;margin-bottom:10px">
+        Maps, ports, catches, and your own waypoints — no credit card required.
+      </div>
+      <button type="button" onclick="window.closePostSignupPlans()" style="width:100%;padding:11px;border:1px solid rgba(107,191,234,.45);border-radius:9px;background:transparent;color:#6bbfea;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">Continue with Free</button>
+    </div>
+
+    <!-- 7-day trial -->
     <div style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:14px;margin:16px 0 12px">
       <div style="font-size:15px;font-weight:800;color:#86efac;margin-bottom:4px">7-day free trial</div>
       <div style="font-size:11.5px;color:#cfe5ff;line-height:1.5;margin-bottom:10px">
@@ -1679,9 +1696,6 @@ body.nav-open #ruler-readout{
       Secure checkout by Stripe. By continuing you agree to the
       <a href="#" onclick="event.preventDefault();if(typeof openLegal==='function')openLegal();" style="color:#7dd3fc;text-decoration:none">Terms &amp; subscription policy</a>.
       Test mode is active during setup.
-    </div>
-    <div style="margin-top:14px;text-align:center">
-      <a href="#" onclick="event.preventDefault();window.closePostSignupPlans()" style="color:#9ec5e8;font-size:12px;text-decoration:none">Continue with the free version →</a>
     </div>
   </div>
 </div>
@@ -1727,18 +1741,37 @@ body.nav-open #ruler-readout{
   };
   window.closePricing = function(){ const m=document.getElementById("pricing-modal"); if(m) m.style.display="none"; };
 
-  // Required post-signup plan selection. Shown immediately after a new account is
-  // created; the user must pick a plan (which routes into Stripe Checkout) before
-  // reaching the app. The auth gate stays underneath, so if they sign out here
-  // they're returned to the sign-in screen rather than into the app.
+  window.markPlanSelected = async function(){
+    try {
+      const s = sb();
+      const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+      if(!s || !u) return;
+      await s.from("profiles").update({ plan_selected_at: new Date().toISOString() }).eq("id", u.id);
+    } catch(e){ console.warn("markPlanSelected", e); }
+  };
+  window.needsPlanOnboarding = async function(){
+    try {
+      const s = sb();
+      if(!s) return false;
+      const { data:p } = await s.from("profiles")
+        .select("plan_selected_at, is_owner, subscription_status")
+        .maybeSingle();
+      if(!p) return true;
+      if(p.plan_selected_at) return false;
+      if(p.is_owner) return false;
+      if(p.subscription_status === "active" || p.subscription_status === "trialing") return false;
+      return true;
+    } catch(e){ return false; }
+  };
+
+  // One-time plan selection after the user's first confirmed sign-in.
   window.openPostSignupPlans = function(){
     const g = document.getElementById("plan-gate");
     const m = document.getElementById("plan-gate-msg");
     if(m) m.style.display = "none";
-    // Keep the auth gate visible behind the plan gate so the app is never exposed
-    // until a plan is chosen and Stripe confirms entitlement.
     const auth = document.getElementById("bw-auth-gate");
-    if(auth) auth.style.display = "flex";
+    const signedIn = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+    if(auth) auth.style.display = signedIn ? "none" : "flex";
     if(g) g.style.display = "flex";
   };
   // ── Create account page ──────────────────────────────────────────────────
@@ -1772,23 +1805,20 @@ body.nav-open #ruler-readout{
       // record captures consent. BW_AUTH.signUp forwards metadata to Supabase.
       const meta = { full_name: name, tos_accepted_at: new Date().toISOString() };
       const res = await window.BW_AUTH.signUp(email, pass, meta);
-      if(res && res.session){
-        if(typeof refreshEntitlement === "function"){ try { await refreshEntitlement(); } catch(e){} }
-        closeCreateAccount();
-        hideGate();
-        // Go straight to plan selection (Free or Pro → Stripe).
-        if(typeof window.openPostSignupPlans === "function") window.openPostSignupPlans();
-      } else {
-        // Email-confirmation flow (no immediate session).
-        closeCreateAccount();
+      closeCreateAccount();
+      if(!res || !res.session){
         showGate();
         const gmsg = document.getElementById("bw-auth-msg");
-        if(gmsg){ gmsg.style.display="block"; gmsg.style.color="#86efac"; gmsg.textContent="Account created — check your email to confirm, then sign in to choose your plan."; }
+        if(gmsg){
+          gmsg.style.display="block";
+          gmsg.style.color="#86efac";
+          gmsg.textContent=`Account created! We've sent a verification email to ${email}. Please confirm your email before signing in — then you'll choose a plan (Free or Pro).`;
+        }
       }
     } catch(e){
       show(e && e.message ? e.message : "Could not create account. Try again.");
     } finally {
-      if(btn){ btn.disabled = false; btn.textContent = "Create Account & Choose Plan"; }
+      if(btn){ btn.disabled = false; btn.textContent = "Create Account"; }
     }
   };
 
@@ -1824,18 +1854,14 @@ body.nav-open #ruler-readout{
           planLabel = "Owner";
           planDetail = "Full access · unlimited";
           actionsHtml = `<span style="${badgeStyle}">Owner</span>`;
-        } else if(st === "lifetime"){
-          planLabel = "Pro";
-          planDetail = "Lifetime access · all features";
-          actionsHtml = `<span style="${badgeStyle}">PRO Lifetime</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
         } else if(st === "active"){
           planLabel = interval === "year" ? "PRO Annual" : "PRO Monthly";
           planDetail = "Full app — Bite Map, ocean & weather layers, all waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.";
           actionsHtml = `<span style="${badgeStyle}">${planLabel}</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
         } else if(st === "trialing"){
-          planLabel = "Free Trial";
+          planLabel = "7 Day Trial";
           planDetail = "Full app · all waypoints (AI brief excluded)";
-          actionsHtml = `<span style="${badgeStyle}">Free Trial</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
+          actionsHtml = `<span style="${badgeStyle}">7 Day Trial</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
         } else if(paid){
           planLabel = "Pro";
           planDetail = "Full app — Bite Map, ocean & weather layers, all waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.";
@@ -1897,11 +1923,11 @@ body.nav-open #ruler-readout{
     }
   };
 
-  window.closePostSignupPlans = function(){    const g = document.getElementById("plan-gate"); if(g) g.style.display = "none";
-    // Dismissing the Pro upsell drops the auth gate too, landing the user in the
-    // free app (Model B). Premium features remain individually locked with PRO tags.
+  window.closePostSignupPlans = function(){
+    const g = document.getElementById("plan-gate"); if(g) g.style.display = "none";
     const auth = document.getElementById("bw-auth-gate"); if(auth) auth.style.display = "none";
     if(typeof hideGate === "function"){ try { hideGate(); } catch(e){} }
+    if(typeof window.markPlanSelected === "function") window.markPlanSelected();
   };
   window.bwSignOutFromPlanGate = async function(){
     try { if(window.BW_AUTH && window.BW_AUTH.signOut) await window.BW_AUTH.signOut(); } catch(e){}
@@ -1941,24 +1967,21 @@ body.nav-open #ruler-readout{
         interval = p && p.subscription_interval;
         isOwner = !!(p && p.is_owner);
         if(isOwner){ tier="Owner"; detail="Full access · unlimited"; }
-        else if(st==="lifetime"){ tier="Pro"; detail="Lifetime access · all features"; }
         else if(st==="active"){ tier="Pro"; detail="Full app · all waypoints · 2 AI briefs/day"; }
-        else if(st==="trialing"){ tier="Free trial"; detail="Full app · all waypoints (AI brief excluded)"; }
+        else if(st==="trialing"){ tier="7 Day Trial"; detail="Full app · all waypoints (AI brief excluded)"; }
       }
     } catch(e){ /* show free */ }
     const badgeStyle = "font-family:inherit;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.45);color:#86efac;font-size:11px;font-weight:700;padding:7px 12px;border-radius:7px;white-space:nowrap;text-align:center";
     let actionHtml = `<button type="button" onclick="openPricing()" style="font-family:inherit;background:#2979b5;border:none;color:#fff;font-size:11px;font-weight:700;padding:7px 12px;border-radius:7px;cursor:pointer">Upgrade</button>`;
     if(isOwner){
       actionHtml = `<span style="${badgeStyle}">Owner</span>`;
-    } else if(st==="lifetime"){
-      actionHtml = `<span style="${badgeStyle}">PRO Lifetime</span>`;
     } else if(st==="active"){
       const planLabel = interval === "year" ? "PRO Annual" : "PRO Monthly";
       actionHtml = `<span style="${badgeStyle}">${planLabel}</span>`;
     } else if(st==="trialing"){
-      actionHtml = `<span style="${badgeStyle}">Free Trial</span>`;
+      actionHtml = `<span style="${badgeStyle}">7 Day Trial</span>`;
     }
-    const showManage = !isOwner && (st==="active" || st==="trialing" || st==="lifetime");
+    const showManage = !isOwner && (st==="active" || st==="trialing");
     el.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(7,17,33,.5);border:1px solid rgba(107,191,234,.18);border-radius:9px;padding:8px 10px">
         <div style="min-width:0">
@@ -1979,6 +2002,7 @@ body.nav-open #ruler-readout{
     if(q.get("checkout")==="success"){
       const clean = location.origin + location.pathname;
       history.replaceState({}, "", clean);
+      if(typeof window.markPlanSelected === "function") window.markPlanSelected();
       // After returning from Stripe, the webhook that writes entitlement can lag
       // a few seconds. Re-check entitlement a few times; as soon as the plan is
       // active, drop the plan gate AND the auth gate so the user enters the app.
