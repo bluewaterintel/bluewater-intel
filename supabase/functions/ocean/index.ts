@@ -492,16 +492,36 @@ function ensureTideStations() {
   }
   return _stationsPromise;
 }
-// Per-station prediction cache (15 min) keyed by station id.
-const tideCache = new Map<string, { atMs: number; value: number | null; state: string | null }>();
+// Per-station prediction cache (15 min) keyed by station id + forecast hour.
+const tideCache = new Map<string, { atMs: number; value: number | null; state: string | null; validAtMs: number | null }>();
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const coopsDate = (ms: number) => {
   const d = new Date(ms);
   return `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 };
 
-async function fetchTide(lat: number, lng: number) {
-  const none = { value: null as number | null, state: null as string | null, station: null as string | null, observedAtMs: null as number | null };
+type TideRec = {
+  value: number | null;
+  state: string | null;
+  station: string | null;
+  observedAtMs: number | null;
+  _forecast?: boolean;
+  forecastHour?: number;
+};
+
+function tidePayload(t: TideRec) {
+  return {
+    value: t.value,
+    state: t.state,
+    observedAtMs: t.observedAtMs,
+    ...(t._forecast ? { _forecast: true, forecastHour: t.forecastHour } : {}),
+  };
+}
+
+async function fetchTide(lat: number, lng: number, hoursAhead = 0): Promise<TideRec> {
+  const none: TideRec = { value: null, state: null, station: null, observedAtMs: null };
+  const hour = Math.round(clamp(hoursAhead, 0, 96) / 3) * 3;
+  const targetMs = Date.now() + hour * 3600000;
   const stations = await ensureTideStations();
   if (!stations.length) return none;
   let best: { id: string; lat: number; lng: number } | null = null;
@@ -513,11 +533,20 @@ async function fetchTide(lat: number, lng: number) {
   // No reference station within ~90 nm → no honest tide signal for this point.
   if (!best || bestNm > 90) return none;
   const now = Date.now();
-  const hit = tideCache.get(best.id);
-  if (hit && now - hit.atMs < 15 * 60 * 1000) return { value: hit.value, state: hit.state, station: best.id, observedAtMs: now };
+  const cacheKey = `${best.id},${hour}`;
+  const hit = tideCache.get(cacheKey);
+  if (hit && now - hit.atMs < 15 * 60 * 1000) {
+    return {
+      value: hit.value,
+      state: hit.state,
+      station: best.id,
+      observedAtMs: hit.validAtMs ?? targetMs,
+      ...(hour > 0 ? { _forecast: true, forecastHour: hour } : {}),
+    };
+  }
   const url = `${COOPS_PRED}?product=predictions&application=bluewaterintel`
-    + `&begin_date=${encodeURIComponent(coopsDate(now - 3 * 3600 * 1000))}`
-    + `&end_date=${encodeURIComponent(coopsDate(now + 3 * 3600 * 1000))}`
+    + `&begin_date=${encodeURIComponent(coopsDate(targetMs - 3 * 3600 * 1000))}`
+    + `&end_date=${encodeURIComponent(coopsDate(targetMs + 3 * 3600 * 1000))}`
     + `&datum=MLLW&station=${best.id}&time_zone=gmt&units=english&interval=6&format=json`;
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(9000), headers: ERDDAP_HEADERS });
@@ -538,11 +567,18 @@ async function fetchTide(lat: number, lng: number) {
     }
     if (!slopes.length || maxSlope <= 0) return none;
     let cur = slopes[0], bd = Infinity;
-    for (const sl of slopes) { const dd = Math.abs(sl.tMid - now); if (dd < bd) { bd = dd; cur = sl; } }
+    for (const sl of slopes) { const dd = Math.abs(sl.tMid - targetMs); if (dd < bd) { bd = dd; cur = sl; } }
     const value = Math.min(1, Math.abs(cur.s) / maxSlope);
     const state = cur.s > maxSlope * 0.1 ? "rising" : cur.s < -maxSlope * 0.1 ? "falling" : "slack";
-    tideCache.set(best.id, { atMs: now, value, state });
-    return { value, state, station: best.id, observedAtMs: now };
+    const validAtMs = Math.round(cur.tMid);
+    tideCache.set(cacheKey, { atMs: now, value, state, validAtMs });
+    return {
+      value,
+      state,
+      station: best.id,
+      observedAtMs: validAtMs,
+      ...(hour > 0 ? { _forecast: true, forecastHour: hour } : {}),
+    };
   } catch {
     return none;
   }
@@ -584,7 +620,7 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
     useForecast ? Promise.resolve(null) : fetchBuoy(lat, lng),
     fetchGridPoint(SST_ERDDAP, SST_DATASET, SST_VAR, lat, lng, SST_HAS_ALTITUDE, SST_LOOKBACK),
     fetchGridPoint(CHL_ERDDAP, CHL_DATASET, CHL_VAR, lat, lng, CHL_HAS_ALTITUDE, CHL_LOOKBACK),
-    fetchTide(lat, lng),
+    fetchTide(lat, lng, hoursAhead),
     buoyWtmpList(),
     useForecast ? fetchModelWind(lat, lng, hoursAhead) : Promise.resolve(null),
   ]);
@@ -611,7 +647,7 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
     airTemp: wx ? wx.airTemp : (buoy?.airTemp ?? { value: null, observedAtMs: null }),
     pressure: wx ? wx.pressure : (buoy?.pressure ?? { value: null, observedAtMs: null }),
     barometer: wx ? wx.barometer : (buoy?.barometer ?? { value: null, observedAtMs: null }),
-    tide: { value: tide.value, state: tide.state, observedAtMs: tide.observedAtMs },
+    tide: tidePayload(tide),
     sources: {
       sst: SST_DATASET,
       sstBuoy: buoySst ? { nm: Math.round(buoySst.distNm), observedAtMs: buoySst.observedAtMs } : null,
@@ -675,7 +711,7 @@ async function fetchSstRows(latMin: number, latMax: number, lngMin: number, lngM
 // chlorophyll come from their grids, so we skip the per-point ERDDAP calls here.
 async function assembleFieldPoint(lat: number, lng: number, hoursAhead = 0) {
   if (hoursAhead > 0) {
-    const [model, tide] = await Promise.all([fetchModelWind(lat, lng, hoursAhead), fetchTide(lat, lng)]);
+    const [model, tide] = await Promise.all([fetchModelWind(lat, lng, hoursAhead), fetchTide(lat, lng, hoursAhead)]);
     const wx = forecastWeatherFields(model, hoursAhead);
     return {
       point: { lat, lng },
@@ -689,11 +725,11 @@ async function assembleFieldPoint(lat: number, lng: number, hoursAhead = 0) {
       airTemp: wx.airTemp,
       pressure: wx.pressure,
       barometer: wx.barometer,
-      tide: { value: tide.value, state: tide.state, observedAtMs: tide.observedAtMs },
+      tide: tidePayload(tide),
       sources: { ...wx.sources, tide: tide.station },
     };
   }
-  const [buoy, tide] = await Promise.all([fetchBuoy(lat, lng), fetchTide(lat, lng)]);
+  const [buoy, tide] = await Promise.all([fetchBuoy(lat, lng), fetchTide(lat, lng, hoursAhead)]);
   return {
     point: { lat, lng },
     fetchedAtMs: Date.now(),
@@ -705,7 +741,7 @@ async function assembleFieldPoint(lat: number, lng: number, hoursAhead = 0) {
     airTemp: buoy?.airTemp ?? { value: null, observedAtMs: null },
     pressure: buoy?.pressure ?? { value: null, observedAtMs: null },
     barometer: buoy?.barometer ?? { value: null, observedAtMs: null },
-    tide: { value: tide.value, state: tide.state, observedAtMs: tide.observedAtMs },
+    tide: tidePayload(tide),
     sources: { buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null, tide: tide.station },
   };
 }

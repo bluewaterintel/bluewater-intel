@@ -31,7 +31,7 @@
 
   // ── Last-known-good (best available REAL data) ─────────────────────────────
   const FIELDS = ["sst", "chlor", "wind", "waves", "waterTemp", "airTemp", "pressure", "barometer", "tide"];
-  const FORECAST_FIELDS = new Set(["wind", "waves", "waterTemp", "airTemp", "pressure", "barometer"]);
+  const FORECAST_FIELDS = new Set(["wind", "waves", "waterTemp", "airTemp", "pressure", "barometer", "tide"]);
   const lastGood = new Map();
 
   function mergeBestAvailable(k, payload, opts = {}) {

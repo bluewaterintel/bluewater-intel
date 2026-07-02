@@ -88,6 +88,15 @@ console.log("\nlive ocean edge predictinputs (hours=0 vs hours=24):");
     console.log(`    sample wind now=${sample0?.value}kt dir=${sample0?.dir}, +24h=${sample24?.value}kt dir=${sample24?.dir}`);
     // Values may match if model is flat; structure must still be forecast.
     check("hours=24 observedAtMs is future valid time", sample24?.observedAtMs > Date.now());
+    const tides0 = d0.field.map((f) => f.p?.tide).filter((t) => t?.value != null);
+    const tides24 = d24.field.map((f) => f.p?.tide).filter((t) => t?.value != null);
+    check("hours=0 has tide data", tides0.length > 0);
+    check("hours=24 has forecast tide", tides24.length > 0);
+    check("hours=24 tide marked _forecast", tides24.every((t) => t._forecast === true));
+    const t0 = tides0[0];
+    const t24 = tides24[0];
+    console.log(`    sample tide now=${t0?.value?.toFixed(2)} (${t0?.state}), +24h=${t24?.value?.toFixed(2)} (${t24?.state})`);
+    check("hours=24 tide observedAtMs is future valid time", t24?.observedAtMs > Date.now());
   }
 }
 
