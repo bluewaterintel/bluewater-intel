@@ -11984,6 +11984,27 @@ function drawPortMarkers(){
       portMarkers.push(label);
     }
 
+    // Combined popup (matches other waypoints): port name + coordinates + a
+    // 6-day weather forecast button. Ports previously only had a hover tooltip
+    // and no way to pull a forecast, unlike every other marker type.
+    const _pLat = p.lat.toFixed(3), _pLng = p.lng.toFixed(3);
+    const _pSafeName = (p.short || name || "Port").replace(/'/g, "\\'");
+    mk.bindPopup(
+      `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:180px">
+        <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:15px;padding:0 18px">${p.short || name}</div>
+        <div style="font-size:11px;color:#f5c842;margin-bottom:2px;letter-spacing:.04em">${isH ? "HOME PORT" : "PORT"}</div>
+        <div style="font-size:10.5px;color:#8fb4d8;margin-bottom:9px">${_pLat}°, ${_pLng}°</div>
+        <button onclick="showForecast(${p.lat},${p.lng},'${_pSafeName}')" style="
+          width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
+          padding:11px 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
+          display:flex;align-items:center;justify-content:center;gap:7px">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0 0-9 6 6 0 0 0-11.6-2A4.5 4.5 0 0 0 6.5 19Z"/><path d="M8 13l-1.5 3M12 13l-1.5 3M16 13l-1.5 3"/></svg>
+          6-Day Forecast
+        </button>
+      </div>`,
+      {offset:[0,-16], className:"wp-fc-popup", maxWidth:320}
+    );
+
     // Hover/tap tooltip with full name (non-permanent, doesn't clutter)
     mk.bindTooltip(p.short, {
       direction: "right",
