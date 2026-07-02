@@ -1474,10 +1474,23 @@ body.nav-open #ruler-readout{
     const q = new URLSearchParams(location.search);
     if (q.get("confirmed") === "1") {
       history.replaceState({}, "", location.origin + location.pathname);
-      const handleConfirmedReturn = () => {
-        // Some Supabase flows auto-establish a session from the URL hash; if so,
-        // onAuthChange/onSignedIn will proceed into the app without this banner.
-        if (window.BW_AUTH && window.BW_AUTH.getUser()) return;
+      const handleConfirmedReturn = async () => {
+        // If Supabase auto-established a session from the confirmation link (the
+        // common case), the user is now signed in and hasn't picked a plan yet —
+        // send them STRAIGHT to the Choose Your Plan screen rather than flashing
+        // the sign-in page first. onSignedIn also handles this, but we invoke the
+        // plan picker directly here so there's no sign-in-gate flash in between.
+        if (window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser()) {
+          let showPlan = false;
+          try { if(typeof window.needsPlanOnboarding === "function") showPlan = await window.needsPlanOnboarding(); } catch(e){}
+          if(showPlan && typeof window.openPostSignupPlans === "function"){
+            if(typeof hideGate === "function") hideGate();
+            window.openPostSignupPlans();
+          }
+          return;  // signed in → onSignedIn handles the rest
+        }
+        // No auto-session (they must sign in manually) → show the welcome banner
+        // on the sign-in screen so they know their email is confirmed.
         showWelcomeBanner();
       };
       if (window.BW_AUTH) {
@@ -1567,38 +1580,54 @@ body.nav-open #ruler-readout{
 <div id="create-account-page" style="display:none;position:fixed;inset:0;z-index:100005;
      background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
      overflow-y:auto;padding:0;font-family:'Segoe UI',system-ui,sans-serif">
-  <div style="max-width:420px;margin:0 auto;padding:24px 20px 40px">
+  <div style="max-width:480px;margin:0 auto;padding:32px 26px 40px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding-top:6px">
-      <div style="font-size:20px;font-weight:800;color:#f0f6ff">Create your account</div>
+      <div style="font-size:24px;font-weight:800;color:#f0f6ff">Create your account</div>
       <button type="button" onclick="closeCreateAccount()" aria-label="Close" style="background:rgba(255,255,255,.06);border:1px solid rgba(107,191,234,.25);color:#9ec5e8;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;line-height:1">×</button>
     </div>
-    <div style="font-size:12.5px;color:#9ec5e8;line-height:1.5;margin-bottom:20px">Join Bluewater Intel — then choose Free or Pro. You can start on the free version anytime.</div>
+    <div style="font-size:14px;color:#9ec5e8;line-height:1.5;margin-bottom:22px">Join Bluewater Intel — then choose Free or Pro. You can start on the free version anytime.</div>
 
-    <div id="ca-msg" style="display:none;font-size:12px;color:#fca5a5;margin-bottom:12px;text-align:center"></div>
+    <div id="ca-msg" style="display:none;font-size:13.5px;color:#fca5a5;margin-bottom:12px;text-align:center"></div>
 
-    <label style="display:block;font-size:11px;color:#9ec5e8;margin-bottom:4px">Name</label>
-    <input id="ca-name" type="text" autocomplete="name" placeholder="Captain name" style="width:100%;box-sizing:border-box;margin-bottom:12px;padding:11px 12px;border-radius:8px;border:1px solid rgba(107,191,234,.3);background:#0a1628;color:#f0f6ff;font-size:14px;font-family:inherit"/>
+    <label style="display:block;font-size:13px;color:#9ec5e8;margin-bottom:5px">Name</label>
+    <input id="ca-name" type="text" autocomplete="name" placeholder="Captain name" style="width:100%;box-sizing:border-box;margin-bottom:12px;padding:11px 12px;border-radius:8px;border:1px solid rgba(107,191,234,.3);background:#0a1628;color:#f0f6ff;font-size:15px;font-family:inherit"/>
 
-    <label style="display:block;font-size:11px;color:#9ec5e8;margin-bottom:4px">Email</label>
-    <input id="ca-email" type="email" autocomplete="email" placeholder="you@example.com" style="width:100%;box-sizing:border-box;margin-bottom:12px;padding:11px 12px;border-radius:8px;border:1px solid rgba(107,191,234,.3);background:#0a1628;color:#f0f6ff;font-size:14px;font-family:inherit"/>
+    <label style="display:block;font-size:13px;color:#9ec5e8;margin-bottom:5px">Email</label>
+    <input id="ca-email" type="email" autocomplete="email" placeholder="you@example.com" style="width:100%;box-sizing:border-box;margin-bottom:12px;padding:11px 12px;border-radius:8px;border:1px solid rgba(107,191,234,.3);background:#0a1628;color:#f0f6ff;font-size:15px;font-family:inherit"/>
 
-    <label style="display:block;font-size:11px;color:#9ec5e8;margin-bottom:4px">Password</label>
-    <input id="ca-password" type="password" autocomplete="new-password" placeholder="At least 6 characters" style="width:100%;box-sizing:border-box;margin-bottom:16px;padding:11px 12px;border-radius:8px;border:1px solid rgba(107,191,234,.3);background:#0a1628;color:#f0f6ff;font-size:14px;font-family:inherit"/>
+    <label style="display:block;font-size:13px;color:#9ec5e8;margin-bottom:5px">Password</label>
+    <input id="ca-password" type="password" autocomplete="new-password" placeholder="At least 6 characters" style="width:100%;box-sizing:border-box;margin-bottom:16px;padding:11px 12px;border-radius:8px;border:1px solid rgba(107,191,234,.3);background:#0a1628;color:#f0f6ff;font-size:15px;font-family:inherit"/>
 
     <!-- Required T&C consent -->
-    <label style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:#cfe5ff;line-height:1.5;margin-bottom:20px;cursor:pointer">
+    <label style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#cfe5ff;line-height:1.5;margin-bottom:22px;cursor:pointer">
       <input id="ca-terms" type="checkbox" style="margin-top:2px;flex-shrink:0;width:16px;height:16px;accent-color:#2979b5"/>
       <span>I agree to the
         <a href="#" onclick="event.preventDefault();if(typeof openLegal==='function'){closeCreateAccount();openLegal();}" style="color:#7dd3fc;text-decoration:none">Terms &amp; Conditions and Privacy Policy</a>.
       </span>
     </label>
 
-    <button id="ca-submit" type="button" onclick="submitCreateAccount()" style="width:100%;padding:13px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:15px;cursor:pointer;font-family:inherit;margin-bottom:14px">Create Account</button>
+    <button id="ca-submit" type="button" onclick="submitCreateAccount()" style="width:100%;padding:13px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:16px;cursor:pointer;font-family:inherit;margin-bottom:16px">Create Account</button>
 
     <div style="text-align:center">
-      <a href="#" onclick="event.preventDefault();closeCreateAccount()" style="color:#9ec5e8;font-size:12.5px;text-decoration:none">Already have an account? Sign in</a>
+      <a href="#" onclick="event.preventDefault();closeCreateAccount()" style="color:#9ec5e8;font-size:14px;text-decoration:none">Already have an account? Sign in</a>
     </div>
-    <div style="font-size:10px;color:#7d9bb8;margin-top:18px;line-height:1.5;text-align:center">After you create your account, we'll send a verification email to your inbox. Confirm your email, then sign in to choose a plan (Free or Pro).</div>
+    <div style="font-size:13px;color:#9ab3cc;margin-top:20px;line-height:1.6;text-align:center">After you create your account, we'll send a verification email to your inbox. Confirm your email, then sign in to choose a plan (Free or Pro).</div>
+  </div>
+</div>
+
+<!-- CHECK-YOUR-EMAIL CONFIRMATION SCREEN -------------------------------------- -->
+<div id="verify-email-page" style="display:none;position:fixed;inset:0;z-index:100006;
+     background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
+     overflow-y:auto;padding:0;font-family:'Segoe UI',system-ui,sans-serif">
+  <div style="max-width:480px;margin:0 auto;padding:48px 26px 40px;text-align:center">
+    <div style="width:72px;height:72px;border-radius:50%;background:rgba(34,197,94,.14);border:1px solid rgba(134,239,172,.45);display:flex;align-items:center;justify-content:center;margin:0 auto 22px">
+      <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="#86efac" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+    </div>
+    <div style="font-size:24px;font-weight:800;color:#f0f6ff;margin-bottom:12px">Welcome to Bluewater Intel!</div>
+    <div style="font-size:15px;color:#cfe5ff;line-height:1.6;margin-bottom:8px">Please check your email for a verification link to complete registration.</div>
+    <div id="verify-email-addr" style="font-size:14px;color:#86efac;font-weight:700;margin-bottom:22px word-break:break-all"></div>
+    <div style="font-size:13px;color:#9ab3cc;line-height:1.6;margin-bottom:28px">Once you confirm your email, sign in to choose your plan (Free or Pro) and start fishing. Don't see it? Check your spam folder — it can take a minute to arrive.</div>
+    <button type="button" onclick="verifyEmailContinue()" style="width:100%;max-width:280px;padding:13px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:16px;cursor:pointer;font-family:inherit;margin-bottom:14px">Continue to Sign In</button>
   </div>
 </div>
 
@@ -1787,6 +1816,20 @@ body.nav-open #ruler-readout{
   window.closeCreateAccount = function(){
     const p = document.getElementById("create-account-page"); if(p) p.style.display = "none";
   };
+  // Dedicated "check your email to verify" screen shown after signup, so the
+  // user isn't dropped on the login form before they've confirmed (which caused
+  // an "invalid login credentials" error when they tried to sign in early).
+  window.showVerifyEmailScreen = function(email){
+    const p = document.getElementById("verify-email-page");
+    const addr = document.getElementById("verify-email-addr");
+    if(addr) addr.textContent = email || "";
+    if(p) p.style.display = "block";
+  };
+  window.verifyEmailContinue = function(){
+    const p = document.getElementById("verify-email-page"); if(p) p.style.display = "none";
+    // Take them to the sign-in screen; they'll sign in after confirming.
+    if(typeof showGate === "function") showGate();
+  };
   window.submitCreateAccount = async function(){
     const msg = document.getElementById("ca-msg");
     const show = (t) => { if(msg){ msg.style.display="block"; msg.textContent=t; } };
@@ -1806,14 +1849,17 @@ body.nav-open #ruler-readout{
       const meta = { full_name: name, tos_accepted_at: new Date().toISOString() };
       const res = await window.BW_AUTH.signUp(email, pass, meta);
       closeCreateAccount();
-      if(!res || !res.session){
+      // With email confirmation ON, the user must verify before they have a
+      // usable session. Do NOT drop them on the sign-in form (they'd try to log
+      // in and hit "invalid login credentials" because they haven't confirmed).
+      // Show a dedicated "check your email" welcome screen instead.
+      if(typeof window.showVerifyEmailScreen === "function"){
+        window.showVerifyEmailScreen(email);
+      } else {
         showGate();
         const gmsg = document.getElementById("bw-auth-msg");
-        if(gmsg){
-          gmsg.style.display="block";
-          gmsg.style.color="#86efac";
-          gmsg.textContent=`Account created! We've sent a verification email to ${email}. Please confirm your email before signing in — then you'll choose a plan (Free or Pro).`;
-        }
+        if(gmsg){ gmsg.style.display="block"; gmsg.style.color="#86efac";
+          gmsg.textContent = `Account created! Check your email (${email}) for a verification link, then sign in.`; }
       }
     } catch(e){
       show(e && e.message ? e.message : "Could not create account. Try again.");
@@ -13959,7 +14005,14 @@ window.bwOnSignedIn = async function (user) {
     // Refresh the Settings modal controls so the synced values are reflected.
     if(typeof refreshSettingsModal === "function") refreshSettingsModal();
 
-    if(loginDefault && typeof selectPort === "function"){
+    // Recenter the map to the login/home port ONLY on the genuine sign-in, not
+    // on every onAuthChange re-fire. Supabase fires onAuthChange again on token
+    // refresh and when the tab regains focus; without this guard, returning to
+    // the tab re-ran selectPort() and snapped the map back over the home port —
+    // the recenter-on-tab-return the user asked to remove. The flag ensures the
+    // one-time login centering happens once per page session.
+    if(loginDefault && typeof selectPort === "function" && !window._bwDidLoginRecenter){
+      window._bwDidLoginRecenter = true;
       selectPort(loginDefault);
     }
   } catch(e){ console.error("profile load failed", e); }
