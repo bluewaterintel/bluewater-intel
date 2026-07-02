@@ -9,32 +9,46 @@
   const ANON = cfg.supabaseAnonKey || cfg.anonKey || "";
   const cache = new Map();
   const TTL = 20 * 60 * 1000;
-  const keyOf = (lat, lng, opts = {}) => `${lat.toFixed(2)},${lng.toFixed(2)},${opts.mode || "ocean"},${opts.hours ?? 0}`;
+
+  function normalizeHours(v) {
+    const h = Number(v);
+    if (!isFinite(h) || h <= 0) return 0;
+    return Math.round(Math.min(96, h) / 3) * 3;
+  }
+
+  function parseFetchOpts(forecastHourOrOpts) {
+    if (typeof forecastHourOrOpts === "object" && forecastHourOrOpts !== null) {
+      return {
+        mode: forecastHourOrOpts.mode,
+        hours: normalizeHours(forecastHourOrOpts.hours ?? 0),
+      };
+    }
+    return { hours: normalizeHours(forecastHourOrOpts) };
+  }
+
+  const keyOf = (lat, lng, opts = {}) =>
+    `${lat.toFixed(2)},${lng.toFixed(2)},${opts.mode || "ocean"},${opts.hours ?? 0}`;
 
   // ── Last-known-good (best available REAL data) ─────────────────────────────
-  // GOVERNING PRINCIPLE: real data or an honest absence — never synthetic. The
-  // backend already returns the most recent cloud-free observation per pixel, but
-  // a field can still come back null (a transient request failure, or a pixel that
-  // has been clouded for the whole lookback window). Rather than let the algorithm
-  // drop that variable to zero, we remember the last REAL value we ever received
-  // for each point+field and reuse it when the current response has none. The value
-  // keeps its ORIGINAL observedAt, so the freshness model ages/labels it honestly
-  // and confidence reflects the staleness. We never invent a number; we only ever
-  // reuse one that was actually measured.
   const FIELDS = ["sst", "chlor", "wind", "waves", "waterTemp", "airTemp", "pressure", "barometer", "tide"];
-  const lastGood = new Map(); // key -> { field: {value, observedAtMs, ...} }
+  const FORECAST_FIELDS = new Set(["wind", "waves", "waterTemp", "airTemp", "pressure", "barometer"]);
+  const lastGood = new Map();
 
-  function mergeBestAvailable(k, payload) {
+  function mergeBestAvailable(k, payload, opts = {}) {
     if (!payload) return payload;
+    const forecast = (opts.hours ?? 0) > 0;
     const store = lastGood.get(k) || {};
     let usedFallback = false;
     for (const f of FIELDS) {
       const cur = payload[f];
       if (cur && cur.value != null) {
-        store[f] = { ...cur };                 // remember this real observation
-      } else if (store[f] && store[f].value != null) {
-        payload[f] = { ...store[f], _stale: true }; // reuse last real value (honestly aged)
+        store[f] = { ...cur };
+      } else if (!forecast && store[f] && store[f].value != null) {
+        payload[f] = { ...store[f], _stale: true };
         usedFallback = true;
+      } else if (forecast && FORECAST_FIELDS.has(f)) {
+        // Never back-fill forecast slots with stale current observations.
+        payload[f] = cur ?? { value: null, observedAtMs: null };
       }
     }
     lastGood.set(k, store);
@@ -42,14 +56,15 @@
     return payload;
   }
 
-  async function fetchOcean(lat, lng, opts = {}) {
+  async function fetchOcean(lat, lng, forecastHourOrOpts = 0) {
+    const opts = parseFetchOpts(forecastHourOrOpts);
     const k = keyOf(lat, lng, opts);
     const hit = cache.get(k);
-    if (hit && Date.now() - hit.atMs < TTL) return mergeBestAvailable(k, { ...hit.payload, _cache: "fresh-cache" });
+    if (hit && Date.now() - hit.atMs < TTL) return mergeBestAvailable(k, { ...hit.payload, _cache: "fresh-cache" }, opts);
     try {
       const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
       if (opts.mode) params.set("mode", opts.mode);
-      if (opts.hours != null) params.set("hours", String(opts.hours));
+      if (opts.hours > 0) params.set("hours", String(opts.hours));
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: AbortSignal.timeout(12000),
@@ -57,11 +72,12 @@
       if (!res.ok) throw new Error(`ocean ${res.status}`);
       const payload = await res.json();
       cache.set(k, { payload, atMs: Date.now() });
-      return mergeBestAvailable(k, payload);
+      return mergeBestAvailable(k, payload, opts);
     } catch (e) {
-      if (hit) return mergeBestAvailable(k, { ...hit.payload, _cache: "stale-cache" });
+      if (hit) return mergeBestAvailable(k, { ...hit.payload, _cache: "stale-cache" }, opts);
       return mergeBestAvailable(k, {
         point: { lat, lng }, fetchedAtMs: Date.now(),
+        ...(opts.hours > 0 ? { forecastHour: opts.hours } : {}),
         sst: { value: null, observedAtMs: null },
         chlor: { value: null, observedAtMs: null },
         wind: { value: null, observedAtMs: null },
@@ -71,12 +87,10 @@
         pressure: { value: null, observedAtMs: null },
         barometer: { value: null, observedAtMs: null },
         sources: {}, _cache: "unavailable",
-      });
+      }, opts);
     }
   }
 
-  // Real bathymetry (ETOPO) for a bounding box — one request per area, cached.
-  // Returns { stepDeg, rows:[[lat,lng,depthMeters], ...] } or null on failure.
   const bathyCache = new Map();
   async function fetchBathy(latMin, latMax, lngMin, lngMax) {
     const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}`;
@@ -102,8 +116,6 @@
     }
   }
 
-  // Chlorophyll spatial+temporal composite grid for a bounding box — one cached
-  // request returns the freshest real value per cell (gap-filled from clouds).
   const chlorGridCache = new Map();
   async function fetchChlorGrid(latMin, latMax, lngMin, lngMax) {
     const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}`;
@@ -129,12 +141,10 @@
     }
   }
 
-  // Combined prediction inputs (bathy grid + chlorophyll composite + batched
-  // per-point ocean field) in ONE cached request. Same data as the per-point
-  // calls — just bundled to remove ~90 round-trips.
   const predictInputsCache = new Map();
-  async function fetchPredictInputs(latMin, latMax, lngMin, lngMax, maxPoints) {
-    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)},${maxPoints || 90}`;
+  async function fetchPredictInputs(latMin, latMax, lngMin, lngMax, maxPoints, forecastHour = 0) {
+    const hours = normalizeHours(forecastHour);
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)},${maxPoints || 90},${hours}`;
     const hit = predictInputsCache.get(k);
     if (hit) return hit;
     try {
@@ -144,6 +154,7 @@
         lngMin: String(lngMin), lngMax: String(lngMax),
         maxPoints: String(maxPoints || 90),
       });
+      if (hours > 0) params.set("hours", String(hours));
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: AbortSignal.timeout(35000),
@@ -158,12 +169,9 @@
     }
   }
 
-  // Gridded wind field for a bounding box — one cached request returns a fixed
-  // grid {stepDeg, rows:[[lat,lng,speedKt,dirDeg],…], hour}. Rendered identically
-  // at every zoom (Windy-style) instead of re-sampling per viewport.
   const windGridCache = new Map();
   async function fetchWindGrid(latMin, latMax, lngMin, lngMax, hours) {
-    const h = Math.round((Number(hours) || 0) / 3) * 3;
+    const h = normalizeHours(hours);
     const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)},${h}`;
     const hit = windGridCache.get(k);
     if (hit && Date.now() - hit.atMs < 20 * 60 * 1000) return hit.data;
