@@ -6053,7 +6053,13 @@ async function buildOceanField(latMin, latMax, lngMin, lngMax, opts){
     while(next < pts.length){
       const i = next++;
       const [la, ln] = pts[i];
-      const p = await BW_OCEAN.fetchOcean(la, ln);
+      // Pass the selected forecast horizon (0/12/24/48/72h) so the backend can
+      // return FORECAST wind/pressure/weather for that time, not just current
+      // conditions. When the user scrubs the forecast slider into the future,
+      // the bite score should reflect predicted weather. Backend fetchOcean must
+      // accept this hour offset; if it ignores the extra arg, behavior is
+      // unchanged (current conditions), so this is safe to pass unconditionally.
+      const p = await BW_OCEAN.fetchOcean(la, ln, FORECAST_HOUR_OFFSET || 0);
       results[i] = { la, ln, p };
     }
   }
@@ -6088,8 +6094,11 @@ function applyOceanField(samples, spacingNm){
 // endpoint is unavailable, so behavior is preserved either way.
 async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
   let data = null;
+  // Forecast horizon (0/12/24/48/72h) so the backend returns forecast wind,
+  // pressure, and weather for the selected time — not just current conditions.
+  const fcHour = (typeof FORECAST_HOUR_OFFSET !== "undefined") ? (FORECAST_HOUR_OFFSET || 0) : 0;
   if(typeof BW_OCEAN !== "undefined" && BW_OCEAN.fetchPredictInputs){
-    try { data = await BW_OCEAN.fetchPredictInputs(latMin, latMax, lngMin, lngMax, 90); }
+    try { data = await BW_OCEAN.fetchPredictInputs(latMin, latMax, lngMin, lngMax, 90, fcHour); }
     catch(e){ data = null; }
   }
   if(data && Array.isArray(data.field)){
@@ -10192,7 +10201,7 @@ const LORAN_CHAINS = {
     offset: 42237.7,
     // Region where this chain produces useful (non-degenerate) lines:
     // north of Cape Fear, where Carolina Beach Y secondary spread is good.
-    useBounds: {south: 34.5, north: 38.6, west: -78.0, east: -73.0},
+    useBounds: {south: 34.5, north: 38.6, west: -77.0, east: -74.0},
     // 50-µs increments. TD values 40000-42600 across this region.
     tdMin: 40000, tdMax: 42600, step: 50,
   },
@@ -10213,7 +10222,7 @@ const LORAN_CHAINS = {
     offset: 50735,
     // Region where this chain produces useful (non-degenerate) lines:
     // south of Cape Fear in SC/GA waters.
-    useBounds: {south: 32.0, north: 34.5, west: -80.5, east: -76.5},
+    useBounds: {south: 32.0, north: 34.5, west: -79.7, east: -77.3},
     // 50-µs increments. TD values 46000-51000 across SC/GA waters.
     tdMin: 46000, tdMax: 51000, step: 50,
   },
