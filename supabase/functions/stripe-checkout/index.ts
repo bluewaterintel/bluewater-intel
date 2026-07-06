@@ -2,10 +2,10 @@
 // Bluewater Intel — Stripe Checkout session (Edge Function, Deno)
 // Deploy: supabase functions deploy stripe-checkout --no-verify-jwt
 //
-// Creates a Stripe Checkout Session for one of:
-//   kind="subscription" interval="month"|"year"  → recurring plan ($14.99/$109.99)
-//   kind="lifetime"                               → one-time $899.99 (everything)
-//   kind="pack" port="<port name>"                → one-time $49.99 waypoint pack
+// Creates a Stripe Checkout Session for:
+//   kind="subscription" interval="month"|"year"  → Pro plan (full app incl. all charted waypoints)
+//   kind="lifetime"                               → one-time lifetime (everything)
+//   kind="pack" port="<port name>"                → legacy one-time port pack (deprecated)
 //
 // The user must be signed in (Supabase JWT). We create/reuse a Stripe customer
 // and stamp it on profiles.stripe_customer_id so the webhook + billing portal
@@ -21,6 +21,10 @@ import Stripe from "npm:stripe@16";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20" });
+const STRIPE_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
+const IS_LIVE = STRIPE_KEY.startsWith("sk_live_");
+const PRO_CHECKOUT_BLURB =
+  "Bluewater Intel Pro — full app access: Bite Map, all charted waypoints, ocean & wind layers, fishing reports, and up to 2 AI Captain's Briefs per day.";
 const APP_URL = (Deno.env.get("APP_URL") ?? "").replace(/\/$/, "");
 const PRICES = {
   monthly: Deno.env.get("STRIPE_PRICE_MONTHLY") ?? "",
@@ -103,19 +107,24 @@ Deno.serve(async (req) => {
       success_url: `${APP_URL}/?checkout=success`,
       cancel_url: `${APP_URL}/?checkout=cancel`,
       metadata: meta,
+      ...(kind === "subscription"
+        ? {
+            custom_text: {
+              submit: { message: PRO_CHECKOUT_BLURB },
+            },
+          }
+        : {}),
       ...(mode === "subscription"
         ? {
             subscription_data: {
               metadata: meta,
-              // 7-day free trial (card still collected by Checkout; billed after
-              // the trial unless the user cancels). Only on subscriptions.
               ...(trial ? { trial_period_days: 7 } : {}),
             },
           }
         : { payment_intent_data: { metadata: meta } }),
     });
 
-    return json({ url: session.url });
+    return json({ url: session.url, livemode: IS_LIVE });
   } catch (e) {
     console.error("checkout error", (e as Error)?.message);
     return json({ error: "Could not start checkout." }, 502);
