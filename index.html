@@ -1556,7 +1556,7 @@ body.nav-open #ruler-readout{
     </div>
 
     <div style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:12px 0 6px">Subscription — full app + 2 AI briefs/day</div>
-    <div style="font-size:11px;color:#9ec5e8;margin-bottom:8px">Everything in the app. Charted waypoints are sold separately as packs.</div>
+    <div style="font-size:11px;color:#9ec5e8;margin-bottom:8px">Everything in the app, including all charted waypoints for your home port.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month'})">Monthly — $12.99/mo</button>
       <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'year'})">Annual — $109.99/yr</button>
@@ -1566,7 +1566,7 @@ body.nav-open #ruler-readout{
     <div style="margin-top:16px;text-align:center">
       <a href="#" onclick="event.preventDefault();bwManageBilling()" style="color:#7dd3fc;font-size:12.5px;text-decoration:none">Manage billing / cancel</a>
     </div>
-    <div style="font-size:10px;color:#7d9bb8;margin-top:12px;line-height:1.5">Secure checkout by Stripe. Test mode is active during setup.</div>
+    <div style="font-size:10px;color:#7d9bb8;margin-top:12px;line-height:1.5">Secure checkout by Stripe.</div>
   </div>
 </div>
 <style>
@@ -1724,7 +1724,6 @@ body.nav-open #ruler-readout{
     <div style="font-size:10px;color:#7d9bb8;margin-top:16px;line-height:1.5;text-align:center">
       Secure checkout by Stripe. By continuing you agree to the
       <a href="#" onclick="event.preventDefault();if(typeof openLegal==='function')openLegal();" style="color:#7dd3fc;text-decoration:none">Terms &amp; subscription policy</a>.
-      Test mode is active during setup.
     </div>
   </div>
 </div>
@@ -1749,23 +1748,6 @@ body.nav-open #ruler-readout{
   window.openPricing = async function(){
     const m = document.getElementById("pricing-modal"); if(!m) return;
     const msg = document.getElementById("pricing-msg"); if(msg) msg.style.display="none";
-    // Pack option depends on a selected home port; show its waypoint count.
-    const btn = document.getElementById("pricing-pack-btn");
-    const note = document.getElementById("pricing-pack-note");
-    const port = (typeof activePort !== "undefined") ? activePort : null;
-    if(btn){
-      if(!port){ btn.disabled = true; btn.textContent = "Select a home port first"; }
-      else {
-        btn.disabled = false; btn.textContent = "Buy " + port + " pack — $49.99";
-        try {
-          const P = (typeof PORTS!=="undefined") ? PORTS[port] : null;
-          if(P && sb()){
-            const { data } = await sb().rpc("pack_port_count", { p_lat: P.lat, p_lng: P.lng });
-            if(note && typeof data === "number") note.innerHTML = `<b style="color:#dde8f5">${data.toLocaleString()}</b> charted waypoints within 120&nbsp;nm of ${port}.`;
-          }
-        } catch(e){ /* count is best-effort */ }
-      }
-    }
     m.style.display = "flex";
   };
   window.closePricing = function(){ const m=document.getElementById("pricing-modal"); if(m) m.style.display="none"; };
@@ -12098,12 +12080,10 @@ const WP_TYPE_STYLE = {
 };
 
 // ── Entitlement / freemium gating ────────────────────────────────────────────
-// The charted "Fishing Waypoints" dataset is the paid product (per-port packs).
-// Owners and active subscribers see the full set; everyone else sees a small
-// teaser (the nearest few) with an upgrade nudge. Owners are flagged server-side
-// (profiles.is_owner / has_premium()); the two owner emails are also fast-pathed
-// here so they unlock instantly. NOTE: this is UI-level gating — hardening it
-// fully requires the server-side pack RPC (supabase-m5-billing).
+// Charted fishing waypoints: Pro subscribers (trial or paid), lifetime, and
+// owners get the full set for their port radius via pack_waypoints_within RPC.
+// Free users see none (only their personal waypoints). Legacy per-port pack
+// purchases still grant access if subscription lapses.
 const BW_OWNER_EMAILS = ["rnovakwvu@gmail.com", "natalienovakm@gmail.com"];
 const WP_TEASER_COUNT = 10;        // teaser size for trial/subscribers
 let _wpTeaserActive = false;       // last waypoint draw was capped to a teaser
@@ -12285,11 +12265,8 @@ async function drawWaypoints(){
   const p = PORTS[activePort];
   // Show a loading state in the panel while the query is in flight.
   updateWaypointPanel(-1, -1); // -1 => "loading…"
-  // Charted waypoints come from the SERVER-ENFORCED gated RPC: entitled users
-  // (owner or Pro subscriber) get the full set; everyone else
-  // gets a nearest-10 teaser (rows flagged gated=true). This is real enforcement
-  // — a plain subscription does NOT include waypoints, and the data is never
-  // shipped to non-entitled clients.
+  // Charted waypoints: server-enforced RPC. Pro subscribers get the full set;
+  // free users get none (positions never shipped to non-entitled clients).
   const types = wpTypeFilter ? [...wpTypeFilter] : null;
   let rows = [], status = "live", fullCount = 0;
   _wpTeaserActive = false;
