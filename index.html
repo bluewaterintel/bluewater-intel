@@ -2844,11 +2844,11 @@ body.nav-open #ruler-readout{
     <div style="font-size:10px;color:#9ec5e8;line-height:1.45;margin:-2px 0 8px;padding:0 2px">
       Satellite overlays on any basemap. We auto-select the freshest NASA-published imagery (usually today or yesterday). The date readout shows the exact observed day.
     </div>
-    <label class="layer-row" title="NASA GHRSST GAMSSA Sea Surface Temperature (L4, gap-filled, ~25km) via NASA GIBS. Cool blue = cold, warm red = warm. Shows the Gulf Stream wall, upwelling zones, and temp breaks.">
+    <label class="layer-row" title="NASA GHRSST MUR Sea Surface Temperature (L4, gap-filled, ~1km) via NASA GIBS. Cool blue = cold, warm red = warm. Shows the Gulf Stream wall, upwelling zones, and temp breaks.">
       <input type="checkbox" id="chk-sst" onchange="toggleLayer('sst')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:linear-gradient(90deg,#0a2e6b 0%,#0e72b5 25%,#4dbed5 45%,#8fd96b 60%,#e8d65a 75%,#c83520 100%);width:18px;height:8px;border-radius:2px"></span>
-        <span>Sea Surface Temp <span style="font-size:8px;color:#fbbf24;opacity:.85">(GAMSSA SST)</span></span>
+        <span>Sea Surface Temp <span style="font-size:8px;color:#fbbf24;opacity:.85">(MUR L4 · 1km)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -4312,7 +4312,7 @@ async function initMap(){
     scoped.textContent =
       '.ocean-overlays-smooth img.leaflet-tile { image-rendering:auto !important; image-rendering:smooth !important; }' +
       // Blur the whole tile CONTAINER per layer so seams between tiles smooth too.
-      '.sst-smooth   { filter: blur(9px); }' +   // big SST cells need a strong blur
+      '.sst-smooth   { filter: blur(3px); }' +    // MUR ~1km — light blend only
       '.chlor-smooth { filter: blur(2px); }';    // chlor cells are smaller
     document.head.appendChild(scoped);
   })();
@@ -4333,7 +4333,8 @@ async function initMap(){
   // SATELLITE OCEAN OVERLAYS — NASA GIBS WMTS service.
   //
   // SST (sea surface temperature):
-  //   GHRSST L4 GAMSSA Sea Surface Temperature — gap-filled global daily SST (~25km).
+  //   GHRSST L4 MUR Sea Surface Temperature — gap-filled global daily SST (~1km).
+  //   Matches the MUR grid used by the Bite Map scoring engine.
   //   Color scale: dark blue (40°F) → cyan → green → yellow → red (84°F+).
   //
   // Chlorophyll-a (water color / productivity):
@@ -4346,14 +4347,16 @@ async function initMap(){
   // Factory builders for the satellite layers, so initial creation and the
   // date-slider rebuild share ONE definition (URLs/options can't drift).
   // satDayOffset = extra days back beyond the resolved freshest published date.
+  const GIBS_MUR_SST = "GHRSST_L4_MUR_Sea_Surface_Temperature";
+  const GIBS_MUR_TILESET = "GoogleMapsCompatible_Level7";
   window.buildSstLayer = function(dayOffset){
     const date = gibsRecentDate(SAT_FRESH_BACK.sst + (dayOffset||0));
     const lyr = L.tileLayer(
-      // GAMSSA — GHRSST L4, gap-filled, global daily SST (~28km). L4 = complete
-      // coverage, no cloud holes. maxNativeZoom keeps it visible (upscaled) past z6.
-      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_GAMSSA_GDS2_Sea_Surface_Temperature/default/${date}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png`,
-      { maxZoom:18, maxNativeZoom:6, minZoom:0, opacity:oceanOpacity.sst, crossOrigin:'anonymous',
-        pane:"ocean-overlays", className:"sst-smooth", attribution:'© NASA GIBS · GHRSST GAMSSA L4 (ABoM)',
+      // MUR — GHRSST L4, gap-filled, global daily SST (~1km). Native z7 tiles;
+      // matches the ERDDAP MUR product used for Bite Map scoring.
+      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${GIBS_MUR_SST}/default/${date}/${GIBS_MUR_TILESET}/{z}/{y}/{x}.png`,
+      { maxZoom:18, maxNativeZoom:7, minZoom:0, opacity:oceanOpacity.sst, crossOrigin:'anonymous',
+        pane:"ocean-overlays", className:"sst-smooth", attribution:'© NASA GIBS · GHRSST MUR L4 (JPL)',
         errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" });
     return attachTileSmoothing(lyr);
   };
@@ -5369,7 +5372,7 @@ async function ensureFreshestSatDates(){
   _ensuringFreshDates = true;
   try {
     const [sst, chl] = await Promise.all([
-      resolveFreshestGibsDate("GHRSST_L4_GAMSSA_GDS2_Sea_Surface_Temperature", "GoogleMapsCompatible_Level6", "png", 3),
+      resolveFreshestGibsDate("GHRSST_L4_MUR_Sea_Surface_Temperature", "GoogleMapsCompatible_Level7", "png", 3),
       resolveFreshestGibsDate("MODIS_Aqua_L2_Chlorophyll_A", "GoogleMapsCompatible_Level7", "png", 3),
     ]);
     let sstChanged = false, chlChanged = false;
@@ -9568,7 +9571,7 @@ function renderExplainerMain(){
         </button>
       </div>
       <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.07);font-size:9px;color:#6b8bab;line-height:1.5;text-align:center">
-        Environmental data: sea-surface temperature &amp; chlorophyll courtesy NASA GIBS (GHRSST, MODIS Aqua); marine &amp; weather data from NOAA/NDBC. Predictions are estimates for planning only.
+        Environmental data: sea-surface temperature &amp; chlorophyll courtesy NASA GIBS (GHRSST MUR, MODIS Aqua); marine &amp; weather data from NOAA/NDBC and Open-Meteo WaveWatch III. Predictions are estimates for planning only.
       </div>
     </div>
   `;
@@ -18537,6 +18540,15 @@ function tbClearFavs(){
 // NASA GIBS WMTS layer definitions — these all work without API key.
 // URL pattern: https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/{LAYER}/default/{TIME}/{TILE_SET}/{z}/{y}/{x}.{ext}
 const OC_GIBS_LAYERS = {
+  sst_mur: {
+    id: "GHRSST_L4_MUR_Sea_Surface_Temperature",
+    name: "Sea Surface Temperature (MUR L4 · 1km)",
+    desc: "High-resolution gap-filled daily SST — matches the Bite Map data. Best for Gulf Stream edges and thermal breaks.",
+    set: "GoogleMapsCompatible_Level7",
+    maxZoom: 7,
+    ext: "png",
+    legend: "sst",
+  },
   sst_gamssa: {
     id: "GHRSST_L4_GAMSSA_GDS2_Sea_Surface_Temperature",
     name: "Sea Surface Temperature (GAMSSA L4)",
@@ -18654,7 +18666,7 @@ const OC_CHARTS = [
 let OC_state = {
   tab: "map",
   date: null,           // current display date (YYYY-MM-DD)
-  layerKey: "sst_gamssa",
+  layerKey: "sst_mur",
   opacity: 0.75,
   showBase: true,
   map: null,
@@ -19066,7 +19078,7 @@ function ocRenderCharts(){
       <div class="tut-feature-icon">🛰</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Satellite ocean data overlays</div>
-        <div class="tut-feature-desc">Two NASA satellite layers, toggleable in the Layers panel under "OCEAN DATA": <b>Sea Surface Temp</b> (GAMSSA SST — gap-filled L4, shows the Gulf Stream wall and temp breaks visually) and <b>Chlorophyll-A</b> (MODIS Aqua — shows water color/productivity, where bait stacks along the green-to-blue boundary). Both work on any basemap and auto-select the freshest published imagery (usually today or yesterday). The color legend and date readout at the bottom show the exact observed day. Bite Map chlorophyll uses the same freshest-available VIIRS gap-filled DINEOF slice from NOAA (newest posted day first).</div>
+        <div class="tut-feature-desc">Two NASA satellite layers, toggleable in the Layers panel under "OCEAN DATA": <b>Sea Surface Temp</b> (MUR L4 — ~1km gap-filled SST, shows the Gulf Stream wall and temp breaks visually, matching the Bite Map data) and <b>Chlorophyll-A</b> (MODIS Aqua — shows water color/productivity, where bait stacks along the green-to-blue boundary). Both work on any basemap and auto-select the freshest published imagery (usually today or yesterday). The color legend and date readout at the bottom show the exact observed day. Sea state in the 6-Day Forecast comes from Open-Meteo WaveWatch III marine model.</div>
       </div>
     </div>
 
@@ -23120,17 +23132,33 @@ function closeForecast(){
   if(modal) modal.classList.remove("open");
 }
 
-// Fetch + merge the two Open-Meteo endpoints into a tidy 6-day array.
+// Fetch + merge Open-Meteo weather + marine (WaveWatch III) into a tidy 6-day array.
+function bwiHourlyWaveForDate(hourly, dateIso){
+  if(!hourly || !hourly.time) return { waveFt: null, wavePer: null };
+  let maxM = null, maxPer = null;
+  for(let i = 0; i < hourly.time.length; i++){
+    if(!String(hourly.time[i]).startsWith(dateIso)) continue;
+    const h = hourly.wave_height ? hourly.wave_height[i] : null;
+    if(h == null) continue;
+    if(maxM == null || h > maxM){
+      maxM = h;
+      const p = hourly.wave_period ? hourly.wave_period[i] : null;
+      maxPer = (p != null) ? p : maxPer;
+    }
+  }
+  if(maxM == null) return { waveFt: null, wavePer: null };
+  return { waveFt: Math.round(bwiMToFt(maxM) * 10) / 10, wavePer: maxPer != null ? Math.round(maxPer) : null };
+}
 async function fetchForecast(lat, lng){
   const base = `latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&forecast_days=6&timezone=auto`;
   const marineUrl  = `https://marine-api.open-meteo.com/v1/marine?${base}` +
-    `&daily=wave_height_max,wave_period_max,wave_direction_dominant`;
+    `&daily=wave_height_max,wave_period_max,wave_direction_dominant` +
+    `&hourly=wave_height,wave_period,wave_direction`;
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?${base}` +
     `&daily=weather_code,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,temperature_2m_max,temperature_2m_min,precipitation_probability_max`;
 
   // Run both in parallel. Marine coverage is open-ocean; very nearshore points
-  // can occasionally lack wave data, so we tolerate a missing marine response
-  // and still show wind.
+  // can occasionally lack daily wave data — hourly marine is used as fallback.
   const [wRes, mRes] = await Promise.all([
     fetch(weatherUrl),
     fetch(marineUrl).catch(()=>null),
@@ -23142,6 +23170,7 @@ async function fetchForecast(lat, lng){
 
   const wd = w.daily || {};
   const md = (m && m.daily) || {};
+  const mh = (m && m.hourly) || null;
   const dates = wd.time || [];
   const out = [];
   for(let i=0; i<dates.length && i<6; i++){
@@ -23150,8 +23179,13 @@ async function fetchForecast(lat, lng){
     const windDir = wd.wind_direction_10m_dominant ? wd.wind_direction_10m_dominant[i] : null;
     const airHiF = wd.temperature_2m_max ? (wd.temperature_2m_max[i] * 9/5 + 32) : null;
     const airLoF = (wd.temperature_2m_min && wd.temperature_2m_min[i]!=null) ? (wd.temperature_2m_min[i] * 9/5 + 32) : null;
-    const waveFt = (md.wave_height_max && md.wave_height_max[i]!=null) ? bwiMToFt(md.wave_height_max[i]) : null;
-    const wavePer = (md.wave_period_max && md.wave_period_max[i]!=null) ? md.wave_period_max[i] : null;
+    let waveFt = (md.wave_height_max && md.wave_height_max[i]!=null) ? bwiMToFt(md.wave_height_max[i]) : null;
+    let wavePer = (md.wave_period_max && md.wave_period_max[i]!=null) ? md.wave_period_max[i] : null;
+    if(waveFt == null && mh){
+      const fb = bwiHourlyWaveForDate(mh, dates[i]);
+      waveFt = fb.waveFt;
+      wavePer = wavePer ?? fb.wavePer;
+    }
     const wxCode = (wd.weather_code && wd.weather_code[i]!=null) ? wd.weather_code[i] : null;
     const precip = (wd.precipitation_probability_max && wd.precipitation_probability_max[i]!=null) ? wd.precipitation_probability_max[i] : null;
     out.push({
@@ -23231,7 +23265,7 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
     ? `<div class="fc-fresh live">
          <span class="fc-fresh-dot"></span>
          <span>Live · updated ${agoStr}</span>
-         <span class="fc-fresh-src">Open-Meteo marine model</span>
+         <span class="fc-fresh-src">Open-Meteo · WaveWatch III seas</span>
        </div>`
     : `<div class="fc-fresh stale">
          <span class="fc-fresh-dot"></span>
