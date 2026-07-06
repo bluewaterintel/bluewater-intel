@@ -586,9 +586,17 @@ async function fetchTide(lat: number, lng: number, hoursAhead = 0): Promise<Tide
 
 // Per-point lookback windows (module-level so batch + point modes share them).
 const SST_LOOKBACK = Number(Deno.env.get("SST_LOOKBACK") ?? "3");
-// Gap-filled NRT chlor is spatially complete, so a tiny lookback is enough (just
-// a safety margin if the very newest daily slice hasn't fully posted yet).
-const CHL_LOOKBACK = Number(Deno.env.get("CHL_LOOKBACK") ?? "2");
+// Gap-filled VIIRS DINEOF chlor: prefer the newest ERDDAP slice (lookback 0),
+// stepping back only if that slice is not posted yet. CHL_MAX_LOOKBACK caps retries.
+const CHL_MAX_LOOKBACK = Number(Deno.env.get("CHL_MAX_LOOKBACK") ?? "2");
+
+async function fetchChlorPoint(lat: number, lng: number) {
+  for (let lb = 0; lb <= CHL_MAX_LOOKBACK; lb++) {
+    const hit = await fetchGridPoint(CHL_ERDDAP, CHL_DATASET, CHL_VAR, lat, lng, CHL_HAS_ALTITUDE, lb);
+    if (hit.value != null) return hit;
+  }
+  return { value: null, observedAtMs: null };
+}
 
 // Assemble one point's full ocean payload from the real sources. Used by both
 // the single-point GET and the batched predictinputs mode so values are IDENTICAL
@@ -619,7 +627,7 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
   const [buoy, sst, chlorRaw, tide, buoyTemps, model] = await Promise.all([
     useForecast ? Promise.resolve(null) : fetchBuoy(lat, lng),
     fetchGridPoint(SST_ERDDAP, SST_DATASET, SST_VAR, lat, lng, SST_HAS_ALTITUDE, SST_LOOKBACK),
-    fetchGridPoint(CHL_ERDDAP, CHL_DATASET, CHL_VAR, lat, lng, CHL_HAS_ALTITUDE, CHL_LOOKBACK),
+    fetchChlorPoint(lat, lng),
     fetchTide(lat, lng, hoursAhead),
     buoyWtmpList(),
     useForecast ? fetchModelWind(lat, lng, hoursAhead) : Promise.resolve(null),
@@ -774,20 +782,19 @@ async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, ln
   }
 }
 
-// Chlorophyll spatial+temporal composite for a box → freshest real value per cell.
-async function fetchChlorRows(latMin: number, latMax: number, lngMin: number, lngMax: number) {
+// Chlorophyll spatial grid for a box — freshest real value per cell.
+async function fetchChlorRowsWithLookback(
+  latMin: number, latMax: number, lngMin: number, lngMax: number, lookback: number,
+) {
   const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
   const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
   const native = Number(Deno.env.get("CHL_STEP_DEG") ?? "0.0417"); // DINEOF NRT ~4km grid
   const targetDeg = Number(Deno.env.get("CHLGRID_DEG") ?? "0.08");
   const strideIdx = Math.max(1, Math.round(targetDeg / native));
-  // Gap-filled (DINEOF) product → the latest slice is complete, so we only need a
-  // tiny lookback as a safety margin for an unposted newest slice (was 14 for the
-  // cloud-gapped science-quality feed). This also shrinks the response ~10x.
-  const lookback = Number(Deno.env.get("CHLGRID_LOOKBACK") ?? "1");
   const altIdx = CHL_HAS_ALTITUDE ? "%5B(0.0)%5D" : "";
+  const timeIdx = lookback > 0 ? `%5Blast-${lookback}:last%5D` : "%5B(last)%5D";
   const url = `${CHL_ERDDAP}/${CHL_DATASET}.json`
-    + `?${CHL_VAR}%5Blast-${lookback}:last%5D${altIdx}`
+    + `?${CHL_VAR}${timeIdx}${altIdx}`
     + `%5B(${a1}):${strideIdx}:(${a0})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(20000), headers: ERDDAP_HEADERS });
@@ -812,6 +819,17 @@ async function fetchChlorRows(latMin: number, latMax: number, lngMin: number, ln
   } catch {
     return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
   }
+}
+
+async function fetchChlorRows(latMin: number, latMax: number, lngMin: number, lngMax: number) {
+  const maxLb = Number(Deno.env.get("CHLGRID_MAX_LOOKBACK") ?? String(CHL_MAX_LOOKBACK));
+  let last = { stepDeg: Number(Deno.env.get("CHL_STEP_DEG") ?? "0.0417"), rows: [] as unknown[][] };
+  for (let lb = 0; lb <= maxLb; lb++) {
+    const out = await fetchChlorRowsWithLookback(latMin, latMax, lngMin, lngMax, lb);
+    last = out;
+    if (out.rows.length > 0) return out;
+  }
+  return last;
 }
 
 // Run an async task over items with bounded concurrency.
@@ -884,7 +902,7 @@ export const handler = async (req: Request): Promise<Response> => {
     }
     const out = await fetchChlorRows(latMin, latMax, lngMin, lngMax);
     return new Response(JSON.stringify(out), {
-      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" },
+      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
     });
   }
 
