@@ -1563,7 +1563,7 @@ body.nav-open #ruler-readout{
     </div>
     <div style="font-size:10px;color:#7d9bb8;margin-top:10px;line-height:1.5;text-align:center">Pro includes everything: the Bite Map, ocean &amp; wind layers, all charted waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.</div>
 
-    <div style="margin-top:16px;text-align:center">
+    <div id="pricing-manage-wrap" style="display:none;margin-top:16px;text-align:center">
       <a href="#" onclick="event.preventDefault();bwManageBilling()" style="color:#7dd3fc;font-size:12.5px;text-decoration:none">Manage billing / cancel</a>
     </div>
     <div style="font-size:10px;color:#7d9bb8;margin-top:12px;line-height:1.5">Secure checkout by Stripe.</div>
@@ -1672,7 +1672,7 @@ body.nav-open #ruler-readout{
     <!-- DANGER ZONE -->
     <div style="border:1px solid rgba(220,38,38,.3);border-radius:14px;padding:18px;background:rgba(220,38,38,.05)">
       <div style="font-size:11px;font-weight:700;color:#f87171;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Danger zone</div>
-      <div style="font-size:12px;color:#cbd5e1;line-height:1.5;margin-bottom:12px">Deleting your account permanently removes your profile, saved waypoints, and catch log. If you have an active subscription, cancel it first from Manage Billing. This cannot be undone.</div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.5;margin-bottom:12px">Deleting your account permanently removes your profile, saved waypoints, and catch log. If you have an active Pro subscription or trial, cancel it first from Manage Billing. Free accounts can be deleted directly. This cannot be undone.</div>
       <button type="button" onclick="deleteAccountFlow()" style="width:100%;background:transparent;border:1px solid rgba(220,38,38,.55);color:#f87171;font-family:inherit;font-weight:700;font-size:13px;padding:12px;border-radius:9px;cursor:pointer">Delete my account</button>
       <div id="acct-delete-msg" style="display:none;font-size:12px;margin-top:10px;line-height:1.5"></div>
     </div>
@@ -1748,6 +1748,18 @@ body.nav-open #ruler-readout{
   window.openPricing = async function(){
     const m = document.getElementById("pricing-modal"); if(!m) return;
     const msg = document.getElementById("pricing-msg"); if(msg) msg.style.display="none";
+    const manageWrap = document.getElementById("pricing-manage-wrap");
+    if(manageWrap) manageWrap.style.display = "none";
+    try {
+      const s = sb();
+      if(s && manageWrap){
+        const { data:p } = await s.from("profiles").select("subscription_status").maybeSingle();
+        const st = (p && p.subscription_status) || "none";
+        if(st === "active" || st === "trialing" || st === "past_due" || st === "canceled" || st === "lifetime"){
+          manageWrap.style.display = "block";
+        }
+      }
+    } catch(e){ /* hide manage link */ }
     m.style.display = "flex";
   };
   window.closePricing = function(){ const m=document.getElementById("pricing-modal"); if(m) m.style.display="none"; };
@@ -1921,13 +1933,17 @@ body.nav-open #ruler-readout{
   };
   // Manage Billing → opens the Stripe customer portal (backend returns a URL).
   window.bwManageBilling = async function(){
+    const msg = document.getElementById("pricing-msg");
+    if(msg){ msg.style.display="none"; msg.textContent=""; }
     try {
       const res = await fetch(`${fnBase()}/stripe-portal`, { method:"POST", headers: await authHeaders() });
-      const j = await res.json();
-      if(j && j.url){ window.location.href = j.url; return; }
+      const j = await res.json().catch(() => ({}));
+      if(res.ok && j && j.url){ window.location.href = j.url; return; }
       throw new Error((j && j.error) || "Could not open billing portal.");
     } catch(e){
-      if(typeof showToast === "function") showToast(e.message || "Billing portal unavailable.", "error");
+      const text = e.message || "Billing portal unavailable.";
+      if(msg){ msg.textContent = text; msg.style.display="block"; }
+      else if(typeof showToast === "function") showToast(text, "error");
     }
   };
   // Account deletion — two-step confirm, then calls the backend delete endpoint.
@@ -1972,15 +1988,6 @@ body.nav-open #ruler-readout{
       if(!res.ok) throw new Error(j.error || `Checkout failed (${res.status})`);
       if(j.url) window.location.href = j.url;
     } catch(e){ if(msg){ msg.textContent = e.message || "Could not start checkout."; msg.style.display="block"; } }
-  };
-  window.bwManageBilling = async function(){
-    const msg = document.getElementById("pricing-msg");
-    try {
-      const res = await fetch(`${fnBase()}/stripe-portal`, { method:"POST", headers: await authHeaders() });
-      const j = await res.json();
-      if(!res.ok) throw new Error(j.error || "Could not open billing portal.");
-      if(j.url) window.location.href = j.url;
-    } catch(e){ if(msg){ msg.textContent = e.message || "Could not open billing portal."; msg.style.display="block"; } }
   };
   // Renders the plan status + Upgrade/Manage buttons inside the nav account block.
   window.renderNavPlan = async function(){

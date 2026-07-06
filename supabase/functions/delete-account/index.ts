@@ -38,6 +38,11 @@ async function cancelStripeSubscriptions(customerId: string): Promise<void> {
   }
 }
 
+function isMissingStripeCustomer(err: unknown): boolean {
+  const msg = (err as Error)?.message ?? "";
+  return /no such customer/i.test(msg);
+}
+
 async function deleteUserData(admin: ReturnType<typeof createClient>, userId: string): Promise<void> {
   const tables = [
   { table: "user_waypoints", column: "user_id" },
@@ -92,26 +97,25 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     const customerId = prof?.stripe_customer_id as string | undefined;
-    const hasBillableSub = prof?.subscription_status === "active" || prof?.subscription_status === "trialing";
+    const subStatus = (prof?.subscription_status as string | undefined) ?? "none";
+    const hasBillableSub = subStatus === "active" || subStatus === "trialing";
 
-    if (customerId && hasBillableSub) {
+    if (customerId) {
       try {
         await cancelStripeSubscriptions(customerId);
       } catch (e) {
-        console.error("stripe cancel failed", (e as Error)?.message);
-        return json({
-          error: "Could not cancel your subscription. Please cancel billing first from Manage Billing, then try again.",
-        }, 409);
-      }
-    } else if (customerId) {
-      // Customer exists (e.g. lifetime / canceled) — cancel any stray active subs in Stripe.
-      try {
-        await cancelStripeSubscriptions(customerId);
-      } catch (e) {
-        console.error("stripe cancel failed", (e as Error)?.message);
-        return json({
-          error: "Could not cancel your subscription. Please cancel billing first from Manage Billing, then try again.",
-        }, 409);
+        const msg = (e as Error)?.message ?? "";
+        console.error("stripe cancel failed", msg);
+        // Only block deletion when the profile still shows an active/trial subscription.
+        if (hasBillableSub) {
+          return json({
+            error: "Could not cancel your subscription. Please cancel billing first from Manage Billing, then try again.",
+          }, 409);
+        }
+        if (isMissingStripeCustomer(e)) {
+          await admin.from("profiles").update({ stripe_customer_id: null }).eq("id", userId);
+        }
+        console.warn("stripe cleanup skipped for non-billable account", userId, msg);
       }
     }
 
