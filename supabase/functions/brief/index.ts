@@ -141,7 +141,7 @@ WEATHER SAFETY EMPHASIS:
 
 Write these sections, in this order. Use short paragraphs or tight bullets. A captain reads this on a phone before leaving the dock.
 
-1. CONDITIONS — for the selected spot on the selected day: forecast high and low air temperature (airTempHiF/airTempLoF), general weather, wind (windKt, windDir, windGustKt), and sea state (waveHtFt and wavePeriodS). If only current values exist rather than a forecast for that day, say so briefly. Note the data source/buoy if present.
+1. CONDITIONS — for the selected spot on the selected day: forecast high and low air temperature (airTempHiF/airTempLoF), general weather, wind (windKt, windDir, windGustKt), and sea state (waveHtFt and wavePeriodS). When currentDriftKt and currentSetDir are present, include ocean surface current set and drift (e.g. "2.1 kt setting NE"). If only current values exist rather than a forecast for that day, say so briefly. Note the data source/buoy if present.
 
 2. WATER — waterTempF and what it means for the target species relative to their preferred range; any temperature-break or water-color context you can infer from chlorophyll; and tide (state plus nextHigh/nextLow if present). If waterTempObservedAtMs shows the reading is old, note that it may be dated.
 
@@ -149,7 +149,7 @@ Write these sections, in this order. Use short paragraphs or tight bullets. A ca
 
 4. BAITS & LURES — recommend a few specific baits/lures for the target species, with recommended COLORS chosen for the actual water clarity/color and the light/weather in the data: darker, higher-contrast colors in dirty water or low light; natural and translucent patterns in clean water and bright sun. Tie each choice to the conditions you were given.
 
-5. CAPTAIN'S TIPS — 3 to 5 specific, actionable tips for these species and conditions: working temperature breaks and color changes, suggested trolling speeds where relevant, structure and depth to target (use depthFt and nearbyStructure), how the wind and tide interact at this spot, and what to watch for on the water (bird activity, bait, rips, weed lines). Make them specific to the data, not generic filler.
+5. CAPTAIN'S TIPS — 3 to 5 specific, actionable tips for these species and conditions: working temperature breaks and color changes, suggested trolling speeds where relevant, structure and depth to target (use depthFt and nearbyStructure), how the wind and tide interact at this spot, where current edges or speed changes (from currentDriftKt/currentSetDir when present) may stack bait and predators, and what to watch for on the water (bird activity, bait, rips, weed lines). Make them specific to the data, not generic filler.
 
 Keep the whole brief tight and scannable. No travel time. No go/no-go call. No preamble or sign-off.`;
 

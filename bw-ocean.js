@@ -86,6 +86,7 @@
         airTemp: { value: null, observedAtMs: null },
         pressure: { value: null, observedAtMs: null },
         barometer: { value: null, observedAtMs: null },
+        current: null,
         sources: {}, _cache: "unavailable",
       }, opts);
     }
@@ -196,5 +197,30 @@
     }
   }
 
-  root.BW_OCEAN = { fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs, fetchWindGrid };
+  const currentGridCache = new Map();
+  async function fetchCurrentGrid(latMin, latMax, lngMin, lngMax) {
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}`;
+    const hit = currentGridCache.get(k);
+    if (hit && Date.now() - hit.atMs < 2 * 60 * 60 * 1000) return hit.data;
+    try {
+      const params = new URLSearchParams({
+        mode: "currentgrid",
+        latMin: String(latMin), latMax: String(latMax),
+        lngMin: String(lngMin), lngMax: String(lngMax),
+      });
+      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+        headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !Array.isArray(data.u) || !Array.isArray(data.v) || !data.nLat || !data.nLng) return null;
+      currentGridCache.set(k, { data, atMs: Date.now() });
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  root.BW_OCEAN = { fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs, fetchWindGrid, fetchCurrentGrid };
 })(typeof globalThis !== "undefined" ? globalThis : this);

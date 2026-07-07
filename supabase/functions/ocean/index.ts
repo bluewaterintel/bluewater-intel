@@ -1,3 +1,5 @@
+import { NetCDFReader } from "npm:netcdfjs";
+
 // ============================================================================
 // Bluewater Intel — Milestone 4: ocean data proxy
 // Supabase Edge Function (Deno). Deploy: supabase functions deploy ocean
@@ -16,6 +18,9 @@
 //   • NDBC buoys (point obs: wind, waves, water temp, pressure) via the
 //     real-time .txt feeds. Nearest buoy to the requested point is used.
 //   • NOAA CoastWatch ERDDAP (gridded SST, chlorophyll) via griddap .json.
+//   • NOAA RTOFS surface currents (ESPC-D-V02 / HYCOM NCSS) — u/v at the
+//     surface; global 1/12° nowcast + forecast. CoastWatch ERDDAP RTOFS
+//     datasets currently 404, so we subset via HYCOM THREDDS NCSS (same model).
 //   • Bathymetry is handled client-side (static) — not proxied here.
 //
 // NOTE: dataset IDs and station lists are configured below and WILL need
@@ -69,6 +74,14 @@ const OPEN_METEO_MARINE = "https://marine-api.open-meteo.com/v1/marine";
 const ETOPO_ERDDAP = Deno.env.get("ETOPO_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
 const ETOPO_DATASET = Deno.env.get("ETOPO_DATASET") ?? "etopo180";
 const ETOPO_STEP_DEG = 1 / 60; // native ~1 arcmin grid step
+// RTOFS (Real-Time Ocean Forecast System) — operational ESPC-D-V02 on HYCOM.
+const RTOFS_NCSS = Deno.env.get("RTOFS_NCSS")
+  ?? "https://ncss.hycom.org/thredds/ncss/grid/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd";
+const RTOFS_DODS = Deno.env.get("RTOFS_DODS")
+  ?? "https://tds.hycom.org/thredds/dodsC/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd";
+const RTOFS_NATIVE_STEP = 1 / 12; // ~0.0833° native grid
+const RTOFS_FILL = 1.26765e30;
+const MS_TO_KT = 1.943844;
 
 const num = (v: unknown): number | null => {
   const n = typeof v === "string" ? parseFloat(v) : (v as number);
@@ -364,6 +377,177 @@ async function fetchWindGrid(latMin: number, latMax: number, lngMin: number, lng
   })();
   windGridCache.set(key, { atMs: now, p });
   return p;
+}
+
+// ── RTOFS surface currents (ESPC-D-V02 via HYCOM NCSS, NetCDF-3 subset) ───────
+// Returns only real model values; land / fill → NaN in grids, null in point samples.
+type CurrentGrid = {
+  step: number; minLat: number; minLng: number; nLat: number; nLng: number;
+  u: number[]; v: number[]; observedAtMs: number;
+};
+type CurrentPoint = { driftKts: number; setDeg: number; u: number; v: number; observedAtMs: number };
+
+function lon360To180(lon: number) {
+  return lon > 180 ? lon - 360 : lon;
+}
+function isCurrentVal(v: number | null) {
+  return v != null && isFinite(v) && Math.abs(v) < RTOFS_FILL * 0.1;
+}
+function currentFromUv(u: number, v: number): Omit<CurrentPoint, "observedAtMs"> {
+  const driftKts = Math.round(Math.sqrt(u * u + v * v) * MS_TO_KT * 100) / 100;
+  const setDeg = Math.round((Math.atan2(u, v) * 180 / Math.PI + 360) % 360);
+  return { driftKts, setDeg, u: Math.round(u * 1000) / 1000, v: Math.round(v * 1000) / 1000 };
+}
+
+const rtofsTimeCache = new Map<string, { atMs: number; p: Promise<{ epochMs: number; hours: number[] } | null> }>();
+async function getRtofsTimeAxis(): Promise<{ epochMs: number; hours: number[] } | null> {
+  const key = "axis";
+  const now = Date.now();
+  const hit = rtofsTimeCache.get(key);
+  if (hit && now - hit.atMs < 3 * 3600 * 1000) return hit.p;
+  const p = (async () => {
+    try {
+      const [dasR, timeR] = await Promise.all([
+        fetch(`${RTOFS_DODS}.das`, { signal: AbortSignal.timeout(8000), headers: ERDDAP_HEADERS }),
+        fetch(`${RTOFS_DODS}.ascii?time`, { signal: AbortSignal.timeout(8000), headers: ERDDAP_HEADERS }),
+      ]);
+      if (!dasR.ok || !timeR.ok) return null;
+      const das = await dasR.text();
+      const units = das.match(/time\s*\{[^}]*units\s+"hours since ([^"]+)"/s)?.[1];
+      if (!units) return null;
+      const epochMs = Date.parse(units.replace(" UTC", "Z").replace(".000", ""));
+      if (!isFinite(epochMs)) return null;
+      const body = await timeR.text();
+      const m = body.match(/time\[\d+\]\s*\n([\s\S]+)/);
+      if (!m) return null;
+      const hours = m[1].split(",").map((x) => parseFloat(x.trim())).filter((h) => isFinite(h));
+      if (!hours.length) return null;
+      return { epochMs, hours };
+    } catch {
+      return null;
+    }
+  })();
+  rtofsTimeCache.set(key, { atMs: now, p });
+  return p;
+}
+
+async function resolveRtofsValidTimeIso(hoursAhead = 0): Promise<{ iso: string; observedAtMs: number } | null> {
+  const axis = await getRtofsTimeAxis();
+  if (!axis) return null;
+  const targetMs = Date.now() + Math.max(0, hoursAhead) * 3600000;
+  let best = axis.hours[0], bestMs = axis.epochMs + best * 3600000;
+  for (const h of axis.hours) {
+    const ms = axis.epochMs + h * 3600000;
+    if (Math.abs(ms - targetMs) < Math.abs(bestMs - targetMs)) {
+      best = h; bestMs = ms;
+    }
+  }
+  const iso = new Date(bestMs).toISOString().replace(".000Z", "Z");
+  return { iso, observedAtMs: bestMs };
+}
+
+function parseRtofsNcssSync(buf: ArrayBuffer): {
+  lats: number[]; lons: number[]; u: number[]; v: number[]; timeH: number;
+} | null {
+  try {
+    const reader = new NetCDFReader(new Uint8Array(buf));
+    const lats = reader.getDataVariable("lat") as number[];
+    const lons = reader.getDataVariable("lon") as number[];
+    const uRaw = reader.getDataVariable("water_u") as number[];
+    const vRaw = reader.getDataVariable("water_v") as number[];
+    const timeH = (reader.getDataVariable("time") as number[])[0];
+    if (!lats?.length || !lons?.length || !uRaw?.length || !vRaw?.length || !isFinite(timeH)) return null;
+    const u: number[] = [], v: number[] = [];
+    for (let i = 0; i < uRaw.length; i++) {
+      const ui = num(uRaw[i]), vi = num(vRaw[i]);
+      u.push(isCurrentVal(ui) ? ui! : NaN);
+      v.push(isCurrentVal(vi) ? vi! : NaN);
+    }
+    return { lats, lons, u, v, timeH };
+  } catch {
+    return null;
+  }
+}
+
+async function parseRtofsNcssAsync(buf: ArrayBuffer) {
+  const parsed = parseRtofsNcssSync(buf);
+  if (!parsed) return null;
+  const axis = await getRtofsTimeAxis();
+  const observedAtMs = axis ? axis.epochMs + parsed.timeH * 3600000 : Date.now();
+  return { lats: parsed.lats, lons: parsed.lons, u: parsed.u, v: parsed.v, observedAtMs };
+}
+
+function packCurrentGrid(
+  lats: number[], lons: number[], u: number[], v: number[], observedAtMs: number,
+): CurrentGrid | null {
+  if (!lats.length || !lons.length) return null;
+  const minLat = lats[0], maxLat = lats[lats.length - 1];
+  const minLng = lon360To180(lons[0]);
+  const nLat = lats.length, nLng = lons.length;
+  const latStep = nLat > 1 ? (maxLat - minLat) / (nLat - 1) : RTOFS_NATIVE_STEP;
+  const lngStep = nLng > 1 ? (lon360To180(lons[nLng - 1]) - minLng) / (nLng - 1) : RTOFS_NATIVE_STEP;
+  const step = Math.round(Math.max(latStep, Math.abs(lngStep)) * 10000) / 10000;
+  return { step, minLat, minLng, nLat, nLng, u, v, observedAtMs };
+}
+
+const currentGridCache = new Map<string, { atMs: number; p: Promise<CurrentGrid | null> }>();
+async function fetchCurrentGrid(latMin: number, latMax: number, lngMin: number, lngMax: number, hoursAhead = 0) {
+  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+  const CAP = 2500; // keep JSON under ~150KB
+  const STEPS = [0.0833, 0.1, 0.15, 0.2, 0.25, 0.35, 0.5, 0.75, 1.0, 1.5, 2.0];
+  const count = (s: number) => (Math.floor((a1 - a0) / s) + 1) * (Math.floor((o1 - o0) / s) + 1);
+  let step = STEPS[STEPS.length - 1];
+  for (const s of STEPS) { if (count(s) <= CAP) { step = s; break; } }
+  const horizStride = Math.max(1, Math.round(step / RTOFS_NATIVE_STEP));
+  const key = `${a0.toFixed(2)},${a1.toFixed(2)},${o0.toFixed(2)},${o1.toFixed(2)},${horizStride},${hoursAhead}`;
+  const now = Date.now();
+  const hit = currentGridCache.get(key);
+  if (hit && now - hit.atMs < 2 * 3600 * 1000) return hit.p;
+
+  const p = (async () => {
+    const valid = await resolveRtofsValidTimeIso(hoursAhead);
+    if (!valid) return null;
+    const url = `${RTOFS_NCSS}?var=water_u&var=water_v&north=${a1}&south=${a0}&west=${o0}&east=${o1}`
+      + `&horizStride=${horizStride}&time=${encodeURIComponent(valid.iso)}&accept=netcdf`;
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(25000), headers: ERDDAP_HEADERS });
+      if (!r.ok) return null;
+      const parsed = await parseRtofsNcssAsync(await r.arrayBuffer());
+      if (!parsed) return null;
+      return packCurrentGrid(parsed.lats, parsed.lons, parsed.u, parsed.v, parsed.observedAtMs);
+    } catch {
+      return null;
+    }
+  })();
+  currentGridCache.set(key, { atMs: now, p });
+  return p;
+}
+
+function sampleCurrentFromGrid(grid: CurrentGrid | null, lat: number, lng: number): CurrentPoint | null {
+  if (!grid || !grid.nLat || !grid.nLng) return null;
+  const fi = (lat - grid.minLat) / grid.step;
+  const fj = (lng - grid.minLng) / grid.step;
+  if (fi < -0.001 || fj < -0.001 || fi > grid.nLat - 1 + 0.001 || fj > grid.nLng - 1 + 0.001) return null;
+  const i0 = Math.max(0, Math.min(grid.nLat - 2, Math.floor(fi)));
+  const j0 = Math.max(0, Math.min(grid.nLng - 2, Math.floor(fj)));
+  const di = Math.max(0, Math.min(1, fi - i0)), dj = Math.max(0, Math.min(1, fj - j0));
+  const idx = (i: number, j: number) => i * grid.nLng + j;
+  const u00 = grid.u[idx(i0, j0)], u10 = grid.u[idx(i0 + 1, j0)], u01 = grid.u[idx(i0, j0 + 1)], u11 = grid.u[idx(i0 + 1, j0 + 1)];
+  const v00 = grid.v[idx(i0, j0)], v10 = grid.v[idx(i0 + 1, j0)], v01 = grid.v[idx(i0, j0 + 1)], v11 = grid.v[idx(i0 + 1, j0 + 1)];
+  const w = (a: number, b: number, c: number, d: number) => {
+    if (!isFinite(a) || !isFinite(b) || !isFinite(c) || !isFinite(d)) return null;
+    return (1 - di) * (1 - dj) * a + di * (1 - dj) * b + (1 - di) * dj * c + di * dj * d;
+  };
+  const u = w(u00, u10, u01, u11), v = w(v00, v10, v01, v11);
+  if (u == null || v == null) return null;
+  return { ...currentFromUv(u, v), observedAtMs: grid.observedAtMs };
+}
+
+async function fetchCurrentPoint(lat: number, lng: number, hoursAhead = 0): Promise<CurrentPoint | null> {
+  const pad = 0.25;
+  const grid = await fetchCurrentGrid(lat - pad, lat + pad, lng - pad, lng + pad, hoursAhead);
+  return sampleCurrentFromGrid(grid, lat, lng);
 }
 
 async function fetchBuoy(lat: number, lng: number) {
@@ -691,7 +875,7 @@ function forecastWeatherFields(model: ModelWindRec, marine: MarineRec | null, ho
 
 async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
   const useForecast = hoursAhead > 0;
-  const [buoy, sst, chlorRaw, tide, buoyTemps, model, marine] = await Promise.all([
+  const [buoy, sst, chlorRaw, tide, buoyTemps, model, marine, current] = await Promise.all([
     useForecast ? Promise.resolve(null) : fetchBuoy(lat, lng),
     fetchGridPoint(SST_ERDDAP, SST_DATASET, SST_VAR, lat, lng, SST_HAS_ALTITUDE, SST_LOOKBACK),
     fetchChlorPoint(lat, lng),
@@ -699,6 +883,7 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
     buoyWtmpList(),
     fetchModelWind(lat, lng, hoursAhead),
     fetchModelMarine(lat, lng, hoursAhead),
+    fetchCurrentPoint(lat, lng, hoursAhead),
   ]);
   // Gridded SST (MUR, °F) is the base; convert units (MUR analysed_sst is Kelvin).
   let gridSstF: SstSrc = { value: null, observedAtMs: sst.observedAtMs };
@@ -725,6 +910,7 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
     pressure: wx ? wx.pressure : (buoy?.pressure ?? { value: null, observedAtMs: null }),
     barometer: wx ? wx.barometer : (buoy?.barometer ?? { value: null, observedAtMs: null }),
     tide: tidePayload(tide),
+    current,
     sources: {
       sst: SST_DATASET,
       sstBuoy: buoySst ? { nm: Math.round(buoySst.distNm), observedAtMs: buoySst.observedAtMs } : null,
@@ -732,6 +918,7 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
       buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
       tide: tide.station,
       waves: buoy?.waves?.value != null ? `NDBC ${buoy.buoyId}` : marine.source,
+      current: current ? "RTOFS ESPC-D-V02" : null,
       ...(wx?.sources ?? {}),
     },
   };
@@ -950,6 +1137,23 @@ export const handler = async (req: Request): Promise<Response> => {
     });
   }
 
+  // ── RTOFS surface current grid for a bounding box (one request, cached) ─────
+  if (mode === "currentgrid") {
+    const latMin = num(u.searchParams.get("latMin"));
+    const latMax = num(u.searchParams.get("latMax"));
+    const lngMin = num(u.searchParams.get("lngMin"));
+    const lngMax = num(u.searchParams.get("lngMax"));
+    if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+    }
+    const hoursAhead = num(u.searchParams.get("hours")) ?? 0;
+    const out = await fetchCurrentGrid(latMin, latMax, lngMin, lngMax, hoursAhead);
+    if (!out) return json({ error: "Current data unavailable" }, 502);
+    return new Response(JSON.stringify(out), {
+      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=7200" },
+    });
+  }
+
   // ── Gridded wind field for a bounding box (one request, cached) ────────────
   // A fixed-resolution wind grid the client renders identically at every zoom —
   // Windy-style stability — instead of re-sampling per viewport.
@@ -1007,11 +1211,12 @@ export const handler = async (req: Request): Promise<Response> => {
     const forecastHour = Math.round(clamp(hoursAhead, 0, 96) / 3) * 3;
     // All three grids in parallel (each ONE ERDDAP box request). Bathy also tells
     // us which field points are water so we don't fetch buoy/tide over land.
-    const [bathy, chlor, sstGrid, buoyTemps] = await Promise.all([
+    const [bathy, chlor, sstGrid, buoyTemps, currentGrid] = await Promise.all([
       fetchBathyRows(latMin, latMax, lngMin, lngMax),
       fetchChlorRows(latMin, latMax, lngMin, lngMax),
       fetchSstRows(latMin, latMax, lngMin, lngMax),
       buoyWtmpList(),
+      fetchCurrentGrid(latMin, latMax, lngMin, lngMax, hoursAhead),
     ]);
     // Correct the high-res SST grid with the nearest live buoy per cell (distance/
     // freshness weighted). Buoys are prefetched once and shared, so this adds no
@@ -1037,7 +1242,8 @@ export const handler = async (req: Request): Promise<Response> => {
       : 12;
     const field = await pool(fieldPts, 16, async (pt) => {
       const p = await assembleFieldPoint(pt[0], pt[1], hoursAhead);
-      return { la: pt[0], ln: pt[1], p };
+      const cur = sampleCurrentFromGrid(currentGrid, pt[0], pt[1]);
+      return { la: pt[0], ln: pt[1], p: { ...p, current: cur } };
     });
     return new Response(JSON.stringify({ bathy, chlor, sst, field, fieldStepNm, forecastHour }), {
       headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
