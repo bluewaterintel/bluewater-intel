@@ -9341,9 +9341,12 @@ const CurrentParticleLayer = L.Layer.extend({
     ctx.lineJoin = 'round';
     const size = this._map.getSize();
     const zoom = this._map.getZoom();
-    const zoomScale = Math.pow(2, (zoom - 6) * 0.35);
+    // Gentle, CLAMPED zoom factor so the flow moves at a readable pace at every
+    // scale — never so slow it looks like static dots (the old bug), never so fast
+    // it looks like contrails.
+    const zoomFactor = Math.min(1.8, Math.max(0.8, Math.pow(2, (zoom - 6) * 0.30)));
     const CALM_KT = 0.15;
-    const MAX_AGE = 70;
+    const MAX_AGE = 90;
     for(const p of this._particles){
       p.age++;
       if(p.age > MAX_AGE || p.x < -20 || p.y < -20 || p.x > size.x+20 || p.y > size.y+20){
@@ -9356,15 +9359,27 @@ const CurrentParticleLayer = L.Layer.extend({
       const cur = getCurrentField(ll.lat, ll.lng);
       if(!cur){ Object.assign(p, this._spawn(size)); p.age = 0; continue; }
       if(cur.driftKts < CALM_KT){ continue; }
-      const stepPx = Math.min(1.15, cur.driftKts * 0.07) * zoomScale;
+      // Step length scales with drift so the eye reads RELATIVE speed (faster water
+      // = faster/longer motion), while the COLOR ramp is what actually quantifies
+      // speed in kt. ~2–3 px/frame in the Gulf Stream = clearly directional flow.
+      const stepPx = Math.min(3.2, Math.max(0.5, cur.driftKts * 1.05)) * zoomFactor;
       const mag = Math.hypot(cur.u, cur.v) || 1;
-      const nx = p.x + (cur.u / mag) * stepPx;
-      const ny = p.y - (cur.v / mag) * stepPx;
+      const ux = cur.u / mag, uy = -cur.v / mag;   // unit flow vector (screen space)
+      const nx = p.x + ux * stepPx;
+      const ny = p.y + uy * stepPx;
       // Don't let a ripple cross onto land — respawn instead of drawing over coast.
       if(!this._overWater(nx, ny)){ Object.assign(p, this._spawn(size)); p.age = 0; continue; }
       ctx.strokeStyle = _currentFlowColor(cur.driftKts);
-      ctx.lineWidth = cur.driftKts >= 2.5 ? 2.4 : (cur.driftKts >= 1 ? 1.9 : 1.5);
+      ctx.lineWidth = cur.driftKts >= 2.5 ? 2.3 : (cur.driftKts >= 1 ? 1.9 : 1.4);
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny); ctx.stroke();
+      // Bright leading head so the direction of flow (set) is unmistakable — the
+      // comet head points the way the water is going.
+      if(cur.driftKts >= 0.4){
+        ctx.fillStyle = _currentFlowColor(Math.min(4, cur.driftKts + 1.2));
+        ctx.beginPath();
+        ctx.arc(nx, ny, cur.driftKts >= 2 ? 1.6 : 1.2, 0, 6.283);
+        ctx.fill();
+      }
       p.x = nx; p.y = ny;
     }
   },
@@ -11794,12 +11809,12 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:11px;font-weight:700;color:#2dd4bf;letter-spacing:.08em;margin-bottom:2px">CURRENT DRIFT (kt)</div>
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,rgba(148,163,184,0.55) 0%,rgba(45,212,191,0.45) 18%,rgba(45,212,191,0.75) 38%,rgba(103,232,249,0.85) 62%,rgba(251,191,36,0.85) 88%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#93c5e0 0%,#38bdf8 18%,#2dd4bf 40%,#5eead4 62%,#fbbf24 88%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="position:relative;height:11px;margin-top:2px;font-size:9px;color:#cfe5ff;font-weight:600">
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
         </div>
         <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
-        <div style="font-size:8.5px;color:#7aa8c8;margin-top:3px;line-height:1.35">Streak length ∝ speed · warm = Gulf Stream core</div>
+        <div style="font-size:8.5px;color:#7aa8c8;margin-top:3px;line-height:1.35"><b style="color:#bfe3f5">Color = speed</b> · flowing water shows set (direction) · amber = Gulf Stream core</div>
       </div>`);
   }
   if(layerVis.radar){

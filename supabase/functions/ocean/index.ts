@@ -466,8 +466,14 @@ function parseRtofsNcssSync(buf: ArrayBuffer): {
     const vRaw = reader.getDataVariable("water_v") as number[];
     const timeH = (reader.getDataVariable("time") as number[])[0];
     if (!lats?.length || !lons?.length || !uRaw?.length || !vRaw?.length || !isFinite(timeH)) return null;
+    // RTOFS uv3z is [time, depth, lat, lon] with ~40 depth levels. We only want the
+    // SURFACE current (depth[0]). The request pins vertCoord=0, but defensively take
+    // just the first lat*lon block so a stray depth axis can never scramble the grid
+    // (or bloat the payload ~40×). Surface is the first block because depth is the
+    // outer axis after time.
+    const surf = lats.length * lons.length;
     const u: number[] = [], v: number[] = [];
-    for (let i = 0; i < uRaw.length; i++) {
+    for (let i = 0; i < surf; i++) {
       const ui = num(uRaw[i]), vi = num(vRaw[i]);
       u.push(isCurrentVal(ui) ? ui! : NaN);
       v.push(isCurrentVal(vi) ? vi! : NaN);
@@ -518,7 +524,7 @@ async function fetchCurrentGrid(latMin: number, latMax: number, lngMin: number, 
     const valid = await resolveRtofsValidTimeIso(hoursAhead);
     if (!valid) return null;
     const url = `${RTOFS_NCSS}?var=water_u&var=water_v&north=${a1}&south=${a0}&west=${o0}&east=${o1}`
-      + `&horizStride=${horizStride}&time=${encodeURIComponent(valid.iso)}&accept=netcdf`;
+      + `&horizStride=${horizStride}&vertCoord=0&time=${encodeURIComponent(valid.iso)}&accept=netcdf`;
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(25000), headers: ERDDAP_HEADERS });
       if (!r.ok) return null;

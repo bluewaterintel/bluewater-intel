@@ -53,7 +53,7 @@ async function fetchCurrentGrid(latMin, latMax, lngMin, lngMax) {
   const horizStride = Math.max(1, Math.round(step / RTOFS_NATIVE_STEP));
   const valid = await resolveRtofsValidTimeIso();
   const url = `${RTOFS_NCSS}?var=water_u&var=water_v&north=${a1}&south=${a0}&west=${o0}&east=${o1}`
-    + `&horizStride=${horizStride}&time=${encodeURIComponent(valid.iso)}&accept=netcdf`;
+    + `&horizStride=${horizStride}&vertCoord=0&time=${encodeURIComponent(valid.iso)}&accept=netcdf`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`NCSS ${r.status}`);
   const reader = new NetCDFReader(new Uint8Array(await r.arrayBuffer()));
@@ -110,4 +110,10 @@ if (!pt || pt.driftKts < 2 || pt.driftKts > 5) {
   console.error("FAIL: expected point current ~2–4 kt, got", pt);
   process.exit(1);
 }
-console.log("OK: RTOFS currents look valid for Hatteras / Gulf Stream.");
+// Direction: off Hatteras the Gulf Stream sets to the NE (roughly 010–090°).
+// This guards against a flipped lat axis or a depth-dim indexing slip reversing it.
+if (pt.setDeg < 0 || pt.setDeg > 110) {
+  console.error("FAIL: expected NE set (~10–90°) for the Gulf Stream, got", pt.setDeg);
+  process.exit(1);
+}
+console.log(`OK: RTOFS currents valid — Gulf Stream sets ${pt.setDeg}° (NE) at ${pt.driftKts} kt.`);
