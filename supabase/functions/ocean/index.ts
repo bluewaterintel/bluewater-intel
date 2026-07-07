@@ -21,7 +21,8 @@ import { NetCDFReader } from "npm:netcdfjs";
 //   • NOAA RTOFS surface currents (ESPC-D-V02 / HYCOM NCSS) — u/v at the
 //     surface; global 1/12° nowcast + forecast. CoastWatch ERDDAP RTOFS
 //     datasets currently 404, so we subset via HYCOM THREDDS NCSS (same model).
-//   • Bathymetry is handled client-side (static) — not proxied here.
+//   • Bathymetry: NOAA CUDEM 1/9 arc-sec (US coastal, BlueTopo sources) with
+//     ETOPO 1-arcmin global fallback — proxied here for bite-map depth scoring.
 //
 // NOTE: dataset IDs and station lists are configured below and WILL need
 // verification/tuning against live ERDDAP when you deploy (dataset IDs change,
@@ -74,6 +75,14 @@ const OPEN_METEO_MARINE = "https://marine-api.open-meteo.com/v1/marine";
 const ETOPO_ERDDAP = Deno.env.get("ETOPO_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
 const ETOPO_DATASET = Deno.env.get("ETOPO_DATASET") ?? "etopo180";
 const ETOPO_STEP_DEG = 1 / 60; // native ~1 arcmin grid step
+// CUDEM / BlueTopo — NOAA NCEI 1/9 arc-second (~3 m) US coastal bathymetry.
+// CoastWatch ERDDAP has no global BlueTopo grid; we subset CUDEM tiles via NCSS.
+const CUDEM_NCSS = Deno.env.get("CUDEM_NCSS")
+  ?? "https://www.ngdc.noaa.gov/thredds/ncss/grid/tiles/tiled_19as";
+const CUDEM_TILE_DEG = 0.25;
+const CUDEM_NATIVE_STEP = 1 / (9 * 3600); // 1/9 arc-second in degrees
+const CUDEM_VERSIONS = ["2019v2", "2019v1", "2018v1"];
+const CUDEM_BOUNDS = { latMin: 23, latMax: 52, lngMin: -127, lngMax: -65 };
 // RTOFS (Real-Time Ocean Forecast System) — operational ESPC-D-V02 on HYCOM.
 const RTOFS_NCSS = Deno.env.get("RTOFS_NCSS")
   ?? "https://ncss.hycom.org/thredds/ncss/grid/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd";
@@ -1024,7 +1033,131 @@ async function assembleFieldPoint(lat: number, lng: number, hoursAhead = 0) {
 }
 
 // ETOPO bathymetry grid for a box → { stepDeg, rows:[[lat,lng,depthM],…] }.
-async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, lngMax: number) {
+// US coastal boxes prefer NOAA CUDEM (1/9 arc-sec, BlueTopo source data); ETOPO
+// fills gaps offshore, outside CUDEM coverage, or when a tile is unavailable.
+type BathyOut = { stepDeg: number; rows: unknown[][]; source?: string };
+
+function bboxOverlapsCudem(latMin: number, latMax: number, lngMin: number, lngMax: number) {
+  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+  return a1 >= CUDEM_BOUNDS.latMin && a0 <= CUDEM_BOUNDS.latMax
+    && o1 >= CUDEM_BOUNDS.lngMin && o0 <= CUDEM_BOUNDS.lngMax;
+}
+
+function cudemTileName(latSouth: number, lngWest: number) {
+  const latTag = Math.round((latSouth + CUDEM_TILE_DEG) * 100);
+  const nLat = Math.floor(latTag / 100);
+  const xLat = latTag % 100;
+  const lngTag = Math.round(Math.abs(lngWest) * 100);
+  const wLng = Math.floor(lngTag / 100);
+  const xLng = lngTag % 100;
+  return `n${nLat}x${String(xLat).padStart(2, "0")}_w${wLng}x${String(xLng).padStart(2, "0")}`;
+}
+
+function cudemTilesForBBox(latMin: number, latMax: number, lngMin: number, lngMax: number) {
+  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+  const tiles: { id: string; latSouth: number; lngWest: number }[] = [];
+  const latStart = Math.floor(a0 / CUDEM_TILE_DEG) * CUDEM_TILE_DEG;
+  const lngStart = Math.floor(o0 / CUDEM_TILE_DEG) * CUDEM_TILE_DEG;
+  for (let la = latStart; la < a1; la += CUDEM_TILE_DEG) {
+    for (let ln = lngStart; ln < o1; ln += CUDEM_TILE_DEG) {
+      tiles.push({ id: cudemTileName(la, ln), latSouth: la, lngWest: ln });
+    }
+  }
+  return tiles;
+}
+
+function parseCudemNcss(buf: ArrayBuffer): { lats: number[]; lons: number[]; z: number[] } | null {
+  try {
+    const reader = new NetCDFReader(new Uint8Array(buf));
+    const lats = reader.getDataVariable("lat") as number[];
+    const lons = reader.getDataVariable("lon") as number[];
+    const zRaw = reader.getDataVariable("z") as number[];
+    if (!lats?.length || !lons?.length || !zRaw?.length) return null;
+    return { lats, lons, z: zRaw };
+  } catch {
+    return null;
+  }
+}
+
+const cudemTileCache = new Map<string, { atMs: number; p: Promise<unknown[][]> }>();
+async function fetchCudemTileRows(
+  tile: { id: string; latSouth: number; lngWest: number },
+  latMin: number, latMax: number, lngMin: number, lngMax: number,
+  horizStride: number,
+): Promise<unknown[][]> {
+  const a0 = Math.max(latMin, tile.latSouth);
+  const a1 = Math.min(latMax, tile.latSouth + CUDEM_TILE_DEG);
+  const o0 = Math.max(lngMin, tile.lngWest);
+  const o1 = Math.min(lngMax, tile.lngWest + CUDEM_TILE_DEG);
+  if (a0 >= a1 || o0 >= o1) return [];
+  const key = `${tile.id},${a0.toFixed(3)},${a1.toFixed(3)},${o0.toFixed(3)},${o1.toFixed(3)},${horizStride}`;
+  const now = Date.now();
+  const hit = cudemTileCache.get(key);
+  if (hit && now - hit.atMs < 7 * 24 * 3600 * 1000) return hit.p;
+
+  const p = (async () => {
+    const q = `var=z&north=${a1}&south=${a0}&west=${o0}&east=${o1}`
+      + `&horizStride=${horizStride}&accept=netcdf`;
+    for (const ver of CUDEM_VERSIONS) {
+      const url = `${CUDEM_NCSS}/ncei19_${tile.id}_${ver}.nc?${q}`;
+      try {
+        const r = await fetch(url, { signal: AbortSignal.timeout(22000), headers: ERDDAP_HEADERS });
+        if (!r.ok) continue;
+        const parsed = parseCudemNcss(await r.arrayBuffer());
+        if (!parsed) continue;
+        const rows: unknown[][] = [];
+        for (let i = 0; i < parsed.lats.length; i++) {
+          for (let j = 0; j < parsed.lons.length; j++) {
+            const z = num(parsed.z[i * parsed.lons.length + j]);
+            if (z == null) continue;
+            const depth = z < 0 ? Math.round(-z * 10) / 10 : 0;
+            rows.push([
+              Math.round(parsed.lats[i] * 10000) / 10000,
+              Math.round(parsed.lons[j] * 10000) / 10000,
+              depth,
+            ]);
+          }
+        }
+        if (rows.length) return rows;
+      } catch { /* try next version */ }
+    }
+    return [];
+  })();
+  cudemTileCache.set(key, { atMs: now, p });
+  return p;
+}
+
+async function fetchCudemRows(latMin: number, latMax: number, lngMin: number, lngMax: number): Promise<BathyOut | null> {
+  if (!bboxOverlapsCudem(latMin, latMax, lngMin, lngMax)) return null;
+  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+  const CAP = 12000;
+  const TARGETS = [0.005, 0.01, 0.02, 0.03, 0.05, 0.08];
+  let targetStep = TARGETS[TARGETS.length - 1];
+  for (const s of TARGETS) {
+    const n = (Math.floor((a1 - a0) / s) + 1) * (Math.floor((o1 - o0) / s) + 1);
+    if (n <= CAP) { targetStep = s; break; }
+  }
+  const horizStride = Math.max(1, Math.round(targetStep / CUDEM_NATIVE_STEP));
+  const tiles = cudemTilesForBBox(a0, a1, o0, o1);
+  const parts = await pool(tiles, 4, (t) => fetchCudemTileRows(t, a0, a1, o0, o1, horizStride));
+  const byKey = new Map<string, unknown[]>();
+  for (const part of parts) {
+    for (const row of part) {
+      byKey.set(`${(row[0] as number).toFixed(4)},${(row[1] as number).toFixed(4)}`, row);
+    }
+  }
+  if (!byKey.size) return null;
+  return {
+    stepDeg: Math.round(horizStride * CUDEM_NATIVE_STEP * 10000) / 10000,
+    rows: [...byKey.values()],
+    source: "CUDEM",
+  };
+}
+
+async function fetchEtopoRows(latMin: number, latMax: number, lngMin: number, lngMax: number): Promise<BathyOut> {
   const a0 = Math.max(-89, Math.min(latMin, latMax));
   const a1 = Math.min(89, Math.max(latMin, latMax));
   const o0 = Math.max(-179, Math.min(lngMin, lngMax));
@@ -1034,7 +1167,7 @@ async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, ln
     + `?altitude%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(12000), headers: ERDDAP_HEADERS });
-    if (!r.ok) return { stepDeg: strideIdx * ETOPO_STEP_DEG, rows: [] as unknown[][] };
+    if (!r.ok) return { stepDeg: strideIdx * ETOPO_STEP_DEG, rows: [] as unknown[][], source: "ETOPO" };
     const d = await r.json();
     const cols: string[] = d?.table?.columnNames ?? [];
     const rawRows: unknown[][] = d?.table?.rows ?? [];
@@ -1045,10 +1178,30 @@ async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, ln
       const depth = alt != null ? Math.max(0, -alt) : null;
       return [Math.round(la * 1000) / 1000, Math.round(ln * 1000) / 1000, depth];
     }).filter(Boolean) as unknown[][];
-    return { stepDeg: strideIdx * ETOPO_STEP_DEG, rows };
+    return { stepDeg: strideIdx * ETOPO_STEP_DEG, rows, source: "ETOPO" };
   } catch {
-    return { stepDeg: strideIdx * ETOPO_STEP_DEG, rows: [] as unknown[][] };
+    return { stepDeg: strideIdx * ETOPO_STEP_DEG, rows: [] as unknown[][], source: "ETOPO" };
   }
+}
+
+async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, lngMax: number): Promise<BathyOut> {
+  const [cudem, etopo] = await Promise.all([
+    fetchCudemRows(latMin, latMax, lngMin, lngMax),
+    fetchEtopoRows(latMin, latMax, lngMin, lngMax),
+  ]);
+  if (!cudem?.rows?.length) return etopo;
+  const byKey = new Map<string, unknown[]>();
+  for (const row of etopo.rows) {
+    byKey.set(`${(row[0] as number).toFixed(3)},${(row[1] as number).toFixed(3)}`, row);
+  }
+  for (const row of cudem.rows) {
+    byKey.set(`${(row[0] as number).toFixed(4)},${(row[1] as number).toFixed(4)}`, row);
+  }
+  return {
+    stepDeg: cudem.stepDeg,
+    rows: [...byKey.values()],
+    source: "CUDEM+ETOPO",
+  };
 }
 
 // Chlorophyll spatial grid for a box — freshest real value per cell.
@@ -1120,7 +1273,7 @@ export const handler = async (req: Request): Promise<Response> => {
   const u = new URL(req.url);
   const mode = u.searchParams.get("mode") || "ocean";
 
-  // ── Real bathymetry grid (ETOPO) for a bounding box, one request ───────────
+  // ── Real bathymetry grid (CUDEM + ETOPO) for a bounding box ────────────────
   // Returns a coarse grid of real depths so the prediction engine can place
   // species on the correct shelf/break depth instead of a static estimate.
   if (mode === "bathy") {

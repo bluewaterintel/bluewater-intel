@@ -2789,7 +2789,7 @@ body.nav-open #ruler-readout{
     <div class="layers-section">BATHYMETRY</div>
     <div style="font-size:11px;color:#cfe5ff;line-height:1.5;margin:2px 0 8px;padding:8px 10px;background:rgba(41,121,181,.10);border:1px solid rgba(41,121,181,.3);border-radius:7px">
       <div style="font-weight:600;color:#7dd3fc;margin-bottom:4px">📐 For depth contours</div>
-      <div>Switch the basemap to <b>Ocean Bathymetric</b> — Esri's World Ocean Base (GEBCO / NOAA / NGA bathymetry) with shaded depth relief and contours.</div>
+      <div>Switch the basemap to <b>Ocean Bathymetric</b> — Esri World Ocean Base plus NOAA <b>BlueTopo</b> hillshade on US waters (~3 m CUDEM relief). Bite Map depth scoring uses the same CUDEM tiles offshore with ETOPO fallback.</div>
     </div>
 
     <hr class="layers-divider">
@@ -4167,11 +4167,18 @@ async function initMap(){
     {maxZoom:18,minZoom:0,attribution:'',opacity:0.7}
   ).addTo(MAP);
 
-  // ── OCEAN BATHYMETRIC: Esri Ocean Base with depth shading ──
+  // ── OCEAN BATHYMETRIC: Esri Ocean Base + NOAA BlueTopo hillshade (US) ──
   esriOceanLayer=L.layerGroup([
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
       {maxZoom:13,minZoom:0,crossOrigin:'anonymous',attribution:'© Esri · GEBCO · NOAA · NGA'}
+    ),
+    L.tileLayer(
+      "https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
+        + "&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade&TILEMATRIXSET=EPSG%3A3857"
+        + "&TILEMATRIX=EPSG%3A3857%3A{z}&TILEROW={y}&TILECOL={x}&FORMAT=image%2Fpng8",
+      {maxZoom:9,maxNativeZoom:9,minZoom:0,crossOrigin:'anonymous',opacity:0.72,
+        attribution:'© NOAA OCS · BlueTopo CUDEM',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
     ),
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}",
@@ -4302,17 +4309,10 @@ async function initMap(){
       attribution: '© NOAA/NWS nowCOAST · MRMS base reflectivity',
     });
 
-  // ── Bathymetric contour overlay (currently not wired) ──
-  // Previous attempt used an authenticated ArcGIS service that returned 401
-  // to anonymous tile requests, so the layer appeared blank. For a future
-  // implementation, candidates that don't require auth:
-  //   • NOAA BlueTopo via nowCOAST WMTS (US-focused, no auth)
-  //   • OpenSeaMap depth contour tiles (community, spotty coverage)
-  //   • GEBCO WMS (https://wms.gebco.net/) — WMS not WMTS, more complex
-  //   • EMODnet bathymetry WMTS (Europe-only)
-  // For now, users who want depth contours should switch the basemap to
-  // "Ocean Bathymetric" — Esri's World Ocean Base (GEBCO/NOAA/NGA) shows shaded
-  // depth relief and contours.
+  // ── Bathymetric contour overlay ──
+  // High-res US relief is on the Ocean Bathymetric basemap via NOAA BlueTopo WMTS
+  // (bluetopo:hillshade / nbs_hillshade, EPSG:3857, z0–9). Scoring depth comes from
+  // CUDEM 1/9 arc-sec NCSS tiles in the ocean edge function (ETOPO fallback offshore).
 
   L.control.zoom({position:"topleft"}).addTo(MAP);
   MAP.on("click",onMapClick);
@@ -5833,9 +5833,9 @@ function normalizeScore(raw){
 // Real ocean field cache for the current heatmap render (coarse grid prefetch).
 let OCEAN_FIELD = { samples: [], builtAtMs: 0 };
 
-// Real bathymetry grid (ETOPO) for the active prediction area. Built once per
-// port render and sampled per cell so depth reflects the ACTUAL shelf/break,
-// not a static estimate. { stepDeg, minLat, minLng, nLat, nLng, depth:Float32 }.
+// Real bathymetry grid (NOAA CUDEM / BlueTopo on US coast, ETOPO fallback) for the
+// active prediction area. Built once per port render and sampled per cell so depth
+// reflects the ACTUAL shelf/break, not a static estimate.
 let BATHY_GRID = null;
 
 async function buildBathyGrid(latMin, latMax, lngMin, lngMax){
@@ -5994,7 +5994,7 @@ function chlorBreakGrid(lat, lng){
   return null;
 }
 
-// Real depth (meters) at a point from the ETOPO grid; null if unavailable.
+// Real depth (meters) at a point from the CUDEM/ETOPO grid; null if unavailable.
 function realDepthAt(lat, lng){
   const g = BATHY_GRID;
   if(!g) return null;
@@ -6014,13 +6014,13 @@ function predictDepth(lat, lng){
   return seaDepth(lat, lng);
 }
 
-// Water test for the prediction heat map. Prefers REAL bathymetry (ETOPO), so
+// Water test for the prediction heat map. Prefers REAL bathymetry (CUDEM/ETOPO), so
 // land inside bays/rivers — where the static model's coarse bay rectangles bleed
 // across land (e.g. the whole Chesapeake box) — is correctly excluded and the
-// heat map no longer paints over land. ETOPO stores land as depth 0, water > 0.
+// heat map no longer paints over land. CUDEM/ETOPO store land as depth 0, water > 0.
 // Falls back to the static model only outside the fetched bathy grid.
 // Inland freshwater bodies that must NEVER be treated as fishable saltwater,
-// even though a global bathymetry/elevation grid (ETOPO) stores them as water
+// even though a global bathymetry/elevation grid stores them as water
 // with a positive depth. Without this, hotspots appeared in places like Lake
 // Okeechobee — a pure freshwater lake — because realDepthAt() read a positive
 // depth there. Each entry is a lat/lng bounding box. Add others (large inland
@@ -7789,7 +7789,7 @@ function classifyWaterType(lat, lng){
     }
   }
 
-  // Depth-based classification in FEET. Prefer REAL bathymetry (ETOPO) so the
+  // Depth-based classification in FEET. Prefer REAL bathymetry (CUDEM/ETOPO) so the
   // shelf/nearshore/offshore split matches actual depth, not the static model.
   const depthM = (typeof predictDepth === "function") ? predictDepth(lat, lng) : seaDepth(lat, lng);
   const depthFt = depthM * 3.281;
@@ -8663,7 +8663,7 @@ const HeatCanvasLayer = L.Layer.extend({
         const ll = { lat: _lat, lng: _lngAtX[x] };
 
         // ── REAL bathymetry land mask (authoritative when loaded) ──
-        // ETOPO stores land as depth 0 and water as depth > 0. When the bathy
+        // CUDEM/ETOPO store land as depth 0 and water as depth > 0. When the bathy
         // grid is loaded for this area (it is during a prediction render), this
         // is a precise, basemap-independent land cut for coastlines, bays,
         // sounds and rivers everywhere from Maine to Texas — so the heat never
@@ -9098,10 +9098,11 @@ function getCurrentField(lat, lng){
     if(!isFinite(uu)||!isFinite(vv)) continue;
     su+=uu*wt; sv+=vv*wt; sw+=wt;
   }
-  if(sw<=0) return null;
+  if(sw < 0.75) return null;   // need most of the cell — avoids coast bleed onto land
   const u=su/sw, v=sv/sw;
   const driftKts=Math.hypot(u,v)*_CUR_MS_TO_KT;
   const setDeg=(Math.atan2(u,v)*180/Math.PI+360)%360;   // direction of flow (toward)
+  if(typeof isFishableWater === "function" && !isFishableWater(lat, lng)) return null;
   return { u, v, driftKts, setDeg };
 }
 
@@ -9134,6 +9135,7 @@ async function buildCurrentFieldForMap(){
     if(seq !== _curFetchSeq) return;
     setCurrentGridFromData(data);
     CURRENT_STATUS = CURRENT_GRID ? "ready" : "unavailable";
+    if(typeof updateOceanLegend === "function") updateOceanLegend();
   } catch(e){
     if(seq !== _curFetchSeq) return;
     CURRENT_GRID = null;
@@ -9152,11 +9154,29 @@ function _currentSpeedColor(kts){
   return "rgba(148,163,184,0.28)";                  // barely moving
 }
 
+function currentStatusLabel(){
+  if(CURRENT_STATUS === "loading") return "Loading RTOFS…";
+  if(CURRENT_STATUS === "ready") return "NOAA RTOFS · surface drift";
+  if(CURRENT_STATUS === "unavailable") return "Currents unavailable";
+  return "";
+}
+
 const CurrentParticleLayer = L.Layer.extend({
   initialize: function(){
     this._particles = [];
     this._anim = null;
     this._dataReq = 0;
+  },
+  // Pixel + lat/lng land mask — keeps streaks off the basemap's green/brown land.
+  _overWater: function(x, y, ll){
+    if(!this._map) return false;
+    if(!ll) ll = this._map.containerPointToLatLng([x, y]);
+    if(typeof BasemapSampler !== "undefined" && BasemapSampler._ready){
+      const w = BasemapSampler.isWater(x, y);
+      if(w === false) return false;
+    }
+    if(typeof isFishableWater === "function") return isFishableWater(ll.lat, ll.lng);
+    return true;
   },
   onAdd: function(map){
     this._map = map;
@@ -9206,8 +9226,11 @@ const CurrentParticleLayer = L.Layer.extend({
     for(let i=0;i<count;i++) this._particles.push(this._spawn(size));
   },
   _spawn: function(size){
-    return { x: Math.random()*size.x, y: Math.random()*size.y,
-             age: Math.floor(Math.random()*70) };
+    for(let n = 0; n < 18; n++){
+      const x = Math.random() * size.x, y = Math.random() * size.y;
+      if(this._overWater(x, y)) return { x, y, age: Math.floor(Math.random() * 42) };
+    }
+    return { x: Math.random() * size.x, y: Math.random() * size.y, age: 0 };
   },
   _start: function(){
     if(this._anim) return;
@@ -9219,27 +9242,36 @@ const CurrentParticleLayer = L.Layer.extend({
     if(!this._map || !this._canvas) return;
     const ctx = this._canvas.getContext('2d');
     const w = this._canvas.width, h = this._canvas.height;
-    // Trail fade: keep ~86% of the previous frame so streaks draw smooth paths.
-    ctx.globalCompositeOperation = 'destination-in';
-    ctx.fillStyle = 'rgba(0,0,0,0.86)';
+    // Short trails (like the wind layer) — the old 86% fade made the Gulf Stream
+    // look like jet contrails.
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
     ctx.fillRect(0,0,w,h);
     ctx.globalCompositeOperation = 'source-over';
     ctx.lineCap = 'round';
     const size = this._map.getSize();
-    // Currents are ~30× slower than wind in m/s, so the px-per-m/s factor is much
-    // larger than the wind layer's to make a 1-kt drift visibly flow.
-    const speedScale = 2.6;
+    const zoom = this._map.getZoom();
+    const zoomScale = Math.pow(2, (zoom - 6) * 0.35);
+    const CALM_KT = 0.2;
     for(const p of this._particles){
       p.age++;
       const ll = this._map.containerPointToLatLng([p.x, p.y]);
-      const cur = getCurrentField(ll.lat, ll.lng);
-      if(!cur || p.age > 70 || p.x < -20 || p.y < -20 || p.x > size.x+20 || p.y > size.y+20){
+      if(!this._overWater(p.x, p.y, ll)){
         Object.assign(p, this._spawn(size)); p.age = 0; continue;
       }
-      const nx = p.x + cur.u * speedScale;
-      const ny = p.y - cur.v * speedScale;   // canvas y grows downward; v is northward
+      const cur = getCurrentField(ll.lat, ll.lng);
+      if(!cur || p.age > 42 || p.x < -20 || p.y < -20 || p.x > size.x+20 || p.y > size.y+20){
+        Object.assign(p, this._spawn(size)); p.age = 0; continue;
+      }
+      // Step length scales with drift (kt), not raw m/s — currents are ~30× slower
+      // than wind so streak length stays readable and proportional to the legend.
+      if(cur.driftKts < CALM_KT){ continue; }
+      const stepPx = Math.min(1.1, cur.driftKts * 0.065) * zoomScale;
+      const mag = Math.hypot(cur.u, cur.v) || 1;
+      const nx = p.x + (cur.u / mag) * stepPx;
+      const ny = p.y - (cur.v / mag) * stepPx;
       ctx.strokeStyle = _currentSpeedColor(cur.driftKts);
-      ctx.lineWidth = cur.driftKts >= 1.5 ? 1.6 : 1.1;
+      ctx.lineWidth = cur.driftKts >= 2.5 ? 1.5 : (cur.driftKts >= 1 ? 1.2 : 0.9);
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny); ctx.stroke();
       p.x = nx; p.y = ny;
     }
@@ -9255,6 +9287,7 @@ function drawCurrents(){
   } else {
     if(currentsLayer && MAP && MAP.hasLayer(currentsLayer)) MAP.removeLayer(currentsLayer);
   }
+  if(typeof updateOceanLegend === "function") updateOceanLegend();
 }
 
 
@@ -11624,7 +11657,7 @@ function updateOceanLegend(){
   const el = document.getElementById("ocean-legend");
   const content = document.getElementById("ocean-legend-content");
   if(!el || !content) return;
-  if(!layerVis.sst && !layerVis.chlor && !layerVis.wind && !layerVis.radar){
+  if(!layerVis.sst && !layerVis.chlor && !layerVis.wind && !layerVis.radar && !layerVis.currents){
     el.style.display = "none";
     updateBiteBanner();
     return;
@@ -11663,6 +11696,18 @@ function updateOceanLegend(){
           ${[0,5,10,15,20,25,30,35,40].map((v,i,arr)=>{const pct=v/40*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===40?'40+':v}</span>`;}).join('')}
         </div>
         <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
+      </div>`);
+  }
+  if(layerVis.currents){
+    parts.push(`
+      <div style="${gap()}">
+        <div style="font-size:11px;font-weight:700;color:#2dd4bf;letter-spacing:.08em;margin-bottom:2px">CURRENT DRIFT (kt)</div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,rgba(148,163,184,0.55) 0%,rgba(45,212,191,0.45) 18%,rgba(45,212,191,0.75) 38%,rgba(103,232,249,0.85) 62%,rgba(251,191,36,0.85) 88%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="position:relative;height:11px;margin-top:2px;font-size:9px;color:#cfe5ff;font-weight:600">
+          ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
+        </div>
+        <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
+        <div style="font-size:8.5px;color:#7aa8c8;margin-top:3px;line-height:1.35">Streak length ∝ speed · warm = Gulf Stream core</div>
       </div>`);
   }
   if(layerVis.radar){
@@ -19205,7 +19250,7 @@ function ocRenderCharts(){
       <div class="tut-feature-icon">📐</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Real-feature bathymetry under the hood</div>
-        <div class="tut-feature-desc">Depth-driven habitat scoring is now anchored to 201 real-world reference points — canyon heads, named banks (Stellwagen, Cashes, Charleston Bump), shelf-edge stations, the Mississippi/Desoto canyons, East Breaks, Loop Current center, Sigsbee Deep. The algorithm blends these references with the regional shelf model so depth is correct around real features instead of just averaged. To <em>see</em> depth lines visually, switch the basemap to Ocean Bathymetric.</div>
+        <div class="tut-feature-desc">Depth-driven habitat scoring is anchored to NOAA CUDEM / BlueTopo (~3 m) on US waters (ETOPO elsewhere), blended with 201 real-world reference points — canyon heads, named banks, shelf-edge stations, and Gulf canyons. The algorithm merges these with the regional shelf model so depth is correct around real features instead of just averaged. To <em>see</em> depth relief, switch the basemap to Ocean Bathymetric (BlueTopo hillshade overlay).</div>
       </div>
     </div>
 
@@ -19233,7 +19278,7 @@ function ocRenderCharts(){
       <div class="tut-data-icon">⬇</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Water depth (bathymetry)</div>
-        <div class="tut-data-desc">Depth determines what's possible — yellowfin won't be in 30 ft of water no matter how warm it is. Each species has preferred depth bands. Flexible species like bluefin have multiple bands (shallow shelf for NC fall blitz, deeper canyon water for summer giants, Gulf canyons for Apr-Jun spawners). Offshore pelagics are also held to <b>blue water</b>: the map keeps tuna and billfish out on the shelf edge and beyond instead of lighting up the inner shelf just because the surface is warm. And deep <b>bottom species</b> like golden tilefish are scored on an estimated <b>bottom</b> temperature for their depth — not the warm surface — so they correctly show up over deep structure (e.g. Norfolk Canyon) year-round.</div>
+        <div class="tut-data-desc">Depth determines what's possible — yellowfin won't be in 30 ft of water no matter how warm it is. Each species has preferred depth bands. On US coasts we score against NOAA CUDEM (BlueTopo, ~3 m); elsewhere ETOPO fills in. Flexible species like bluefin have multiple bands (shallow shelf for NC fall blitz, deeper canyon water for summer giants, Gulf canyons for Apr-Jun spawners). Offshore pelagics are also held to <b>blue water</b>: the map keeps tuna and billfish out on the shelf edge and beyond instead of lighting up the inner shelf just because the surface is warm. And deep <b>bottom species</b> like golden tilefish are scored on an estimated <b>bottom</b> temperature for their depth — not the warm surface — so they correctly show up over deep structure (e.g. Norfolk Canyon) year-round.</div>
       </div>
     </div>
 
