@@ -2765,12 +2765,12 @@ body.nav-open #ruler-readout{
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="Real animated wind field — white streaks show direction from current ocean-feed wind observations; shaded color shows stronger wind speed areas.">      <input type="checkbox" id="chk-wind" onchange="toggleLayer('wind')">
+    <label class="layer-row" title="Live animated wind field from GFS/HRRR seamless blend — HRRR at 3 km resolution for nearshore waters within 48 h, then GFS offshore. Streaks show direction, color shows speed. Includes gusts.">      <input type="checkbox" id="chk-wind" onchange="toggleLayer('wind')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8 h11 a2.5 2.5 0 1 0 -2.5 -2.5"></path><path d="M3 13 h15 a2.5 2.5 0 1 1 -2.5 2.5"></path><path d="M3 18 h8 a2 2 0 1 1 -2 2"></path></svg>
         </span>
-        <span>Wind (live) <span style="font-size:8px;color:#7dd3fc;opacity:.85">(NOAA/NDBC)</span></span>
+        <span>Wind (live) <span style="font-size:8px;color:#7dd3fc;opacity:.85">(GFS/HRRR)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -2781,6 +2781,16 @@ body.nav-open #ruler-readout{
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0"/><path d="M2 18c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0"/><path d="M2 6c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0"/></svg>
         </span>
         <span>Ocean Currents <span style="font-size:8px;color:#2dd4bf;opacity:.85">(NOAA RTOFS)</span></span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
+    <label class="layer-row" title="Sea-surface height anomaly (SSH) from satellite altimetry — reveals warm-core eddies (red, +SSH), cold-core eddies (blue, -SSH), and Gulf Stream meanders. The same premium intel Hilton's and ROFFS sell. Source: NOAA CoastWatch RADS NRT, ~1–3 day latency.">
+      <input type="checkbox" id="chk-altimetry" onchange="toggleLayer('altimetry')">
+      <span class="lyr-label">
+        <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e879f9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12c0-2.5 1.5-4 4-4s4 1.5 4 4"/><path d="M5 12c0-4 3-7 7-7s7 3 7 7"/><path d="M8 12c0 2.5 1.5 4 4 4s4-1.5 4-4"/></svg>
+        </span>
+        <span>Altimetry / SSH <span style="font-size:8px;color:#e879f9;opacity:.85">(NOAA RADS NRT)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -4044,7 +4054,7 @@ async function loadReports(){
 let MAP, activeSpId=null, activePort=null;
 let pinLL=null;
 let portMarkers=[], canyonLayers=[], vesselLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, zones:false, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, wind:false, currents:false, waypoints:false, ramps:false};
+let layerVis={spots:true, zones:false, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -5546,13 +5556,17 @@ function applyWindGrid(data){
   const nLng=Math.max(1,Math.round((mxLn-mnLn)/step)+1);
   const u=new Float32Array(nLat*nLng).fill(NaN);
   const v=new Float32Array(nLat*nLng).fill(NaN);
+  const gust=new Float32Array(nLat*nLng).fill(NaN);
   for(const r of data.rows){
     const vec = window.BW_WIND.vectorFromObservation({ value:r[2], dir:r[3] });
     if(!vec) continue;
     const i=Math.round((r[0]-mnLa)/step), j=Math.round((r[1]-mnLn)/step);
-    if(i>=0&&i<nLat&&j>=0&&j<nLng){ u[i*nLng+j]=vec.u; v[i*nLng+j]=vec.v; }
+    if(i>=0&&i<nLat&&j>=0&&j<nLng){
+      u[i*nLng+j]=vec.u; v[i*nLng+j]=vec.v;
+      if(r.length>4 && isFinite(r[4])) gust[i*nLng+j]=r[4];
+    }
   }
-  WIND_GRID = { step, minLat:mnLa, minLng:mnLn, nLat, nLng, u, v,
+  WIND_GRID = { step, minLat:mnLa, minLng:mnLn, nLat, nLng, u, v, gust,
     bounds:{ s:mnLa, n:mxLa, w:mnLn, e:mxLn },
     hour:(data.hour!=null ? data.hour : WIND_FORECAST_HOUR) };
 }
@@ -5589,7 +5603,20 @@ function getWindField(lat, lng){
   const u=su/sw, v=sv/sw;
   const speedKts=Math.hypot(u,v)*_WIND_MS_TO_KT;
   const dirTo=(Math.atan2(u,v)*180/Math.PI+360)%360;
-  return { u, v, speedKts, dirDeg:(dirTo+180)%360, sources:1 };
+  // Gust: bilinear max of the (up to 4) valid gust corners, matches speed interp
+  let gustKts=null;
+  if(g.gust){
+    let sgust=0,sgw=0;
+    for(const c of corners){
+      const ci=c[0],cj=c[1],wt=c[2];
+      if(ci<0||cj<0||ci>=g.nLat||cj>=g.nLng) continue;
+      const gg=g.gust[idx(ci,cj)];
+      if(!isFinite(gg)) continue;
+      sgust+=gg*wt; sgw+=wt;
+    }
+    if(sgw>0) gustKts=sgust/sgw;
+  }
+  return { u, v, speedKts, dirDeg:(dirTo+180)%360, gustKts, sources:1 };
 }
 
 // Snap a raw degree step to a fixed "nice" ladder so the wind sampling lattice
@@ -9419,6 +9446,216 @@ function drawCurrents(){
   if(typeof updateOceanLegend === "function") updateOceanLegend();
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// SSH ALTIMETRY — NOAA CoastWatch RADS NRT (nesdisSSH1day)
+// Sea-level anomaly (SLA) from merged-altimeter daily composites. Positive SLA
+// = elevated sea surface = anticyclonic warm-core eddy / Gulf Stream meander.
+// Negative = cyclonic cold-core eddy. Same data Hilton's & ROFFS sell; NOAA
+// provides it free at 0.25° resolution with ~1–3 day latency.
+// ═════════════════════════════════════════════════════════════════════════════
+let ALTIMETRY_GRID = null;  // { stepDeg, minLat, minLng, nLat, nLng, sla, ugos, vgos, observedAtMs }
+let ALTIMETRY_STATUS = "idle";
+let _altiFetchSeq = 0;
+let altimetryLayer = null;
+
+function applyAltimetryGrid(data){
+  ALTIMETRY_GRID = null;
+  if(!data || !Array.isArray(data.rows) || !data.rows.length) return;
+  const step = data.stepDeg || 0.25;
+  let mnLa=Infinity,mxLa=-Infinity,mnLn=Infinity,mxLn=-Infinity;
+  for(const r of data.rows){ if(r[0]<mnLa)mnLa=r[0]; if(r[0]>mxLa)mxLa=r[0]; if(r[1]<mnLn)mnLn=r[1]; if(r[1]>mxLn)mxLn=r[1]; }
+  const nLat=Math.max(1,Math.round((mxLa-mnLa)/step)+1);
+  const nLng=Math.max(1,Math.round((mxLn-mnLn)/step)+1);
+  const sla=new Float32Array(nLat*nLng).fill(NaN);
+  const ugos=new Float32Array(nLat*nLng).fill(0);
+  const vgos=new Float32Array(nLat*nLng).fill(0);
+  for(const r of data.rows){
+    const i=Math.round((r[0]-mnLa)/step), j=Math.round((r[1]-mnLn)/step);
+    if(i>=0&&i<nLat&&j>=0&&j<nLng){
+      const idx=i*nLng+j;
+      if(isFinite(r[2])) sla[idx]=r[2];
+      if(isFinite(r[3])) ugos[idx]=r[3];
+      if(isFinite(r[4])) vgos[idx]=r[4];
+    }
+  }
+  ALTIMETRY_GRID = { step, minLat:mnLa, minLng:mnLn, nLat, nLng, sla, ugos, vgos,
+    bounds:{s:mnLa,n:mxLa,w:mnLn,e:mxLn}, observedAtMs: data.observedAtMs||null };
+}
+
+function getAltimetryField(lat, lng){
+  const g=ALTIMETRY_GRID; if(!g||!g.nLat) return null;
+  const fi=(lat-g.minLat)/g.step, fj=(lng-g.minLng)/g.step;
+  if(fi<-0.001||fj<-0.001||fi>g.nLat-1+0.001||fj>g.nLng-1+0.001) return null;
+  const i0=Math.max(0,Math.min(g.nLat-2,Math.floor(fi)));
+  const j0=Math.max(0,Math.min(g.nLng-2,Math.floor(fj)));
+  const di=Math.max(0,Math.min(1,fi-i0)), dj=Math.max(0,Math.min(1,fj-j0));
+  const idx=(i,j)=>i*g.nLng+j;
+  let ss=0,su=0,sv=0,sw=0;
+  const corners=[[i0,j0,(1-di)*(1-dj)],[i0,j0+1,(1-di)*dj],[i0+1,j0,di*(1-dj)],[i0+1,j0+1,di*dj]];
+  for(const c of corners){
+    const ci=c[0],cj=c[1],wt=c[2];
+    if(ci<0||cj<0||ci>=g.nLat||cj>=g.nLng) continue;
+    const sv0=g.sla[idx(ci,cj)];
+    if(!isFinite(sv0)) continue;
+    ss+=sv0*wt; su+=g.ugos[idx(ci,cj)]*wt; sv+=g.vgos[idx(ci,cj)]*wt; sw+=wt;
+  }
+  if(sw<=0) return null;
+  const slaM=ss/sw, u=su/sw, v=sv/sw;
+  const geoSpeedKts=Math.hypot(u,v)*1.943844;
+  const geoSetDeg=(Math.atan2(u,v)*180/Math.PI+360)%360;
+  return { slaM, ugos:u, vgos:v, geoSpeedKts, geoSetDeg };
+}
+
+// Color for SSH anomaly: blue (cold/cyclonic eddy) → transparent (neutral) → red (warm/anticyclonic)
+function _altimetryColor(slaM){
+  const a=Math.min(1, Math.abs(slaM)*4.0);  // full opacity at ±0.25m
+  if(a < 0.04) return null;
+  if(slaM > 0){
+    // Warm/anticyclonic: orange-red
+    const r=Math.round(220+35*Math.min(1,slaM*3));
+    const g=Math.round(80-60*Math.min(1,slaM*3));
+    return `rgba(${r},${g},30,${(a*0.62).toFixed(2)})`;
+  } else {
+    // Cold/cyclonic: blue-cyan
+    const b=Math.round(200+55*Math.min(1,(-slaM)*3));
+    const gr=Math.round(180-80*Math.min(1,(-slaM)*3));
+    return `rgba(30,${gr},${b},${(a*0.62).toFixed(2)})`;
+  }
+}
+
+const AltimetryLayer = L.Layer.extend({
+  onAdd: function(map){
+    this._map=map;
+    this._canvas=L.DomUtil.create("canvas","leaflet-zoom-animated");
+    this._canvas.style.cssText="position:absolute;top:0;left:0;pointer-events:none;z-index:399";
+    map.getPanes().overlayPane.appendChild(this._canvas);
+    map.on("moveend zoomend",this._reset,this);
+    map.on("move",this._onMove,this);
+    this._reset();
+    this._requestData();
+  },
+  onRemove: function(map){
+    map.off("moveend zoomend",this._reset,this);
+    map.off("move",this._onMove,this);
+    if(this._canvas&&this._canvas.parentNode) this._canvas.parentNode.removeChild(this._canvas);
+    this._canvas=null; this._map=null;
+  },
+  _onMove: function(){
+    if(!this._canvas||!this._map) return;
+    const tl=this._map.containerPointToLayerPoint([0,0]);
+    L.DomUtil.setPosition(this._canvas,tl);
+    this._draw();
+  },
+  _reset: function(){
+    if(!this._map) return;
+    const size=this._map.getSize();
+    const tl=this._map.containerPointToLayerPoint([0,0]);
+    L.DomUtil.setPosition(this._canvas,tl);
+    this._canvas.width=size.x; this._canvas.height=size.y;
+    this._draw();
+    // Refetch if the view has grown outside the cached grid
+    const g=ALTIMETRY_GRID;
+    const b=this._map.getBounds();
+    if(!g||b.getSouth()<g.bounds.s+0.001||b.getNorth()>g.bounds.n-0.001||
+       b.getWest()<g.bounds.w+0.001||b.getEast()>g.bounds.e-0.001){
+      this._requestData();
+    }
+  },
+  _requestData: function(){
+    if(!layerVis.altimetry||typeof BW_OCEAN==="undefined"||!BW_OCEAN.fetchAltimetryGrid||!MAP) return;
+    const seq=++_altiFetchSeq;
+    ALTIMETRY_STATUS="loading";
+    const b=MAP.getBounds().pad(0.8);
+    BW_OCEAN.fetchAltimetryGrid(b.getSouth(),b.getNorth(),b.getWest(),b.getEast())
+      .then(data=>{
+        if(seq!==_altiFetchSeq||!layerVis.altimetry) return;
+        applyAltimetryGrid(data);
+        ALTIMETRY_STATUS=ALTIMETRY_GRID?"ready":"unavailable";
+        updateOceanLegend();
+        this._draw();
+      }).catch(()=>{
+        ALTIMETRY_STATUS="unavailable"; updateOceanLegend();
+      });
+  },
+  _draw: function(){
+    if(!this._canvas||!this._map) return;
+    const ctx=this._canvas.getContext("2d");
+    const w=this._canvas.width, h=this._canvas.height;
+    ctx.clearRect(0,0,w,h);
+    if(!ALTIMETRY_GRID) return;
+    // Draw SSH as filled 0.25° cells, skipping transparent ones
+    const cellPad=0.001; // tiny overlap to avoid hairlines between cells
+    const g=ALTIMETRY_GRID;
+    for(let i=0;i<g.nLat;i++){
+      for(let j=0;j<g.nLng;j++){
+        const slaM=g.sla[i*g.nLng+j];
+        if(!isFinite(slaM)) continue;
+        const col=_altimetryColor(slaM);
+        if(!col) continue;
+        const lat=g.minLat+i*g.step;
+        const lng=g.minLng+j*g.step;
+        const p0=this._map.latLngToContainerPoint([lat-step*0.5-cellPad, lng-step*0.5-cellPad]);
+        const p1=this._map.latLngToContainerPoint([lat+step*0.5+cellPad, lng+step*0.5+cellPad]);
+        const x=Math.min(p0.x,p1.x), y=Math.min(p0.y,p1.y);
+        const cw=Math.abs(p1.x-p0.x), ch=Math.abs(p1.y-p0.y);
+        ctx.fillStyle=col;
+        ctx.fillRect(Math.floor(x),Math.floor(y),Math.ceil(cw),Math.ceil(ch));
+      }
+    }
+    // Draw geostrophic velocity arrows for cells with significant flow (> 0.3 kt)
+    const _MS_KT=1.943844;
+    for(let i=0;i<g.nLat;i++){
+      for(let j=0;j<g.nLng;j++){
+        const ug=g.ugos[i*g.nLng+j], vg=g.vgos[i*g.nLng+j];
+        const spd=Math.hypot(ug,vg)*_MS_KT;
+        if(spd<0.3) continue;
+        const lat=g.minLat+i*g.step, lng=g.minLng+j*g.step;
+        const pc=this._map.latLngToContainerPoint([lat,lng]);
+        if(pc.x<-20||pc.x>w+20||pc.y<-20||pc.y>h+20) continue;
+        const ang=Math.atan2(ug,-vg); // +x=east, -y=north on canvas
+        const len=Math.min(14, 6+spd*2.5);
+        const ax=Math.cos(ang), ay=Math.sin(ang);
+        const tx=pc.x+ax*len, ty=pc.y+ay*len;
+        ctx.strokeStyle="rgba(255,255,255,0.72)";
+        ctx.lineWidth=1.2; ctx.lineCap="round";
+        ctx.beginPath(); ctx.moveTo(pc.x,pc.y); ctx.lineTo(tx,ty); ctx.stroke();
+        // Arrowhead
+        const hl=5, hw=2.5;
+        const bx=tx-ax*hl, by=ty-ay*hl;
+        const nx=-ay, ny=ax;
+        ctx.fillStyle="rgba(255,255,255,0.72)";
+        ctx.beginPath();
+        ctx.moveTo(tx,ty);
+        ctx.lineTo(bx+nx*hw,by+ny*hw);
+        ctx.lineTo(bx-nx*hw,by-ny*hw);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+  },
+});
+
+async function buildAltimetryForMap(){
+  if(!MAP||!BW_OCEAN||!BW_OCEAN.fetchAltimetryGrid) return;
+  const seq=++_altiFetchSeq;
+  ALTIMETRY_STATUS="loading";
+  const b=MAP.getBounds().pad(0.8);
+  const data=await BW_OCEAN.fetchAltimetryGrid(b.getSouth(),b.getNorth(),b.getWest(),b.getEast());
+  if(seq!==_altiFetchSeq) return;
+  applyAltimetryGrid(data);
+  ALTIMETRY_STATUS=ALTIMETRY_GRID?"ready":"unavailable";
+  updateOceanLegend();
+  if(altimetryLayer) altimetryLayer._draw();
+}
+
+function drawAltimetry(){
+  if(layerVis.altimetry){
+    if(!altimetryLayer) altimetryLayer=new AltimetryLayer();
+    if(MAP&&!MAP.hasLayer(altimetryLayer)) altimetryLayer.addTo(MAP);
+  } else {
+    if(altimetryLayer&&MAP&&MAP.hasLayer(altimetryLayer)) MAP.removeLayer(altimetryLayer);
+  }
+  if(typeof updateOceanLegend==="function") updateOceanLegend();
+}
 
 // ── PREDICTION INTERACTION (marker-free) ─────────────────────────────────────
 // Resolve a map LatLng to the nearest scored grid cell within a small pixel
@@ -10176,6 +10413,7 @@ function toggleLayer(key){
   else if(key==="closures")drawClosures();
   else if(key==="wind")drawWind();
   else if(key==="currents")drawCurrents();
+  else if(key==="altimetry")drawAltimetry();
   else if(key==="sst"){
     if(layerVis.sst){ sstLayer.setOpacity(oceanOpacity.sst); sstLayer.addTo(MAP); }
     else if(MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
@@ -11825,6 +12063,7 @@ function updateOceanLegend(){
           ${[0,5,10,15,20,25,30,35,40].map((v,i,arr)=>{const pct=v/40*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===40?'40+':v}</span>`;}).join('')}
         </div>
         <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
+        <div style="font-size:8.5px;color:#7aa8c8;margin-top:3px;line-height:1.35"><b style="color:#bfe3f5">GFS/HRRR blend</b> · HRRR 3 km nearshore &lt;48 h · includes gusts</div>
       </div>`);
   }
   if(layerVis.currents){
@@ -11837,6 +12076,21 @@ function updateOceanLegend(){
         </div>
         <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
         <div style="font-size:8.5px;color:#7aa8c8;margin-top:3px;line-height:1.35"><b style="color:#bfe3f5">Color = speed</b> · flowing water shows set (direction) · amber = Gulf Stream core</div>
+      </div>`);
+  }
+  if(layerVis.altimetry){
+    const altiDate = ALTIMETRY_GRID&&ALTIMETRY_GRID.observedAtMs
+      ? new Date(ALTIMETRY_GRID.observedAtMs).toLocaleDateString("en-US",{month:"short",day:"numeric"})
+      : (ALTIMETRY_STATUS==="loading"?"loading…":"—");
+    parts.push(`
+      <div style="${gap()}">
+        <div style="font-size:11px;font-weight:700;color:#e879f9;letter-spacing:.08em;margin-bottom:2px">SSH ANOMALY (m)</div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1e3a8a 0%,#38bdf8 30%,rgba(30,30,40,0.4) 50%,#f87171 70%,#7f1d1d 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#cfe5ff;margin-top:2px;font-weight:600">
+          <span>−0.3 cold eddy</span><span>0</span><span>+0.3 warm eddy</span>
+        </div>
+        <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">RADS NRT · ${altiDate}</div>
+        <div style="font-size:8.5px;color:#7aa8c8;margin-top:3px;line-height:1.35"><b style="color:#f0abfc">Arrows = geostrophic flow</b> · red/warm = Gulf Stream + warm eddies · blue/cold = cyclonic eddies</div>
       </div>`);
   }
   if(layerVis.radar){
@@ -12485,7 +12739,7 @@ let _wpTeaserActive = false;       // last waypoint draw was capped to a teaser
 let BW_PREMIUM = false;
 let BW_PAID = false;
 // Premium-gated map layers (everything outside the free baseline).
-const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "radar", "ramps", "loran", "waypoints"];
+const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "altimetry", "radar", "ramps", "loran", "waypoints"];
 
 async function refreshEntitlement(){
   let premium = false, paid = false;
@@ -19370,7 +19624,7 @@ function ocRenderCharts(){
       <div class="tut-feature-icon">💨</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Animated wind layer</div>
-        <div class="tut-feature-desc">Toggle <b>Wind (animated)</b> under Ocean Data for a flowing particle field over your grounds — streaks show wind direction and are colored by speed (calm green → strong red). This is an <b>illustrative preview</b>, not live observations or a real forecast; real GFS/HRRR wind is coming in a future update. For actual wind right now, use the 6-Day Forecast.</div>
+        <div class="tut-feature-desc">Toggle <b>Wind (animated)</b> under Ocean Data for a live particle wind field — streaks show direction and are colored by speed (calm green → strong red). Data comes from the <b>GFS/HRRR seamless blend</b>: HRRR at 3 km for nearshore waters within 48 h, then GFS offshore and beyond. For a point forecast with gusts and 6-day outlook, tap any waypoint and use the 6-Day Forecast tab.</div>
       </div>
     </div>
 

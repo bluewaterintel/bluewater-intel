@@ -83,6 +83,12 @@ const CUDEM_TILE_DEG = 0.25;
 const CUDEM_NATIVE_STEP = 1 / (9 * 3600); // 1/9 arc-second in degrees
 const CUDEM_VERSIONS = ["2019v2", "2019v1", "2018v1"];
 const CUDEM_BOUNDS = { latMin: 23, latMax: 52, lngMin: -127, lngMax: -65 };
+// NOAA CoastWatch SSH altimetry (RADS NRT, ~1-3 day latency).
+// Variables: sla (m), ugos / vgos (m/s geostrophic). 0.25° global grid.
+const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP")
+  ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
+const ALTIMETRY_DATASET = "nesdisSSH1day";
+const ALTIMETRY_STEP = 0.25;
 // RTOFS (Real-Time Ocean Forecast System) — operational ESPC-D-V02 on HYCOM.
 const RTOFS_NCSS = Deno.env.get("RTOFS_NCSS")
   ?? "https://ncss.hycom.org/thredds/ncss/grid/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd";
@@ -202,7 +208,7 @@ function nmBetween(la1: number, lo1: number, la2: number, lo2: number) {
 type ModelWindRec = {
   observedAtMs: number | null;
   forecastHour: number;
-  wind: { value: number | null; dir: number | null; observedAtMs: number | null };
+  wind: { value: number | null; dir: number | null; gustKts: number | null; observedAtMs: number | null };
   airTemp: { value: number | null; observedAtMs: number | null };
   /** 24h pressure change (hPa), same semantics as NDBC PTDY / buoy trend. */
   pressure: { value: number | null; observedAtMs: number | null };
@@ -234,9 +240,11 @@ async function fetchModelWind(lat: number, lng: number, hoursAhead = 0): Promise
   const hit = modelWindCache.get(k);
   if (hit && now - hit.atMs < 20 * 60 * 1000) return hit.p;
   const p = (async () => {
+    // gfs_hrrr: HRRR 3-km for CONUS/nearshore 0–48h, then GFS offshore/beyond
     const url = `${OPEN_METEO_FORECAST}?latitude=${lat}&longitude=${lng}`
-      + "&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,surface_pressure"
-      + "&wind_speed_unit=kn&temperature_unit=fahrenheit&timezone=UTC&forecast_days=5";
+      + "&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,surface_pressure"
+      + "&wind_speed_unit=kn&temperature_unit=fahrenheit&timezone=UTC&forecast_days=5"
+      + "&models=gfs_hrrr";
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(7000), headers: ERDDAP_HEADERS });
       if (!r.ok) throw new Error(`open-meteo ${r.status}`);
@@ -248,6 +256,7 @@ async function fetchModelWind(lat: number, lng: number, hoursAhead = 0): Promise
       const observedAtMs = idx >= 0 ? Date.parse(times[idx] + "Z") : null;
       const speed = idx >= 0 ? num(d?.hourly?.wind_speed_10m?.[idx]) : null;
       const dir = idx >= 0 ? num(d?.hourly?.wind_direction_10m?.[idx]) : null;
+      const gust = idx >= 0 ? num(d?.hourly?.wind_gusts_10m?.[idx]) : null;
       const air = idx >= 0 ? num(d?.hourly?.temperature_2m?.[idx]) : null;
       const pres = idx >= 0 ? num(d?.hourly?.surface_pressure?.[idx]) : null;
       const pres24 = idx24 >= 0 ? num(d?.hourly?.surface_pressure?.[idx24]) : null;
@@ -255,21 +264,23 @@ async function fetchModelWind(lat: number, lng: number, hoursAhead = 0): Promise
       return {
         observedAtMs,
         forecastHour: hour,
-        wind: speed != null && dir != null ? { value: Math.round(speed * 10) / 10, dir, observedAtMs } : { value: null, dir: null, observedAtMs: null },
+        wind: speed != null && dir != null
+          ? { value: Math.round(speed * 10) / 10, dir, gustKts: gust != null ? Math.round(gust * 10) / 10 : null, observedAtMs }
+          : { value: null, dir: null, gustKts: null, observedAtMs: null },
         airTemp: air != null ? { value: Math.round(air * 10) / 10, observedAtMs } : { value: null, observedAtMs: null },
         pressure: trend != null ? { value: trend, observedAtMs } : { value: null, observedAtMs: null },
         barometer: pres != null ? { value: Math.round(pres * 10) / 10, observedAtMs } : { value: null, observedAtMs: null },
-        source: "open-meteo-gfs",
+        source: "open-meteo-gfs_hrrr",
       };
     } catch {
       return {
         observedAtMs: null,
         forecastHour: hour,
-        wind: { value: null, dir: null, observedAtMs: null },
+        wind: { value: null, dir: null, gustKts: null, observedAtMs: null },
         airTemp: { value: null, observedAtMs: null },
         pressure: { value: null, observedAtMs: null },
         barometer: { value: null, observedAtMs: null },
-        source: "open-meteo-gfs",
+        source: "open-meteo-gfs_hrrr",
       };
     }
   })();
@@ -361,8 +372,10 @@ async function fetchWindGrid(latMin: number, latMax: number, lngMin: number, lng
     lngs.push(Math.round(j * step * 1000) / 1000);
   }
   const p = (async () => {
+    // gfs_hrrr: HRRR 3-km for CONUS/nearshore 0–48h, GFS offshore/beyond
     const url = `${OPEN_METEO_FORECAST}?latitude=${lats.join(",")}&longitude=${lngs.join(",")}`
-      + "&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&timezone=UTC&forecast_days=5";
+      + "&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kn&timezone=UTC&forecast_days=5"
+      + "&models=gfs_hrrr";
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(12000), headers: ERDDAP_HEADERS });
       if (!r.ok) return { stepDeg: step, rows: [] as number[][] };
@@ -377,7 +390,10 @@ async function fetchWindGrid(latMin: number, latMax: number, lngMin: number, lng
         const idx = nearestHourlyIndex(times, targetMs);
         const spd = num(e?.hourly?.wind_speed_10m?.[idx]);
         const dir = num(e?.hourly?.wind_direction_10m?.[idx]);
-        if (spd != null && dir != null) rows.push([lats[n], lngs[n], Math.round(spd * 10) / 10, Math.round(dir)]);
+        const gust = num(e?.hourly?.wind_gusts_10m?.[idx]);
+        if (spd != null && dir != null) {
+          rows.push([lats[n], lngs[n], Math.round(spd * 10) / 10, Math.round(dir), gust != null ? Math.round(gust * 10) / 10 : NaN]);
+        }
       }
       return { stepDeg: step, rows };
     } catch {
@@ -385,6 +401,73 @@ async function fetchWindGrid(latMin: number, latMax: number, lngMin: number, lng
     }
   })();
   windGridCache.set(key, { atMs: now, p });
+  return p;
+}
+
+// ── NOAA SSH altimetry grid (nesdisSSH1day — RADS NRT, ~1-3 day latency) ─────
+// Sea-level anomaly (sla, metres) + absolute geostrophic velocities
+// (ugos/vgos, m/s) at 0.25° global resolution. Positive SLA = elevated sea
+// surface = anticyclonic (warm-core eddy, Gulf Stream meander). Negative =
+// depressed = cyclonic (cold-core eddy). This is the layer Hilton's and ROFFS
+// charge $45-75/mo for — NOAA provides it free via CoastWatch ERDDAP.
+type AltimetryGrid = {
+  stepDeg: number;
+  observedAtMs: number | null;
+  rows: number[][];  // [lat, lng, sla_m, ugos_ms, vgos_ms]
+};
+const altimetryGridCache = new Map<string, { atMs: number; p: Promise<AltimetryGrid> }>();
+async function fetchAltimetryGrid(
+  latMin: number, latMax: number, lngMin: number, lngMax: number,
+): Promise<AltimetryGrid> {
+  const s = ALTIMETRY_STEP;
+  const a0 = Math.floor(Math.min(latMin, latMax) / s) * s;
+  const a1 = Math.ceil(Math.max(latMin, latMax) / s) * s;
+  const o0 = Math.floor(Math.min(lngMin, lngMax) / s) * s;
+  const o1 = Math.ceil(Math.max(lngMin, lngMax) / s) * s;
+  const key = `${a0.toFixed(3)},${a1.toFixed(3)},${o0.toFixed(3)},${o1.toFixed(3)}`;
+  const now = Date.now();
+  const hit = altimetryGridCache.get(key);
+  if (hit && now - hit.atMs < 6 * 60 * 60 * 1000) return hit.p; // 6h cache (daily product)
+  const none: AltimetryGrid = { stepDeg: s, observedAtMs: null, rows: [] };
+  const p = (async (): Promise<AltimetryGrid> => {
+    try {
+      const enc = (v: number) => `(${v.toFixed(4)})`;
+      const dims = `[(last)][${enc(a0)}:${enc(a1)}][${enc(o0)}:${enc(o1)}]`;
+      const url = `${ALTIMETRY_ERDDAP}/${ALTIMETRY_DATASET}.csv`
+        + `?sla${dims},ugos${dims},vgos${dims}`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(15000), headers: ERDDAP_HEADERS });
+      if (!r.ok) return none;
+      const txt = await r.text();
+      const lines = txt.trim().split("\n");
+      if (lines.length < 3) return none;
+      // Line 0: column names; Line 1: units; Line 2+: data rows
+      let observedAtMs: number | null = null;
+      const rows: number[][] = [];
+      for (let i = 2; i < lines.length; i++) {
+        const p = lines[i].split(",");
+        if (p.length < 6) continue;
+        const t = p[0].trim();
+        if (!observedAtMs && t) { const ms = Date.parse(t); if (isFinite(ms)) observedAtMs = ms; }
+        const lat = parseFloat(p[1]);
+        const lng = parseFloat(p[2]);
+        const sla = parseFloat(p[3]);
+        const ugos = parseFloat(p[4]);
+        const vgos = parseFloat(p[5]);
+        if (!isFinite(lat) || !isFinite(lng) || !isFinite(sla)) continue;
+        rows.push([
+          Math.round(lat * 1000) / 1000,
+          Math.round(lng * 1000) / 1000,
+          Math.round(sla * 10000) / 10000,
+          isFinite(ugos) ? Math.round(ugos * 10000) / 10000 : 0,
+          isFinite(vgos) ? Math.round(vgos * 10000) / 10000 : 0,
+        ]);
+      }
+      return { stepDeg: s, observedAtMs, rows };
+    } catch {
+      return none;
+    }
+  })();
+  altimetryGridCache.set(key, { atMs: now, p });
   return p;
 }
 
@@ -1328,6 +1411,21 @@ export const handler = async (req: Request): Promise<Response> => {
     const out = await fetchWindGrid(latMin, latMax, lngMin, lngMax, hoursAhead);
     return new Response(JSON.stringify({ ...out, hour: Math.round(clamp(hoursAhead, 0, 96) / 3) * 3 }), {
       headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=900" },
+    });
+  }
+
+  // ── SSH altimetry grid — sea-level anomaly + geostrophic currents ───────────
+  if (mode === "altimetrygrid") {
+    const latMin = num(u.searchParams.get("latMin"));
+    const latMax = num(u.searchParams.get("latMax"));
+    const lngMin = num(u.searchParams.get("lngMin"));
+    const lngMax = num(u.searchParams.get("lngMax"));
+    if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+    }
+    const out = await fetchAltimetryGrid(latMin, latMax, lngMin, lngMax);
+    return new Response(JSON.stringify(out), {
+      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" },
     });
   }
 
