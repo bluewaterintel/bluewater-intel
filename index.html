@@ -2774,7 +2774,7 @@ body.nav-open #ruler-readout{
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="Ocean surface currents — animated streaks show set (direction of flow) and drift (speed). Brighter/warmer streaks = stronger current. Find the Gulf Stream wall, eddies, and current edges where bait and predators stack.">
+    <label class="layer-row" title="Ocean surface currents — a translucent flowing-water wash shows set (direction) and drift (speed): the brighter/warmer the water, the stronger the current. Find the Gulf Stream wall, eddies, and current edges where bait and predators stack.">
       <input type="checkbox" id="chk-currents" onchange="toggleLayer('currents')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -4171,18 +4171,22 @@ async function initMap(){
   esriOceanLayer=L.layerGroup([
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
-      {maxZoom:13,minZoom:0,crossOrigin:'anonymous',attribution:'© Esri · GEBCO · NOAA · NGA'}
+      {maxZoom:19,maxNativeZoom:13,minZoom:0,crossOrigin:'anonymous',attribution:'© Esri · GEBCO · NOAA · NGA'}
     ),
     L.tileLayer(
       "https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
         + "&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade&TILEMATRIXSET=EPSG%3A3857"
         + "&TILEMATRIX=EPSG%3A3857%3A{z}&TILEROW={y}&TILECOL={x}&FORMAT=image%2Fpng8",
-      {maxZoom:9,maxNativeZoom:9,minZoom:0,crossOrigin:'anonymous',opacity:0.72,
+      // BlueTopo GWC serves survey-resolution relief to z20 — cap native at 16 (fine
+      // detail: ledges, humps, wrecks) and let Leaflet upscale past that so the layer
+      // never disappears when the user zooms in tight. Was mistakenly capped at z9,
+      // which only showed coarse regional relief.
+      {maxZoom:19,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.78,
         attribution:'© NOAA OCS · BlueTopo CUDEM',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
     ),
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}",
-      {maxZoom:13,minZoom:0,crossOrigin:'anonymous',attribution:'© Esri',opacity:0.85}
+      {maxZoom:19,maxNativeZoom:13,minZoom:0,crossOrigin:'anonymous',attribution:'© Esri',opacity:0.85}
     )]);
 
   // ── STREET + SEAMARKS ──
@@ -9143,15 +9147,27 @@ async function buildCurrentFieldForMap(){
   }
 }
 
-// Streak color by drift speed. Currents live in a 0–4 kt world (the Stream core
-// runs ~2–4 kt; most shelf water is under 1). Faint teal for a drift you'd
-// barely notice, bright cyan for a real edge, warm for Stream-core velocity.
-function _currentSpeedColor(kts){
-  if(kts >= 3.0) return "rgba(251,191,36,0.85)";    // amber — Stream core
-  if(kts >= 2.0) return "rgba(103,232,249,0.85)";   // bright cyan — strong
-  if(kts >= 1.0) return "rgba(45,212,191,0.75)";    // teal — solid current
-  if(kts >= 0.4) return "rgba(45,212,191,0.48)";    // faint teal
-  return "rgba(148,163,184,0.28)";                  // barely moving
+// Translucent water WASH color by drift speed — a soft, low-alpha tint painted
+// under the flow highlights so the current reads as a body of moving water
+// (Windy/ROFFS style) rather than sharp jet-contrail streaks. Currents live in a
+// 0–4 kt world (Stream core ~2–4 kt; most shelf water under 1). Null = too slow
+// to tint (leaves the basemap untouched).
+function _currentShadeColor(kts){
+  if(kts >= 3.0) return "rgba(251,191,36,0.30)";    // amber — Stream core
+  if(kts >= 2.0) return "rgba(94,234,212,0.26)";    // bright aqua — strong
+  if(kts >= 1.0) return "rgba(45,212,191,0.20)";    // teal — solid current
+  if(kts >= 0.5) return "rgba(56,189,248,0.15)";    // soft blue — moving
+  if(kts >= 0.2) return "rgba(125,211,252,0.10)";   // faint drift
+  return null;                                      // effectively still
+}
+// Flow-highlight color for the animated ripples riding on top of the wash. Kept
+// soft and semi-transparent (not pure white) so overlapping strokes build a
+// flowing sheen instead of hard lines. Alpha grows a little with speed.
+function _currentFlowColor(kts){
+  const a = Math.max(0.16, Math.min(0.5, 0.16 + kts * 0.11));
+  if(kts >= 3.0) return `rgba(255,244,214,${a.toFixed(3)})`;  // warm sheen — core
+  if(kts >= 1.5) return `rgba(224,252,255,${a.toFixed(3)})`;  // cool white-cyan
+  return `rgba(203,241,245,${a.toFixed(3)})`;                 // pale aqua
 }
 
 function currentStatusLabel(){
@@ -9161,42 +9177,79 @@ function currentStatusLabel(){
   return "";
 }
 
+// ── "Flowing water" current renderer ────────────────────────────────────────
+// Two stacked canvases:
+//   • SHADE  — a soft, water-masked translucent wash tinted by drift speed. It's
+//     recomputed only on move/zoom/data (not every frame), so it's cheap, and it
+//     gives the "body of moving water" look the sharp streaks lacked.
+//   • FLOW   — soft, semi-transparent highlights that drift along the current so
+//     the water looks alive. Fewer, softer, and water-masked at BOTH endpoints so
+//     nothing paints across the coast onto land.
 const CurrentParticleLayer = L.Layer.extend({
   initialize: function(){
     this._particles = [];
     this._anim = null;
     this._dataReq = 0;
+    this._moveRAF = null;
+    this._shadeCellPx = 18;
   },
-  // Pixel + lat/lng land mask — keeps streaks off the basemap's green/brown land.
+  // Pixel + lat/lng land mask — keeps flow off the basemap's green/brown land.
+  // Prefer the basemap pixel classifier (authoritative for what's drawn); fall
+  // back to the depth-based polygon check where the pixel is unknown.
   _overWater: function(x, y, ll){
     if(!this._map) return false;
-    if(!ll) ll = this._map.containerPointToLatLng([x, y]);
     if(typeof BasemapSampler !== "undefined" && BasemapSampler._ready){
       const w = BasemapSampler.isWater(x, y);
       if(w === false) return false;
+      if(w === true) return true;
     }
+    if(!ll) ll = this._map.containerPointToLatLng([x, y]);
     if(typeof isFishableWater === "function") return isFishableWater(ll.lat, ll.lng);
     return true;
   },
   onAdd: function(map){
     this._map = map;
+    if(!this._shadeCanvas){
+      this._shadeCanvas = L.DomUtil.create('canvas', 'current-shade-canvas');
+      this._shadeCanvas.style.position = 'absolute';
+      this._shadeCanvas.style.pointerEvents = 'none';
+      this._shadeCanvas.style.zIndex = '442';
+    }
     if(!this._canvas){
-      this._canvas = L.DomUtil.create('canvas', 'current-particle-canvas');
+      this._canvas = L.DomUtil.create('canvas', 'current-flow-canvas');
       this._canvas.style.position = 'absolute';
       this._canvas.style.pointerEvents = 'none';
       this._canvas.style.zIndex = '443';   // just under the wind streaks (445)
     }
+    map.getPanes().overlayPane.appendChild(this._shadeCanvas);
     map.getPanes().overlayPane.appendChild(this._canvas);
     map.on('moveend zoomend viewreset resize', this._reset, this);
     map.on('movestart zoomstart', this._pause, this);
+    map.on('move', this._onMove, this);
     this._reset();
   },
   onRemove: function(map){
     this._dataReq++;
     this._stop();
+    if(this._moveRAF){ cancelAnimationFrame(this._moveRAF); this._moveRAF = null; }
+    if(this._shadeCanvas && this._shadeCanvas.parentNode) this._shadeCanvas.parentNode.removeChild(this._shadeCanvas);
     if(this._canvas && this._canvas.parentNode) this._canvas.parentNode.removeChild(this._canvas);
     map.off('moveend zoomend viewreset resize', this._reset, this);
     map.off('movestart zoomstart', this._pause, this);
+    map.off('move', this._onMove, this);
+  },
+  _onMove: function(){
+    if(!this._map || !this._shadeCanvas) return;
+    if(this._map._animatingZoom) return;
+    if(this._moveRAF) return;
+    this._moveRAF = requestAnimationFrame(() => {
+      this._moveRAF = null;
+      if(!this._map) return;
+      const topLeft = this._map.containerPointToLayerPoint([0, 0]);
+      L.DomUtil.setPosition(this._shadeCanvas, topLeft);
+      L.DomUtil.setPosition(this._canvas, topLeft);
+      this._drawShade();   // keep the wash pinned to geography during the drag
+    });
   },
   _pause: function(){
     this._stop();
@@ -9206,29 +9259,65 @@ const CurrentParticleLayer = L.Layer.extend({
     if(!this._map) return;
     const size = this._map.getSize();
     const topLeft = this._map.containerPointToLayerPoint([0,0]);
+    L.DomUtil.setPosition(this._shadeCanvas, topLeft);
     L.DomUtil.setPosition(this._canvas, topLeft);
-    this._canvas.width = size.x;
-    this._canvas.height = size.y;
+    this._shadeCanvas.width = size.x;  this._shadeCanvas.height = size.y;
+    this._canvas.width = size.x;       this._canvas.height = size.y;
     this._seed();
+    this._drawShade();
     const req = ++this._dataReq;
     buildCurrentFieldForMap().then(() => {
       if(req !== this._dataReq || !this._map) return;
       this._seed();
+      this._drawShade();
       if(!this._anim) this._start();
     }).catch(()=>{});
     this._start();
   },
+  // Translucent, water-masked wash tinted by drift. Coarse grid + blur = cheap;
+  // painted only on move/zoom/data, never per animation frame.
+  _drawShade: function(){
+    if(!this._shadeCanvas || !this._map) return;
+    const ctx = this._shadeCanvas.getContext('2d');
+    const w = this._shadeCanvas.width, h = this._shadeCanvas.height;
+    ctx.clearRect(0,0,w,h);
+    if(!CURRENT_GRID) return;
+    const cell = this._shadeCellPx;
+    const sw = Math.max(1, Math.ceil(w / cell));
+    const sh = Math.max(1, Math.ceil(h / cell));
+    const off = document.createElement("canvas");
+    off.width = sw; off.height = sh;
+    const octx = off.getContext("2d");
+    for(let gy = 0; gy < sh; gy++){
+      for(let gx = 0; gx < sw; gx++){
+        const px = (gx + 0.5) * cell, py = (gy + 0.5) * cell;
+        if(!this._overWater(px, py)) continue;   // hard land mask — no bleed
+        const ll = this._map.containerPointToLatLng([px, py]);
+        const cur = getCurrentField(ll.lat, ll.lng);
+        if(!cur) continue;
+        const fill = _currentShadeColor(cur.driftKts);
+        if(!fill) continue;
+        octx.fillStyle = fill;
+        octx.fillRect(gx, gy, 1, 1);
+      }
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.filter = "blur(7px)";
+    ctx.drawImage(off, -cell, -cell, w + cell * 2, h + cell * 2);
+    ctx.filter = "none";
+  },
   _seed: function(){
     if(!this._map) return;
     const size = this._map.getSize();
-    const count = Math.round(Math.min(1100, Math.max(350, (size.x*size.y)/1400)));
+    // Fewer than the old streak field — soft translucent flow doesn't need many.
+    const count = Math.round(Math.min(650, Math.max(220, (size.x*size.y)/2600)));
     this._particles = [];
     for(let i=0;i<count;i++) this._particles.push(this._spawn(size));
   },
   _spawn: function(size){
     for(let n = 0; n < 18; n++){
       const x = Math.random() * size.x, y = Math.random() * size.y;
-      if(this._overWater(x, y)) return { x, y, age: Math.floor(Math.random() * 42) };
+      if(this._overWater(x, y)) return { x, y, age: Math.floor(Math.random() * 60) };
     }
     return { x: Math.random() * size.x, y: Math.random() * size.y, age: 0 };
   },
@@ -9242,36 +9331,39 @@ const CurrentParticleLayer = L.Layer.extend({
     if(!this._map || !this._canvas) return;
     const ctx = this._canvas.getContext('2d');
     const w = this._canvas.width, h = this._canvas.height;
-    // Short trails (like the wind layer) — the old 86% fade made the Gulf Stream
-    // look like jet contrails.
+    // Gentle trail fade — soft overlapping strokes read as flowing water, and the
+    // longer fade (vs. a hard clear) gives ripples a smooth tail without contrails.
     ctx.globalCompositeOperation = 'destination-out';
-    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.fillStyle = 'rgba(0,0,0,0.10)';
     ctx.fillRect(0,0,w,h);
     ctx.globalCompositeOperation = 'source-over';
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     const size = this._map.getSize();
     const zoom = this._map.getZoom();
     const zoomScale = Math.pow(2, (zoom - 6) * 0.35);
-    const CALM_KT = 0.2;
+    const CALM_KT = 0.15;
+    const MAX_AGE = 70;
     for(const p of this._particles){
       p.age++;
+      if(p.age > MAX_AGE || p.x < -20 || p.y < -20 || p.x > size.x+20 || p.y > size.y+20){
+        Object.assign(p, this._spawn(size)); p.age = 0; continue;
+      }
+      if(!this._overWater(p.x, p.y)){
+        Object.assign(p, this._spawn(size)); p.age = 0; continue;
+      }
       const ll = this._map.containerPointToLatLng([p.x, p.y]);
-      if(!this._overWater(p.x, p.y, ll)){
-        Object.assign(p, this._spawn(size)); p.age = 0; continue;
-      }
       const cur = getCurrentField(ll.lat, ll.lng);
-      if(!cur || p.age > 42 || p.x < -20 || p.y < -20 || p.x > size.x+20 || p.y > size.y+20){
-        Object.assign(p, this._spawn(size)); p.age = 0; continue;
-      }
-      // Step length scales with drift (kt), not raw m/s — currents are ~30× slower
-      // than wind so streak length stays readable and proportional to the legend.
+      if(!cur){ Object.assign(p, this._spawn(size)); p.age = 0; continue; }
       if(cur.driftKts < CALM_KT){ continue; }
-      const stepPx = Math.min(1.1, cur.driftKts * 0.065) * zoomScale;
+      const stepPx = Math.min(1.15, cur.driftKts * 0.07) * zoomScale;
       const mag = Math.hypot(cur.u, cur.v) || 1;
       const nx = p.x + (cur.u / mag) * stepPx;
       const ny = p.y - (cur.v / mag) * stepPx;
-      ctx.strokeStyle = _currentSpeedColor(cur.driftKts);
-      ctx.lineWidth = cur.driftKts >= 2.5 ? 1.5 : (cur.driftKts >= 1 ? 1.2 : 0.9);
+      // Don't let a ripple cross onto land — respawn instead of drawing over coast.
+      if(!this._overWater(nx, ny)){ Object.assign(p, this._spawn(size)); p.age = 0; continue; }
+      ctx.strokeStyle = _currentFlowColor(cur.driftKts);
+      ctx.lineWidth = cur.driftKts >= 2.5 ? 2.4 : (cur.driftKts >= 1 ? 1.9 : 1.5);
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny); ctx.stroke();
       p.x = nx; p.y = ny;
     }
