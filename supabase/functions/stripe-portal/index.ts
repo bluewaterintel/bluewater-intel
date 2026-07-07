@@ -40,9 +40,17 @@ Deno.serve(async (req) => {
   const { data: { user }, error: uerr } = await supa.auth.getUser();
   if (uerr || !user) return json({ error: "Sign in required." }, 401);
 
-  const { data: prof } = await supa.from("profiles").select("stripe_customer_id").eq("id", user.id).maybeSingle();
+  const { data: prof } = await supa.from("profiles").select("stripe_customer_id, subscription_status").eq("id", user.id).maybeSingle();
   const customerId = prof?.stripe_customer_id as string | undefined;
-  if (!customerId) return json({ error: "No active subscription to manage." }, 400);
+  const subStatus = (prof?.subscription_status as string | undefined) ?? "none";
+  const canManage = ["active", "trialing", "past_due", "lifetime", "canceled"].includes(subStatus);
+
+  if (!customerId) {
+    return json({ error: "No billing account on file. Subscribe or start a trial first." }, 400);
+  }
+  if (!canManage) {
+    return json({ error: "You're on the free plan — no billing to manage." }, 400);
+  }
 
   try {
     const session = await stripe.billingPortal.sessions.create({
@@ -51,7 +59,13 @@ Deno.serve(async (req) => {
     });
     return json({ url: session.url });
   } catch (e) {
-    console.error("portal error", (e as Error)?.message);
-    return json({ error: "Could not open billing portal." }, 502);
+    const msg = (e as Error)?.message ?? "";
+    console.error("portal error", msg);
+    if (/no such customer/i.test(msg)) {
+      return json({
+        error: "Billing record not found. If you never subscribed, you can delete your account without canceling billing.",
+      }, 404);
+    }
+    return json({ error: "Could not open billing portal. Contact info@bluewaterintel.com for help." }, 502);
   }
 });
