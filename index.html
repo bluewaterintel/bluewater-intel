@@ -2792,7 +2792,7 @@ body.nav-open #ruler-readout{
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="Sea-surface height anomaly (SSH) from satellite altimetry — reveals warm-core eddies (red, +SSH), cold-core eddies (blue, -SSH), and Gulf Stream meanders. The same premium intel Hilton's and ROFFS sell. Source: NOAA CoastWatch RADS NRT, ~1–3 day latency.">
+    <label class="layer-row" title="Sea-surface height anomaly (SSH) from satellite altimetry — reveals warm-core eddies (red, +SSH), cold-core eddies (blue, -SSH), and Gulf Stream meanders. Arrows show geostrophic flow derived from the SSH slope — eddy circulation pattern, not actual drift direction. For real surface drift use the Ocean Currents layer. Source: NOAA CoastWatch RADS NRT, ~1–3 day latency.">
       <input type="checkbox" id="chk-altimetry" onchange="toggleLayer('altimetry')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -12585,7 +12585,13 @@ function updateOceanLegend(){
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
         </div>
         <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
-        <div style="font-size:8.5px;color:#7aa8c8;margin-top:3px;line-height:1.35"><b style="color:#bfe3f5">Color = speed</b> · flowing water shows set (direction) · amber = Gulf Stream core</div>
+        <div style="margin-top:5px;display:grid;grid-template-columns:14px 1fr;gap:4px 6px;align-items:start;font-size:11px;color:#cfe5ff;line-height:1.35">
+          <span style="justify-self:center;color:#94a3b8;font-size:13px;line-height:1">●</span><span><b style="color:#e2eaf2">Gray/faint</b> — barely moving (&lt;0.5 kt). Negligible drift.</span>
+          <span style="justify-self:center;color:#2dd4bf;font-size:13px;line-height:1">●</span><span><b style="color:#99f6e4">Teal</b> — solid current (0.5–2 kt). Note the direction; adjust your drift.</span>
+          <span style="justify-self:center;color:#67e8f9;font-size:13px;line-height:1">●</span><span><b style="color:#a5f3fc">Cyan</b> — strong current (2–3 kt). Edges concentrate bait &amp; fish.</span>
+          <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">●</span><span><b style="color:#fde68a">Amber</b> — Gulf Stream core (3+ kt). Fish the western edge, not the core.</span>
+        </div>
+        <div style="font-size:11px;color:#7aa8c8;margin-top:6px;line-height:1.4"><b style="color:#2dd4bf">Tip:</b> streaks show where the water is going (set). The edges between fast and slow water hold the most fish — same as a rip line.</div>
       </div>`);
   }
   if(layerVis.altimetry){
@@ -12606,12 +12612,12 @@ function updateOceanLegend(){
           <span>Cold / low</span><span>Flat</span><span>Warm / high</span>
         </div>
         ${statusRow}
-        <div style="margin-top:5px;display:grid;grid-template-columns:14px 1fr;gap:3px 5px;align-items:start;font-size:8.5px;color:#cfe5ff;line-height:1.3">
-          <span style="justify-self:center;color:#f87171;font-size:12px;line-height:1">●</span><span><b style="color:#f8b4b4">Red — warm water bulge</b> (Gulf Stream, warm eddies). Bait &amp; pelagics stack on the edges.</span>
-          <span style="justify-self:center;color:#60a5fa;font-size:12px;line-height:1">●</span><span><b style="color:#bcd6f8">Blue — cool depression</b> (cold-core eddy, upwelling). Nutrient-rich, good for bait.</span>
-          <span style="justify-self:center;color:#e8e8ef;font-size:12px;line-height:1">→</span><span><b style="color:#eef0f6">Arrows — current flow</b> (geostrophic). Longer = faster; fish the color breaks they cross.</span>
+        <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:4px 6px;align-items:start;font-size:11px;color:#cfe5ff;line-height:1.35">
+          <span style="justify-self:center;color:#f87171;font-size:13px;line-height:1">●</span><span><b style="color:#f8b4b4">Red — warm bulge</b> (Gulf Stream, warm-core eddy). Bait &amp; pelagics stack on the edges — not the center.</span>
+          <span style="justify-self:center;color:#60a5fa;font-size:13px;line-height:1">●</span><span><b style="color:#bcd6f8">Blue — cool depression</b> (cold-core eddy, upwelling). Nutrient-rich; good for bait and surface feeding.</span>
+          <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">→</span><span><b style="color:#eef0f6">Arrows — geostrophic flow</b> (derived from the SSH slope, not direct measurement). Shows the rotation and circulation pattern around eddies — longer = stronger gradient.</span>
         </div>
-        <div style="font-size:8px;color:#7aa8c8;margin-top:4px;line-height:1.35"><b style="color:#f0abfc">Tip:</b> the tightest red↔blue boundary is the temperature/current break — the #1 place to find fish.</div>
+        <div style="font-size:11px;color:#7aa8c8;margin-top:6px;line-height:1.4"><b style="color:#f0abfc">Key:</b> the sharpest red↔blue boundary is the temperature/current break — the #1 place to find billfish and tuna. Use the <b style="color:#2dd4bf">Ocean Currents layer</b> for actual drift direction; these arrows show eddy circulation pattern only.</div>
       </div>`);
   }
   if(layerVis.radar){
@@ -24315,25 +24321,29 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
     const precipTxt = (d.precip!=null && d.precip >= 20) ? `<span class="fc-precip">${d.precip}%</span>` : "";
     return `
       <div class="fc-row" ${i===0?'data-today="1"':''}>
-        <div class="fc-day">
-          <div class="fc-dow">${i===0?"Today":wk}</div>
-          <div class="fc-date">${md}</div>
+        <div class="fc-top">
+          <div class="fc-day">
+            <div class="fc-dow">${i===0?"Today":wk}</div>
+            <div class="fc-date">${md}</div>
+          </div>
+          <div class="fc-wx">
+            <div class="fc-wx-icon">${wx.icon}</div>
+            <div class="fc-wx-label">${wx.label}${precipTxt}</div>
+          </div>
         </div>
-        <div class="fc-wx">
-          <div class="fc-wx-icon">${wx.icon}</div>
-          <div class="fc-wx-label${wx.label.length > 12 ? " fc-wx-xlong" : (wx.label.length > 8 ? " fc-wx-long" : "")}">${wx.label}${precipTxt}</div>
-        </div>
-        <div class="fc-metric fc-air">
-          <div class="fc-metric-val">${airTxt}</div>
-          <div class="fc-metric-cap">${(d.airHiF!=null && d.airLoF!=null) ? "air hi/lo" : "air"}</div>
-        </div>
-        <div class="fc-metric">
-          <div class="fc-metric-val">${arrow}${windTxt}</div>
-          <div class="fc-metric-cap">wind${fromDir?` ${fromDir}`:""}</div>
-        </div>
-        <div class="fc-metric">
-          <div class="fc-metric-val">${waveTxt}</div>
-          <div class="fc-metric-cap">seas</div>
+        <div class="fc-metrics">
+          <div class="fc-metric fc-air">
+            <div class="fc-metric-val">${airTxt}</div>
+            <div class="fc-metric-cap">${(d.airHiF!=null && d.airLoF!=null) ? "air hi/lo" : "air"}</div>
+          </div>
+          <div class="fc-metric">
+            <div class="fc-metric-val">${arrow}${windTxt}</div>
+            <div class="fc-metric-cap">wind${fromDir?` ${fromDir}`:""}</div>
+          </div>
+          <div class="fc-metric">
+            <div class="fc-metric-val">${waveTxt}</div>
+            <div class="fc-metric-cap">seas</div>
+          </div>
         </div>
       </div>`;
   }).join("");
@@ -24394,40 +24404,36 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
 .fc-error{text-align:center;padding:26px 10px;color:#e8f4ff}
 .fc-retry{margin-top:14px;background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.5);color:#bae6fd;font-weight:700;font-size:14px;border-radius:10px;padding:9px 18px;cursor:pointer;font-family:inherit}
 .fc-retry:hover{background:rgba(56,189,248,.28)}
-.fc-table{display:flex;flex-direction:column;gap:8px}
+.fc-table{display:flex;flex-direction:column;gap:9px}
 .fc-row{
-  display:grid;grid-template-columns:54px minmax(0,1fr) auto auto auto;align-items:center;gap:10px;
+  display:flex;flex-direction:column;gap:11px;
   background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);
-  border-radius:12px;padding:11px 12px;
+  border-radius:12px;padding:13px 15px;
 }
 .fc-row[data-today]{border-color:rgba(125,211,252,.5);background:rgba(56,189,248,.10)}
-.fc-day{text-align:center}
+/* Top line: day + weather condition, with all the room the label needs */
+.fc-top{display:flex;align-items:center;gap:13px}
+.fc-day{flex-shrink:0;min-width:52px}
 .fc-dow{font-size:16px;font-weight:800;color:#f0f6ff;line-height:1.1}
 .fc-date{font-size:12.5px;color:#7d9bb8}
-/* Weather-condition column: icon + short label */
-.fc-wx{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
-.fc-wx-icon{flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center}
-.fc-wx-label{font-size:15px;font-weight:600;color:#e8f4ff;line-height:1.15;min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* Longer condition strings (e.g. "Thunderstorms", "Freezing rain") get a
-   smaller size so they still fit on a single line instead of wrapping. */
-.fc-wx-label.fc-wx-long{font-size:12.5px;letter-spacing:-.01em}
-.fc-wx-label.fc-wx-xlong{font-size:11px;letter-spacing:-.02em}
-.fc-precip{display:inline-block;margin-left:6px;font-size:12px;font-weight:700;color:#38bdf8}
-.fc-metric{text-align:right;min-width:60px}
-.fc-metric-val{font-size:19px;font-weight:800;color:#f0f6ff;line-height:1.1;white-space:nowrap}
+.fc-wx{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.fc-wx-icon{flex-shrink:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center}
+.fc-wx-label{font-size:16px;font-weight:600;color:#e8f4ff;line-height:1.2}
+.fc-precip{display:inline-block;margin-left:7px;font-size:13px;font-weight:700;color:#38bdf8}
+/* Bottom line: three metrics spread evenly across the full card width */
+.fc-metrics{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+  border-top:1px solid rgba(255,255,255,.07);padding-top:10px}
+.fc-metric{text-align:center;flex:1;min-width:0}
+.fc-metric-val{font-size:19px;font-weight:800;color:#f0f6ff;line-height:1.15;white-space:nowrap}
 .fc-unit{font-size:11px;font-weight:600;color:#9ec5e8;margin-left:1px}
 .fc-gust{font-size:11px;color:#fbbf24;font-weight:700}
 .fc-per{font-size:11px;color:#7dd3fc;font-weight:600}
-.fc-metric-cap{font-size:11.5px;color:#7d9bb8;text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
+.fc-metric-cap{font-size:11px;color:#7d9bb8;text-transform:uppercase;letter-spacing:.05em;margin-top:3px;line-height:1.2}
 .fc-arrow{display:inline-block;color:#7dd3fc;font-weight:900;margin-right:3px;font-size:15px}
 .fc-foot{margin-top:14px;font-size:12px;color:#7d9bb8;line-height:1.5;border-top:1px solid rgba(255,255,255,.08);padding-top:10px}
 @media (max-width:480px){
-  .fc-row{grid-template-columns:48px 1fr auto auto;row-gap:8px}
-  .fc-wx{grid-column:2 / 5}
-  .fc-metric:nth-of-type(3){grid-column:2}
-  .fc-metric:nth-of-type(4){grid-column:3}
-  .fc-metric:nth-of-type(5){grid-column:4}
-  .fc-day{grid-row:1 / 3}
+  .fc-wx-label{font-size:15px}
+  .fc-metric-val{font-size:17px}
 }
 </style>
 
