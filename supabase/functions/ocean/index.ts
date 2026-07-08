@@ -83,11 +83,14 @@ const CUDEM_TILE_DEG = 0.25;
 const CUDEM_NATIVE_STEP = 1 / (9 * 3600); // 1/9 arc-second in degrees
 const CUDEM_VERSIONS = ["2019v2", "2019v1", "2018v1"];
 const CUDEM_BOUNDS = { latMin: 23, latMax: 52, lngMin: -127, lngMax: -65 };
-// NOAA CoastWatch SSH altimetry (RADS NRT, ~1-3 day latency).
-// Variables: sla (m), ugos / vgos (m/s geostrophic). 0.25° global grid.
+// NOAA CoastWatch BLENDED altimetry (multi-mission NRT, ~1-2 day latency).
+// Two sibling datasets on the same 0.25° grid: sla (m) from the SSH product,
+// u_current/v_current (m/s geostrophic) from the currents product. The older
+// nesdisSSH1day (pfeg host) stopped updating in March 2026 — do not use it.
 const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP")
-  ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
-const ALTIMETRY_DATASET = "nesdisSSH1day";
+  ?? "https://coastwatch.noaa.gov/erddap/griddap";
+const ALTIMETRY_SSH_DATASET = "noaacwBLENDEDsshDaily";
+const ALTIMETRY_CUR_DATASET = "noaacwBLENDEDNRTcurrentsDaily";
 const ALTIMETRY_STEP = 0.25;
 // RTOFS (Real-Time Ocean Forecast System) — operational ESPC-D-V02 on HYCOM.
 const RTOFS_NCSS = Deno.env.get("RTOFS_NCSS")
@@ -240,11 +243,12 @@ async function fetchModelWind(lat: number, lng: number, hoursAhead = 0): Promise
   const hit = modelWindCache.get(k);
   if (hit && now - hit.atMs < 20 * 60 * 1000) return hit.p;
   const p = (async () => {
-    // gfs_hrrr: HRRR 3-km for CONUS/nearshore 0–48h, then GFS offshore/beyond
+    // gfs_seamless: HRRR 3-km where available (CONUS, 0–48h), GFS elsewhere.
+    // NOT gfs_hrrr — that is HRRR-only and returns null offshore / beyond 48h.
     const url = `${OPEN_METEO_FORECAST}?latitude=${lat}&longitude=${lng}`
       + "&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,surface_pressure"
       + "&wind_speed_unit=kn&temperature_unit=fahrenheit&timezone=UTC&forecast_days=5"
-      + "&models=gfs_hrrr";
+      + "&models=gfs_seamless";
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(7000), headers: ERDDAP_HEADERS });
       if (!r.ok) throw new Error(`open-meteo ${r.status}`);
@@ -270,7 +274,7 @@ async function fetchModelWind(lat: number, lng: number, hoursAhead = 0): Promise
         airTemp: air != null ? { value: Math.round(air * 10) / 10, observedAtMs } : { value: null, observedAtMs: null },
         pressure: trend != null ? { value: trend, observedAtMs } : { value: null, observedAtMs: null },
         barometer: pres != null ? { value: Math.round(pres * 10) / 10, observedAtMs } : { value: null, observedAtMs: null },
-        source: "open-meteo-gfs_hrrr",
+        source: "open-meteo-gfs_seamless",
       };
     } catch {
       return {
@@ -280,7 +284,7 @@ async function fetchModelWind(lat: number, lng: number, hoursAhead = 0): Promise
         airTemp: { value: null, observedAtMs: null },
         pressure: { value: null, observedAtMs: null },
         barometer: { value: null, observedAtMs: null },
-        source: "open-meteo-gfs_hrrr",
+        source: "open-meteo-gfs_seamless",
       };
     }
   })();
@@ -372,10 +376,12 @@ async function fetchWindGrid(latMin: number, latMax: number, lngMin: number, lng
     lngs.push(Math.round(j * step * 1000) / 1000);
   }
   const p = (async () => {
-    // gfs_hrrr: HRRR 3-km for CONUS/nearshore 0–48h, GFS offshore/beyond
+    // gfs_seamless: HRRR 3-km where available (CONUS, 0–48h), GFS elsewhere.
+    // NOT gfs_hrrr — that is HRRR-only and returns null offshore / beyond 48h,
+    // which blanked the whole wind layer ("real wind unavailable").
     const url = `${OPEN_METEO_FORECAST}?latitude=${lats.join(",")}&longitude=${lngs.join(",")}`
       + "&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kn&timezone=UTC&forecast_days=5"
-      + "&models=gfs_hrrr";
+      + "&models=gfs_seamless";
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(12000), headers: ERDDAP_HEADERS });
       if (!r.ok) return { stepDeg: step, rows: [] as number[][] };
@@ -392,7 +398,8 @@ async function fetchWindGrid(latMin: number, latMax: number, lngMin: number, lng
         const dir = num(e?.hourly?.wind_direction_10m?.[idx]);
         const gust = num(e?.hourly?.wind_gusts_10m?.[idx]);
         if (spd != null && dir != null) {
-          rows.push([lats[n], lngs[n], Math.round(spd * 10) / 10, Math.round(dir), gust != null ? Math.round(gust * 10) / 10 : NaN]);
+          // null (not NaN) for a missing gust — NaN doesn't survive JSON.
+          rows.push([lats[n], lngs[n], Math.round(spd * 10) / 10, Math.round(dir), gust != null ? Math.round(gust * 10) / 10 : null as unknown as number]);
         }
       }
       return { stepDeg: step, rows };
@@ -433,33 +440,50 @@ async function fetchAltimetryGrid(
     try {
       const enc = (v: number) => `(${v.toFixed(4)})`;
       const dims = `[(last)][${enc(a0)}:${enc(a1)}][${enc(o0)}:${enc(o1)}]`;
-      const url = `${ALTIMETRY_ERDDAP}/${ALTIMETRY_DATASET}.csv`
-        + `?sla${dims},ugos${dims},vgos${dims}`;
-      const r = await fetch(url, { signal: AbortSignal.timeout(15000), headers: ERDDAP_HEADERS });
-      if (!r.ok) return none;
-      const txt = await r.text();
-      const lines = txt.trim().split("\n");
-      if (lines.length < 3) return none;
-      // Line 0: column names; Line 1: units; Line 2+: data rows
+      // SLA and geostrophic u/v live in two sibling datasets on the same grid;
+      // fetch both in parallel and join on the lat/lng cell.
+      const [slaR, curR] = await Promise.all([
+        fetch(`${ALTIMETRY_ERDDAP}/${ALTIMETRY_SSH_DATASET}.csv?sla${dims}`,
+          { signal: AbortSignal.timeout(15000), headers: ERDDAP_HEADERS }),
+        fetch(`${ALTIMETRY_ERDDAP}/${ALTIMETRY_CUR_DATASET}.csv?u_current${dims},v_current${dims}`,
+          { signal: AbortSignal.timeout(15000), headers: ERDDAP_HEADERS }),
+      ]);
+      if (!slaR.ok) return none;
+      const parseCsv = (txt: string) => {
+        const lines = txt.trim().split("\n");
+        const out: { t: string; lat: number; lng: number; vals: number[] }[] = [];
+        for (let i = 2; i < lines.length; i++) {
+          const p = lines[i].split(",");
+          if (p.length < 4) continue;
+          const lat = parseFloat(p[1]), lng = parseFloat(p[2]);
+          if (!isFinite(lat) || !isFinite(lng)) continue;
+          out.push({ t: p[0].trim(), lat, lng, vals: p.slice(3).map(parseFloat) });
+        }
+        return out;
+      };
+      const slaRows = parseCsv(await slaR.text());
+      if (!slaRows.length) return none;
+      const curMap = new Map<string, number[]>();
+      if (curR.ok) {
+        for (const r of parseCsv(await curR.text())) {
+          curMap.set(`${r.lat.toFixed(3)},${r.lng.toFixed(3)}`, r.vals);
+        }
+      }
       let observedAtMs: number | null = null;
       const rows: number[][] = [];
-      for (let i = 2; i < lines.length; i++) {
-        const p = lines[i].split(",");
-        if (p.length < 6) continue;
-        const t = p[0].trim();
-        if (!observedAtMs && t) { const ms = Date.parse(t); if (isFinite(ms)) observedAtMs = ms; }
-        const lat = parseFloat(p[1]);
-        const lng = parseFloat(p[2]);
-        const sla = parseFloat(p[3]);
-        const ugos = parseFloat(p[4]);
-        const vgos = parseFloat(p[5]);
-        if (!isFinite(lat) || !isFinite(lng) || !isFinite(sla)) continue;
+      for (const r of slaRows) {
+        const sla = r.vals[0];
+        if (!isFinite(sla)) continue;
+        if (!observedAtMs && r.t) { const ms = Date.parse(r.t); if (isFinite(ms)) observedAtMs = ms; }
+        const cur = curMap.get(`${r.lat.toFixed(3)},${r.lng.toFixed(3)}`);
+        const ug = cur && isFinite(cur[0]) ? cur[0] : 0;
+        const vg = cur && isFinite(cur[1]) ? cur[1] : 0;
         rows.push([
-          Math.round(lat * 1000) / 1000,
-          Math.round(lng * 1000) / 1000,
+          Math.round(r.lat * 1000) / 1000,
+          Math.round(r.lng * 1000) / 1000,
           Math.round(sla * 10000) / 10000,
-          isFinite(ugos) ? Math.round(ugos * 10000) / 10000 : 0,
-          isFinite(vgos) ? Math.round(vgos * 10000) / 10000 : 0,
+          Math.round(ug * 10000) / 10000,
+          Math.round(vg * 10000) / 10000,
         ]);
       }
       return { stepDeg: s, observedAtMs, rows };
@@ -474,7 +498,8 @@ async function fetchAltimetryGrid(
 // ── RTOFS surface currents (ESPC-D-V02 via HYCOM NCSS, NetCDF-3 subset) ───────
 // Returns only real model values; land / fill → NaN in grids, null in point samples.
 type CurrentGrid = {
-  step: number; minLat: number; minLng: number; nLat: number; nLng: number;
+  step: number; stepLat: number; stepLng: number;
+  minLat: number; minLng: number; nLat: number; nLng: number;
   u: number[]; v: number[]; observedAtMs: number;
 };
 type CurrentPoint = { driftKts: number; setDeg: number; u: number; v: number; observedAtMs: number };
@@ -582,10 +607,16 @@ function packCurrentGrid(
   const minLat = lats[0], maxLat = lats[lats.length - 1];
   const minLng = lon360To180(lons[0]);
   const nLat = lats.length, nLng = lons.length;
-  const latStep = nLat > 1 ? (maxLat - minLat) / (nLat - 1) : RTOFS_NATIVE_STEP;
-  const lngStep = nLng > 1 ? (lon360To180(lons[nLng - 1]) - minLng) / (nLng - 1) : RTOFS_NATIVE_STEP;
-  const step = Math.round(Math.max(latStep, Math.abs(lngStep)) * 10000) / 10000;
-  return { step, minLat, minLng, nLat, nLng, u, v, observedAtMs };
+  // ESPC-D's grid is anisotropic (lat spacing ~0.04°, lon ~0.08° at CONUS
+  // latitudes), so lat and lng steps MUST be tracked separately. Collapsing
+  // them into one step displaced every sample ~2× in latitude — currents were
+  // drawn at the wrong places and the whole field appeared to shift on pan.
+  const stepLat = nLat > 1 ? Math.round((maxLat - minLat) / (nLat - 1) * 100000) / 100000 : RTOFS_NATIVE_STEP;
+  const stepLng = nLng > 1
+    ? Math.round(Math.abs(lon360To180(lons[nLng - 1]) - minLng) / (nLng - 1) * 100000) / 100000
+    : RTOFS_NATIVE_STEP;
+  const step = Math.max(stepLat, stepLng); // legacy field for older cached clients
+  return { step, stepLat, stepLng, minLat, minLng, nLat, nLng, u, v, observedAtMs };
 }
 
 const currentGridCache = new Map<string, { atMs: number; p: Promise<CurrentGrid | null> }>();
@@ -624,8 +655,9 @@ async function fetchCurrentGrid(latMin: number, latMax: number, lngMin: number, 
 
 function sampleCurrentFromGrid(grid: CurrentGrid | null, lat: number, lng: number): CurrentPoint | null {
   if (!grid || !grid.nLat || !grid.nLng) return null;
-  const fi = (lat - grid.minLat) / grid.step;
-  const fj = (lng - grid.minLng) / grid.step;
+  const sLat = grid.stepLat ?? grid.step, sLng = grid.stepLng ?? grid.step;
+  const fi = (lat - grid.minLat) / sLat;
+  const fj = (lng - grid.minLng) / sLng;
   if (fi < -0.001 || fj < -0.001 || fi > grid.nLat - 1 + 0.001 || fj > grid.nLng - 1 + 0.001) return null;
   const i0 = Math.max(0, Math.min(grid.nLat - 2, Math.floor(fi)));
   const j0 = Math.max(0, Math.min(grid.nLng - 2, Math.floor(fj)));
