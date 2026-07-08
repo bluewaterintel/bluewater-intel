@@ -9606,8 +9606,8 @@ const AltimetryLayer = L.Layer.extend({
         if(!col) continue;
         const lat=g.minLat+i*g.step;
         const lng=g.minLng+j*g.step;
-        const p0=this._map.latLngToContainerPoint([lat-step*0.5-cellPad, lng-step*0.5-cellPad]);
-        const p1=this._map.latLngToContainerPoint([lat+step*0.5+cellPad, lng+step*0.5+cellPad]);
+        const p0=this._map.latLngToContainerPoint([lat-g.step*0.5-cellPad, lng-g.step*0.5-cellPad]);
+        const p1=this._map.latLngToContainerPoint([lat+g.step*0.5+cellPad, lng+g.step*0.5+cellPad]);
         const x=Math.min(p0.x,p1.x), y=Math.min(p0.y,p1.y);
         const cw=Math.abs(p1.x-p0.x), ch=Math.abs(p1.y-p0.y);
         ctx.fillStyle=col;
