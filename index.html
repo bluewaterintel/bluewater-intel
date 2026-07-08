@@ -2206,6 +2206,14 @@ body.nav-open #ruler-readout{
 
       <div class="nav-section-label">My Tools</div>
       <div class="nav-group">
+        <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openDownloadTrip)">
+          <span class="nav-ico">⬇</span>
+          <span class="nav-row-body">
+            <span class="nav-row-title">Download My Trip</span>
+            <span class="nav-row-sub">Save bite map, brief, tides &amp; charts for offline</span>
+          </span>
+          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+        </button>
         <button type="button" class="nav-row" onclick="navOpenFromMenu(openMyCatches)">
           <span class="nav-ico">🎣</span>
           <span class="nav-row-body">
@@ -4330,6 +4338,8 @@ async function initMap(){
 
   L.control.zoom({position:"topleft"}).addTo(MAP);
   MAP.on("click",onMapClick);
+  // Live wind point-readout (speed / gusts / direction under the cursor)
+  bindWindReadout();
   // Initial scale bar draw + wire to zoom/move events
   updateScaleBar();
   MAP.on("zoomend moveend", updateScaleBar);
@@ -4466,6 +4476,14 @@ async function initMap(){
 
   // Start live data polling (no-op until a backend is connected)
   startLivePolling();
+
+  // If we opened with no connectivity and a trip is saved, load it straight onto
+  // the map — the whole point of "Download my trip".
+  try{
+    if(!navigator.onLine && typeof tripLoad === "function" && tripLoad()){
+      setTimeout(() => { if(!navigator.onLine && typeof dtOpenTrip === "function"){ dtOpenTrip(); showToast("Offline — loaded your saved trip.", "info"); } }, 900);
+    }
+  }catch(e){}
 }
 
 let livePollTimer = null;
@@ -4640,6 +4658,414 @@ async function clearTileCache(){
     btn.disabled = false;
     refreshCacheStats();
   }, 1200);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DOWNLOAD MY TRIP — offline snapshot of a run
+//
+// Captures everything a captain needs to run offshore even if cell/sat signal
+// drops: the bite map (heat grid + hotspots), the AI Captain's Brief (if one has
+// been generated), tide predictions, in-range waypoints, and the map tiles for
+// the fishing area. Stored in localStorage (JSON) + Cache Storage (tiles via the
+// service worker). When offline, the normal port/species flow transparently
+// falls back to this snapshot (see buildPredictInputs / drawWaypoints /
+// updateHeaderTide fallbacks below).
+// ════════════════════════════════════════════════════════════════════════════
+const TRIP_CACHE_KEY = "bwi.trip.v1";
+let LAST_PREDICT_INPUTS = null;   // {bbox, data, fcHour, atMs} — captured by buildPredictInputs
+let _dtBusy = false;
+
+function _tround(n, d){ if(n==null||!isFinite(n)) return n; const m=Math.pow(10,d==null?3:d); return Math.round(n*m)/m; }
+function tripLoad(){ try{ const s=localStorage.getItem(TRIP_CACHE_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function tripClear(){ try{ localStorage.removeItem(TRIP_CACHE_KEY); }catch(e){} }
+function tripSave(obj){
+  try{ localStorage.setItem(TRIP_CACHE_KEY, JSON.stringify(obj)); return true; }
+  catch(e){
+    // Quota exceeded — retry without the (largest) predictInputs payload; the
+    // cached heat grid alone still lets the bite map paint offline.
+    try{ const slim=Object.assign({},obj,{predictInputs:null}); localStorage.setItem(TRIP_CACHE_KEY, JSON.stringify(slim)); return true; }
+    catch(e2){ return false; }
+  }
+}
+
+// Does a cached trip snapshot's predictInputs bbox cover this request? Used as
+// the offline fallback source for the bite map inputs.
+function tripPredictInputsCovering(latMin, latMax, lngMin, lngMax){
+  const t = tripLoad();
+  if(!t || !t.predictInputs || !t.predictInputs.data || !t.predictInputs.bbox) return null;
+  const b = t.predictInputs.bbox, tol = 0.2;
+  if(latMin >= b.latMin-tol && latMax <= b.latMax+tol && lngMin >= b.lngMin-tol && lngMax <= b.lngMax+tol){
+    return t.predictInputs.data;
+  }
+  return null;
+}
+function tripWaypointsFor(port){ const t=tripLoad(); return (t && t.port===port && Array.isArray(t.waypoints)) ? t.waypoints : null; }
+function tripTideHeaderFor(port){ const t=tripLoad(); return (t && t.port===port && t.tides && t.tides.headerText) ? t.tides.headerText : null; }
+
+// Format the header tide string from a fetchNextTideEvent() result (mirrors the
+// live formatting in updateHeaderTide so cached + live look identical).
+function formatTideHeader(next){
+  if(!next || !next.events || !next.events.length) return null;
+  const stateTxt = next.state === "rising" ? "Rising" : next.state === "falling" ? "Falling" : next.state === "slack" ? "Slack" : "";
+  const seq = next.events.slice(0,2).map(e => `${e.type === "H" ? "High" : "Low"} ${e.timeTxt}`).join(" → ");
+  return stateTxt ? `${stateTxt} · ${seq}` : seq;
+}
+
+// Run the bite-grid compute once and resolve with the full payload.
+function dtComputeGrid(speciesId){
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (full) => { if(settled) return; settled = true; resolve(full); };
+    try { computePredictionGridAsync(speciesId, null, done); }
+    catch(e){ done(null); }
+    setTimeout(() => done(null), 60000);  // safety: never hang the download
+  });
+}
+
+async function dtFetchTides(p){
+  try{
+    if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchOcean) return null;
+    const o = await BW_OCEAN.fetchOcean(p.lat + 0.05, p.lng + 0.05);
+    const station = o && o.sources ? o.sources.tide : null;
+    if(!station) return null;
+    const next = await fetchNextTideEvent(station);
+    if(!next) return null;
+    return { station, state: next.state, events: next.events, headerText: formatTideHeader(next) };
+  }catch(e){ return null; }
+}
+
+async function dtFetchWaypoints(p){
+  try{
+    const sbc = window.BW_AUTH && window.BW_AUTH._sb;
+    if(!sbc) return [];
+    const types = (typeof wpTypeFilter !== "undefined" && wpTypeFilter) ? [...wpTypeFilter] : null;
+    const radius = (typeof wpRadiusNm !== "undefined") ? wpRadiusNm : 40;
+    const { data, error } = await sbc.rpc("pack_waypoints_within", {
+      p_port: activePort, p_lat: p.lat, p_lng: p.lng, p_radius_nm: radius, p_types: types,
+    });
+    if(error) return [];
+    // Only non-gated points carry real positions we can use offline; cap for size.
+    return (data || [])
+      .filter(r => !r.gated)
+      .slice(0, 2500)
+      .map(r => ({ name: r.name, lat: _tround(r.lat,4), lng: _tround(r.lng,4), t: r.type_code, nm: _tround(r.nm,1) }));
+  }catch(e){ return []; }
+}
+
+// Pre-fetch map tiles (zoom 6–12) for a lat/lng bounds via the service worker
+// cache. Returns {done,total}. Reports progress through onProgress(done,total).
+async function dtPrefetchTiles(bounds, onProgress){
+  if(!navigator.serviceWorker || !navigator.serviceWorker.controller) return { done:0, total:0, unavailable:true };
+  const activeBase = document.querySelector('input[name="base"]:checked')?.value || "satellite";
+  const urlBuilders = {
+    satellite: (z,x,y) => [
+      `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,
+      `https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/${z}/${y}/${x}`],
+    ocean: (z,x,y) => [
+      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/${z}/${y}/${x}`,
+      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/${z}/${y}/${x}`],
+    osm: (z,x,y) => [
+      `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`,
+      `https://tiles.openseamap.org/seamark/${z}/${x}/${y}.png`],
+  };
+  const buildUrls = urlBuilders[activeBase] || urlBuilders.satellite;
+  const latLngToTile = (lat, lng, z) => {
+    const n = Math.pow(2, z);
+    const xt = Math.floor((lng + 180) / 360 * n);
+    const latR = lat * Math.PI / 180;
+    const yt = Math.floor((1 - Math.log(Math.tan(latR) + 1/Math.cos(latR)) / Math.PI) / 2 * n);
+    return { x: xt, y: yt };
+  };
+  const tasks = [];
+  for(let z = 6; z <= 12; z++){
+    const nw = latLngToTile(bounds.n, bounds.w, z);
+    const se = latLngToTile(bounds.s, bounds.e, z);
+    if((se.x - nw.x + 1) * (se.y - nw.y + 1) > 1400) continue;  // skip runaway zooms
+    for(let x = nw.x; x <= se.x; x++)
+      for(let y = nw.y; y <= se.y; y++)
+        buildUrls(z, x, y).forEach(url => tasks.push(url));
+  }
+  let done = 0;
+  const total = tasks.length;
+  for(let i = 0; i < tasks.length; i += 8){
+    const batch = tasks.slice(i, i + 8);
+    await Promise.all(batch.map(url => fetch(url, { mode:"cors" }).then(r => { if(r.ok) done++; }).catch(() => {})));
+    if(onProgress) onProgress(Math.min(i + 8, total), total);
+  }
+  return { done, total };
+}
+
+// Compute the fishing-area bbox from the water cells actually scored (falls back
+// to the current map view). Used for tile prefetch + map framing on reload.
+function dtBboxFromGrid(heatGrid){
+  if(heatGrid && heatGrid.length){
+    let s=Infinity,n=-Infinity,w=Infinity,e=-Infinity;
+    for(const c of heatGrid){ if(c.lat<s)s=c.lat; if(c.lat>n)n=c.lat; if(c.lng<w)w=c.lng; if(c.lng>e)e=c.lng; }
+    if(isFinite(s)) return { s:s-0.1, n:n+0.1, w:w-0.1, e:e+0.1, latMin:s-0.1, latMax:n+0.1, lngMin:w-0.1, lngMax:e+0.1 };
+  }
+  const b = MAP.getBounds();
+  return { s:b.getSouth(), n:b.getNorth(), w:b.getWest(), e:b.getEast(),
+           latMin:b.getSouth(), latMax:b.getNorth(), lngMin:b.getWest(), lngMax:b.getEast() };
+}
+
+// ── Download the current trip ────────────────────────────────────────────────
+async function dtDownload(){
+  if(_dtBusy) return;
+  if(!activePort || !PORTS[activePort]){ showToast("Pick a home port first, then download.", "warning"); dtRender(); return; }
+  if(!activeSpId || activeSpId === "all"){ showToast("Pick a target species first, then download.", "warning"); dtRender(); return; }
+  if(typeof BW_PREMIUM !== "undefined" && !BW_PREMIUM){ if(typeof openPricing==="function") openPricing(); return; }
+  _dtBusy = true;
+  const p = PORTS[activePort];
+  const species = SPECIES.find(s => s.id === activeSpId);
+  const setStep = (id, state, note) => dtSetStep(id, state, note);
+
+  dtRenderProgress();
+  try{
+    // 1) Bite map (heat grid + hotspots). This also fetches + caches the ocean
+    //    inputs into LAST_PREDICT_INPUTS.
+    setStep("grid", "run", "Scoring the bite map…");
+    const full = await dtComputeGrid(activeSpId);
+    const heatGrid = (full && full.heatGrid) ? full.heatGrid : [];
+    const hotspots = (full && full.hotspots) ? full.hotspots : [];
+    if(!heatGrid.length){ setStep("grid","warn","Couldn't build the bite map (need connection)"); }
+    else setStep("grid","ok", `${heatGrid.length.toLocaleString()} cells · ${hotspots.length} hotspots`);
+
+    // 2) Tides
+    setStep("tides","run","Fetching tide predictions…");
+    const tides = await dtFetchTides(p);
+    setStep("tides", tides ? "ok" : "warn", tides ? (tides.headerText || "cached") : "No tide station nearby");
+
+    // 3) Waypoints
+    setStep("wp","run","Pulling in-range waypoints…");
+    const waypoints = await dtFetchWaypoints(p);
+    setStep("wp", waypoints.length ? "ok" : "warn", waypoints.length ? `${waypoints.length.toLocaleString()} points` : "None available");
+
+    // 4) Brief (only if one has already been generated this session)
+    setStep("brief","run","Checking for a saved brief…");
+    const brief = (typeof aiCOA === "string" && aiCOA.trim()) ? { text: aiCOA, atMs: Date.now() } : null;
+    setStep("brief", brief ? "ok" : "skip", brief ? "Included" : "Generate a brief first to include it");
+
+    // 5) Map tiles for the fishing area
+    const bbox = dtBboxFromGrid(heatGrid);
+    setStep("tiles","run","Caching map tiles…");
+    const tileRes = await dtPrefetchTiles(bbox, (d,t) => dtSetStep("tiles","run", `Caching map tiles… ${d}/${t}`));
+    setStep("tiles", tileRes.unavailable ? "warn" : "ok",
+      tileRes.unavailable ? "Tile cache not active (reload once online)" : `${tileRes.done.toLocaleString()} tiles cached`);
+
+    // Assemble + persist the snapshot.
+    const center = MAP.getCenter();
+    const snapshot = {
+      version: 1,
+      savedAtMs: Date.now(),
+      port: activePort,
+      speciesId: activeSpId,
+      speciesName: species ? species.name : activeSpId,
+      forecastHour: (typeof FORECAST_HOUR_OFFSET !== "undefined") ? (FORECAST_HOUR_OFFSET || 0) : 0,
+      mapView: { lat: _tround(center.lat,4), lng: _tround(center.lng,4), zoom: MAP.getZoom() },
+      bbox: { latMin: bbox.latMin, latMax: bbox.latMax, lngMin: bbox.lngMin, lngMax: bbox.lngMax },
+      biteGrid: {
+        heat: heatGrid.map(c => [_tround(c.lat,3), _tround(c.lng,3), _tround(c.score,3)]),
+        hotspots: hotspots.slice(0, 80).map(c => Object.assign({}, c, { lat:_tround(c.lat,4), lng:_tround(c.lng,4), score:_tround(c.score,3) })),
+        gridStep: (full && full.gridStep) || 0.1,
+        gridOrigin: full ? { lat: full.gridOriginLat, lng: full.gridOriginLng } : null,
+      },
+      predictInputs: LAST_PREDICT_INPUTS ? { bbox: LAST_PREDICT_INPUTS.bbox, data: LAST_PREDICT_INPUTS.data } : null,
+      tides,
+      waypoints,
+      brief,
+      counts: { heat: heatGrid.length, hotspots: hotspots.length, waypoints: waypoints.length, hasBrief: !!brief, hasTides: !!tides },
+    };
+    const ok = tripSave(snapshot);
+    if(typeof BWI !== "undefined") BWI.track("trip_download", { port: activePort, species: activeSpId, heat: heatGrid.length, wp: waypoints.length });
+    _dtBusy = false;
+    if(ok) showToast("Trip saved for offline use.", "success");
+    else showToast("Couldn't save — device storage is full.", "warning");
+    dtRender();
+  }catch(e){
+    _dtBusy = false;
+    if(typeof BWI !== "undefined") BWI.logError && BWI.logError("trip_download", e);
+    showToast("Download failed. Check your connection and try again.", "warning");
+    dtRender();
+  }
+}
+
+// ── Load a saved trip onto the map (works offline) ───────────────────────────
+function dtOpenTrip(){
+  const t = tripLoad();
+  if(!t){ showToast("No saved trip yet.", "warning"); return; }
+  closeDownloadTrip();
+  // Prime globals from cached ocean inputs so scoring/taps work with no network.
+  if(t.predictInputs && t.predictInputs.data){
+    const d = t.predictInputs.data;
+    try{
+      if(d.bathy) applyBathyData(d.bathy);
+      if(d.chlor) applyChlorData(d.chlor);
+      if(d.sst) applySstData(d.sst);
+      if(Array.isArray(d.field)) applyOceanField(d.field, d.fieldStepNm);
+    }catch(e){}
+  }
+  // Restore trip context. selectPort/selectSp trigger the normal draws which,
+  // when offline, fall back to this same snapshot for inputs/waypoints/tides.
+  if(t.port && PORTS[t.port] && typeof selectPort === "function") selectPort(t.port);
+  if(t.speciesId && typeof selectSp === "function") selectSp(t.speciesId);
+  if(t.mapView && MAP) MAP.setView([t.mapView.lat, t.mapView.lng], t.mapView.zoom, { animate:false });
+  // Restore the cached brief text so the Captain's Brief panel shows it offline.
+  if(t.brief && t.brief.text && typeof aiCOA !== "undefined") aiCOA = t.brief.text;
+  // Paint the cached bite grid immediately (fast path — doesn't wait on recompute).
+  dtRenderCachedGrid(t);
+  // Seed cached tides into the header so it shows without a network call.
+  if(t.tides && t.tides.headerText){
+    const el = document.getElementById("hdr-tide"); const cell = document.getElementById("hdr-tide-cell");
+    if(el){ el.textContent = t.tides.headerText; if(cell) cell.style.display=""; }
+    if(typeof _hdrTide !== "undefined") _hdrTide = { key: t.port, text: t.tides.headerText, atMs: Date.now() };
+  }
+  showToast(`Trip loaded: ${t.speciesName} out of ${t.port}.`, "success");
+}
+
+function dtRenderCachedGrid(t){
+  if(!t || !t.biteGrid || !MAP || typeof renderPrediction !== "function") return;
+  const sp = SPECIES.find(s => s.id === t.speciesId) || { id: t.speciesId, name: t.speciesName, color: "#7dd3fc" };
+  activeSpId = t.speciesId;
+  if(typeof _predictSpecies !== "undefined") _predictSpecies = sp;
+  layerVis.predict = true;
+  const chk = document.getElementById("chk-predict"); if(chk) chk.checked = true;
+  const heatGrid = (t.biteGrid.heat || []).map(a => ({ lat:a[0], lng:a[1], score:a[2] }));
+  const hotspots = (t.biteGrid.hotspots || []);
+  if(typeof _predictGrid !== "undefined") _predictGrid = hotspots;
+  if(!_predictHandlersBound && typeof bindPredictInteractionHandlers === "function"){ bindPredictInteractionHandlers(); _predictHandlersBound = true; }
+  renderPrediction(hotspots, sp, true, heatGrid, t.biteGrid.gridStep, t.biteGrid.gridOrigin || null);
+  if(typeof updateForecastSliderVisibility === "function") updateForecastSliderVisibility();
+}
+
+// ── UI: overlay open/close + render ──────────────────────────────────────────
+function openDownloadTrip(){
+  const ov = document.getElementById("dt-overlay");
+  if(!ov) return;
+  ov.style.display = "block";
+  document.body.style.overflow = "hidden";
+  dtRender();
+}
+function closeDownloadTrip(){
+  const ov = document.getElementById("dt-overlay");
+  if(!ov) return;
+  ov.style.display = "none";
+  document.body.style.overflow = "";
+}
+
+function dtFmtAge(ms){
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if(s < 60) return "just now";
+  const m = Math.floor(s/60); if(m < 60) return `${m} min ago`;
+  const h = Math.floor(m/60); if(h < 24) return `${h} hr ago`;
+  const d = Math.floor(h/24); return `${d} day${d===1?"":"s"} ago`;
+}
+
+const DT_STEPS = [
+  { id:"grid",   label:"Bite map (heat + hotspots)" },
+  { id:"tides",  label:"Tide predictions" },
+  { id:"wp",     label:"Waypoints in range" },
+  { id:"brief",  label:"AI Captain's Brief" },
+  { id:"tiles",  label:"Map tiles for the area" },
+];
+function dtStepIcon(state){
+  if(state==="ok")   return '<span style="color:#34d399">✓</span>';
+  if(state==="warn") return '<span style="color:#fbbf24">!</span>';
+  if(state==="skip") return '<span style="color:#7d9bb8">–</span>';
+  if(state==="run")  return '<span class="alti-spinner" style="border-top-color:#7dd3fc;border-color:rgba(125,211,252,.3)"></span>';
+  return '<span style="color:#3f5875">○</span>';
+}
+function dtSetStep(id, state, note){
+  const el = document.getElementById(`dt-step-${id}`);
+  if(!el) return;
+  const ic = el.querySelector(".dt-step-ic"); const nt = el.querySelector(".dt-step-note");
+  if(ic) ic.innerHTML = dtStepIcon(state);
+  if(nt && note != null) nt.textContent = note;
+}
+function dtRenderProgress(){
+  const body = document.getElementById("dt-body");
+  if(!body) return;
+  body.innerHTML = `
+    <div style="padding:18px 18px 6px">
+      <div style="font-size:13px;font-weight:700;color:#bfe3f5;margin-bottom:12px">Downloading your trip…</div>
+      ${DT_STEPS.map(s => `
+        <div id="dt-step-${s.id}" style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid rgba(107,191,234,.08)">
+          <span class="dt-step-ic" style="width:16px;text-align:center;flex-shrink:0;font-weight:800">${dtStepIcon("wait")}</span>
+          <span style="flex:1;min-width:0">
+            <span style="display:block;font-size:13px;color:#e8f4ff;font-weight:600">${s.label}</span>
+            <span class="dt-step-note" style="display:block;font-size:11px;color:#7d9bb8">waiting…</span>
+          </span>
+        </div>`).join("")}
+    </div>`;
+}
+function dtRender(){
+  const body = document.getElementById("dt-body");
+  if(!body) return;
+  if(_dtBusy){ dtRenderProgress(); return; }
+  const t = tripLoad();
+  const online = (typeof BWI !== "undefined") ? BWI.online : navigator.onLine;
+  const portReady = activePort && PORTS[activePort];
+  const spReady = activeSpId && activeSpId !== "all";
+  const spName = spReady ? ((SPECIES.find(s => s.id === activeSpId) || {}).name || activeSpId) : null;
+
+  const canDownload = portReady && spReady && online;
+  const readyLine = !online
+    ? `<div style="color:#fbbf24;font-size:12px;font-weight:600">You're offline — connect to download a new trip.</div>`
+    : (!portReady
+      ? `<div style="color:#fbbf24;font-size:12px;font-weight:600">Pick a home port to enable download.</div>`
+      : (!spReady
+        ? `<div style="color:#fbbf24;font-size:12px;font-weight:600">Pick a target species to enable download.</div>`
+        : `<div style="color:#8fd3a8;font-size:12px;font-weight:600">Ready: <b style="color:#e8f4ff">${spName}</b> out of <b style="color:#e8f4ff">${activePort}</b></div>`));
+
+  let savedBlock = "";
+  if(t){
+    const chips = [
+      t.counts.heat ? `${t.counts.heat.toLocaleString()} bite cells` : null,
+      t.counts.hotspots ? `${t.counts.hotspots} hotspots` : null,
+      t.counts.waypoints ? `${t.counts.waypoints.toLocaleString()} waypoints` : null,
+      t.counts.hasTides ? "tides" : null,
+      t.counts.hasBrief ? "brief" : null,
+    ].filter(Boolean).map(c => `<span style="display:inline-block;background:rgba(41,121,181,.22);border:1px solid rgba(125,211,252,.25);color:#bfe3f5;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:20px;margin:0 5px 5px 0">${c}</span>`).join("");
+    savedBlock = `
+      <div style="margin:8px 18px 0;padding:15px 16px;background:rgba(41,121,181,.10);border:1px solid rgba(125,211,252,.22);border-radius:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
+          <div style="font-size:15px;font-weight:800;color:#f0f6ff">${t.speciesName} · ${t.port}</div>
+          <span style="font-size:10px;color:#7d9bb8;white-space:nowrap">saved ${dtFmtAge(t.savedAtMs)}</span>
+        </div>
+        <div style="margin:9px 0 4px">${chips || '<span style="color:#7d9bb8;font-size:12px">Snapshot saved</span>'}</div>
+        <div style="display:flex;gap:9px;margin-top:12px;flex-wrap:wrap">
+          <button onclick="dtOpenTrip()" style="flex:1;min-width:140px;background:linear-gradient(180deg,#2f8fd6,#2470b0);border:none;color:#fff;font-weight:700;font-size:13px;padding:11px 14px;border-radius:10px;cursor:pointer;font-family:inherit">Open this trip</button>
+          <button onclick="dtConfirmClear()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,120,120,.35);color:#fca5a5;font-weight:600;font-size:13px;padding:11px 16px;border-radius:10px;cursor:pointer;font-family:inherit">Delete</button>
+        </div>
+      </div>`;
+  }
+
+  body.innerHTML = `
+    <div style="padding:18px 18px 4px">
+      <div style="font-size:12.5px;color:#9ec5e8;line-height:1.55;margin-bottom:14px">
+        Save your bite map, brief, tides, waypoints, and chart tiles to this device so the run keeps working if you lose signal offshore.
+      </div>
+      ${readyLine}
+      <button onclick="dtDownload()" ${canDownload ? "" : "disabled"} style="
+        width:100%;margin-top:13px;padding:14px;border-radius:12px;border:none;cursor:${canDownload?"pointer":"not-allowed"};
+        font-family:inherit;font-size:14px;font-weight:800;letter-spacing:.02em;
+        color:${canDownload?"#fff":"#5d7690"};
+        background:${canDownload?"linear-gradient(180deg,#2f8fd6,#2470b0)":"rgba(255,255,255,.05)"};
+        box-shadow:${canDownload?"0 6px 18px rgba(36,112,176,.4)":"none"};">
+        ${t ? "⬇  Update this trip" : "⬇  Download this trip"}
+      </button>
+    </div>
+    ${savedBlock}
+    <div style="padding:16px 18px 26px">
+      <div style="font-size:10px;color:#5d7690;line-height:1.5;border-top:1px solid rgba(107,191,234,.08);padding-top:12px">
+        Stored privately on this device. Tiles use your offline map cache; data uses local storage. Open a trip anytime — even in airplane mode — from this screen.
+      </div>
+    </div>`;
+}
+function dtConfirmClear(){
+  if(!confirm("Delete the saved trip from this device?")) return;
+  tripClear();
+  showToast("Saved trip deleted.", "info");
+  dtRender();
 }
 
 // ── DIAGNOSTICS & ANALYTICS OPT-OUT ──────────────────────────────────────────
@@ -6170,11 +6596,19 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
     try { data = await BW_OCEAN.fetchPredictInputs(latMin, latMax, lngMin, lngMax, 90, fcHour); }
     catch(e){ data = null; }
   }
+  // Offline / fetch-failure fallback: reuse a saved trip snapshot's inputs if it
+  // covers this bbox, so the bite map still builds with no connectivity.
+  if((!data || !Array.isArray(data.field)) && typeof tripPredictInputsCovering === "function"){
+    const cached = tripPredictInputsCovering(latMin, latMax, lngMin, lngMax);
+    if(cached && Array.isArray(cached.field)) data = cached;
+  }
   if(data && Array.isArray(data.field)){
     applyBathyData(data.bathy);
     applyChlorData(data.chlor);
     applySstData(data.sst);
     applyOceanField(data.field, data.fieldStepNm);
+    // Remember the inputs so "Download my trip" can snapshot them for offline use.
+    LAST_PREDICT_INPUTS = { bbox: { latMin, latMax, lngMin, lngMax }, data, fcHour, atMs: Date.now() };
     return;
   }
   // Fallback: separate requests (older path; per-point SST in the field).
@@ -9535,6 +9969,20 @@ function _altimetryColor(slaM){
   }
 }
 
+// Build the altimetry request box: modest padding for smooth panning, but the
+// total span is capped because ERDDAP's blended-altimetry griddap store returns
+// 502s / read-timeouts on large-area reads. When the view is wider than the cap
+// we request a box centered on the view (altimetry covers the middle of screen).
+const ALTI_MAX_LAT_SPAN = 8;   // degrees
+const ALTI_MAX_LNG_SPAN = 14;  // degrees
+function altimetryRequestBox(map){
+  const b=map.getBounds().pad(0.2);
+  let s=b.getSouth(), n=b.getNorth(), w=b.getWest(), e=b.getEast();
+  const latC=(s+n)/2, lngC=(w+e)/2;
+  if(n-s>ALTI_MAX_LAT_SPAN){ s=latC-ALTI_MAX_LAT_SPAN/2; n=latC+ALTI_MAX_LAT_SPAN/2; }
+  if(e-w>ALTI_MAX_LNG_SPAN){ w=lngC-ALTI_MAX_LNG_SPAN/2; e=lngC+ALTI_MAX_LNG_SPAN/2; }
+  return {s,n,w,e};
+}
 const AltimetryLayer = L.Layer.extend({
   onAdd: function(map){
     this._map=map;
@@ -9565,11 +10013,14 @@ const AltimetryLayer = L.Layer.extend({
     L.DomUtil.setPosition(this._canvas,tl);
     this._canvas.width=size.x; this._canvas.height=size.y;
     this._draw();
-    // Refetch if the view has grown outside the cached grid
+    // Refetch if the (capped) request box for the current view isn't already
+    // covered by the cached grid. Comparing against the capped box — not the raw
+    // view bounds — avoids endless refetches when zoomed out past the span cap.
     const g=ALTIMETRY_GRID;
-    const b=this._map.getBounds();
-    if(!g||b.getSouth()<g.bounds.s+0.001||b.getNorth()>g.bounds.n-0.001||
-       b.getWest()<g.bounds.w+0.001||b.getEast()>g.bounds.e-0.001){
+    const bx=altimetryRequestBox(this._map);
+    const tol=g?g.step:0.25;
+    if(!g||bx.s<g.bounds.s-tol||bx.n>g.bounds.n+tol||
+       bx.w<g.bounds.w-tol||bx.e>g.bounds.e+tol){
       this._requestData();
     }
   },
@@ -9577,8 +10028,9 @@ const AltimetryLayer = L.Layer.extend({
     if(!layerVis.altimetry||typeof BW_OCEAN==="undefined"||!BW_OCEAN.fetchAltimetryGrid||!MAP) return;
     const seq=++_altiFetchSeq;
     ALTIMETRY_STATUS="loading";
-    const b=MAP.getBounds().pad(0.8);
-    BW_OCEAN.fetchAltimetryGrid(b.getSouth(),b.getNorth(),b.getWest(),b.getEast())
+    if(typeof updateOceanLegend==="function") updateOceanLegend();
+    const bx=altimetryRequestBox(MAP);
+    BW_OCEAN.fetchAltimetryGrid(bx.s,bx.n,bx.w,bx.e)
       .then(data=>{
         if(seq!==_altiFetchSeq||!layerVis.altimetry) return;
         applyAltimetryGrid(data);
@@ -9650,8 +10102,8 @@ async function buildAltimetryForMap(){
   if(!MAP||!BW_OCEAN||!BW_OCEAN.fetchAltimetryGrid) return;
   const seq=++_altiFetchSeq;
   ALTIMETRY_STATUS="loading";
-  const b=MAP.getBounds().pad(0.8);
-  const data=await BW_OCEAN.fetchAltimetryGrid(b.getSouth(),b.getNorth(),b.getWest(),b.getEast());
+  const bx=altimetryRequestBox(MAP);
+  const data=await BW_OCEAN.fetchAltimetryGrid(bx.s,bx.n,bx.w,bx.e);
   if(seq!==_altiFetchSeq) return;
   applyAltimetryGrid(data);
   ALTIMETRY_STATUS=ALTIMETRY_GRID?"ready":"unavailable";
@@ -9741,6 +10193,52 @@ function bindPredictInteractionHandlers(){
     if(cell) showPredictionExplainer(cell, _predictSpecies);
   });
 }
+
+// ── Live wind readout ────────────────────────────────────────────────────────
+// While the animated wind layer is on, follow the cursor with a compact pill
+// showing wind speed, GUSTS, and compass direction at that point — the same
+// point-readout the big weather apps (Windy/PredictWind) lead with. Gust data is
+// already in WIND_GRID; this just surfaces it where a captain reads it.
+let _windReadoutBound = false;
+let _windReadoutEl = null;
+function bindWindReadout(){
+  if(_windReadoutBound || !MAP) return;
+  _windReadoutBound = true;
+  const hide = () => { if(_windReadoutEl) _windReadoutEl.style.display = "none"; };
+  let _wmScheduled = false, _wmEv = null;
+  MAP.on('mousemove', (e) => {
+    if(!layerVis.wind || !WIND_GRID){ hide(); return; }
+    _wmEv = e;
+    if(_wmScheduled) return;
+    _wmScheduled = true;
+    requestAnimationFrame(() => {
+      _wmScheduled = false;
+      if(!layerVis.wind || !WIND_GRID || !_wmEv){ hide(); return; }
+      const wind = getWindField(_wmEv.latlng.lat, _wmEv.latlng.lng);
+      if(!wind || wind.speedKts == null){ hide(); return; }
+      if(!_windReadoutEl){
+        _windReadoutEl = document.createElement("div");
+        _windReadoutEl.id = "wind-readout";
+        _windReadoutEl.style.cssText = "position:absolute;z-index:520;pointer-events:none;background:rgba(8,20,38,.92);border:1px solid rgba(125,211,252,.4);border-radius:9px;padding:5px 9px;box-shadow:0 3px 12px rgba(0,0,0,.5);font:600 12px 'Segoe UI',Arial,sans-serif;color:#e8f4ff;white-space:nowrap;transform:translate(-50%,calc(-100% - 14px))";
+        MAP.getContainer().appendChild(_windReadoutEl);
+      }
+      const from = (typeof bwiCompass16==="function") ? bwiCompass16(wind.dirDeg) : Math.round(wind.dirDeg)+"°";
+      const spd = Math.round(wind.speedKts);
+      const gust = wind.gustKts != null ? Math.round(wind.gustKts) : null;
+      const gustBadge = (gust != null && gust > spd)
+        ? `<span style="color:#fca5a5"> · G${gust}</span>` : "";
+      const arrow = `<span style="display:inline-block;transform:rotate(${wind.dirDeg}deg);color:#7dd3fc;font-size:13px;line-height:1">↓</span>`;
+      _windReadoutEl.innerHTML = `${arrow} <b>${from}</b> ${spd}<span style="opacity:.65;font-weight:400">kt</span>${gustBadge}`;
+      const pt = _wmEv.containerPoint;
+      _windReadoutEl.style.left = pt.x + "px";
+      _windReadoutEl.style.top = pt.y + "px";
+      _windReadoutEl.style.display = "block";
+    });
+  });
+  MAP.getContainer().addEventListener("mouseleave", hide);
+  MAP.on('movestart zoomstart', hide);
+}
+function hideWindReadout(){ if(_windReadoutEl) _windReadoutEl.style.display = "none"; }
 
 // When the user explicitly turns the heat map OFF, auto-enable (ensurePredictLayerOn)
 // must not silently turn it back on. This is the "uncheck = hard stop" contract.
@@ -12036,7 +12534,7 @@ function updateOceanLegend(){
   const el = document.getElementById("ocean-legend");
   const content = document.getElementById("ocean-legend-content");
   if(!el || !content) return;
-  if(!layerVis.sst && !layerVis.chlor && !layerVis.wind && !layerVis.radar && !layerVis.currents){
+  if(!layerVis.sst && !layerVis.chlor && !layerVis.wind && !layerVis.radar && !layerVis.currents && !layerVis.altimetry){
     el.style.display = "none";
     updateBiteBanner();
     return;
@@ -12075,7 +12573,7 @@ function updateOceanLegend(){
           ${[0,5,10,15,20,25,30,35,40].map((v,i,arr)=>{const pct=v/40*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===40?'40+':v}</span>`;}).join('')}
         </div>
         <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
-        <div style="font-size:8.5px;color:#7aa8c8;margin-top:3px;line-height:1.35"><b style="color:#bfe3f5">GFS/HRRR blend</b> · HRRR 3 km nearshore &lt;48 h · includes gusts</div>
+        <div style="font-size:8.5px;color:#7aa8c8;margin-top:3px;line-height:1.35"><b style="color:#bfe3f5">GFS/HRRR blend</b> · HRRR 3 km nearshore &lt;48 h · <b style="color:#bfe3f5">hover the map</b> for speed + gusts</div>
       </div>`);
   }
   if(layerVis.currents){
@@ -12091,18 +12589,29 @@ function updateOceanLegend(){
       </div>`);
   }
   if(layerVis.altimetry){
+    const loading = ALTIMETRY_STATUS === "loading" || (!ALTIMETRY_GRID && ALTIMETRY_STATUS !== "unavailable");
     const altiDate = ALTIMETRY_GRID&&ALTIMETRY_GRID.observedAtMs
       ? new Date(ALTIMETRY_GRID.observedAtMs).toLocaleDateString("en-US",{month:"short",day:"numeric"})
-      : (ALTIMETRY_STATUS==="loading"?"loading…":"—");
+      : "—";
+    const statusRow = loading
+      ? `<div style="display:flex;align-items:center;gap:6px;font-size:9px;color:#f0abfc;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em"><span class="alti-spinner"></span>Loading altimetry…</div>`
+      : (ALTIMETRY_STATUS==="unavailable"
+        ? `<div style="font-size:8.5px;color:#f8a5a5;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Altimetry unavailable</div>`
+        : `<div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">NOAA altimetry · ${altiDate}</div>`);
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:11px;font-weight:700;color:#e879f9;letter-spacing:.08em;margin-bottom:2px">SSH ANOMALY (m)</div>
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1e3a8a 0%,#38bdf8 30%,rgba(30,30,40,0.4) 50%,#f87171 70%,#7f1d1d 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="font-size:11px;font-weight:700;color:#e879f9;letter-spacing:.08em;margin-bottom:2px">SEA-SURFACE HEIGHT</div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1e3a8a 0%,#38bdf8 30%,rgba(60,60,75,0.55) 50%,#f87171 70%,#7f1d1d 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:9px;color:#cfe5ff;margin-top:2px;font-weight:600">
-          <span>−0.3 cold eddy</span><span>0</span><span>+0.3 warm eddy</span>
+          <span>Cold / low</span><span>Flat</span><span>Warm / high</span>
         </div>
-        <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">RADS NRT · ${altiDate}</div>
-        <div style="font-size:8.5px;color:#7aa8c8;margin-top:3px;line-height:1.35"><b style="color:#f0abfc">Arrows = geostrophic flow</b> · red/warm = Gulf Stream + warm eddies · blue/cold = cyclonic eddies</div>
+        ${statusRow}
+        <div style="margin-top:5px;display:grid;grid-template-columns:14px 1fr;gap:3px 5px;align-items:start;font-size:8.5px;color:#cfe5ff;line-height:1.3">
+          <span style="justify-self:center;color:#f87171;font-size:12px;line-height:1">●</span><span><b style="color:#f8b4b4">Red — warm water bulge</b> (Gulf Stream, warm eddies). Bait &amp; pelagics stack on the edges.</span>
+          <span style="justify-self:center;color:#60a5fa;font-size:12px;line-height:1">●</span><span><b style="color:#bcd6f8">Blue — cool depression</b> (cold-core eddy, upwelling). Nutrient-rich, good for bait.</span>
+          <span style="justify-self:center;color:#e8e8ef;font-size:12px;line-height:1">→</span><span><b style="color:#eef0f6">Arrows — current flow</b> (geostrophic). Longer = faster; fish the color breaks they cross.</span>
+        </div>
+        <div style="font-size:8px;color:#7aa8c8;margin-top:4px;line-height:1.35"><b style="color:#f0abfc">Tip:</b> the tightest red↔blue boundary is the temperature/current break — the #1 place to find fish.</div>
       </div>`);
   }
   if(layerVis.radar){
@@ -12452,6 +12961,7 @@ function drawWind(){
     if(MAP && !MAP.hasLayer(windLayer)) windLayer.addTo(MAP);
   } else {
     if(windLayer && MAP && MAP.hasLayer(windLayer)) MAP.removeLayer(windLayer);
+    if(typeof hideWindReadout === "function") hideWindReadout();
   }
   updateWindForecastSliderVisibility();
   updateOceanLegend();   // show/hide the wind-speed scale in the top legend
@@ -12945,7 +13455,14 @@ async function drawWaypoints(){
       fullCount = rows.length;
     }
   } catch(e){
-    rows = []; status = "unavailable";
+    // Offline fallback: use a saved trip snapshot's waypoints for this port.
+    const cachedWp = (typeof tripWaypointsFor === "function") ? tripWaypointsFor(activePort) : null;
+    if(cachedWp && cachedWp.length){
+      rows = cachedWp.map(w => ({ name:w.name, lat:w.lat, lng:w.lng, t:w.t, nm:w.nm, gated:false }));
+      fullCount = rows.length; status = "cached";
+    } else {
+      rows = []; status = "unavailable";
+    }
   }
   // A newer draw started while we were awaiting — discard this stale result.
   if(seq !== _wpDrawSeq) return;
@@ -14386,10 +14903,18 @@ async function updateHeaderTide(){
         text = stateTxt ? `${stateTxt} · ${seq}` : seq;
       }
     }
+    // If the live fetch produced nothing (offline/station gap) but we have a
+    // saved trip for this port, fall back to its cached tide string.
+    if((!text || text === "—") && typeof tripTideHeaderFor === "function"){
+      const cachedTide = tripTideHeaderFor(portKey);
+      if(cachedTide) text = cachedTide;
+    }
     el.textContent = text;
     _hdrTide = { key: portKey, text, atMs: Date.now() };
   } catch(e){
-    el.textContent = "—";
+    const cachedTide = (typeof tripTideHeaderFor === "function") ? tripTideHeaderFor(portKey) : null;
+    el.textContent = cachedTide || "—";
+    if(cachedTide) _hdrTide = { key: portKey, text: cachedTide, atMs: Date.now() };
   }
 }
 
@@ -14474,7 +14999,7 @@ function ensurePredictLayerOn(){
 // ════════════════════════════════════════════════════════════════════════════
 // Menu items that require a Pro subscription (Model B). Free users see them
 // with a PRO badge; tapping opens the upgrade modal instead of the feature.
-const PRO_MENU_FNS = ["openOcean", "openReports", "openWaypoints"];
+const PRO_MENU_FNS = ["openOcean", "openReports", "openWaypoints", "openDownloadTrip"];
 function navOpenFromMenu(openFn){
   closeNav();
   // If this is a Pro feature and the user isn't entitled, show the upgrade
@@ -21955,6 +22480,34 @@ function knRenderData(){
 <!-- ═══════════════════════════════════════════════════════════════════════════
      WAYPOINTS & STRUCTURE — curated public POIs + user uploads
      ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- ── DOWNLOAD MY TRIP overlay ── -->
+<div id="dt-overlay" style="
+  display:none;position:fixed;inset:0;z-index:5000;
+  background:#0a1a2e;color:#e8f4ff;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  font-family:'Segoe UI',Arial,sans-serif;
+">
+  <div style="
+    position:sticky;top:0;z-index:10;
+    background:linear-gradient(180deg,#0a1a2e,#0f2444);
+    border-bottom:1px solid rgba(107,191,234,.18);
+    padding:12px 16px;display:flex;align-items:center;gap:12px;
+    box-shadow:0 4px 16px rgba(0,0,0,.5);
+  ">
+    <button onclick="navBack(closeDownloadTrip)" aria-label="Back to menu" style="
+      width:38px;height:38px;flex-shrink:0;
+      background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
+      color:#cfe5ff;border-radius:10px;
+      display:flex;align-items:center;justify-content:center;cursor:pointer;
+    "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⬇ Download My Trip</div>
+      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Offline bite map · brief · tides · waypoints · charts</div>
+    </div>
+  </div>
+  <div id="dt-body" style="max-width:560px;margin:0 auto"></div>
+</div>
+
 <div id="wp-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
@@ -23837,6 +24390,7 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
 .fc-loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:34px 0;color:#cfe5ff;font-size:14px}
 .fc-spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(125,211,252,.25);border-top-color:#7dd3fc;animation:fc-spin .8s linear infinite}
 @keyframes fc-spin{to{transform:rotate(360deg)}}
+.alti-spinner{width:10px;height:10px;border-radius:50%;border:2px solid rgba(240,171,252,.3);border-top-color:#e879f9;display:inline-block;animation:fc-spin .7s linear infinite;flex:0 0 auto}
 .fc-error{text-align:center;padding:26px 10px;color:#e8f4ff}
 .fc-retry{margin-top:14px;background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.5);color:#bae6fd;font-weight:700;font-size:14px;border-radius:10px;padding:9px 18px;cursor:pointer;font-family:inherit}
 .fc-retry:hover{background:rgba(56,189,248,.28)}

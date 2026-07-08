@@ -436,6 +436,19 @@ async function fetchAltimetryGrid(
   const hit = altimetryGridCache.get(key);
   if (hit && now - hit.atMs < 6 * 60 * 60 * 1000) return hit.p; // 6h cache (daily product)
   const none: AltimetryGrid = { stepDeg: s, observedAtMs: null, rows: [] };
+  // ERDDAP griddap can 502 or read-timeout intermittently on the upstream store,
+  // especially for larger areas. Retry the pair once before giving up.
+  const fetchErddap = async (url: string): Promise<Response | null> => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetch(url, { signal: AbortSignal.timeout(25000), headers: ERDDAP_HEADERS });
+        if (r.ok) return r;
+        // 5xx from the ERDDAP proxy is worth a retry; 4xx is not.
+        if (r.status < 500) return r;
+      } catch { /* network/timeout — retry */ }
+    }
+    return null;
+  };
   const p = (async (): Promise<AltimetryGrid> => {
     try {
       const enc = (v: number) => `(${v.toFixed(4)})`;
@@ -443,12 +456,10 @@ async function fetchAltimetryGrid(
       // SLA and geostrophic u/v live in two sibling datasets on the same grid;
       // fetch both in parallel and join on the lat/lng cell.
       const [slaR, curR] = await Promise.all([
-        fetch(`${ALTIMETRY_ERDDAP}/${ALTIMETRY_SSH_DATASET}.csv?sla${dims}`,
-          { signal: AbortSignal.timeout(15000), headers: ERDDAP_HEADERS }),
-        fetch(`${ALTIMETRY_ERDDAP}/${ALTIMETRY_CUR_DATASET}.csv?u_current${dims},v_current${dims}`,
-          { signal: AbortSignal.timeout(15000), headers: ERDDAP_HEADERS }),
+        fetchErddap(`${ALTIMETRY_ERDDAP}/${ALTIMETRY_SSH_DATASET}.csv?sla${dims}`),
+        fetchErddap(`${ALTIMETRY_ERDDAP}/${ALTIMETRY_CUR_DATASET}.csv?u_current${dims},v_current${dims}`),
       ]);
-      if (!slaR.ok) return none;
+      if (!slaR || !slaR.ok) return none;
       const parseCsv = (txt: string) => {
         const lines = txt.trim().split("\n");
         const out: { t: string; lat: number; lng: number; vals: number[] }[] = [];
@@ -464,7 +475,7 @@ async function fetchAltimetryGrid(
       const slaRows = parseCsv(await slaR.text());
       if (!slaRows.length) return none;
       const curMap = new Map<string, number[]>();
-      if (curR.ok) {
+      if (curR && curR.ok) {
         for (const r of parseCsv(await curR.text())) {
           curMap.set(`${r.lat.toFixed(3)},${r.lng.toFixed(3)}`, r.vals);
         }
@@ -491,6 +502,12 @@ async function fetchAltimetryGrid(
       return none;
     }
   })();
+  // Only cache a successful, non-empty grid. Caching an empty/failed result
+  // would poison this box for the full 6h TTL after a single ERDDAP hiccup.
+  p.then((grid) => {
+    if (grid.rows.length > 0) altimetryGridCache.set(key, { atMs: now, p });
+    else altimetryGridCache.delete(key);
+  }).catch(() => altimetryGridCache.delete(key));
   altimetryGridCache.set(key, { atMs: now, p });
   return p;
 }
