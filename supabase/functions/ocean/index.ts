@@ -423,15 +423,46 @@ type AltimetryGrid = {
   rows: number[][];  // [lat, lng, sla_m, ugos_ms, vgos_ms]
 };
 const altimetryGridCache = new Map<string, { atMs: number; p: Promise<AltimetryGrid> }>();
+let altiLatestTimeCache: { atMs: number; iso: string } | null = null;
+// CoastWatch ERDDAP ignores relative (last-N) on this dataset — resolve the
+// freshest pass once, then step back with explicit ISO timestamps.
+async function getAltiLatestTimeIso(
+  fetchErddap: (url: string) => Promise<Response | null>,
+): Promise<string | null> {
+  const now = Date.now();
+  if (altiLatestTimeCache && now - altiLatestTimeCache.atMs < 60 * 60 * 1000) {
+    return altiLatestTimeCache.iso;
+  }
+  const r = await fetchErddap(
+    `${ALTIMETRY_ERDDAP}/${ALTIMETRY_SSH_DATASET}.csv?sla[(last)][(35.0000)][(-75.0000)]`,
+  );
+  if (!r || !r.ok) return null;
+  const lines = (await r.text()).trim().split("\n");
+  if (lines.length < 3) return null;
+  const iso = lines[2].split(",")[0]?.trim();
+  if (!iso) return null;
+  altiLatestTimeCache = { atMs: now, iso };
+  return iso;
+}
+function altiTimeConstraint(daysBack: number, latestIso: string | null): string {
+  if (daysBack <= 0) return "[(last)]";
+  if (!latestIso) return `[(last-${daysBack})]`; // fallback if probe fails
+  const d = new Date(latestIso);
+  if (!isFinite(d.getTime())) return `[(last-${daysBack})]`;
+  d.setUTCDate(d.getUTCDate() - daysBack);
+  return `[(${d.toISOString().replace(/\.\d{3}Z$/, "Z")})]`;
+}
 async function fetchAltimetryGrid(
   latMin: number, latMax: number, lngMin: number, lngMax: number,
+  daysBack = 0,
 ): Promise<AltimetryGrid> {
   const s = ALTIMETRY_STEP;
+  const back = Math.max(0, Math.min(6, Math.round(daysBack)));
   const a0 = Math.floor(Math.min(latMin, latMax) / s) * s;
   const a1 = Math.ceil(Math.max(latMin, latMax) / s) * s;
   const o0 = Math.floor(Math.min(lngMin, lngMax) / s) * s;
   const o1 = Math.ceil(Math.max(lngMin, lngMax) / s) * s;
-  const key = `${a0.toFixed(3)},${a1.toFixed(3)},${o0.toFixed(3)},${o1.toFixed(3)}`;
+  const key = `${a0.toFixed(3)},${a1.toFixed(3)},${o0.toFixed(3)},${o1.toFixed(3)},${back}`;
   const now = Date.now();
   const hit = altimetryGridCache.get(key);
   if (hit && now - hit.atMs < 6 * 60 * 60 * 1000) return hit.p; // 6h cache (daily product)
@@ -452,7 +483,9 @@ async function fetchAltimetryGrid(
   const p = (async (): Promise<AltimetryGrid> => {
     try {
       const enc = (v: number) => `(${v.toFixed(4)})`;
-      const dims = `[(last)][${enc(a0)}:${enc(a1)}][${enc(o0)}:${enc(o1)}]`;
+      const latestIso = back > 0 ? await getAltiLatestTimeIso(fetchErddap) : null;
+      const timeSel = altiTimeConstraint(back, latestIso);
+      const dims = `${timeSel}[${enc(a0)}:${enc(a1)}][${enc(o0)}:${enc(o1)}]`;
       // SLA and geostrophic u/v live in two sibling datasets on the same grid;
       // fetch both in parallel and join on the lat/lng cell.
       const [slaR, curR] = await Promise.all([
@@ -1472,7 +1505,8 @@ export const handler = async (req: Request): Promise<Response> => {
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
       return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
     }
-    const out = await fetchAltimetryGrid(latMin, latMax, lngMin, lngMax);
+    const daysBack = Math.max(0, Math.min(6, Math.round(num(u.searchParams.get("daysBack")) ?? 0)));
+    const out = await fetchAltimetryGrid(latMin, latMax, lngMin, lngMax, daysBack);
     return new Response(JSON.stringify(out), {
       headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" },
     });

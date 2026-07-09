@@ -223,8 +223,9 @@
   }
 
   const altimetryGridCache = new Map();
-  async function fetchAltimetryGrid(latMin, latMax, lngMin, lngMax) {
-    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}`;
+  async function fetchAltimetryGrid(latMin, latMax, lngMin, lngMax, daysBack = 0) {
+    const back = Math.max(0, Math.min(6, daysBack | 0));
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${back}`;
     const hit = altimetryGridCache.get(k);
     if (hit && Date.now() - hit.atMs < 6 * 60 * 60 * 1000) return hit.data;
     try {
@@ -232,6 +233,7 @@
         mode: "altimetrygrid",
         latMin: String(latMin), latMax: String(latMax),
         lngMin: String(lngMin), lngMax: String(lngMax),
+        daysBack: String(back),
       });
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},

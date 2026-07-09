@@ -16,7 +16,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bw-auth.js"></script>
 <script src="bw-freshness.js"></script>
-<script src="bw-ocean.js?v=20260707b"></script>
+<script src="bw-ocean.js?v=20260708a"></script>
 <script src="bw-wind.js"></script>
 <script src="bw-breaks.js?v=20260708"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -445,6 +445,13 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   #radar-loop-time{ font-size:12px !important; width:auto !important; flex:0 0 auto !important; min-width:38px !important; }
   /* satellite date control — width/anchor only; JS sets bottom for stacking */
   #sat-date-control{
+    width:calc(100vw - 20px) !important;
+    left:10px !important;
+    right:10px !important;
+    transform:none !important;
+  }
+  /* altimetry date control — same footprint as satellite date bar */
+  #alti-date-control{
     width:calc(100vw - 20px) !important;
     left:10px !important;
     right:10px !important;
@@ -2517,6 +2524,52 @@ body.nav-open #ruler-readout{
       <span>Latest →</span>
     </div>
   </div>
+
+  <!-- ALTIMETRY DATE CONTROL — step through the last 7 daily SSH passes to read
+       eddy drift. Manual slider + prev/next only (no autoplay). Shown when the
+       Altimetry / SSH layer is on. Magenta accent matches the break highlights. -->
+  <div id="alti-date-control" style="
+    display:none;position:absolute;
+    bottom:80px;left:50%;transform:translateX(-50%);z-index:500;
+    background:rgba(10,22,40,.94);
+    border:1px solid rgba(236,72,153,.42);
+    border-radius:14px;
+    padding:10px 16px 8px;
+    font-family:'Segoe UI',Arial,sans-serif;
+    color:#e8f4ff;
+    box-shadow:0 4px 14px rgba(0,0,0,.55);
+    width:min(520px, calc(100vw - 32px));
+  ">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px">
+      <div style="font-size:9px;color:#f472b6;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Altimetry Date</div>
+      <div id="alti-date-display" style="font-size:11px;color:#fbcfe8;font-weight:700">Latest pass</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button id="alti-day-older" type="button" onclick="stepAltiDayOlder()" title="One day older" style="
+        flex:0 0 auto;background:rgba(236,72,153,.14);border:1px solid rgba(236,72,153,.45);
+        color:#fbcfe8;font-weight:700;font-size:14px;border-radius:8px;
+        padding:4px 10px;cursor:pointer;font-family:inherit;line-height:1;">◀</button>
+      <input id="alti-date-input" type="range" min="0" max="6" step="1" value="6" style="
+        flex:1 1 auto;
+        -webkit-appearance:none;
+        appearance:none;
+        height:6px;
+        border-radius:3px;
+        background:linear-gradient(90deg,#1c3a5e 0%,#ec4899 100%);
+        outline:none;
+        margin:4px 0 2px;
+      " oninput="onAltiSliderInput(this.value)">
+      <button id="alti-day-newer" type="button" onclick="stepAltiDayNewer()" title="One day newer" style="
+        flex:0 0 auto;background:rgba(236,72,153,.14);border:1px solid rgba(236,72,153,.45);
+        color:#fbcfe8;font-weight:700;font-size:14px;border-radius:8px;
+        padding:4px 10px;cursor:pointer;font-family:inherit;line-height:1;">▶</button>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;color:#d8a8c8;margin-top:4px">
+      <span>6 days ago</span>
+      <span style="color:#9ec5e8;font-size:9px">Faint magenta = prior day · arrow = drift</span>
+      <span>Latest →</span>
+    </div>
+  </div>
 </div>
 
 <!-- RADAR LOOP CONTROL — animate the past ~4 hours of NOAA radar to read storm
@@ -4401,6 +4454,18 @@ async function initMap(){
     satEl.addEventListener("touchmove",    stopAllSat, {passive: true});
     satEl.addEventListener("mousedown",    stopAllSat);
     satEl.addEventListener("mousemove",    stopAllSat);
+  }
+  const altiEl = document.getElementById("alti-date-control");
+  if(altiEl && typeof L !== "undefined" && L.DomEvent){
+    L.DomEvent.disableClickPropagation(altiEl);
+    L.DomEvent.disableScrollPropagation(altiEl);
+    const stopAllAlti = e => { e.stopPropagation(); };
+    altiEl.addEventListener("pointerdown", stopAllAlti);
+    altiEl.addEventListener("pointermove", stopAllAlti);
+    altiEl.addEventListener("touchstart",  stopAllAlti, {passive: true});
+    altiEl.addEventListener("touchmove",   stopAllAlti, {passive: true});
+    altiEl.addEventListener("mousedown",   stopAllAlti);
+    altiEl.addEventListener("mousemove",   stopAllAlti);
   }
   const windCtl = document.getElementById("wind-forecast-slider");
   if(windCtl && typeof L !== "undefined" && L.DomEvent){
@@ -10034,9 +10099,14 @@ function drawCurrents(){
 // provides it free at 0.25° resolution with ~1–3 day latency.
 // ═════════════════════════════════════════════════════════════════════════════
 let ALTIMETRY_GRID = null;  // { stepDeg, minLat, minLng, nLat, nLng, sla, ugos, vgos, observedAtMs }
+let ALTIMETRY_GHOST_GRID = null; // previous-day grid for ghost breaks + drift arrows
 let ALTIMETRY_STATUS = "idle";
 let _altiFetchSeq = 0;
 let altimetryLayer = null;
+// Altimetry is daily observed data — step backward only. 0 = latest pass.
+let altiDayOffset = 0;
+const ALTI_MAX_DAYS_BACK = 6;
+const _altiDayCache = new Map(); // `${bboxKey}:${offset}` → { grid, atMs }
 // Scoring copies of the SSH + current grids, populated by buildPredictInputs for
 // the bite-map bbox. Kept SEPARATE from the display-layer grids (ALTIMETRY_GRID /
 // CURRENT_GRID) so a bite-map compute never repaints a toggled overlay's bbox.
@@ -10231,6 +10301,117 @@ function _altiComputeBreaks(g, portLat, portLng, maxNm){
   }
   return { gm, peaks };
 }
+function altiBBoxKey(bx){ return `${bx.s.toFixed(2)},${bx.n.toFixed(2)},${bx.w.toFixed(2)},${bx.e.toFixed(2)}`; }
+function altiCacheKey(bx, offset){ return `${altiBBoxKey(bx)}:${offset|0}`; }
+async function fetchAltiGridCached(bx, offset){
+  const off = Math.max(0, Math.min(ALTI_MAX_DAYS_BACK, offset|0));
+  const k = altiCacheKey(bx, off);
+  const hit = _altiDayCache.get(k);
+  if(hit && Date.now()-hit.atMs < 6*60*60*1000) return hit.grid;
+  if(typeof BW_OCEAN==="undefined"||!BW_OCEAN.fetchAltimetryGrid) return null;
+  const data = await BW_OCEAN.fetchAltimetryGrid(bx.s, bx.n, bx.w, bx.e, off);
+  const grid = buildAltiGrid(data);
+  if(grid) _altiDayCache.set(k, { grid, atMs: Date.now() });
+  return grid;
+}
+// Draw magenta break contours + peak dots. Style opts control ghost vs current.
+function _altiDrawMagentaBreaks(ctx, map, g, brk, opt){
+  if(!brk || !brk.peaks.length || !g) return;
+  const strokeStyle = opt.strokeStyle || "rgba(236,72,153,0.95)";
+  const lineWidth = opt.lineWidth || 3;
+  const shadowBlur = opt.shadowBlur != null ? opt.shadowBlur : 8;
+  const shadowColor = opt.shadowColor || "rgba(236,72,153,0.85)";
+  const dotR = opt.dotR || 3.4;
+  const dotFill = opt.dotFill || "rgba(236,72,153,0.95)";
+  const gmA = brk.gm, R = 1.3;
+  ctx.save();
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.shadowColor = shadowColor; ctx.shadowBlur = shadowBlur;
+  ctx.strokeStyle = strokeStyle; ctx.lineWidth = lineWidth;
+  for(const pk of brk.peaks){
+    const L = pk.level, gth = 0.5 * pk.gmag;
+    ctx.beginPath();
+    for(let i=0;i<g.nLat-1;i++){
+      const latA = g.minLat + i * g.step;
+      if(Math.abs(latA - pk.lat) > R + g.step) continue;
+      for(let j=0;j<g.nLng-1;j++){
+        const lngA = g.minLng + j * g.step;
+        if(Math.abs(lngA - pk.lng) > R + g.step) continue;
+        const A=g.sla[i*g.nLng+j], B=g.sla[i*g.nLng+(j+1)],
+              C=g.sla[(i+1)*g.nLng+(j+1)], D=g.sla[(i+1)*g.nLng+j];
+        if(!isFinite(A)||!isFinite(B)||!isFinite(C)||!isFinite(D)) continue;
+        if(L<Math.min(A,B,C,D)||L>Math.max(A,B,C,D)) continue;
+        const cg = Math.max(gmA[i*g.nLng+j], gmA[i*g.nLng+(j+1)], gmA[(i+1)*g.nLng+(j+1)], gmA[(i+1)*g.nLng+j]);
+        if(cg < gth) continue;
+        const pts = _altiIsoSegs(A,B,C,D,L,latA,lngA,g.step);
+        if(pts.length >= 2){
+          let a = map.latLngToContainerPoint(pts[0]), b = map.latLngToContainerPoint(pts[1]);
+          ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+          if(pts.length === 4){
+            a = map.latLngToContainerPoint(pts[2]); b = map.latLngToContainerPoint(pts[3]);
+            ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+          }
+        }
+      }
+    }
+    ctx.stroke();
+    const pc = map.latLngToContainerPoint([pk.lat, pk.lng]);
+    ctx.beginPath(); ctx.arc(pc.x, pc.y, dotR, 0, Math.PI*2);
+    ctx.fillStyle = dotFill; ctx.fill();
+  }
+  ctx.restore();
+}
+// Pair each current peak with the nearest prior-day peak within maxNm.
+function _altiMatchPeakDrifts(oldPeaks, newPeaks, maxNm){
+  const pairs = [], used = new Set();
+  for(const neu of newPeaks){
+    let best = -1, bestD = maxNm;
+    for(let i=0;i<oldPeaks.length;i++){
+      if(used.has(i)) continue;
+      const d = nmBetween(neu.lat, neu.lng, oldPeaks[i].lat, oldPeaks[i].lng);
+      if(d < bestD){ bestD = d; best = i; }
+    }
+    if(best >= 0){ used.add(best); pairs.push({ from: oldPeaks[best], to: neu, distNm: bestD }); }
+  }
+  return pairs;
+}
+// Amber dashed arrows from prior-day break to today's break, labeled in nm.
+function _altiDrawDriftArrows(ctx, map, pairs){
+  if(!pairs || !pairs.length) return;
+  ctx.save();
+  ctx.lineCap = "round";
+  for(const { from, to, distNm } of pairs){
+    const p0 = map.latLngToContainerPoint([from.lat, from.lng]);
+    const p1 = map.latLngToContainerPoint([to.lat, to.lng]);
+    const dx = p1.x - p0.x, dy = p1.y - p0.y;
+    const len = Math.hypot(dx, dy);
+    if(len < 10) continue;
+    const ax = dx / len, ay = dy / len;
+    ctx.strokeStyle = "rgba(251,191,36,0.92)";
+    ctx.lineWidth = 2.2;
+    ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+    ctx.setLineDash([]);
+    const hl = 9, hw = 5;
+    const bx = p1.x - ax * hl, by = p1.y - ay * hl;
+    const nx = -ay, ny = ax;
+    ctx.fillStyle = "rgba(251,191,36,0.95)";
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(bx + nx * hw, by + ny * hw);
+    ctx.lineTo(bx - nx * hw, by - ny * hw);
+    ctx.closePath(); ctx.fill();
+    const mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2;
+    ctx.font = "700 11px 'Segoe UI',Arial,sans-serif";
+    ctx.fillStyle = "rgba(255,244,214,0.96)";
+    ctx.strokeStyle = "rgba(10,22,40,0.75)";
+    ctx.lineWidth = 3;
+    const label = `${Math.round(distNm)} nm`;
+    ctx.strokeText(label, mx + 7, my - 5);
+    ctx.fillText(label, mx + 7, my - 5);
+  }
+  ctx.restore();
+}
 
 // Build the altimetry request box: modest padding for smooth panning, but the
 // total span is capped because ERDDAP's blended-altimetry griddap store returns
@@ -10276,13 +10457,12 @@ const AltimetryLayer = L.Layer.extend({
     L.DomUtil.setPosition(this._canvas,tl);
     this._canvas.width=size.x; this._canvas.height=size.y;
     this._draw();
-    // Refetch if the (capped) request box for the current view isn't already
-    // covered by the cached grid. Comparing against the capped box — not the raw
-    // view bounds — avoids endless refetches when zoomed out past the span cap.
     const g=ALTIMETRY_GRID;
     const bx=altimetryRequestBox(this._map);
     const tol=g?g.step:0.25;
-    if(!g||bx.s<g.bounds.s-tol||bx.n>g.bounds.n+tol||
+    const boxKey=altiBBoxKey(bx);
+    if(this._loadedBox!==boxKey || this._loadedOffset!==altiDayOffset ||
+       !g||bx.s<g.bounds.s-tol||bx.n>g.bounds.n+tol||
        bx.w<g.bounds.w-tol||bx.e>g.bounds.e+tol){
       this._requestData();
     }
@@ -10290,19 +10470,30 @@ const AltimetryLayer = L.Layer.extend({
   _requestData: function(){
     if(!layerVis.altimetry||typeof BW_OCEAN==="undefined"||!BW_OCEAN.fetchAltimetryGrid||!MAP) return;
     const seq=++_altiFetchSeq;
+    const bx=altimetryRequestBox(MAP);
+    const boxKey=altiBBoxKey(bx);
     ALTIMETRY_STATUS="loading";
     if(typeof updateOceanLegend==="function") updateOceanLegend();
-    const bx=altimetryRequestBox(MAP);
-    BW_OCEAN.fetchAltimetryGrid(bx.s,bx.n,bx.w,bx.e)
-      .then(data=>{
-        if(seq!==_altiFetchSeq||!layerVis.altimetry) return;
-        applyAltimetryGrid(data);
-        ALTIMETRY_STATUS=ALTIMETRY_GRID?"ready":"unavailable";
-        updateOceanLegend();
-        this._draw();
-      }).catch(()=>{
-        ALTIMETRY_STATUS="unavailable"; updateOceanLegend();
-      });
+    const ghostOff = Math.min(ALTI_MAX_DAYS_BACK, altiDayOffset + 1);
+    Promise.all([
+      fetchAltiGridCached(bx, altiDayOffset),
+      altiDayOffset < ALTI_MAX_DAYS_BACK ? fetchAltiGridCached(bx, ghostOff) : Promise.resolve(null),
+    ]).then(([grid, ghost])=>{
+      if(seq!==_altiFetchSeq||!layerVis.altimetry) return;
+      ALTIMETRY_GRID = grid;
+      ALTIMETRY_GHOST_GRID = ghost;
+      this._loadedBox = boxKey;
+      this._loadedOffset = altiDayOffset;
+      this._breaksFor = null;
+      this._ghostBreaksFor = null;
+      ALTIMETRY_STATUS = grid ? "ready" : "unavailable";
+      if(typeof updateAltiDateDisplay === "function") updateAltiDateDisplay();
+      if(typeof updateOceanLegend === "function") updateOceanLegend();
+      this._draw();
+    }).catch(()=>{
+      ALTIMETRY_STATUS="unavailable";
+      if(typeof updateOceanLegend==="function") updateOceanLegend();
+    });
   },
   _draw: function(){
     if(!this._canvas||!this._map) return;
@@ -10385,54 +10576,32 @@ const AltimetryLayer = L.Layer.extend({
       }
     }
 
-    // ── 4) STRONGEST BREAKS (magenta) ────────────────────────────────────────
-    // Trace the SSH contour through each of the up-to-3 steepest fronts, limited
-    // to that break's steep neighborhood, in glowing magenta — the #1 spots to
-    // fish. Only breaks within 150 nm of the selected home port qualify.
+    // ── 4) PRIOR-DAY GHOST + DRIFT (phase 2) ─────────────────────────────────
     const portName=(typeof activePort!=="undefined"&&activePort)?activePort:"";
+    const po=portName&&PORTS[portName]?PORTS[portName]:null;
+    const gg=ALTIMETRY_GHOST_GRID;
+    if(gg && altiDayOffset < ALTI_MAX_DAYS_BACK){
+      if(this._ghostBreaksFor!==gg||this._ghostBreaksPort!==portName){
+        this._ghostBreaks=_altiComputeBreaks(gg, po?po.lat:null, po?po.lng:null, ALTI_BREAK_PORT_RADIUS_NM);
+        this._ghostBreaksFor=gg; this._ghostBreaksPort=portName;
+      }
+      _altiDrawMagentaBreaks(ctx, this._map, gg, this._ghostBreaks, {
+        strokeStyle:"rgba(236,72,153,0.30)", lineWidth:2, shadowBlur:0,
+        dotR:2.6, dotFill:"rgba(236,72,153,0.38)",
+      });
+    }
+
+    // ── 5) STRONGEST BREAKS (magenta, current day) ─────────────────────────
     if(this._breaksFor!==g||this._breaksPort!==portName){
-      const po=portName&&PORTS[portName]?PORTS[portName]:null;
       this._breaks=_altiComputeBreaks(g, po?po.lat:null, po?po.lng:null, ALTI_BREAK_PORT_RADIUS_NM);
       this._breaksFor=g; this._breaksPort=portName;
     }
     const brk=this._breaks;
-    if(brk && brk.peaks.length){
-      ctx.save();
-      ctx.lineCap="round"; ctx.lineJoin="round";
-      ctx.shadowColor="rgba(236,72,153,0.85)"; ctx.shadowBlur=8;
-      ctx.strokeStyle="rgba(236,72,153,0.95)"; ctx.lineWidth=3;
-      const gmA=brk.gm, R=1.3;
-      for(const pk of brk.peaks){
-        const L=pk.level, gth=0.5*pk.gmag;
-        ctx.beginPath();
-        for(let i=0;i<g.nLat-1;i++){
-          const latA=g.minLat+i*g.step;
-          if(Math.abs(latA-pk.lat)>R+g.step) continue;
-          for(let j=0;j<g.nLng-1;j++){
-            const lngA=g.minLng+j*g.step;
-            if(Math.abs(lngA-pk.lng)>R+g.step) continue;
-            const A=g.sla[i*g.nLng+j], B=g.sla[i*g.nLng+(j+1)],
-                  C=g.sla[(i+1)*g.nLng+(j+1)], D=g.sla[(i+1)*g.nLng+j];
-            if(!isFinite(A)||!isFinite(B)||!isFinite(C)||!isFinite(D)) continue;
-            if(L<Math.min(A,B,C,D)||L>Math.max(A,B,C,D)) continue;
-            const cg=Math.max(gmA[i*g.nLng+j], gmA[i*g.nLng+(j+1)], gmA[(i+1)*g.nLng+(j+1)], gmA[(i+1)*g.nLng+j]);
-            if(cg<gth) continue;
-            const pts=_altiIsoSegs(A,B,C,D,L,latA,lngA,g.step);
-            if(pts.length>=2){
-              let a=this._map.latLngToContainerPoint(pts[0]), b=this._map.latLngToContainerPoint(pts[1]);
-              ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
-              if(pts.length===4){ a=this._map.latLngToContainerPoint(pts[2]); b=this._map.latLngToContainerPoint(pts[3]); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); }
-            }
-          }
-        }
-        ctx.stroke();
-        // Marker dot at the break's steepest point
-        const pc=this._map.latLngToContainerPoint([pk.lat,pk.lng]);
-        ctx.beginPath(); ctx.arc(pc.x,pc.y,3.4,0,Math.PI*2);
-        ctx.fillStyle="rgba(236,72,153,0.95)"; ctx.fill();
-      }
-      ctx.restore();
+    if(brk && this._ghostBreaks && brk.peaks.length && this._ghostBreaks.peaks.length){
+      const drifts=_altiMatchPeakDrifts(this._ghostBreaks.peaks, brk.peaks, 90);
+      _altiDrawDriftArrows(ctx, this._map, drifts);
     }
+    _altiDrawMagentaBreaks(ctx, this._map, g, brk, {});
   },
 });
 
@@ -10441,10 +10610,16 @@ async function buildAltimetryForMap(){
   const seq=++_altiFetchSeq;
   ALTIMETRY_STATUS="loading";
   const bx=altimetryRequestBox(MAP);
-  const data=await BW_OCEAN.fetchAltimetryGrid(bx.s,bx.n,bx.w,bx.e);
+  const ghostOff = Math.min(ALTI_MAX_DAYS_BACK, altiDayOffset + 1);
+  const [grid, ghost] = await Promise.all([
+    fetchAltiGridCached(bx, altiDayOffset),
+    altiDayOffset < ALTI_MAX_DAYS_BACK ? fetchAltiGridCached(bx, ghostOff) : Promise.resolve(null),
+  ]);
   if(seq!==_altiFetchSeq) return;
-  applyAltimetryGrid(data);
-  ALTIMETRY_STATUS=ALTIMETRY_GRID?"ready":"unavailable";
+  ALTIMETRY_GRID = grid;
+  ALTIMETRY_GHOST_GRID = ghost;
+  ALTIMETRY_STATUS = grid ? "ready" : "unavailable";
+  if(typeof updateAltiDateDisplay === "function") updateAltiDateDisplay();
   updateOceanLegend();
   if(altimetryLayer) altimetryLayer._draw();
 }
@@ -10453,8 +10628,10 @@ function drawAltimetry(){
   if(layerVis.altimetry){
     if(!altimetryLayer) altimetryLayer=new AltimetryLayer();
     if(MAP&&!MAP.hasLayer(altimetryLayer)) altimetryLayer.addTo(MAP);
+    if(typeof updateAltiDateControlVisibility === "function") updateAltiDateControlVisibility();
   } else {
     if(altimetryLayer&&MAP&&MAP.hasLayer(altimetryLayer)) MAP.removeLayer(altimetryLayer);
+    if(typeof updateAltiDateControlVisibility === "function") updateAltiDateControlVisibility();
   }
   if(typeof updateOceanLegend==="function") updateOceanLegend();
 }
@@ -11260,6 +11437,54 @@ function updateSatDateControlVisibility(){
   restackBottomControls();
 }
 
+// ── ALTIMETRY DATE CONTROL ───────────────────────────────────────────────────
+// Daily SSH is observed backward-only. Step day-by-day (slider or ◀▶) to read
+// eddy drift. No autoplay — captains inspect each pass at their own pace.
+function altiDateLabel(){
+  if(ALTIMETRY_GRID && ALTIMETRY_GRID.observedAtMs){
+    return new Date(ALTIMETRY_GRID.observedAtMs).toLocaleDateString(undefined, { month:"short", day:"numeric" });
+  }
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - altiDayOffset);
+  return d.toLocaleDateString(undefined, { month:"short", day:"numeric" });
+}
+function updateAltiDateDisplay(){
+  const el = document.getElementById("alti-date-display");
+  if(el){
+    const age = altiDayOffset <= 0 ? "latest pass" : altiDayOffset === 1 ? "1 day earlier" : `${altiDayOffset} days earlier`;
+    el.textContent = `${altiDateLabel()} · ${age}`;
+  }
+  const inp = document.getElementById("alti-date-input");
+  if(inp){
+    const pos = ALTI_MAX_DAYS_BACK - altiDayOffset;
+    if(+inp.value !== pos) inp.value = pos;
+  }
+  const older = document.getElementById("alti-day-older");
+  const newer = document.getElementById("alti-day-newer");
+  if(older) older.disabled = altiDayOffset >= ALTI_MAX_DAYS_BACK;
+  if(newer) newer.disabled = altiDayOffset <= 0;
+}
+function onAltiSliderInput(sliderPos){
+  setAltiDayOffset(ALTI_MAX_DAYS_BACK - (sliderPos|0));
+}
+function setAltiDayOffset(days){
+  const v = Math.max(0, Math.min(ALTI_MAX_DAYS_BACK, days|0));
+  if(v === altiDayOffset){ updateAltiDateDisplay(); return; }
+  altiDayOffset = v;
+  updateAltiDateDisplay();
+  if(altimetryLayer) altimetryLayer._requestData();
+}
+function stepAltiDayOlder(){ setAltiDayOffset(altiDayOffset + 1); }
+function stepAltiDayNewer(){ setAltiDayOffset(altiDayOffset - 1); }
+function updateAltiDateControlVisibility(){
+  const box = document.getElementById("alti-date-control");
+  if(!box) return;
+  const show = !!layerVis.altimetry;
+  box.style.display = show ? "block" : "none";
+  if(show) updateAltiDateDisplay();
+  restackBottomControls();
+}
+
 // ── BOTTOM CONTROL STACKING ──────────────────────────────────────────────────
 // Several control bars share the bottom-center of the map (forecast slider,
 // satellite-date control, radar loop, waypoint radius). Any combination can be
@@ -11270,7 +11495,7 @@ function updateSatDateControlVisibility(){
 // nearest the thumb-friendly bottom edge. Called by every visibility updater.
 // The distance scale bar is then lifted to sit just above the top of the stack
 // so it never overlaps the bars or the Leaflet attribution line.
-const BOTTOM_STACK_ORDER = ["sat-date-control", "radar-loop-control", "wind-forecast-slider", "forecast-slider"];
+const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider", "forecast-slider"];
 const BOTTOM_STACK_GAP  = 8;    // px gap between stacked bars
 function restackBottomControls(){
   // On phones the Leaflet attribution/credit line sits along the very bottom,
@@ -12803,9 +13028,11 @@ function updateOceanLegend(){
   }
   if(layerVis.altimetry){
     const loading = ALTIMETRY_STATUS === "loading" || (!ALTIMETRY_GRID && ALTIMETRY_STATUS !== "unavailable");
-    const altiDate = ALTIMETRY_GRID&&ALTIMETRY_GRID.observedAtMs
-      ? new Date(ALTIMETRY_GRID.observedAtMs).toLocaleDateString("en-US",{month:"short",day:"numeric"})
-      : "—";
+    const altiDate = (typeof altiDateLabel === "function")
+      ? altiDateLabel()
+      : (ALTIMETRY_GRID&&ALTIMETRY_GRID.observedAtMs
+        ? new Date(ALTIMETRY_GRID.observedAtMs).toLocaleDateString("en-US",{month:"short",day:"numeric"})
+        : "—");
     const statusRow = loading
       ? `<div style="display:flex;align-items:center;gap:6px;font-size:9px;color:#f0abfc;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em"><span class="alti-spinner"></span>Loading altimetry…</div>`
       : (ALTIMETRY_STATUS==="unavailable"
@@ -12823,10 +13050,12 @@ function updateOceanLegend(){
           <span>Cold / low</span><span>Flat</span><span>Warm / high</span>
         </div>
         ${statusRow}
-        <div style="font-size:11px;color:#7aa8c8;margin-top:5px;line-height:1.4"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote} — the #1 spots for tuna &amp; billfish you can actually run to. White contours are equal SSH; where they bunch tightest is a break.</div>
+        <div style="font-size:11px;color:#7aa8c8;margin-top:5px;line-height:1.4"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">Altimetry Date</b> bar to step day-by-day and read eddy drift. Faint magenta = prior day; amber arrow = how far the break moved.</div>
         ${detail(`
         <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:4px 6px;align-items:start;font-size:11px;color:#cfe5ff;line-height:1.35">
-          <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${ALTI_BREAK_PORT_RADIUS_NM}-nm fishing range are highlighted — farther breaks are ignored even if sharper.</span>
+          <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${ALTI_BREAK_PORT_RADIUS_NM}-nm fishing range are highlighted.</span>
+          <span style="justify-self:center;color:#f9a8d4;font-size:13px;line-height:1">▬</span><span><b style="color:#fbcfe8">Faint magenta</b> — same break on the <b>previous day</b> you are viewing. Step ◀▶ or the slider to compare passes.</span>
+          <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">↗</span><span><b style="color:#fde68a">Amber arrow</b> — break drift from prior day to this day (labeled in nm). Points where the eddy/front is heading.</span>
           <span style="justify-self:center;color:#f87171;font-size:13px;line-height:1">●</span><span><b style="color:#f8b4b4">Red — warm bulge</b> (Gulf Stream, warm-core eddy). Bait &amp; pelagics stack on the edges — not the center.</span>
           <span style="justify-self:center;color:#60a5fa;font-size:13px;line-height:1">●</span><span><b style="color:#bcd6f8">Blue — cool depression</b> (cold-core eddy, upwelling). Nutrient-rich; good for bait and surface feeding.</span>
           <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">〜</span><span><b style="color:#eef0f6">White contours — equal SSH.</b> Tightly-packed lines = a steep gradient = a temperature/current break.</span>
