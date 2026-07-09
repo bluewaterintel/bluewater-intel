@@ -107,6 +107,46 @@
     return Math.max(0, Math.min(1, conv));
   }
 
+  // ── MULTI-SENSOR FRONT FUSION (offshore pelagics) ─────────────────────────
+  // SST imagery is frequently cloud-masked and lags 1–3 days. Satellite
+  // ALTIMETRY (sea-surface-height gradient) and surface-CURRENT shear see the
+  // same Gulf Stream wall / eddy rim through clouds and in real time, so we fold
+  // them into the two front factors rather than adding correlated duplicate rows.
+
+  // SSH-anomaly gradient (m per 10 nm) → 0..1 edge strength. Grounded in
+  // geostrophy: a ~0.16 m/10nm surface slope ≈ a ~2 kt geostrophic jet (the
+  // Gulf Stream wall); eddy rims run ~0.045–0.09 m/10nm.
+  function sshEdgeStrength(sshPer10nm){
+    const s = sshPer10nm;
+    if (s >= 0.16)  return 1.0;
+    if (s >= 0.09)  return 0.7;
+    if (s >= 0.045) return 0.4;
+    if (s >= 0.02)  return 0.2;
+    return 0.0;
+  }
+  // Surface-current SHEAR (kt per 10 nm) → 0..1. A sharp change in flow speed
+  // marks the current edge/drift line where bait and weed stack; a calm interior
+  // shows none. Tuned to RTOFS-scale gradients across the Stream wall / eddy rims.
+  function currentEdgeStrength(shearKtPer10nm){
+    const s = shearKtPer10nm;
+    if (s >= 1.5) return 1.0;
+    if (s >= 0.8) return 0.7;
+    if (s >= 0.4) return 0.4;
+    if (s >= 0.2) return 0.2;
+    return 0.0;
+  }
+  // Fuse the biological convergence (SST edge × chlor edge) with the dynamic
+  // front signals (SSH edge, current shear). The biological coincidence is the
+  // strongest signal; the dynamic terms CONFIRM it (tip up when they agree) and,
+  // when SST/chlor are cloud-masked (bioConv == 0), register a discounted
+  // dynamic-only convergence so a real, satellite-confirmed front still scores.
+  function frontConvergence(bioConv, sshEdge, curEdge){
+    const dyn = Math.max(sshEdge || 0, curEdge || 0);
+    if (dyn <= 0) return Math.max(0, Math.min(1, bioConv || 0));
+    if (bioConv > 0) return Math.max(0, Math.min(1, bioConv + 0.15 * dyn));
+    return Math.max(0, Math.min(1, 0.6 * dyn));   // dynamic-only, discounted
+  }
+
   // Convenience: compute everything for a point from OCEAN_FIELD samples.
   // radiusNm defaults to ~2.2x the field spacing (same heuristic as the app).
   function analyze(samples, lat, lng, spacingNm){
@@ -122,7 +162,8 @@
     };
   }
 
-  const api = { chlorBreak, sstBreak, sstEdgeStrength, chlorEdgeStrength, convergenceScore, analyze, maxGradientPer10nm };
+  const api = { chlorBreak, sstBreak, sstEdgeStrength, chlorEdgeStrength, convergenceScore, analyze, maxGradientPer10nm,
+    sshEdgeStrength, currentEdgeStrength, frontConvergence };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.BW_BREAKS = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

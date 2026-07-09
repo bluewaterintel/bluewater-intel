@@ -18,7 +18,7 @@
 <script src="bw-freshness.js"></script>
 <script src="bw-ocean.js?v=20260707b"></script>
 <script src="bw-wind.js"></script>
-<script src="bw-breaks.js"></script>
+<script src="bw-breaks.js?v=20260708"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Master fishing-waypoint dataset (~23k points), loaded as a companion file so the
      main app stays lean. Defines window.BW_WAYPOINTS = {version, types, count, wp:[[name,lat,lng,typecode],…]}.
@@ -4902,6 +4902,8 @@ function dtOpenTrip(){
       if(d.chlor) applyChlorData(d.chlor);
       if(d.sst) applySstData(d.sst);
       if(Array.isArray(d.field)) applyOceanField(d.field, d.fieldStepNm);
+      PREDICT_ALTI_GRID = (d.altimetry && typeof buildAltiGrid === "function") ? buildAltiGrid(d.altimetry) : null;
+      PREDICT_CUR_GRID  = (d.current  && typeof buildCurGrid  === "function") ? buildCurGrid(d.current)   : null;
     }catch(e){}
   }
   // Restore trip context. selectPort/selectSp trigger the normal draws which,
@@ -6607,6 +6609,11 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
     applyChlorData(data.chlor);
     applySstData(data.sst);
     applyOceanField(data.field, data.fieldStepNm);
+    // Satellite SSH + surface-current grids for the scorer's front fusion. Kept in
+    // PREDICT_* copies (not the display globals) so the bite map never repaints a
+    // toggled overlay. Absent on older payloads → front factors stay SST-only.
+    PREDICT_ALTI_GRID = (data.altimetry && typeof buildAltiGrid === "function") ? buildAltiGrid(data.altimetry) : null;
+    PREDICT_CUR_GRID  = (data.current  && typeof buildCurGrid  === "function") ? buildCurGrid(data.current)   : null;
     // Remember the inputs so "Download my trip" can snapshot them for offline use.
     LAST_PREDICT_INPUTS = { bbox: { latMin, latMax, lngMin, lngMax }, data, fcHour, atMs: Date.now() };
     return;
@@ -6891,6 +6898,32 @@ function scoreCell(lat, lng, speciesId){
     else breakScore = 0.3;
   }
   if(prefs.breakPref === "any") breakScore = 0.7;
+
+  // ── FRONT FUSION (offshore, edge-seeking pelagics only) ─────────────────────
+  // Fold satellite ALTIMETRY (SSH front) into the temperature break → "Front
+  // strength", and surface-CURRENT shear into the SST×chlor convergence → "Front
+  // convergence". SST is cloud-masked/laggy; SSH and currents see the same Gulf
+  // Stream wall / eddy rim through clouds in near-real time. Gated to offshore,
+  // non-bottom, edge-seeking species so inshore/bottom scores are untouched, and
+  // the SSH term can only RAISE Front strength (it fills SST's gaps, never lowers
+  // a real thermal break). Weights are unchanged — we enrich the two existing
+  // factors rather than adding correlated duplicate rows.
+  let frontSensor = "sst";
+  let _sshEdge01 = 0, _curEdge01 = 0;
+  if(speciesCat === "offshore" && !_isBottom && prefs.breakPref === "edge" && typeof BW_BREAKS !== "undefined"){
+    const sshGrad = (typeof sshBreakAt === "function") ? sshBreakAt(lat, lng) : null;
+    if(sshGrad != null){
+      _sshEdge01 = BW_BREAKS.sshEdgeStrength(sshGrad);
+      const sshBreakScore = _sshEdge01 >= 1.0 ? 1.0 : _sshEdge01 >= 0.7 ? 0.7 : _sshEdge01 >= 0.4 ? 0.4 : _sshEdge01 > 0 ? 0.3 : 0;
+      if(sshBreakScore > breakScore){ breakScore = sshBreakScore; frontSensor = "ssh"; }
+      else if(sshBreakScore > 0 && frontSensor === "sst" && tBreak <= 0) frontSensor = "ssh";
+    }
+    const curShear = (typeof currentShearAt === "function") ? currentShearAt(lat, lng) : null;
+    if(curShear != null) _curEdge01 = BW_BREAKS.currentEdgeStrength(curShear);
+    if(_sshEdge01 > 0 || _curEdge01 > 0){
+      convergence = BW_BREAKS.frontConvergence(convergence, _sshEdge01, _curEdge01);
+    }
+  }
 
   // ── Factor 5: Recent fishing reports ──
   const reportScore = reportsBoost(lat, lng, speciesId);
@@ -7318,9 +7351,18 @@ function scoreCell(lat, lng, speciesId){
     // suggests one. Weight shown is an effective bonus weight.
     ...(reportScore > 0.05 ? [{name:"🎣 Recent catch reports", weight:0.18, score:Math.min(1, reportScore * 2.5), raw:"+bonus"}] : []),
     {name:"Solunar window",     weight:W.solunar,       score:solunarScoreVal,  raw:solunar > 0.7 ? "MAJOR" : solunar > 0.4 ? "minor" : "off"},
-    {name:"Thermal break",      weight:W.thermalBreak,  score:breakScore,       raw:tBreak > 0 ? `${tBreak.toFixed(1)}°F/10nm` : "—"},
-    {name:"Break convergence", weight:(W.convergence||0), score:convergence,
-     raw: convergence > 0 ? `${Math.round(convergence*100)}%` + (chlorBreak>0?` · ${chlorBreak.toFixed(2)} mg/m³/10nm`:"") : "—"},
+    {name:"Front strength",     weight:W.thermalBreak,  score:breakScore,
+     raw: frontSensor === "ssh"
+          ? (tBreak > 0 ? `SSH edge · ${tBreak.toFixed(1)}°F/10nm` : "SSH edge (SST cloudy)")
+          : (tBreak > 0 ? `${tBreak.toFixed(1)}°F/10nm` : (_sshEdge01 > 0 ? "SSH edge" : "—"))},
+    {name:"Front convergence", weight:(W.convergence||0), score:convergence,
+     raw: convergence > 0
+          ? `${Math.round(convergence*100)}%` + [
+              chlorBreak>0 ? `${chlorBreak.toFixed(2)} mg/m³/10nm` : null,
+              _sshEdge01>0 ? "SSH" : null,
+              _curEdge01>0 ? "current" : null,
+            ].filter(Boolean).map((s,i)=> (i===0?" · ":" + ")+s).join("")
+          : "—"},
     {name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
     {name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw:wxLabel},
     {name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonScore > 0.66 ? "peak" : seasonScore > 0.33 ? "good" : "off"},
@@ -9532,9 +9574,11 @@ let CURRENT_STATUS = "idle";     // idle | loading | ready | unavailable
 let _curFetchSeq = 0;
 let _curUnavailToastShown = false;
 
-function setCurrentGridFromData(data){
-  if(!data || !data.u || !data.v || !data.nLat || !data.nLng){ CURRENT_GRID = null; return; }
-  CURRENT_GRID = {
+// Pure builder — used for BOTH the display layer (CURRENT_GRID) and the scorer
+// (PREDICT_CUR_GRID) so they never clobber each other's bbox.
+function buildCurGrid(data){
+  if(!data || !data.u || !data.v || !data.nLat || !data.nLng) return null;
+  return {
     // ESPC-D lat/lng spacings differ (~0.04° vs ~0.08°); older payloads only
     // carried the collapsed `step`, so fall back to it for both axes.
     stepLat: data.stepLat != null ? data.stepLat : data.step,
@@ -9547,14 +9591,19 @@ function setCurrentGridFromData(data){
     observedAtMs: data.observedAtMs || null,
   };
 }
+function setCurrentGridFromData(data){ CURRENT_GRID = buildCurGrid(data); }
 
 // Bilinear-sample the current at a point. Returns {u,v (m/s), driftKts, setDeg}
 // where setDeg is the direction the water flows TOWARD (mariner's "set"), or
 // null outside the grid / over land. NOTE: land cells arrive as JSON null (NaN
 // doesn't survive JSON), and the GLOBAL isFinite(null) is true (null→0), so we
 // must use Number.isFinite here or land reads as a fake 0-knot current.
-function getCurrentField(lat, lng){
-  const g = CURRENT_GRID; if(!g || !g.nLat) return null;
+function getCurrentField(lat, lng){ return sampleCurrentGrid(CURRENT_GRID, lat, lng); }
+
+// Bilinear-sample an arbitrary current grid (display or scoring copy). Body is
+// the original getCurrentField logic, parameterized on the grid.
+function sampleCurrentGrid(g, lat, lng){
+  if(!g || !g.nLat) return null;
   const fi=(lat-g.minLat)/g.stepLat, fj=(lng-g.minLng)/g.stepLng;
   if(fi < -0.001 || fj < -0.001 || fi > g.nLat-1+0.001 || fj > g.nLng-1+0.001) return null;
   const i0=Math.max(0,Math.min(g.nLat-2,Math.floor(fi)));
@@ -9581,6 +9630,31 @@ function getCurrentField(lat, lng){
   const setDeg=(Math.atan2(u,v)*180/Math.PI+360)%360;   // direction of flow (toward)
   if(typeof isPredictWater === "function" && !isPredictWater(lat, lng)) return null;
   return { u, v, driftKts, setDeg };
+}
+
+// Max surface-current SHEAR (kt per 10 nm) within ~12 nm of a point — the flow
+// edge/drift line (Gulf Stream wall, eddy rim) where bait and weed stack. Samples
+// the scorer's PREDICT_CUR_GRID via the bilinear sampler (handles land + the
+// anisotropic RTOFS grid). A robust proxy for the current-convergence line.
+// null when there's no current data covering the point.
+function currentShearAt(lat, lng){
+  const g = PREDICT_CUR_GRID;
+  if(!g) return null;
+  const c0 = sampleCurrentGrid(g, lat, lng);
+  if(!c0) return null;
+  const rNm = 12;
+  const dLat = rNm/60, dLng = rNm/(60*Math.cos(lat*Math.PI/180));
+  const nbrs = [
+    sampleCurrentGrid(g, lat+dLat, lng), sampleCurrentGrid(g, lat-dLat, lng),
+    sampleCurrentGrid(g, lat, lng+dLng), sampleCurrentGrid(g, lat, lng-dLng),
+  ];
+  let maxGrad = 0;   // kt per nm
+  for(const p of nbrs){
+    if(!p) continue;
+    const grad = Math.abs(p.driftKts - c0.driftKts) / rNm;
+    if(grad > maxGrad) maxGrad = grad;
+  }
+  return maxGrad * 10;   // kt per 10 nm
 }
 
 function _curGridCoversView(){
@@ -9903,10 +9977,18 @@ let ALTIMETRY_GRID = null;  // { stepDeg, minLat, minLng, nLat, nLng, sla, ugos,
 let ALTIMETRY_STATUS = "idle";
 let _altiFetchSeq = 0;
 let altimetryLayer = null;
+// Scoring copies of the SSH + current grids, populated by buildPredictInputs for
+// the bite-map bbox. Kept SEPARATE from the display-layer grids (ALTIMETRY_GRID /
+// CURRENT_GRID) so a bite-map compute never repaints a toggled overlay's bbox.
+let PREDICT_ALTI_GRID = null;
+let PREDICT_CUR_GRID = null;
 
-function applyAltimetryGrid(data){
-  ALTIMETRY_GRID = null;
-  if(!data || !Array.isArray(data.rows) || !data.rows.length) return;
+// Pure builder: turn a {stepDeg, rows:[[lat,lng,sla,ugos,vgos]], observedAtMs}
+// payload into a gridded object, or null. Used for BOTH the display layer
+// (ALTIMETRY_GRID) and the scorer (PREDICT_ALTI_GRID) so they never clobber
+// each other's bbox.
+function buildAltiGrid(data){
+  if(!data || !Array.isArray(data.rows) || !data.rows.length) return null;
   const step = data.stepDeg || 0.25;
   let mnLa=Infinity,mxLa=-Infinity,mnLn=Infinity,mxLn=-Infinity;
   for(const r of data.rows){ if(r[0]<mnLa)mnLa=r[0]; if(r[0]>mxLa)mxLa=r[0]; if(r[1]<mnLn)mnLn=r[1]; if(r[1]>mxLn)mxLn=r[1]; }
@@ -9924,8 +10006,41 @@ function applyAltimetryGrid(data){
       if(isFinite(r[4])) vgos[idx]=r[4];
     }
   }
-  ALTIMETRY_GRID = { step, minLat:mnLa, minLng:mnLn, nLat, nLng, sla, ugos, vgos,
+  return { step, minLat:mnLa, minLng:mnLn, nLat, nLng, sla, ugos, vgos,
     bounds:{s:mnLa,n:mxLa,w:mnLn,e:mxLn}, observedAtMs: data.observedAtMs||null };
+}
+function applyAltimetryGrid(data){ ALTIMETRY_GRID = buildAltiGrid(data); }
+
+// Max SSH-anomaly gradient (m per 10 nm) within ~18 nm of a point — the strength
+// of the geostrophic front here. Reads a grid built by buildAltiGrid (defaults
+// to the scorer's PREDICT_ALTI_GRID). Mirrors thermalBreakGrid. null = no cover.
+function sshBreakAt(lat, lng, grid){
+  const g = grid || PREDICT_ALTI_GRID;
+  if(!g || !g.nLat || !g.sla) return null;
+  const radNm = 18;
+  const dLat = radNm/60, dLng = radNm/(60*Math.cos(lat*Math.PI/180));
+  const iC = Math.round((lat-g.minLat)/g.step), jC = Math.round((lng-g.minLng)/g.step);
+  const di = Math.max(1, Math.round(dLat/g.step)), dj = Math.max(1, Math.round(dLng/g.step));
+  const near=[];
+  for(let i=iC-di;i<=iC+di;i++){
+    for(let j=jC-dj;j<=jC+dj;j++){
+      if(i<0||j<0||i>=g.nLat||j>=g.nLng) continue;
+      const v=g.sla[i*g.nLng+j];
+      if(!Number.isFinite(v)) continue;
+      near.push({la:g.minLat+i*g.step, ln:g.minLng+j*g.step, v});
+    }
+  }
+  if(near.length<2) return null;
+  let maxGrad=0;
+  for(let a=0;a<near.length;a++){
+    for(let b=a+1;b<near.length;b++){
+      const dNm=nmBetween(near[a].la,near[a].ln,near[b].la,near[b].ln);
+      if(dNm<1) continue;
+      const grad=Math.abs(near[a].v-near[b].v)/dNm;
+      if(grad>maxGrad) maxGrad=grad;
+    }
+  }
+  return maxGrad*10;   // m per 10 nm
 }
 
 function getAltimetryField(lat, lng){

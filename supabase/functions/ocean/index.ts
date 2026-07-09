@@ -1515,14 +1515,23 @@ export const handler = async (req: Request): Promise<Response> => {
     const maxPoints = Math.max(20, Math.min(120, Math.round(num(u.searchParams.get("maxPoints")) ?? 90)));
     const hoursAhead = num(u.searchParams.get("hours")) ?? 0;
     const forecastHour = Math.round(clamp(hoursAhead, 0, 96) / 3) * 3;
-    // All three grids in parallel (each ONE ERDDAP box request). Bathy also tells
-    // us which field points are water so we don't fetch buoy/tide over land.
-    const [bathy, chlor, sstGrid, buoyTemps, currentGrid] = await Promise.all([
+    // Altimetry (SSH) feeds the scorer's front fusion but ERDDAP can be slow on a
+    // cold cache; bound its wait so it never stalls the bite map. Empty on timeout
+    // → the client's front factors stay SST-only that pass (cache warms for next).
+    const altiSoft: Promise<AltimetryGrid> = Promise.race([
+      fetchAltimetryGrid(latMin, latMax, lngMin, lngMax),
+      new Promise<AltimetryGrid>((res) =>
+        setTimeout(() => res({ stepDeg: ALTIMETRY_STEP, observedAtMs: null, rows: [] }), 6000)),
+    ]);
+    // Grids in parallel (each ONE upstream box request). Bathy also tells us which
+    // field points are water so we don't fetch buoy/tide over land.
+    const [bathy, chlor, sstGrid, buoyTemps, currentGrid, altimetry] = await Promise.all([
       fetchBathyRows(latMin, latMax, lngMin, lngMax),
       fetchChlorRows(latMin, latMax, lngMin, lngMax),
       fetchSstRows(latMin, latMax, lngMin, lngMax),
       buoyWtmpList(),
       fetchCurrentGrid(latMin, latMax, lngMin, lngMax, hoursAhead),
+      altiSoft,
     ]);
     // Correct the high-res SST grid with the nearest live buoy per cell (distance/
     // freshness weighted). Buoys are prefetched once and shared, so this adds no
@@ -1551,7 +1560,7 @@ export const handler = async (req: Request): Promise<Response> => {
       const cur = sampleCurrentFromGrid(currentGrid, pt[0], pt[1]);
       return { la: pt[0], ln: pt[1], p: { ...p, current: cur } };
     });
-    return new Response(JSON.stringify({ bathy, chlor, sst, field, fieldStepNm, forecastHour }), {
+    return new Response(JSON.stringify({ bathy, chlor, sst, field, fieldStepNm, forecastHour, current: currentGrid, altimetry }), {
       headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
     });
   }
