@@ -5260,7 +5260,14 @@ const PREDICT_SPECIES_PREFS = {
   amberjack:    {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
   tripletail:   {tempIdeal:[72,84], tempWorking:[68,88], chlorPref:"any",     depthBands:[[2,40]],     breakPref:"any"  },
   pompano:      {tempIdeal:[68,78], tempWorking:[62,82], chlorPref:"any",     depthBands:[[2,15]],     breakPref:"stable"},
-  vermilion:    {tempIdeal:[66,78], tempWorking:[60,82], chlorPref:"any",     depthBands:[[50,200]],   breakPref:"any", demersal:true },
+  // Vermilion (beeliner): a warm-temperate hard-bottom snapper caught on ledges
+  // in ~100-350 ft (30-107m) — NOT the old 50-200m band, whose 50m (164 ft) floor
+  // zeroed the depth score across the shallow shelf where most vermilion are
+  // caught (the ÷12 shallow-decay nukes anything >12m under the band). Temp range
+  // widened to reflect that they hold on warm summer shelf bottoms (upper 70s-low
+  // 80s°F) as readily as cooler deep water, so the bottom-temp model no longer
+  // penalizes their prime Gulf grounds. This is what kept Gulf vermilion dark.
+  vermilion:    {tempIdeal:[66,82], tempWorking:[60,85], chlorPref:"any",     depthBands:[[30,120]],   breakPref:"any", demersal:true },
   lanesnap:     {tempIdeal:[70,82], tempWorking:[66,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
   yellowtail:   {tempIdeal:[74,84], tempWorking:[68,86], chlorPref:"low",     depthBands:[[10,40]],    breakPref:"any", demersal:true },
 };
@@ -8656,12 +8663,12 @@ const SPECIES_LAT_RANGE = {
   cobia:         [25.0, 40.5],   // FL through Chesapeake/DelMarVa up to NJ (summer)
   spanishmack:   [27.0, 41.0],   // FL through NJ
   // Blackfin: a warm-water / subtropical tuna. Common FL, Gulf, and the SE
-  // Atlantic; the OBX/Hatteras is the northern stronghold. Northern bound 35.5°N
-  // puts the predominant bite SOUTH toward Hatteras (35.2°N) rather than at or
-  // north of Oregon Inlet (~35.8°N) — matching where blackfin are actually
-  // caught off NC. Combined with breakPref:"edge" (so even within range it
-  // scores the Stream, not the inner shelf), this keeps blackfin realistic.
-  blackfin:      [24.0, 35.5],
+  // Atlantic; the OBX/Hatteras is the northern stronghold. Northern bound 35.7°N
+  // reaches just past Oregon Inlet (~35.8°N) so the OBX bite isn't clipped, while
+  // still keeping the predominant weight toward Hatteras (35.2°N). Combined with
+  // breakPref:"edge" (so even within range it scores the Stream, not the inner
+  // shelf), this keeps blackfin realistic.
+  blackfin:      [24.0, 35.7],
   // ── MID-ATLANTIC + NEW ENGLAND ───────────────────────────────────────
   bluelinetile:  [33.0, 40.5],   // Mid-Atlantic deepwater specialist
   bonito:        [33.0, 44.5],   // Mid-Atlantic + New England
@@ -8681,11 +8688,33 @@ const SPECIES_LAT_RANGE = {
   // has no entry — they range coast-wide.
 };
 
+// Bahamas / Bahama-Bank water east of the Florida crossings. Several US
+// estuarine & inshore species carry lat bands (or no band at all) that would
+// otherwise leak east onto the shallow Bahama Bank and light up bite scores in
+// water they never occupy. The Bahamas archipelago sits at lng ≳ -79.5 and
+// lat ≲ 27.6; NO US coastal water falls in this box (the FL Atlantic shelf and
+// its Gulf-Stream fishing grounds are all west of ~-79.8), so excluding it is
+// a clean longitude/latitude cutoff that doesn't touch any US range — including
+// the mid-Atlantic coast, which bends east only at higher latitudes.
+const BAHAMAS_EXCLUDE_BOX = { latMin: 22.0, latMax: 27.6, lngMin: -79.6, lngMax: -72.0 };
+// US-only estuarine / inshore species that do NOT occur in the Bahamas. (Bahamas
+// DOES hold bonefish, permit, tarpon, mutton/lane/yellowtail snapper, grouper,
+// hogfish, cero/king mackerel, and the pelagics — those are intentionally absent.)
+const NOT_IN_BAHAMAS = new Set([
+  "redfish", "snook", "speckledtrout", "flounder", "sheepshead", "croaker",
+]);
+
 // Returns true if the species can be found at this lat/lng. Handles both
 // the simple flat-array format and the per-region object format. Species
 // without any entry are allowed everywhere (safe default for coast-wide
 // species like tuna, mahi, marlin).
 function speciesAllowedAtLat(speciesId, lat, lng){
+  // Hard-exclude US-coastal-only species from Bahamian water.
+  if(lng != null && NOT_IN_BAHAMAS.has(speciesId)
+     && lat >= BAHAMAS_EXCLUDE_BOX.latMin && lat <= BAHAMAS_EXCLUDE_BOX.latMax
+     && lng >= BAHAMAS_EXCLUDE_BOX.lngMin && lng <= BAHAMAS_EXCLUDE_BOX.lngMax){
+    return false;
+  }
   const range = SPECIES_LAT_RANGE[speciesId];
   if(!range) return true;
   // A band is [minLat, maxLat] or, optionally, [minLat, maxLat, minLng, maxLng]
