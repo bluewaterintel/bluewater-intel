@@ -5185,9 +5185,9 @@ const PREDICT_SPECIES_PREFS = {
   mahi:         {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"edge",    depthBands:[[30,150],[200,1000]], breakPref:"any"},
   cobia:        {tempIdeal:[68,78], tempWorking:[64,82], chlorPref:"high",    salinityPref:"high", depthBands:[[2,40]],     breakPref:"stable", warmAdapted:true },
   redfish:      {tempIdeal:[62,78], tempWorking:[58,84], chlorPref:"high",    depthBands:[[1,15]],     breakPref:"stable"},
-  flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable"},
-  blackseabass: {tempIdeal:[58,72], tempWorking:[52,76], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable"},
-  tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable"},
+  flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable", demersal:true },
+  blackseabass: {tempIdeal:[58,72], tempWorking:[52,76], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable", demersal:true },
+  tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable", demersal:true },
   tilefish:     {tempIdeal:[48,60], tempWorking:[42,64], chlorPref:"any",     depthBands:[[150,500]],  breakPref:"any", bottom:true },
   snapper:      {tempIdeal:[68,78], tempWorking:[62,82], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
   grouper:      {tempIdeal:[64,76], tempWorking:[58,80], chlorPref:"any",     depthBands:[[30,200]],   breakPref:"any", demersal:true },
@@ -5196,9 +5196,9 @@ const PREDICT_SPECIES_PREFS = {
   // Striper — also multimodal. Surf + back-bay (shallow) AND offshore
   // bunker schools (40-80m) in summer/fall.
   striper:      {tempIdeal:[55,68], tempWorking:[48,72], chlorPref:"high",    salinityPref:"moderate", depthBands:[[1,15],[20,80]], breakPref:"stable"},
-  cod:          {tempIdeal:[40,52], tempWorking:[36,58], chlorPref:"high",    depthBands:[[50,300]],   breakPref:"stable"},
-  haddock:      {tempIdeal:[42,52], tempWorking:[38,58], chlorPref:"high",    depthBands:[[60,250]],   breakPref:"stable"},
-  pollock:      {tempIdeal:[44,54], tempWorking:[40,60], chlorPref:"high",    depthBands:[[80,300]],   breakPref:"stable"},
+  cod:          {tempIdeal:[40,52], tempWorking:[36,58], chlorPref:"high",    depthBands:[[50,300]],   breakPref:"stable", demersal:true },
+  haddock:      {tempIdeal:[42,52], tempWorking:[38,58], chlorPref:"high",    depthBands:[[60,250]],   breakPref:"stable", demersal:true },
+  pollock:      {tempIdeal:[44,54], tempWorking:[40,60], chlorPref:"high",    depthBands:[[80,300]],   breakPref:"stable", demersal:true },
   bonito:       {tempIdeal:[64,72], tempWorking:[60,76], chlorPref:"edge",    depthBands:[[10,80]],    breakPref:"any"  },
   bluefish:     {tempIdeal:[60,72], tempWorking:[55,78], chlorPref:"high",    salinityPref:"moderate", depthBands:[[1,60]],     breakPref:"stable"},
   bigeye:       {tempIdeal:[64,74], tempWorking:[58,78], chlorPref:"low",     depthBands:[[300,2000]], breakPref:"edge"  },
@@ -6829,29 +6829,39 @@ function scoreCell(lat, lng, speciesId){
     else                  bt = 47;
     tempForScore = bt;
   } else if(_isDemersal && sst != null && depth != null && depth > 0){
-    // GULF THERMOCLINE bottom-temp estimate (°F). The summer water column is
-    // strongly stratified: a warm, near-surface mixed layer down to ~30m
-    // (100 ft); then a sharp thermocline through ~60-100m (200-330 ft) where
-    // temperature plunges ~10-20°F as sunlight fades; then a slow decline toward
-    // the cold deep water that levels off near a constant ~40°F below ~1200m
-    // (≈3,900 ft) to the floor. Reef/bottom fish sit in THIS water, not the hot
-    // surface skin, so we score them on the estimate. Anchored so 300 ft under
-    // an 84°F surface reads ≈69°F rather than the old, too-warm ~78°F.
+    // THERMOCLINE bottom-temp estimate (°F), stratification-aware so ONE formula
+    // works from the Gulf to the Gulf of Maine without region hardcoding.
+    //
+    // Step 1 — fully-stratified profile (warm-surface summer, e.g. the Gulf/SE):
+    // a warm near-surface mixed layer to ~30m (100 ft); a sharp thermocline
+    // through ~60-100m (200-330 ft) where temperature plunges ~10-20°F; a slow
+    // decline toward cold deep water that levels near a constant ~40°F below
+    // ~1200m (≈3,900 ft). Anchored so 300 ft under an 84°F surface reads ≈69°F.
     const d = depth; // meters
-    let bt;
-    if(d <= 30)       bt = sst;                                       // mixed layer ≈ surface
-    else if(d <= 60)  bt = sst - (d - 30) / 30 * 4;                   // top of thermocline: 0→4°F
-    else if(d <= 100) bt = sst - 4 - (d - 60) / 40 * 14;             // sharp drop: 4→18°F (≈300 ft ⇒ sst−15)
-    else if(d <= 200) bt = sst - 18 - (d - 100) / 100 * 8;           // easing: 18→26°F
+    let btFull;
+    if(d <= 30)       btFull = sst;                                   // mixed layer ≈ surface
+    else if(d <= 60)  btFull = sst - (d - 30) / 30 * 4;               // top of thermocline: 0→4°F
+    else if(d <= 100) btFull = sst - 4 - (d - 60) / 40 * 14;         // sharp drop: 4→18°F (≈300 ft ⇒ sst−15)
+    else if(d <= 200) btFull = sst - 18 - (d - 100) / 100 * 8;       // easing: 18→26°F
     else if(d <= 1200){
       // Slow decline from the shelf-break value toward the near-constant ~40°F
       // deep water (~3,900 ft). Rarely reached by shelf demersal species.
       const shelf = sst - 26;
-      bt = shelf - (d - 200) / 1000 * (shelf - 40);
-    } else              bt = 40;                                      // near-constant abyssal water
-    // Cold deep water converges to ~40°F regardless of a warm surface.
-    bt = Math.max(bt, 40);
-    tempForScore = bt;
+      btFull = shelf - (d - 200) / 1000 * (shelf - 40);
+    } else            btFull = 40;                                    // near-constant abyssal water
+    btFull = Math.max(btFull, 40);
+    // Step 2 — scale the deficit by stratification strength. A warm surface over
+    // cold deep water stratifies (full thermocline); a cold surface (NE winter,
+    // high latitude) means a well-mixed column where the bottom ≈ the surface.
+    // So a 42°F Gulf-of-Maine surface in January produces ~no deficit (mixed),
+    // while an 84°F Gulf surface in July produces the full drop. This fixes NE
+    // groundfish being wrongly penalized by warm summer surface AND wrongly
+    // refrigerated by a season-agnostic deficit in winter.
+    // (Heuristic — replace with a real subsurface/bottom-temp feed, e.g.
+    //  HYCOM/GLORYS reanalysis, for the true Mid-Atlantic cold pool.)
+    const strat = Math.max(0, Math.min(1, (sst - 50) / (78 - 50)));
+    const deficit = Math.max(0, sst - btFull);
+    tempForScore = Math.max(40, sst - strat * deficit);
   }
   let tempScore = 0;
   if(tempForScore != null && tempForScore >= prefs.tempIdeal[0] && tempForScore <= prefs.tempIdeal[1]){
