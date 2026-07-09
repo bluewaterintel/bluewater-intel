@@ -427,8 +427,13 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   #ocean-legend [style*="height:11px"]{ height:10px !important; }
   /* Legend label + tick fonts — sized for readability (the phone readability
      layer below keeps these consistent if anything overrides). */
-  #ocean-legend-content > div > div:first-child{ font-size:12px !important; margin-bottom:3px !important; }
-  #ocean-legend-content span{ font-size:11px !important; }
+  #ocean-legend-content > div > div:first-child{ font-size:15px !important; margin-bottom:4px !important; }
+  #ocean-legend-content span{ font-size:14px !important; }
+  #ocean-legend .legend-detail{ font-size:14px !important; }
+  .map-time-pill{
+    width:calc(100vw - 20px) !important;
+    left:10px !important;right:10px !important;transform:none !important;
+  }
   /* ── Radar loop control — smaller on phones; vertical position is handled by
         restackBottomControls() in JS so multiple bars stack instead of overlap. ── */
   #radar-loop-control{
@@ -443,19 +448,10 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   #radar-loop-label-sub{ display:none !important; }
   #radar-loop-btn{ font-size:13px !important; padding:9px 0 !important; width:118px !important; flex:0 0 118px !important; }
   #radar-loop-time{ font-size:12px !important; width:auto !important; flex:0 0 auto !important; min-width:38px !important; }
-  /* satellite date control — width/anchor only; JS sets bottom for stacking */
-  #sat-date-control{
+  /* satellite / altimetry / wind / radar pills — width handled by .map-time-pill */
+  #sat-date-control,#alti-date-control,#wind-forecast-slider,#radar-loop-control{
     width:calc(100vw - 20px) !important;
-    left:10px !important;
-    right:10px !important;
-    transform:none !important;
-  }
-  /* altimetry date control — same footprint as satellite date bar */
-  #alti-date-control{
-    width:calc(100vw - 20px) !important;
-    left:10px !important;
-    right:10px !important;
-    transform:none !important;
+    left:10px !important;right:10px !important;transform:none !important;
   }
   /* Waypoint / range-from-port control — width/anchor only; JS sets bottom. */
   #waypoint-control{
@@ -923,7 +919,82 @@ body.nav-open #ruler-readout{
 
 .layer-swatch{width:18px;height:8px;border-radius:2px;flex-shrink:0}
 .layers-divider{border:none;border-top:1px solid rgba(255,255,255,.10);margin:14px 0 8px}
-.layers-section{font-size:10px;color:rgba(240,200,60,.75);letter-spacing:.14em;margin:4px 0 8px;font-weight:bold}
+.layers-section{font-size:14px;color:rgba(240,200,60,.88);letter-spacing:.12em;margin:6px 0 10px;font-weight:800}
+
+/* Map bottom time-step pills — altimetry / satellite / wind / radar */
+.map-time-pill{
+  display:none;position:absolute;
+  bottom:80px;left:50%;transform:translateX(-50%);z-index:500;
+  background:rgba(10,22,40,.94);
+  border-radius:14px;
+  padding:12px 18px 10px;
+  font-family:'Segoe UI',Arial,sans-serif;
+  color:#e8f4ff;
+  box-shadow:0 4px 14px rgba(0,0,0,.55);
+  width:min(520px, calc(100vw - 32px));
+  touch-action:none;
+}
+.map-time-pill-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.map-time-pill-title{font-size:13px;letter-spacing:.1em;font-weight:800;text-transform:uppercase}
+.map-time-pill-display{font-size:15px;font-weight:700;line-height:1.3;text-align:right}
+.map-time-pill-row{display:flex;align-items:center;gap:10px}
+.map-time-pill-step{
+  flex:0 0 auto;font-weight:800;font-size:16px;border-radius:8px;
+  padding:6px 12px;cursor:pointer;font-family:inherit;line-height:1;
+}
+.map-time-pill-step:disabled{opacity:.35;cursor:not-allowed}
+.map-time-pill-slider{
+  flex:1 1 auto;width:100%;-webkit-appearance:none;appearance:none;
+  height:8px;border-radius:4px;outline:none;margin:4px 0 2px;
+}
+.map-time-pill-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:22px;height:22px;border-radius:50%;
+  background:#f0f6ff;border:2px solid rgba(255,255,255,.45);
+  box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;
+}
+.map-time-pill-slider::-moz-range-thumb{
+  width:22px;height:22px;border-radius:50%;
+  background:#f0f6ff;border:2px solid rgba(255,255,255,.45);
+  box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;
+}
+.map-time-pill-footer{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:13px;font-weight:600;margin-top:6px;gap:8px;line-height:1.35;
+}
+.map-time-pill-hint{color:#9ec5e8;font-size:13px;text-align:center;flex:1 1 auto}
+.map-time-pill-play{
+  font-weight:800;font-size:14px;border-radius:8px;
+  padding:6px 14px;cursor:pointer;font-family:inherit;white-space:nowrap;
+  border:1px solid transparent;
+}
+.map-time-pill--amber{border:1px solid rgba(251,191,36,.40)}
+.map-time-pill--amber .map-time-pill-title{color:#fbbf24}
+.map-time-pill--amber .map-time-pill-display{color:#ffe9b8}
+.map-time-pill--amber .map-time-pill-step{color:#ffe9b8;border:1px solid rgba(251,191,36,.45);background:rgba(251,191,36,.14)}
+.map-time-pill--amber .map-time-pill-slider{background:linear-gradient(90deg,#1c3a5e 0%,#fbbf24 100%)}
+.map-time-pill--amber .map-time-pill-footer{color:#d8b873}
+.map-time-pill--amber .map-time-pill-play{color:#ffe9b8;border-color:rgba(251,191,36,.5);background:rgba(251,191,36,.16)}
+.map-time-pill--pink{border:1px solid rgba(236,72,153,.42)}
+.map-time-pill--pink .map-time-pill-title{color:#f472b6}
+.map-time-pill--pink .map-time-pill-display{color:#fbcfe8}
+.map-time-pill--pink .map-time-pill-step{color:#fbcfe8;border:1px solid rgba(236,72,153,.45);background:rgba(236,72,153,.14)}
+.map-time-pill--pink .map-time-pill-slider{background:linear-gradient(90deg,#1c3a5e 0%,#ec4899 100%)}
+.map-time-pill--pink .map-time-pill-footer{color:#d8a8c8}
+.map-time-pill--cyan{border:1px solid rgba(56,189,248,.40)}
+.map-time-pill--cyan .map-time-pill-title{color:#38bdf8}
+.map-time-pill--cyan .map-time-pill-display{color:#e0f2fe}
+.map-time-pill--cyan .map-time-pill-step{color:#e0f2fe;border:1px solid rgba(56,189,248,.45);background:rgba(56,189,248,.14)}
+.map-time-pill--cyan .map-time-pill-slider{background:linear-gradient(90deg,#1c3a5e 0%,#38bdf8 100%)}
+.map-time-pill--cyan .map-time-pill-footer{color:#9ec5e8}
+.map-time-pill--green{border:1px solid rgba(34,197,94,.40)}
+.map-time-pill--green .map-time-pill-title{color:#4ade80}
+.map-time-pill--green .map-time-pill-display{color:#bbf7d0}
+.map-time-pill--green .map-time-pill-step{color:#bbf7d0;border:1px solid rgba(34,197,94,.45);background:rgba(34,197,94,.14)}
+.map-time-pill--green .map-time-pill-slider{background:linear-gradient(90deg,#1c3a5e 0%,#4ade80 100%)}
+.map-time-pill--green .map-time-pill-footer{color:#9ec5e8}
+.map-time-pill--green .map-time-pill-play{color:#bbf7d0;border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.16)}
+#ocean-legend .legend-detail{font-size:13px;line-height:1.45}
 
 /* Legend rows (now living inside the merged panel) */
 .leg-row{display:flex;align-items:center;gap:9px;font-size:12px;color:#d8d0b8;margin-bottom:4px;padding:3px 0}
@@ -2385,14 +2456,14 @@ body.nav-open #ruler-readout{
     top:10px;left:50%;transform:translateX(-50%);z-index:500;
     background:rgba(10,22,40,.94);
     border:1px solid rgba(107,191,234,.3);
-    border-radius:9px;
-    padding:7px 11px;
+    border-radius:12px;
+    padding:10px 14px;
     font-family:'Segoe UI',Arial,sans-serif;
-    color:#e8f4ff;font-size:10px;
+    color:#e8f4ff;font-size:13px;
     box-shadow:0 4px 14px rgba(0,0,0,.55);
     pointer-events:none;
-    max-width:min(480px, 94vw);
-    min-width:230px;
+    max-width:min(520px, 94vw);
+    min-width:260px;
   ">
     <div id="ocean-legend-content"></div>
   </div>
@@ -2447,157 +2518,77 @@ body.nav-open #ruler-readout{
     </div>
   </div>
 
-  <!-- WIND FORECAST STEPPER — shown only when the live/model wind layer is on.
-       Advances in 3-hour forecast steps from current conditions through 4 days. -->
-  <div id="wind-forecast-slider" style="
-    display:none;position:absolute;
-    bottom:60px;left:50%;transform:translateX(-50%);z-index:500;
-    background:rgba(10,22,40,.94);
-    border:1px solid rgba(56,189,248,.35);
-    border-radius:12px;
-    padding:6px 12px 6px;
-    font-family:'Segoe UI',Arial,sans-serif;
-    color:#e8f4ff;
-    box-shadow:0 4px 14px rgba(0,0,0,.55);
-    width:min(480px, calc(100vw - 32px));
-  ">
-    <div style="display:flex;align-items:center;gap:8px">
-      <button id="wind-prev-btn" onclick="stepWindForecast(-3)" type="button" class="wind-step-btn" aria-label="Previous 3 hours">‹</button>
-      <div style="flex:1;min-width:0;text-align:center;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.10);border-radius:9px;padding:4px 10px">
-        <div style="display:flex;align-items:baseline;justify-content:center;gap:7px">
-          <span style="font-size:8px;color:#38bdf8;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Wind</span>
-          <span id="wind-forecast-date" style="font-size:12px;color:#f0f6ff;font-weight:800;line-height:1.15">Current</span>
-          <span id="wind-forecast-time" style="font-size:10px;color:#9ec5e8;font-weight:700;letter-spacing:.04em">Current</span>
-        </div>
-      </div>
-      <button id="wind-next-btn" onclick="stepWindForecast(3)" type="button" class="wind-step-btn" aria-label="Next 3 hours">›</button>
+  <!-- WIND FORECAST — same pill style as altimetry; 3-hour manual steps -->
+  <div id="wind-forecast-slider" class="map-time-pill map-time-pill--cyan">
+    <div class="map-time-pill-head">
+      <div class="map-time-pill-title">Wind Forecast</div>
+      <div id="wind-forecast-display-pill" class="map-time-pill-display">Current</div>
+    </div>
+    <div class="map-time-pill-row">
+      <button id="wind-prev-btn" type="button" class="map-time-pill-step" onclick="stepWindForecast(-3)" title="3 hours earlier" aria-label="3 hours earlier">◀</button>
+      <input id="wind-forecast-input" type="range" class="map-time-pill-slider" min="0" max="32" step="1" value="0" oninput="onWindSliderInput(this.value)">
+      <button id="wind-next-btn" type="button" class="map-time-pill-step" onclick="stepWindForecast(3)" title="3 hours later" aria-label="3 hours later">▶</button>
+    </div>
+    <div class="map-time-pill-footer">
+      <span>Now</span>
+      <span class="map-time-pill-hint">GFS/HRRR blend · 3-hour steps</span>
+      <span>+96 h →</span>
     </div>
     <div id="wind-forecast-display" style="display:none"></div>
-    <div style="display:flex;justify-content:space-between;gap:5px;font-size:9px;color:#9ec5e8;margin-top:5px">
-      <button onclick="setWindForecastHour(0)"  type="button" class="wind-time-chip wind-mark">Current</button>
-      <button onclick="setWindForecastHour(24)" type="button" class="wind-time-chip wind-mark">+24h</button>
-      <button onclick="setWindForecastHour(48)" type="button" class="wind-time-chip wind-mark">+48h</button>
-      <button onclick="setWindForecastHour(72)" type="button" class="wind-time-chip wind-mark">+72h</button>
-      <button onclick="setWindForecastHour(96)" type="button" class="wind-time-chip wind-mark">+96h</button>
-    </div>
   </div>
 
-  <!-- SATELLITE IMAGERY DATE CONTROL — SEPARATE from the forecast slider above.
-       Satellite layers (SST/chlor) are OBSERVED data. The track runs left→right
-       = OLDER→NEWEST (rightward = forward in time, the intuitive direction).
-       Changing date CROSSFADES the imagery. The play button time-lapses the last
-       two weeks forward so you can read the trend. Shown only when SST/chlor on. -->
-  <div id="sat-date-control" style="
-    display:none;position:absolute;
-    bottom:80px;left:50%;transform:translateX(-50%);z-index:500;
-    background:rgba(10,22,40,.94);
-    border:1px solid rgba(251,191,36,.35);
-    border-radius:14px;
-    padding:10px 16px 8px;
-    font-family:'Segoe UI',Arial,sans-serif;
-    color:#e8f4ff;
-    box-shadow:0 4px 14px rgba(0,0,0,.55);
-    width:min(520px, calc(100vw - 32px));
-  ">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px">
-      <div style="font-size:9px;color:#fbbf24;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Satellite Imagery Date</div>
-      <div id="sat-date-display" style="font-size:11px;color:#ffe9b8;font-weight:700">Latest imagery</div>
+  <!-- SATELLITE IMAGERY — SST & chlorophyll; manual day stepping (no autoplay) -->
+  <div id="sat-date-control" class="map-time-pill map-time-pill--amber">
+    <div class="map-time-pill-head">
+      <div class="map-time-pill-title">Satellite Imagery</div>
+      <div id="sat-date-display" class="map-time-pill-display">Latest imagery</div>
     </div>
-    <!-- value starts at max (=14) so the thumb sits at the RIGHT = newest -->
-    <input id="sat-date-input" type="range" min="0" max="14" step="1" value="14" style="
-      width:100%;
-      -webkit-appearance:none;
-      appearance:none;
-      height:6px;
-      border-radius:3px;
-      background:linear-gradient(90deg,#1c3a5e 0%,#fbbf24 100%);
-      outline:none;
-      margin:4px 0 2px;
-    "
-      oninput="onSatSliderInput(this.value)">
-    <div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;color:#d8b873;margin-top:4px">
+    <div class="map-time-pill-row">
+      <button id="sat-day-older" type="button" class="map-time-pill-step" onclick="stepSatDayOlder()" title="One day older">◀</button>
+      <input id="sat-date-input" type="range" class="map-time-pill-slider" min="0" max="14" step="1" value="14" oninput="onSatSliderInput(this.value)">
+      <button id="sat-day-newer" type="button" class="map-time-pill-step" onclick="stepSatDayNewer()" title="One day newer">▶</button>
+    </div>
+    <div class="map-time-pill-footer">
       <span>2 weeks ago</span>
-      <button id="sat-play-btn" type="button" onclick="toggleSatPlayback()" style="
-        background:rgba(251,191,36,.16);border:1px solid rgba(251,191,36,.5);
-        color:#ffe9b8;font-weight:700;font-size:10px;border-radius:8px;
-        padding:3px 12px;cursor:pointer;font-family:inherit;">▶ Play 2-week trend</button>
+      <span class="map-time-pill-hint">SST &amp; chlorophyll · step day-by-day</span>
       <span>Latest →</span>
     </div>
   </div>
 
-  <!-- ALTIMETRY DATE CONTROL — step through the last 7 daily SSH passes to read
-       eddy drift. Manual slider + prev/next only (no autoplay). Shown when the
-       Altimetry / SSH layer is on. Magenta accent matches the break highlights. -->
-  <div id="alti-date-control" style="
-    display:none;position:absolute;
-    bottom:80px;left:50%;transform:translateX(-50%);z-index:500;
-    background:rgba(10,22,40,.94);
-    border:1px solid rgba(236,72,153,.42);
-    border-radius:14px;
-    padding:10px 16px 8px;
-    font-family:'Segoe UI',Arial,sans-serif;
-    color:#e8f4ff;
-    box-shadow:0 4px 14px rgba(0,0,0,.55);
-    width:min(520px, calc(100vw - 32px));
-  ">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px">
-      <div style="font-size:9px;color:#f472b6;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Altimetry Date</div>
-      <div id="alti-date-display" style="font-size:11px;color:#fbcfe8;font-weight:700">Latest pass</div>
+  <!-- ALTIMETRY DATE — step through daily SSH passes -->
+  <div id="alti-date-control" class="map-time-pill map-time-pill--pink">
+    <div class="map-time-pill-head">
+      <div class="map-time-pill-title">Altimetry Date</div>
+      <div id="alti-date-display" class="map-time-pill-display">Latest pass</div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <button id="alti-day-older" type="button" onclick="stepAltiDayOlder()" title="One day older" style="
-        flex:0 0 auto;background:rgba(236,72,153,.14);border:1px solid rgba(236,72,153,.45);
-        color:#fbcfe8;font-weight:700;font-size:14px;border-radius:8px;
-        padding:4px 10px;cursor:pointer;font-family:inherit;line-height:1;">◀</button>
-      <input id="alti-date-input" type="range" min="0" max="6" step="1" value="6" style="
-        flex:1 1 auto;
-        -webkit-appearance:none;
-        appearance:none;
-        height:6px;
-        border-radius:3px;
-        background:linear-gradient(90deg,#1c3a5e 0%,#ec4899 100%);
-        outline:none;
-        margin:4px 0 2px;
-      " oninput="onAltiSliderInput(this.value)">
-      <button id="alti-day-newer" type="button" onclick="stepAltiDayNewer()" title="One day newer" style="
-        flex:0 0 auto;background:rgba(236,72,153,.14);border:1px solid rgba(236,72,153,.45);
-        color:#fbcfe8;font-weight:700;font-size:14px;border-radius:8px;
-        padding:4px 10px;cursor:pointer;font-family:inherit;line-height:1;">▶</button>
+    <div class="map-time-pill-row">
+      <button id="alti-day-older" type="button" class="map-time-pill-step" onclick="stepAltiDayOlder()" title="One day older">◀</button>
+      <input id="alti-date-input" type="range" class="map-time-pill-slider" min="0" max="6" step="1" value="6" oninput="onAltiSliderInput(this.value)">
+      <button id="alti-day-newer" type="button" class="map-time-pill-step" onclick="stepAltiDayNewer()" title="One day newer">▶</button>
     </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;color:#d8a8c8;margin-top:4px">
+    <div class="map-time-pill-footer">
       <span>6 days ago</span>
-      <span style="color:#9ec5e8;font-size:9px">Faint magenta = tracked prior day · arrow = 1-day drift (≤28 nm)</span>
+      <span class="map-time-pill-hint">Faint magenta = tracked prior day · arrow ≤28 nm drift</span>
       <span>Latest →</span>
     </div>
   </div>
 </div>
 
-<!-- RADAR LOOP CONTROL — animate the past ~4 hours of NOAA radar to read storm
-     motion. Shown only when the Weather Radar layer is on. Green accent (live
-     weather) to distinguish it from the amber satellite-date control. -->
-<div id="radar-loop-control" style="
-  display:none;position:absolute;
-  bottom:118px;left:50%;transform:translateX(-50%);z-index:500;
-  background:rgba(10,22,40,.94);
-  border:1px solid rgba(34,197,94,.40);
-  border-radius:14px;
-  padding:9px 16px;
-  font-family:'Segoe UI',Arial,sans-serif;
-  color:#e8f4ff;
-  box-shadow:0 4px 14px rgba(0,0,0,.55);
-  width:min(480px, calc(100vw - 32px));
-">
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-    <div style="display:flex;flex-direction:column;line-height:1.2;min-width:0;flex:1 1 auto">
-      <span id="radar-loop-label-main" style="font-size:12px;color:#4ade80;letter-spacing:.1em;font-weight:700;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Weather Radar Loop</span>
-      <span id="radar-loop-label-sub" style="font-size:12px;color:#9ec5e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">past ~4 hours · storm motion</span>
-    </div>
-    <button id="radar-loop-btn" type="button" onclick="toggleRadarLoop()" style="
-      background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.5);
-      color:#bbf7d0;font-weight:700;font-size:15px;border-radius:9px;
-      padding:9px 18px;cursor:pointer;font-family:inherit;white-space:nowrap;
-      width:170px;flex:0 0 170px;text-align:center;box-sizing:border-box;">▶ Play radar loop</button>
-    <div style="font-size:14px;color:#bbf7d0;font-weight:700;width:96px;flex:0 0 96px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="radar-loop-time">Live</div>
+<!-- WEATHER RADAR — pill + manual scrub + play loop for storm motion -->
+<div id="radar-loop-control" class="map-time-pill map-time-pill--green">
+  <div class="map-time-pill-head">
+    <div class="map-time-pill-title">Weather Radar</div>
+    <div id="radar-loop-time" class="map-time-pill-display">Live</div>
+  </div>
+  <div class="map-time-pill-row">
+    <button id="radar-frame-older" type="button" class="map-time-pill-step" onclick="stepRadarFrame(-1)" title="Earlier frame">◀</button>
+    <input id="radar-frame-input" type="range" class="map-time-pill-slider" min="0" max="12" step="1" value="12" oninput="onRadarSliderInput(this.value)">
+    <button id="radar-frame-newer" type="button" class="map-time-pill-step" onclick="stepRadarFrame(1)" title="Later frame">▶</button>
+  </div>
+  <div class="map-time-pill-footer">
+    <span>4 h ago</span>
+    <button id="radar-loop-btn" type="button" class="map-time-pill-play" onclick="toggleRadarLoop()">▶ Play storm loop</button>
+    <span>Now →</span>
   </div>
 </div>
 
@@ -6051,26 +6042,27 @@ function windForecastDateParts(hours){
 }
 
 function updateWindForecastDisplay(){
+  const parts = windForecastDateParts(WIND_FORECAST_HOUR);
+  const pill = document.getElementById("wind-forecast-display-pill");
+  if(pill){
+    pill.textContent = WIND_FORECAST_HOUR === 0
+      ? "Current"
+      : `${parts.date} · ${parts.time || windForecastLabel(WIND_FORECAST_HOUR)}`;
+  }
   const label = document.getElementById("wind-forecast-display");
   if(label) label.textContent = windForecastLabel(WIND_FORECAST_HOUR);
-  const parts = windForecastDateParts(WIND_FORECAST_HOUR);
-  const dateEl = document.getElementById("wind-forecast-date");
-  const timeEl = document.getElementById("wind-forecast-time");
-  if(dateEl) dateEl.textContent = parts.date;
-  if(timeEl) timeEl.textContent = parts.time;
+  const slider = document.getElementById("wind-forecast-input");
+  if(slider){
+    const pos = Math.round(WIND_FORECAST_HOUR / 3);
+    if(+slider.value !== pos) slider.value = pos;
+  }
   const prev = document.getElementById("wind-prev-btn");
   const next = document.getElementById("wind-next-btn");
   if(prev) prev.disabled = WIND_FORECAST_HOUR <= 0;
   if(next) next.disabled = WIND_FORECAST_HOUR >= 96;
-  const exact = [0, 24, 48, 72, 96];
-  const box = document.getElementById("wind-forecast-slider");
-  if(box){
-    box.querySelectorAll(".wind-mark").forEach((btn, idx) => {
-      const active = exact[idx] === WIND_FORECAST_HOUR;
-      btn.classList.toggle("active", active);
-    });
-  }
 }
+
+function onWindSliderInput(val){ setWindForecastHour((val|0) * 3); }
 
 function updateWindForecastSliderVisibility(){
   const box = document.getElementById("wind-forecast-slider");
@@ -10099,9 +10091,13 @@ function drawCurrents(){
 // provides it free at 0.25° resolution with ~1–3 day latency.
 // ═════════════════════════════════════════════════════════════════════════════
 let ALTIMETRY_GRID = null;  // { stepDeg, minLat, minLng, nLat, nLng, sla, ugos, vgos, observedAtMs }
-let ALTIMETRY_GHOST_GRID = null; // previous-day grid for ghost breaks + drift arrows
+let ALTIMETRY_GHOST_GRID = null; // deprecated — port-break ghost uses ALTIMETRY_BREAKS_GHOST_GRID
+let ALTIMETRY_BREAKS_GRID = null;      // port-centered grid for stable magenta breaks
+let ALTIMETRY_BREAKS_GHOST_GRID = null;
+let ALTI_PORT_BREAKS = null;           // { port, offset, brk, ghostBrk } — fixed for port+day
 let ALTIMETRY_STATUS = "idle";
 let _altiFetchSeq = 0;
+let _altiPortBreaksSeq = 0;
 let altimetryLayer = null;
 // Altimetry is daily observed data — step backward only. 0 = latest pass.
 let altiDayOffset = 0;
@@ -10269,6 +10265,8 @@ function _altiIsoSegs(A,B,C,D,L,latA,lngA,step){
 // Magenta highlights are limited to ALTI_BREAK_PORT_RADIUS_NM of the home port
 // so captains only see breaks they can actually run to.
 const ALTI_BREAK_PORT_RADIUS_NM = 150;
+// Magenta contour trace stays local to each peak — not the full SSH isoline.
+const ALTI_BREAK_TRACE_NM = 32;
 // Realistic 1-day eddy motion — arrows only drawn inside this band so we never
 // connect unrelated breaks that jumped tens of nm (the old 90nm cap caused that).
 const ALTI_MAX_DRIFT_NM_PER_DAY = 28;
@@ -10318,8 +10316,18 @@ async function fetchAltiGridCached(bx, offset){
   if(grid) _altiDayCache.set(k, { grid, atMs: Date.now() });
   return grid;
 }
-// Draw magenta break contours + peak dots. Style opts control ghost vs current.
-function _altiDrawMagentaBreaks(ctx, map, g, brk, opt){
+// Draw magenta break contours + peak dots. Clipped to port radius AND a local
+// neighborhood around each peak so we never paint a 100+ nm Gulf Stream wall.
+function _altiSegInBreakRange(pts, pk, portLat, portLng, portMaxNm){
+  if(!pts || pts.length < 2) return false;
+  const ok = (lat, lng) => {
+    if(nmBetween(pk.lat, pk.lng, lat, lng) > ALTI_BREAK_TRACE_NM) return false;
+    if(Number.isFinite(portLat) && nmBetween(portLat, portLng, lat, lng) > portMaxNm) return false;
+    return true;
+  };
+  return ok(pts[0][0], pts[0][1]) && ok(pts[1][0], pts[1][1]);
+}
+function _altiDrawMagentaBreaks(ctx, map, g, brk, opt, portLat, portLng, portMaxNm){
   if(!brk || !brk.peaks.length || !g) return;
   const strokeStyle = opt.strokeStyle || "rgba(236,72,153,0.95)";
   const lineWidth = opt.lineWidth || 3;
@@ -10327,20 +10335,24 @@ function _altiDrawMagentaBreaks(ctx, map, g, brk, opt){
   const shadowColor = opt.shadowColor || "rgba(236,72,153,0.85)";
   const dotR = opt.dotR || 3.4;
   const dotFill = opt.dotFill || "rgba(236,72,153,0.95)";
-  const gmA = brk.gm, R = 1.3;
+  const gmA = brk.gm;
+  const clipPort = Number.isFinite(portLat) && Number.isFinite(portLng) && portMaxNm > 0;
   ctx.save();
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.shadowColor = shadowColor; ctx.shadowBlur = shadowBlur;
   ctx.strokeStyle = strokeStyle; ctx.lineWidth = lineWidth;
   for(const pk of brk.peaks){
+    if(clipPort && nmBetween(portLat, portLng, pk.lat, pk.lng) > portMaxNm) continue;
     const L = pk.level, gth = 0.5 * pk.gmag;
+    const traceLat = ALTI_BREAK_TRACE_NM / 60;
+    const traceLng = ALTI_BREAK_TRACE_NM / (60 * Math.cos(pk.lat * Math.PI / 180) || 1e-6);
     ctx.beginPath();
     for(let i=0;i<g.nLat-1;i++){
       const latA = g.minLat + i * g.step;
-      if(Math.abs(latA - pk.lat) > R + g.step) continue;
+      if(Math.abs(latA - pk.lat) > traceLat + g.step) continue;
       for(let j=0;j<g.nLng-1;j++){
         const lngA = g.minLng + j * g.step;
-        if(Math.abs(lngA - pk.lng) > R + g.step) continue;
+        if(Math.abs(lngA - pk.lng) > traceLng + g.step) continue;
         const A=g.sla[i*g.nLng+j], B=g.sla[i*g.nLng+(j+1)],
               C=g.sla[(i+1)*g.nLng+(j+1)], D=g.sla[(i+1)*g.nLng+j];
         if(!isFinite(A)||!isFinite(B)||!isFinite(C)||!isFinite(D)) continue;
@@ -10348,12 +10360,15 @@ function _altiDrawMagentaBreaks(ctx, map, g, brk, opt){
         const cg = Math.max(gmA[i*g.nLng+j], gmA[i*g.nLng+(j+1)], gmA[(i+1)*g.nLng+(j+1)], gmA[(i+1)*g.nLng+j]);
         if(cg < gth) continue;
         const pts = _altiIsoSegs(A,B,C,D,L,latA,lngA,g.step);
-        if(pts.length >= 2){
+        if(pts.length >= 2 && _altiSegInBreakRange(pts, pk, portLat, portLng, portMaxNm)){
           let a = map.latLngToContainerPoint(pts[0]), b = map.latLngToContainerPoint(pts[1]);
           ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
           if(pts.length === 4){
-            a = map.latLngToContainerPoint(pts[2]); b = map.latLngToContainerPoint(pts[3]);
-            ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+            const pts2 = [pts[2], pts[3]];
+            if(_altiSegInBreakRange(pts2, pk, portLat, portLng, portMaxNm)){
+              a = map.latLngToContainerPoint(pts[2]); b = map.latLngToContainerPoint(pts[3]);
+              ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+            }
           }
         }
       }
@@ -10461,6 +10476,16 @@ function altimetryRequestBox(map){
   if(e-w>ALTI_MAX_LNG_SPAN){ w=lngC-ALTI_MAX_LNG_SPAN/2; e=lngC+ALTI_MAX_LNG_SPAN/2; }
   return {s,n,w,e};
 }
+// Fixed bbox centered on the home port for magenta-break scoring. Independent
+// of map pan/zoom so the top-3 breaks stay anchored to the port.
+function altimetryPortBox(port){
+  const r = ALTI_BREAK_PORT_RADIUS_NM;
+  let degLat = r / 60 + 0.05;
+  let degLng = r / (60 * Math.cos(port.lat * Math.PI / 180) || 1e-6) + 0.05;
+  degLat = Math.min(degLat, ALTI_MAX_LAT_SPAN / 2);
+  degLng = Math.min(degLng, ALTI_MAX_LNG_SPAN / 2);
+  return { s: port.lat - degLat, n: port.lat + degLat, w: port.lng - degLng, e: port.lng + degLng };
+}
 const AltimetryLayer = L.Layer.extend({
   onAdd: function(map){
     this._map=map;
@@ -10470,7 +10495,8 @@ const AltimetryLayer = L.Layer.extend({
     map.on("moveend zoomend",this._reset,this);
     map.on("move",this._onMove,this);
     this._reset();
-    this._requestData();
+    this._requestDisplayData();
+    this._requestPortBreaks(true);
   },
   onRemove: function(map){
     map.off("moveend zoomend",this._reset,this);
@@ -10495,39 +10521,64 @@ const AltimetryLayer = L.Layer.extend({
     const bx=altimetryRequestBox(this._map);
     const tol=g?g.step:0.25;
     const boxKey=altiBBoxKey(bx);
-    if(this._loadedBox!==boxKey || this._loadedOffset!==altiDayOffset ||
+    if(this._displayBox!==boxKey || this._displayOffset!==altiDayOffset ||
        !g||bx.s<g.bounds.s-tol||bx.n>g.bounds.n+tol||
        bx.w<g.bounds.w-tol||bx.e>g.bounds.e+tol){
-      this._requestData();
+      this._requestDisplayData();
     }
   },
-  _requestData: function(){
+  _requestDisplayData: function(){
     if(!layerVis.altimetry||typeof BW_OCEAN==="undefined"||!BW_OCEAN.fetchAltimetryGrid||!MAP) return;
     const seq=++_altiFetchSeq;
     const bx=altimetryRequestBox(MAP);
     const boxKey=altiBBoxKey(bx);
     ALTIMETRY_STATUS="loading";
     if(typeof updateOceanLegend==="function") updateOceanLegend();
-    const ghostOff = Math.min(ALTI_MAX_DAYS_BACK, altiDayOffset + 1);
-    Promise.all([
-      fetchAltiGridCached(bx, altiDayOffset),
-      altiDayOffset < ALTI_MAX_DAYS_BACK ? fetchAltiGridCached(bx, ghostOff) : Promise.resolve(null),
-    ]).then(([grid, ghost])=>{
+    fetchAltiGridCached(bx, altiDayOffset).then(grid=>{
       if(seq!==_altiFetchSeq||!layerVis.altimetry) return;
-      ALTIMETRY_GRID = grid;
-      ALTIMETRY_GHOST_GRID = ghost;
-      this._loadedBox = boxKey;
-      this._loadedOffset = altiDayOffset;
-      this._breaksFor = null;
-      this._ghostBreaksFor = null;
-      ALTIMETRY_STATUS = grid ? "ready" : "unavailable";
-      if(typeof updateAltiDateDisplay === "function") updateAltiDateDisplay();
-      if(typeof updateOceanLegend === "function") updateOceanLegend();
+      ALTIMETRY_GRID=grid;
+      this._displayBox=boxKey;
+      this._displayOffset=altiDayOffset;
+      ALTIMETRY_STATUS=grid?"ready":"unavailable";
+      if(typeof updateAltiDateDisplay==="function") updateAltiDateDisplay();
+      if(typeof updateOceanLegend==="function") updateOceanLegend();
       this._draw();
     }).catch(()=>{
       ALTIMETRY_STATUS="unavailable";
       if(typeof updateOceanLegend==="function") updateOceanLegend();
     });
+  },
+  // Port-centered top-3 breaks — only refresh when port or altimetry day changes.
+  _requestPortBreaks: function(force){
+    if(!layerVis.altimetry||typeof BW_OCEAN==="undefined"||!BW_OCEAN.fetchAltimetryGrid) return Promise.resolve();
+    const portName=(typeof activePort!=="undefined"&&activePort)?activePort:"";
+    const key=portName+":"+altiDayOffset;
+    if(!force && this._portBreaksKey===key && ALTI_PORT_BREAKS) return Promise.resolve();
+    const po=portName&&PORTS[portName]?PORTS[portName]:null;
+    if(!po){
+      ALTI_PORT_BREAKS=null; ALTIMETRY_BREAKS_GRID=null; ALTIMETRY_BREAKS_GHOST_GRID=null;
+      this._portBreaksKey=""; this._draw(); return Promise.resolve();
+    }
+    const seq=++_altiPortBreaksSeq;
+    const bx=altimetryPortBox(po);
+    const ghostOff=altiDayOffset+1;
+    return Promise.all([
+      fetchAltiGridCached(bx, altiDayOffset),
+      altiDayOffset<ALTI_MAX_DAYS_BACK ? fetchAltiGridCached(bx, ghostOff) : Promise.resolve(null),
+    ]).then(([grid, ghost])=>{
+      if(seq!==_altiPortBreaksSeq||!layerVis.altimetry) return;
+      ALTIMETRY_BREAKS_GRID=grid;
+      ALTIMETRY_BREAKS_GHOST_GRID=ghost;
+      const brk=grid?_altiComputeBreaks(grid, po.lat, po.lng, ALTI_BREAK_PORT_RADIUS_NM):null;
+      const ghostBrk=ghost?_altiComputeBreaks(ghost, po.lat, po.lng, ALTI_BREAK_PORT_RADIUS_NM):null;
+      ALTI_PORT_BREAKS={ port:portName, offset:altiDayOffset, brk, ghostBrk };
+      this._portBreaksKey=key;
+      this._draw();
+    });
+  },
+  _requestData: function(){
+    this._requestDisplayData();
+    this._requestPortBreaks(true);
   },
   _draw: function(){
     if(!this._canvas||!this._map) return;
@@ -10610,57 +10661,37 @@ const AltimetryLayer = L.Layer.extend({
       }
     }
 
-    // ── 4) PRIOR-DAY GHOST + DRIFT (phase 2) ─────────────────────────────────
+    // ── 4) PRIOR-DAY GHOST + DRIFT + MAGENTA (port-anchored) ───────────────
     const portName=(typeof activePort!=="undefined"&&activePort)?activePort:"";
     const po=portName&&PORTS[portName]?PORTS[portName]:null;
-    const gg=ALTIMETRY_GHOST_GRID;
-    if(this._breaksFor!==g||this._breaksPort!==portName){
-      this._breaks=_altiComputeBreaks(g, po?po.lat:null, po?po.lng:null, ALTI_BREAK_PORT_RADIUS_NM);
-      this._breaksFor=g; this._breaksPort=portName;
+    const pb=ALTI_PORT_BREAKS;
+    const bg=ALTIMETRY_BREAKS_GRID;
+    const gg=ALTIMETRY_BREAKS_GHOST_GRID;
+    if(po && pb && pb.port===portName && pb.offset===altiDayOffset && bg && pb.brk){
+      const brk=pb.brk;
+      let drifts=[];
+      if(gg && pb.ghostBrk && altiDayOffset<ALTI_MAX_DAYS_BACK && brk.peaks.length && pb.ghostBrk.peaks.length){
+        drifts=_altiMatchPeakDrifts(pb.ghostBrk.peaks, brk.peaks, ALTI_MAX_DRIFT_NM_PER_DAY);
+        if(drifts.length){
+          const matchedGhost={ gm:pb.ghostBrk.gm, peaks:drifts.map(d=>d.from) };
+          _altiDrawMagentaBreaks(ctx, this._map, gg, matchedGhost, {
+            strokeStyle:"rgba(236,72,153,0.30)", lineWidth:2, shadowBlur:0,
+            dotR:2.6, dotFill:"rgba(236,72,153,0.38)",
+          }, po.lat, po.lng, ALTI_BREAK_PORT_RADIUS_NM);
+        }
+      }
+      if(drifts.length) _altiDrawDriftArrows(ctx, this._map, drifts);
+      _altiDrawMagentaBreaks(ctx, this._map, bg, brk, {}, po.lat, po.lng, ALTI_BREAK_PORT_RADIUS_NM);
     }
-    const brk=this._breaks;
-    let drifts=[];
-    if(gg && altiDayOffset < ALTI_MAX_DAYS_BACK){
-      if(this._ghostBreaksFor!==gg||this._ghostBreaksPort!==portName){
-        this._ghostBreaks=_altiComputeBreaks(gg, po?po.lat:null, po?po.lng:null, ALTI_BREAK_PORT_RADIUS_NM);
-        this._ghostBreaksFor=gg; this._ghostBreaksPort=portName;
-      }
-      if(brk && brk.peaks.length && this._ghostBreaks.peaks.length){
-        drifts=_altiMatchPeakDrifts(this._ghostBreaks.peaks, brk.peaks, ALTI_MAX_DRIFT_NM_PER_DAY);
-      }
-      // Only ghost the prior-day breaks we confidently tracked — not every peak.
-      if(drifts.length){
-        const matchedGhost={ gm:this._ghostBreaks.gm, peaks:drifts.map(d=>d.from) };
-        _altiDrawMagentaBreaks(ctx, this._map, gg, matchedGhost, {
-          strokeStyle:"rgba(236,72,153,0.30)", lineWidth:2, shadowBlur:0,
-          dotR:2.6, dotFill:"rgba(236,72,153,0.38)",
-        });
-      }
-    }
-
-    // ── 5) STRONGEST BREAKS (magenta, current day) + drift arrows ───────────
-    if(drifts.length) _altiDrawDriftArrows(ctx, this._map, drifts);
-    _altiDrawMagentaBreaks(ctx, this._map, g, brk, {});
   },
 });
 
 async function buildAltimetryForMap(){
   if(!MAP||!BW_OCEAN||!BW_OCEAN.fetchAltimetryGrid) return;
-  const seq=++_altiFetchSeq;
-  ALTIMETRY_STATUS="loading";
-  const bx=altimetryRequestBox(MAP);
-  const ghostOff = Math.min(ALTI_MAX_DAYS_BACK, altiDayOffset + 1);
-  const [grid, ghost] = await Promise.all([
-    fetchAltiGridCached(bx, altiDayOffset),
-    altiDayOffset < ALTI_MAX_DAYS_BACK ? fetchAltiGridCached(bx, ghostOff) : Promise.resolve(null),
-  ]);
-  if(seq!==_altiFetchSeq) return;
-  ALTIMETRY_GRID = grid;
-  ALTIMETRY_GHOST_GRID = ghost;
-  ALTIMETRY_STATUS = grid ? "ready" : "unavailable";
-  if(typeof updateAltiDateDisplay === "function") updateAltiDateDisplay();
-  updateOceanLegend();
-  if(altimetryLayer) altimetryLayer._draw();
+  if(altimetryLayer){
+    await altimetryLayer._requestPortBreaks(true);
+    altimetryLayer._requestDisplayData();
+  }
 }
 
 function drawAltimetry(){
@@ -11450,7 +11481,13 @@ function updateSatDateDisplay(){
     const pos = SAT_MAX_DAYS_BACK - satDayOffset;
     if(+inp.value !== pos) inp.value = pos;
   }
+  const older = document.getElementById("sat-day-older");
+  const newer = document.getElementById("sat-day-newer");
+  if(older) older.disabled = satDayOffset >= SAT_MAX_DAYS_BACK;
+  if(newer) newer.disabled = satDayOffset <= 0;
 }
+function stepSatDayOlder(){ stopSatPlayback(); setSatDayOffset(satDayOffset + 1); }
+function stepSatDayNewer(){ stopSatPlayback(); setSatDayOffset(satDayOffset - 1); }
 // Slider handler: input position is left(old)→right(newest), so days-back is inverted.
 function onSatSliderInput(sliderPos){
   setSatDayOffset(SAT_MAX_DAYS_BACK - (sliderPos|0));
@@ -11511,7 +11548,10 @@ function setAltiDayOffset(days){
   if(v === altiDayOffset){ updateAltiDateDisplay(); return; }
   altiDayOffset = v;
   updateAltiDateDisplay();
-  if(altimetryLayer) altimetryLayer._requestData();
+  if(altimetryLayer){
+    altimetryLayer._requestPortBreaks(true);
+    altimetryLayer._requestDisplayData();
+  }
 }
 function stepAltiDayOlder(){ setAltiDayOffset(altiDayOffset + 1); }
 function stepAltiDayNewer(){ setAltiDayOffset(altiDayOffset - 1); }
@@ -11702,7 +11742,40 @@ function showRadarFrame(i){
     if(!MAP.hasLayer(f.layer)) f.layer.addTo(MAP);
     f.layer.setOpacity(idx === _radarFrameIdx ? 0.6 : 0);
   });
+  syncRadarSlider();
   updateRadarLoopReadout();
+}
+function ensureRadarFramesBuilt(){
+  if(!_radarBuilt || !_radarFrames.length){
+    buildRadarFrames();
+    _radarFrameIdx = _radarFrames.length - 1;
+    if(layerVis.radar && MAP && MAP.hasLayer(radarLayer)) radarLayer.setOpacity(0);
+  }
+}
+function syncRadarSlider(){
+  const inp = document.getElementById("radar-frame-input");
+  const maxIdx = Math.max(0, (_radarFrames.length || 13) - 1);
+  if(inp){
+    if(+inp.max !== maxIdx) inp.max = maxIdx;
+    if(+inp.value !== _radarFrameIdx) inp.value = _radarFrameIdx;
+  }
+  const older = document.getElementById("radar-frame-older");
+  const newer = document.getElementById("radar-frame-newer");
+  if(older) older.disabled = !_radarFrames.length || _radarFrameIdx <= 0;
+  if(newer) newer.disabled = !_radarFrames.length || _radarFrameIdx >= _radarFrames.length - 1;
+}
+function stepRadarFrame(delta){
+  if(!layerVis.radar) return;
+  if(isRadarLooping()) pauseRadarLoop();
+  ensureRadarFramesBuilt();
+  const next = Math.max(0, Math.min(_radarFrames.length - 1, _radarFrameIdx + (delta|0)));
+  showRadarFrame(next);
+}
+function onRadarSliderInput(val){
+  if(!layerVis.radar) return;
+  if(isRadarLooping()) pauseRadarLoop();
+  ensureRadarFramesBuilt();
+  showRadarFrame(val|0);
 }
 function isRadarLooping(){ return _radarTimer !== null; }
 function startRadarLoop(){
@@ -11748,6 +11821,9 @@ function stopRadarLoop(){
   if(_radarTimer){ clearInterval(_radarTimer); _radarTimer = null; }
   clearRadarFrames();
   _radarFrameIdx = 0;
+  const inp = document.getElementById("radar-frame-input");
+  if(inp) inp.value = inp.max || 12;
+  syncRadarSlider();
   // Restore the live single-frame radar layer if radar is still on.
   if(layerVis.radar && radarLayer){
     if(!MAP.hasLayer(radarLayer)) radarLayer.addTo(MAP);
@@ -11759,7 +11835,7 @@ function stopRadarLoop(){
 function toggleRadarLoop(){ isRadarLooping() ? pauseRadarLoop() : startRadarLoop(); }
 function updateRadarLoopButton(){
   const btn = document.getElementById("radar-loop-btn");
-  if(btn) btn.textContent = isRadarLooping() ? "⏸ Pause" : "▶ Play radar loop";
+  if(btn) btn.textContent = isRadarLooping() ? "⏸ Pause loop" : "▶ Play storm loop";
 }
 function updateRadarLoopReadout(){
   const el = document.getElementById("radar-loop-time");
@@ -13017,9 +13093,9 @@ function updateOceanLegend(){
   if(layerVis.sst){
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:11px;font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:2px">SST (°F)</div>
+        <div style="font-size:14px;font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">SST (°F)</div>
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#0a2e6b 0%,#0e72b5 20%,#4dbed5 40%,#8fd96b 55%,#e8d65a 70%,#e8975a 85%,#c83520 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:#cfe5ff;margin-top:2px;font-weight:600">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>40°</span><span>50°</span><span>60°</span><span>68°</span><span>72°</span><span>78°</span><span>84°+</span>
         </div>
       </div>`);
@@ -13027,9 +13103,9 @@ function updateOceanLegend(){
   if(layerVis.chlor){
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:11px;font-weight:700;color:#34d399;letter-spacing:.08em;margin-bottom:2px">CHLOROPHYLL</div>
+        <div style="font-size:14px;font-weight:700;color:#34d399;letter-spacing:.08em;margin-bottom:3px">CHLOROPHYLL</div>
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1a1a4d 0%,#2563a8 25%,#34d399 55%,#fbbf24 80%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:#cfe5ff;margin-top:2px;font-weight:600">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>Low</span><span>Productive</span><span>High</span>
         </div>
       </div>`);
@@ -13037,32 +13113,32 @@ function updateOceanLegend(){
   if(layerVis.wind){
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:2px">WIND (kt)</div>
+        <div style="font-size:14px;font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:3px">WIND (kt)</div>
         <div style="height:11px;border-radius:3px;background:${(window.BW_WIND && window.BW_WIND.legendGradient) ? window.BW_WIND.legendGradient(40) : 'linear-gradient(90deg,#2870d2,#82e178,#ebe650,#e46e19,#be1a26,#f05ab4)'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="position:relative;height:11px;margin-top:2px;font-size:9px;color:#cfe5ff;font-weight:600">
+        <div style="position:relative;height:11px;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600">
           ${[0,5,10,15,20,25,30,35,40].map((v,i,arr)=>{const pct=v/40*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===40?'40+':v}</span>`;}).join('')}
         </div>
-        <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
-        <div style="font-size:8.5px;color:#7aa8c8;margin-top:3px;line-height:1.35"><b style="color:#bfe3f5">GFS/HRRR blend</b> · HRRR 3 km nearshore &lt;48 h · <b style="color:#bfe3f5">hover the map</b> for speed + gusts</div>
+        <div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
+        <div style="font-size:12px;color:#7aa8c8;margin-top:4px;line-height:1.4"><b style="color:#bfe3f5">GFS/HRRR blend</b> · HRRR 3 km nearshore &lt;48 h · <b style="color:#bfe3f5">hover the map</b> for speed + gusts</div>
       </div>`);
   }
   if(layerVis.currents){
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:11px;font-weight:700;color:#2dd4bf;letter-spacing:.08em;margin-bottom:2px">CURRENT DRIFT (kt)</div>
+        <div style="font-size:14px;font-weight:700;color:#2dd4bf;letter-spacing:.08em;margin-bottom:3px">CURRENT DRIFT (kt)</div>
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#93c5e0 0%,#38bdf8 18%,#2dd4bf 40%,#5eead4 62%,#fbbf24 88%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="position:relative;height:11px;margin-top:2px;font-size:9px;color:#cfe5ff;font-weight:600">
+        <div style="position:relative;height:11px;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600">
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
         </div>
-        <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
+        <div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
         ${detail(`
-        <div style="margin-top:5px;display:grid;grid-template-columns:14px 1fr;gap:4px 6px;align-items:start;font-size:11px;color:#cfe5ff;line-height:1.35">
+        <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
           <span style="justify-self:center;color:#94a3b8;font-size:13px;line-height:1">●</span><span><b style="color:#e2eaf2">Gray/faint</b> — barely moving (&lt;0.5 kt). Negligible drift.</span>
           <span style="justify-self:center;color:#2dd4bf;font-size:13px;line-height:1">●</span><span><b style="color:#99f6e4">Teal</b> — solid current (0.5–2 kt). Note the direction; adjust your drift.</span>
           <span style="justify-self:center;color:#67e8f9;font-size:13px;line-height:1">●</span><span><b style="color:#a5f3fc">Cyan</b> — strong current (2–3 kt). Edges concentrate bait &amp; fish.</span>
           <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">●</span><span><b style="color:#fde68a">Amber</b> — Gulf Stream core (3+ kt). Fish the western edge, not the core.</span>
         </div>
-        <div style="font-size:11px;color:#7aa8c8;margin-top:6px;line-height:1.4"><b style="color:#2dd4bf">Tip:</b> streaks show where the water is going (set). The edges between fast and slow water hold the most fish — same as a rip line.</div>`)}
+        <div style="font-size:13px;color:#7aa8c8;margin-top:7px;line-height:1.45"><b style="color:#2dd4bf">Tip:</b> streaks show where the water is going (set). The edges between fast and slow water hold the most fish — same as a rip line.</div>`)}
       </div>`);
   }
   if(layerVis.altimetry){
@@ -13073,25 +13149,25 @@ function updateOceanLegend(){
         ? new Date(ALTIMETRY_GRID.observedAtMs).toLocaleDateString("en-US",{month:"short",day:"numeric"})
         : "—");
     const statusRow = loading
-      ? `<div style="display:flex;align-items:center;gap:6px;font-size:9px;color:#f0abfc;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em"><span class="alti-spinner"></span>Loading altimetry…</div>`
+      ? `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#f0abfc;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em"><span class="alti-spinner"></span>Loading altimetry…</div>`
       : (ALTIMETRY_STATUS==="unavailable"
-        ? `<div style="font-size:8.5px;color:#f8a5a5;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Altimetry unavailable</div>`
-        : `<div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">NOAA altimetry · ${altiDate}</div>`);
+        ? `<div style="font-size:12px;color:#f8a5a5;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Altimetry unavailable</div>`
+        : `<div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">NOAA altimetry · ${altiDate}</div>`);
     const altiPort = (typeof activePort!=="undefined"&&activePort&&PORTS[activePort]) ? activePort.split(",")[0] : null;
     const altiRangeNote = altiPort
       ? `within <b style="color:#e8f4ff">${ALTI_BREAK_PORT_RADIUS_NM} nm</b> of <b style="color:#e8f4ff">${altiPort}</b>`
       : `within <b style="color:#e8f4ff">${ALTI_BREAK_PORT_RADIUS_NM} nm</b> of your home port <span style="color:#fbbf24">(select a port)</span>`;
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:11px;font-weight:700;color:#e879f9;letter-spacing:.08em;margin-bottom:2px">SEA-SURFACE HEIGHT</div>
+        <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em;margin-bottom:3px">SEA-SURFACE HEIGHT</div>
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1e3a8a 0%,#38bdf8 30%,rgba(60,60,75,0.55) 50%,#f87171 70%,#7f1d1d 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:#cfe5ff;margin-top:2px;font-weight:600">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>Cold / low</span><span>Flat</span><span>Warm / high</span>
         </div>
         ${statusRow}
-        <div style="font-size:11px;color:#7aa8c8;margin-top:5px;line-height:1.4"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">Altimetry Date</b> bar to step day-by-day and read eddy drift. Faint magenta = prior day; amber arrow = how far the break moved.</div>
+        <div style="font-size:13px;color:#7aa8c8;margin-top:6px;line-height:1.45"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">Altimetry Date</b> bar to step day-by-day and read eddy drift. Faint magenta = prior day; amber arrow = how far the break moved.</div>
         ${detail(`
-        <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:4px 6px;align-items:start;font-size:11px;color:#cfe5ff;line-height:1.35">
+        <div style="margin-top:7px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
           <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${ALTI_BREAK_PORT_RADIUS_NM}-nm fishing range are highlighted.</span>
           <span style="justify-self:center;color:#f9a8d4;font-size:13px;line-height:1">▬</span><span><b style="color:#fbcfe8">Faint magenta</b> — same break on the <b>previous day</b> (only shown when tracked). Step ◀▶ or the slider to compare passes.</span>
           <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">↗</span><span><b style="color:#fde68a">Amber arrow</b> — 1-day drift for a <b>tracked</b> break (2–${ALTI_MAX_DRIFT_NM_PER_DAY} nm). No arrow = different feature or moved too far to link.</span>
@@ -13100,15 +13176,15 @@ function updateOceanLegend(){
           <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">〜</span><span><b style="color:#eef0f6">White contours — equal SSH.</b> Tightly-packed lines = a steep gradient = a temperature/current break.</span>
           <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">→</span><span><b style="color:#eef0f6">Arrows — geostrophic flow</b> (from the SSH slope, not a direct measurement). Shows eddy rotation; longer = stronger.</span>
         </div>
-        <div style="font-size:11px;color:#7aa8c8;margin-top:6px;line-height:1.4">Use the <b style="color:#2dd4bf">Ocean Currents layer</b> for actual drift direction; these arrows show eddy circulation pattern only.</div>`)}
+        <div style="font-size:13px;color:#7aa8c8;margin-top:7px;line-height:1.45">Use the <b style="color:#2dd4bf">Ocean Currents layer</b> for actual drift direction; these arrows show eddy circulation pattern only.</div>`)}
       </div>`);
   }
   if(layerVis.radar){
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:11px;font-weight:700;color:#a855f7;letter-spacing:.08em;margin-bottom:2px">RADAR (dBZ)</div>
+        <div style="font-size:14px;font-weight:700;color:#a855f7;letter-spacing:.08em;margin-bottom:3px">RADAR (dBZ)</div>
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#04e9e7 0%,#019ff4 15%,#0300f4 28%,#02fd02 42%,#01c501 52%,#fdf802 64%,#e5bc00 72%,#fd9500 80%,#fd0000 90%,#d40000 95%,#bc0000 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:#cfe5ff;margin-top:2px;font-weight:600">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>light</span><span>moderate</span><span>heavy</span><span>intense</span>
         </div>
       </div>`);
@@ -13118,9 +13194,9 @@ function updateOceanLegend(){
   if(_hasDetail){
     parts.push(`
       <button type="button" onclick="toggleOceanLegendDetail()" style="
-        width:100%;margin-top:8px;padding:6px 8px;border-radius:6px;cursor:pointer;pointer-events:auto;
+        width:100%;margin-top:8px;padding:8px 10px;border-radius:6px;cursor:pointer;pointer-events:auto;
         background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
-        color:#bfe3f5;font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.06em;
+        color:#bfe3f5;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.06em;
         text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:5px">
         ${oceanLegendExpanded ? "Hide details ▴" : "How to read ▾"}
       </button>`);
@@ -15323,7 +15399,10 @@ function selectPort(name){
   drawRamps();
   ensurePredictLayerOn();
   drawPrediction();
-  if(layerVis.altimetry&&altimetryLayer) altimetryLayer._draw();
+  if(layerVis.altimetry&&altimetryLayer){
+    altimetryLayer._requestPortBreaks(true);
+    altimetryLayer._draw();
+  }
   updateEmptyState();
   updateHeaderConditions();
 }
