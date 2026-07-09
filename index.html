@@ -2566,7 +2566,7 @@ body.nav-open #ruler-readout{
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;color:#d8a8c8;margin-top:4px">
       <span>6 days ago</span>
-      <span style="color:#9ec5e8;font-size:9px">Faint magenta = prior day · arrow = drift</span>
+      <span style="color:#9ec5e8;font-size:9px">Faint magenta = tracked prior day · arrow = 1-day drift (≤28 nm)</span>
       <span>Latest →</span>
     </div>
   </div>
@@ -10269,6 +10269,10 @@ function _altiIsoSegs(A,B,C,D,L,latA,lngA,step){
 // Magenta highlights are limited to ALTI_BREAK_PORT_RADIUS_NM of the home port
 // so captains only see breaks they can actually run to.
 const ALTI_BREAK_PORT_RADIUS_NM = 150;
+// Realistic 1-day eddy motion — arrows only drawn inside this band so we never
+// connect unrelated breaks that jumped tens of nm (the old 90nm cap caused that).
+const ALTI_MAX_DRIFT_NM_PER_DAY = 28;
+const ALTI_MIN_DRIFT_NM = 2;
 function _altiComputeBreaks(g, portLat, portLng, maxNm){
   const n=g.nLat, m=g.nLng, gm=new Float32Array(n*m);
   const latOf=(i)=>g.minLat+i*g.step;
@@ -10361,17 +10365,47 @@ function _altiDrawMagentaBreaks(ctx, map, g, brk, opt){
   }
   ctx.restore();
 }
-// Pair each current peak with the nearest prior-day peak within maxNm.
+// Pair prior-day ↔ current peaks only when both are mutual nearest neighbors,
+// within realistic 1-day drift, and the same warm/cold character. Prevents bogus
+// 45–60nm arrows from cross-matching unrelated breaks.
+function _altiPeaksCompatible(from, to){
+  if(!from || !to) return false;
+  if(Math.abs(from.level) > 0.03 && Math.abs(to.level) > 0.03){
+    if((from.level > 0) !== (to.level > 0)) return false;
+  }
+  return true;
+}
 function _altiMatchPeakDrifts(oldPeaks, newPeaks, maxNm){
-  const pairs = [], used = new Set();
-  for(const neu of newPeaks){
-    let best = -1, bestD = maxNm;
-    for(let i=0;i<oldPeaks.length;i++){
-      if(used.has(i)) continue;
-      const d = nmBetween(neu.lat, neu.lng, oldPeaks[i].lat, oldPeaks[i].lng);
-      if(d < bestD){ bestD = d; best = i; }
+  if(!oldPeaks?.length || !newPeaks?.length) return [];
+  const cands = [];
+  for(let ni=0; ni<newPeaks.length; ni++){
+    for(let oi=0; oi<oldPeaks.length; oi++){
+      if(!_altiPeaksCompatible(oldPeaks[oi], newPeaks[ni])) continue;
+      const d = nmBetween(newPeaks[ni].lat, newPeaks[ni].lng, oldPeaks[oi].lat, oldPeaks[oi].lng);
+      if(d > maxNm || d < ALTI_MIN_DRIFT_NM) continue;
+      cands.push({ ni, oi, d, rankDiff: Math.abs(ni - oi) });
     }
-    if(best >= 0){ used.add(best); pairs.push({ from: oldPeaks[best], to: neu, distNm: bestD }); }
+  }
+  cands.sort((a,b) => a.d - b.d || a.rankDiff - b.rankDiff);
+  const usedNew = new Set(), usedOld = new Set(), pairs = [];
+  for(const c of cands){
+    if(usedNew.has(c.ni) || usedOld.has(c.oi)) continue;
+    const neu = newPeaks[c.ni], old = oldPeaks[c.oi];
+    let bestOldForNew = -1, bestD1 = Infinity;
+    for(let oi=0; oi<oldPeaks.length; oi++){
+      if(!_altiPeaksCompatible(oldPeaks[oi], neu)) continue;
+      const d = nmBetween(neu.lat, neu.lng, oldPeaks[oi].lat, oldPeaks[oi].lng);
+      if(d < bestD1){ bestD1 = d; bestOldForNew = oi; }
+    }
+    let bestNewForOld = -1, bestD2 = Infinity;
+    for(let ni=0; ni<newPeaks.length; ni++){
+      if(!_altiPeaksCompatible(old, newPeaks[ni])) continue;
+      const d = nmBetween(old.lat, old.lng, newPeaks[ni].lat, newPeaks[ni].lng);
+      if(d < bestD2){ bestD2 = d; bestNewForOld = ni; }
+    }
+    if(bestOldForNew !== c.oi || bestNewForOld !== c.ni) continue;
+    usedNew.add(c.ni); usedOld.add(c.oi);
+    pairs.push({ from: old, to: neu, distNm: c.d });
   }
   return pairs;
 }
@@ -10580,27 +10614,32 @@ const AltimetryLayer = L.Layer.extend({
     const portName=(typeof activePort!=="undefined"&&activePort)?activePort:"";
     const po=portName&&PORTS[portName]?PORTS[portName]:null;
     const gg=ALTIMETRY_GHOST_GRID;
-    if(gg && altiDayOffset < ALTI_MAX_DAYS_BACK){
-      if(this._ghostBreaksFor!==gg||this._ghostBreaksPort!==portName){
-        this._ghostBreaks=_altiComputeBreaks(gg, po?po.lat:null, po?po.lng:null, ALTI_BREAK_PORT_RADIUS_NM);
-        this._ghostBreaksFor=gg; this._ghostBreaksPort=portName;
-      }
-      _altiDrawMagentaBreaks(ctx, this._map, gg, this._ghostBreaks, {
-        strokeStyle:"rgba(236,72,153,0.30)", lineWidth:2, shadowBlur:0,
-        dotR:2.6, dotFill:"rgba(236,72,153,0.38)",
-      });
-    }
-
-    // ── 5) STRONGEST BREAKS (magenta, current day) ─────────────────────────
     if(this._breaksFor!==g||this._breaksPort!==portName){
       this._breaks=_altiComputeBreaks(g, po?po.lat:null, po?po.lng:null, ALTI_BREAK_PORT_RADIUS_NM);
       this._breaksFor=g; this._breaksPort=portName;
     }
     const brk=this._breaks;
-    if(brk && this._ghostBreaks && brk.peaks.length && this._ghostBreaks.peaks.length){
-      const drifts=_altiMatchPeakDrifts(this._ghostBreaks.peaks, brk.peaks, 90);
-      _altiDrawDriftArrows(ctx, this._map, drifts);
+    let drifts=[];
+    if(gg && altiDayOffset < ALTI_MAX_DAYS_BACK){
+      if(this._ghostBreaksFor!==gg||this._ghostBreaksPort!==portName){
+        this._ghostBreaks=_altiComputeBreaks(gg, po?po.lat:null, po?po.lng:null, ALTI_BREAK_PORT_RADIUS_NM);
+        this._ghostBreaksFor=gg; this._ghostBreaksPort=portName;
+      }
+      if(brk && brk.peaks.length && this._ghostBreaks.peaks.length){
+        drifts=_altiMatchPeakDrifts(this._ghostBreaks.peaks, brk.peaks, ALTI_MAX_DRIFT_NM_PER_DAY);
+      }
+      // Only ghost the prior-day breaks we confidently tracked — not every peak.
+      if(drifts.length){
+        const matchedGhost={ gm:this._ghostBreaks.gm, peaks:drifts.map(d=>d.from) };
+        _altiDrawMagentaBreaks(ctx, this._map, gg, matchedGhost, {
+          strokeStyle:"rgba(236,72,153,0.30)", lineWidth:2, shadowBlur:0,
+          dotR:2.6, dotFill:"rgba(236,72,153,0.38)",
+        });
+      }
     }
+
+    // ── 5) STRONGEST BREAKS (magenta, current day) + drift arrows ───────────
+    if(drifts.length) _altiDrawDriftArrows(ctx, this._map, drifts);
     _altiDrawMagentaBreaks(ctx, this._map, g, brk, {});
   },
 });
@@ -13054,8 +13093,8 @@ function updateOceanLegend(){
         ${detail(`
         <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:4px 6px;align-items:start;font-size:11px;color:#cfe5ff;line-height:1.35">
           <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${ALTI_BREAK_PORT_RADIUS_NM}-nm fishing range are highlighted.</span>
-          <span style="justify-self:center;color:#f9a8d4;font-size:13px;line-height:1">▬</span><span><b style="color:#fbcfe8">Faint magenta</b> — same break on the <b>previous day</b> you are viewing. Step ◀▶ or the slider to compare passes.</span>
-          <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">↗</span><span><b style="color:#fde68a">Amber arrow</b> — break drift from prior day to this day (labeled in nm). Points where the eddy/front is heading.</span>
+          <span style="justify-self:center;color:#f9a8d4;font-size:13px;line-height:1">▬</span><span><b style="color:#fbcfe8">Faint magenta</b> — same break on the <b>previous day</b> (only shown when tracked). Step ◀▶ or the slider to compare passes.</span>
+          <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">↗</span><span><b style="color:#fde68a">Amber arrow</b> — 1-day drift for a <b>tracked</b> break (2–${ALTI_MAX_DRIFT_NM_PER_DAY} nm). No arrow = different feature or moved too far to link.</span>
           <span style="justify-self:center;color:#f87171;font-size:13px;line-height:1">●</span><span><b style="color:#f8b4b4">Red — warm bulge</b> (Gulf Stream, warm-core eddy). Bait &amp; pelagics stack on the edges — not the center.</span>
           <span style="justify-self:center;color:#60a5fa;font-size:13px;line-height:1">●</span><span><b style="color:#bcd6f8">Blue — cool depression</b> (cold-core eddy, upwelling). Nutrient-rich; good for bait and surface feeding.</span>
           <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">〜</span><span><b style="color:#eef0f6">White contours — equal SSH.</b> Tightly-packed lines = a steep gradient = a temperature/current break.</span>
