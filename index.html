@@ -3274,6 +3274,19 @@ const PORTS={
   "Palm Beach, FL":    {lat:26.70,  lng:-80.04,  short:"Palm Beach"},
   "Fort Lauderdale, FL":{lat:26.10, lng:-80.10,  short:"Ft. Lauderdale"},
   "Miami, FL":         {lat:25.77,  lng:-80.18,  short:"Miami"},
+  // ── BAHAMAS (common crossings from Florida + marquee grounds) ────────
+  // The three classic FL-crossing gateways plus the marquee offshore
+  // grounds, selectable as a fishing center. All sit on the Atlantic side
+  // (Gulf Stream / Northwest Providence Channel / Tongue of the Ocean) and
+  // draw full ocean data: MUR SST, VIIRS chlorophyll, altimetry, RTOFS
+  // currents, and ETOPO bathymetry (global — CUDEM is US-only).
+  "Bimini, Bahamas":            {lat:25.735, lng:-79.297, short:"Bimini"},
+  "West End, Bahamas":          {lat:26.686, lng:-78.977, short:"West End"},
+  "Chub Cay, Bahamas":          {lat:25.412, lng:-77.882, short:"Chub Cay"},
+  "Bimini Wall, Bahamas":       {lat:25.740, lng:-79.420, short:"Bimini Wall"},
+  "Tongue of the Ocean, Bahamas":{lat:24.700,lng:-77.750, short:"Tongue of the Ocean"},
+  "NW Providence Channel, Bahamas":{lat:26.300,lng:-78.300,short:"NW Prov. Channel"},
+  "Great Isaac, Bahamas":       {lat:26.030, lng:-79.090, short:"Great Isaac"},
   // ── FLORIDA KEYS ─────────────────────────────────────────────────────
   "Islamorada, FL":    {lat:24.93,  lng:-80.62,  short:"Islamorada"},
   "Marathon, FL":      {lat:24.72,  lng:-81.09,  short:"Marathon"},
@@ -3350,6 +3363,13 @@ const SPECIES=[
   {id:"tautog",      name:"Tautog",         color:"#0a5c8a",cat:"nearshore"},
   {id:"grouper",     name:"Grouper",        color:"#4a4038",cat:"nearshore"},
   {id:"snapper",     name:"Red Snapper",    color:"#991010",cat:"nearshore"},
+  // ── NEW ENGLAND / NORTHEAST SPECIES ─────────────────────────────────
+  {id:"striper",     name:"Striped Bass",   color:"#4a7a3a",cat:"inshore"},
+  {id:"bluefish",    name:"Bluefish",       color:"#3a5878",cat:"inshore"},
+  {id:"cod",         name:"Atlantic Cod",   color:"#6a5440",cat:"nearshore"},
+  {id:"haddock",     name:"Haddock",        color:"#8a7050",cat:"nearshore"},
+  {id:"pollock",     name:"Pollock",        color:"#5a6048",cat:"nearshore"},
+  {id:"bonito",      name:"Atlantic Bonito",color:"#2a7080",cat:"nearshore"},
   // ── FLORIDA / TROPICAL SPECIES ──────────────────────────────────────
   {id:"tarpon",      name:"Tarpon",         color:"#a8a8a8",cat:"inshore"},
   {id:"snook",       name:"Snook",          color:"#9a8a4a",cat:"inshore"},
@@ -3455,6 +3475,23 @@ const CANYONS=[
   {name:"Key West Wall",   color:"#1a4fa8", lat:24.30, lng:-81.80,
    desc:"Drop-off ~10-15nm S of Key West. Gulf Stream/Loop Current edge. Sailfish, blackfin, wahoo, mahi. Top winter sailfish.",
    fish:["sailfish","blackfin","wahoo","mahi","kingmack"]},
+
+  // ── BAHAMAS (marquee grounds off the Florida crossings) ──────────────
+  {name:"Bimini Wall",     color:"#1a4fa8", lat:25.740, lng:-79.420, type:"ledge",
+   desc:"The drop-off just W of Bimini where the Gulf Stream sweeps the island shelf into 1,000+ fathoms — ~50nm from Miami. Blue & white marlin, wahoo, tuna, and mahi push right to the edge.",
+   fish:["bluemarlin","whitemarlin","sailfish","spearfish","wahoo","yellowfin","blackfin","mahi"]},
+  {name:"Tongue of the Ocean", color:"#1a4fa8", lat:24.700, lng:-77.750, type:"canyon",
+   desc:"Deep ~6,000ft basin between Andros and the Berry Islands. Premier blue marlin and yellowfin grounds; Chub Cay is the classic gateway. Steep walls stack bait.",
+   fish:["bluemarlin","whitemarlin","yellowfin","blackfin","wahoo","mahi","sailfish"]},
+  {name:"Northwest Providence Channel", color:"#1a4fa8", lat:26.300, lng:-78.300, type:"canyon",
+   desc:"Deepwater channel between Grand Bahama and the Berry Islands. A wahoo and tuna highway in winter/spring, mahi and billfish through summer. Run it from West End or Chub Cay.",
+   fish:["wahoo","yellowfin","blackfin","mahi","bluemarlin","kingmack"]},
+  {name:"Great Isaac Light", color:"#1a4fa8", lat:26.030, lng:-79.090, type:"structure",
+   desc:"Historic light on the NW corner of the Bahama Bank where the bank edge meets the Gulf Stream. Wahoo, kingfish, tuna, and mahi work the current lines.",
+   fish:["wahoo","kingmack","yellowfin","blackfin","mahi","sailfish"]},
+  {name:"Cat Cay / Gun Cay Cut", color:"#1a4fa8", lat:25.550, lng:-79.290, type:"ledge",
+   desc:"South Bimini chain — troll the Gun Cay cut and Cat Cay wall for wahoo, tuna, and marlin, while the reef edges hold mutton snapper, yellowtail, and grouper.",
+   fish:["wahoo","yellowfin","blackfin","muttonsnap","yellowtail","grouper","kingmack"]},
 
   // ═════════════════ GULF OF MEXICO STRUCTURES ════════════════════════
   // ── FLORIDA GULF COAST ──────────────────────────────────────────────
@@ -15564,6 +15601,7 @@ const PORT_GROUPS = [
   {label:"Carolinas", ports:["Oregon Inlet, NC","Hatteras, NC","Morehead City, NC","Oak Island, NC","Myrtle Beach, SC","Murrells Inlet, SC","Charleston, SC"]},
   {label:"South Atlantic", ports:["Savannah, GA","Brunswick, GA","St. Augustine, FL","Jacksonville, FL","Daytona Beach, FL","Port Canaveral, FL","Melbourne, FL","Vero Beach, FL"]},
   {label:"Florida East Coast", ports:["Stuart, FL","Palm Beach, FL","Fort Lauderdale, FL","Miami, FL"]},
+  {label:"Bahamas", ports:["Bimini, Bahamas","West End, Bahamas","Chub Cay, Bahamas","Bimini Wall, Bahamas","Tongue of the Ocean, Bahamas","NW Providence Channel, Bahamas","Great Isaac, Bahamas"]},
   {label:"Florida Keys", ports:["Islamorada, FL","Marathon, FL","Key West, FL"]},
   {label:"Florida Gulf Coast", ports:["Clearwater, FL","Tampa Bay, FL","Sarasota, FL","Venice, FL","Fort Myers, FL","Naples, FL","Crystal River, FL","Cedar Key, FL","Steinhatchee, FL"]},
   {label:"Florida Panhandle", ports:["Apalachicola, FL","Panama City, FL","Destin, FL","Pensacola, FL"]},
@@ -16736,7 +16774,7 @@ const ENC_SPECIES = [
       "Bigger fluke (\"doormats\" 8+ lbs) prefer larger live bait or whole squid"],
   },
   {
-    id:"snapper", name:"Red Snapper", color:"#991010", cat:"inshore",
+    id:"snapper", name:"Red Snapper", color:"#991010", cat:"nearshore",
     snippet:"Reef and wreck fish off the Carolinas and Georgia. Tightly regulated — short federal seasons but a phenomenal catch when open.",
     facts:{ size:"5-30 lbs", record:"50 lbs 4 oz (LA)", legal:"20\" total length; 1 fish bag (federal); season usually 1-2 weeks/year", season:"Federal season usually July (check NOAA each year)" },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:0,Jul:3,Aug:1,Sep:0,Oct:0,Nov:0,Dec:0},
@@ -18733,7 +18771,7 @@ function cmClearLog(){
 const TB_TACKLE = [
   // ── PELAGIC SPREAD — skirted trolling lures (work across marlin & tuna) ──
   {id:"pelagic-ilander-seawitch",name:"Ilander / Sea Witch + Ballyhoo",icon:"🎏",cat:"Trolling Bait",
-   species:["bluemarlin","whitemarlin","sailfish","yellowfin","bigeye","bluefin","wahoo","mahi"],technique:["trolling"],
+   species:["bluemarlin","whitemarlin","spearfish","sailfish","yellowfin","bigeye","bluefin","wahoo","mahi"],technique:["trolling"],
    priority:{bluemarlin:1,whitemarlin:1,yellowfin:1,bigeye:1,bluefin:2,sailfish:2,wahoo:2,mahi:2},
    waterClarity:["clear","green"],light:["bright","overcast","lowlight"],
    speed:[6,9],sizeIn:9,
@@ -18768,7 +18806,7 @@ const TB_TACKLE = [
 
   // ── WHITE MARLIN ────────────────────────────────────────────────────────
   {id:"wm-dink-balyhoo",name:"Dink Ballyhoo (small) + Sea Witch",icon:"🐟",cat:"Trolling Bait",
-   species:["whitemarlin"],technique:["trolling"],
+   species:["whitemarlin","spearfish","sailfish"],technique:["trolling"],
    waterClarity:["clear","green"],light:["bright","overcast"],
    speed:[6,7.5],sizeIn:7,
    colors:["Pink/White","Blue/White","Black/Purple"],
@@ -18776,7 +18814,7 @@ const TB_TACKLE = [
    tip:"Smaller dink ballyhoo are deadly on whites. 6/0 inline circle hook — drop back on the strike, let them eat."},
 
   {id:"wm-squid-daisy",name:"Squid Daisy Chain Teaser",icon:"🦑",cat:"Teaser",
-   species:["whitemarlin","bluemarlin","sailfish"],technique:["trolling"],
+   species:["whitemarlin","bluemarlin","sailfish","spearfish"],technique:["trolling"],
    waterClarity:["clear","green"],light:["bright","overcast"],
    speed:[6,9],sizeIn:0,
    colors:["Natural","Pink","Blue"],
@@ -18785,7 +18823,7 @@ const TB_TACKLE = [
 
   // ── SAILFISH ────────────────────────────────────────────────────────────
   {id:"sf-livebait-goggle",name:"Live Goggle-Eye / Threadfin",icon:"🐠",cat:"Live Bait",
-   species:["sailfish","kingmackerel","cobia"],technique:["livebait","kite"],
+   species:["sailfish","kingmack","cobia"],technique:["livebait","kite"],
    priority:{cobia:4},
    speciesTips:{cobia:"A solid live bait when cobia are holding deep on a wreck or buoy and won't eat an eel. Free-line or fish on a fishfinder rig; bridle through the nose. Not a sight-casting bait — for cruising fish, reach for a live eel or bucktail first."},
    waterClarity:["clear","green"],light:["bright","overcast","lowlight"],
@@ -18795,7 +18833,7 @@ const TB_TACKLE = [
    tip:"#1 sailfish bait on the East Coast. Slow troll or fly off kites. Hook through the nose for sailfish."},
 
   {id:"sf-naked-balyhoo",name:"Naked Ballyhoo",icon:"🐟",cat:"Trolling Bait",
-   species:["sailfish","mahi","whitemarlin"],technique:["trolling"],
+   species:["sailfish","mahi","whitemarlin","spearfish"],technique:["trolling"],
    waterClarity:["clear"],light:["bright","overcast"],
    speed:[5,7],sizeIn:8,
    colors:["Natural"],
@@ -18935,7 +18973,7 @@ const TB_TACKLE = [
    tip:"Mahi can't refuse green/yellow. Troll along weed lines and floating debris. Pitch a live bait if you find a school."},
 
   {id:"mh-livebait-pinfish",name:"Live Pinfish/Pilchard",icon:"🐠",cat:"Live Bait",
-   species:["mahi","cobia","kingmackerel"],technique:["livebait","casting"],
+   species:["mahi","cobia","kingmack"],technique:["livebait","casting"],
    priority:{cobia:4},
    speciesTips:{cobia:"A handy live bait to pitch to a cobia that follows a hooked fish or boat to the surface but won't commit to a lure. Free-line it weightless to a cruising fish, or fish it on a fishfinder rig near a wreck or buoy. For actively cruising cobia, a live eel or bucktail is the stronger first choice."},
    waterClarity:["any"],light:["any"],
@@ -18974,7 +19012,7 @@ const TB_TACKLE = [
 
   // ── REDFISH ──────────────────────────────────────────────────────────────
   {id:"rd-zman-paddletail",name:"Z-Man Paddletail (4-5\")",icon:"🦐",cat:"Soft Plastic",
-   species:["redfish","speckled","flounder"],technique:["casting"],
+   species:["redfish","speckledtrout","flounder"],technique:["casting"],
    waterClarity:["green","dirty"],light:["bright","overcast"],
    speed:[0,0],sizeIn:5,
    colors:["New Penny","Pearl","Chartreuse","Houdini"],
@@ -18982,7 +19020,7 @@ const TB_TACKLE = [
    tip:"Rigged on a 1/4-1/2 oz jighead. The go-to inshore soft plastic. Slow retrieve with subtle hops along grass edges."},
 
   {id:"rd-gold-spoon",name:"Gold Weedless Spoon",icon:"🥄",cat:"Spoon",
-   species:["redfish","speckled"],technique:["casting"],
+   species:["redfish","speckledtrout"],technique:["casting"],
    waterClarity:["green","dirty"],light:["bright"],
    speed:[0,0],sizeIn:3,
    colors:["Gold","Silver"],
@@ -18990,7 +19028,7 @@ const TB_TACKLE = [
    tip:"Throw it shallow over grass flats. Steady retrieve — the flash drives reds crazy. Weedless = no snags."},
 
   {id:"rd-topwater-spook",name:"Heddon Spook Jr (Topwater)",icon:"🎣",cat:"Topwater",
-   species:["redfish","speckled","striper"],technique:["casting"],
+   species:["redfish","speckledtrout","striper"],technique:["casting"],
    waterClarity:["clear","green"],light:["lowlight","overcast"],
    speed:[0,0],sizeIn:4,
    colors:["Bone","Chrome/Black","Chartreuse"],
