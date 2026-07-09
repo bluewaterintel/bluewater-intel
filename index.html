@@ -10297,6 +10297,16 @@ function applyAltimetryGrid(data){ ALTIMETRY_GRID = buildAltiGrid(data); }
 // Max SSH-anomaly gradient (m per 10 nm) within ~18 nm of a point — the strength
 // of the geostrophic front here. Reads a grid built by buildAltiGrid (defaults
 // to the scorer's PREDICT_ALTI_GRID). Mirrors thermalBreakGrid. null = no cover.
+//
+// The raw altimetry product is ~0.25° (~15 nm). Estimating the front by finite-
+// differencing SLA between nodes that far apart SMEARS a Gulf Stream wall that's
+// narrower than one cell across the whole 15 nm, understating a sharp front. To
+// sharpen without inventing resolution we ALSO read the geostrophic current
+// (ugos/vgos) the provider ships in the same grid: by geostrophy the surface
+// jet speed is proportional to the SSH gradient AT that node (v = (g/f)·∂η/∂x),
+// a node-local, un-smeared measure of the wall. We convert the peak jet speed to
+// an SLA-equivalent gradient and return the STRONGER of the two estimators, so a
+// real, sharp front scores like the wall it is instead of being averaged away.
 function sshBreakAt(lat, lng, grid){
   const g = grid || PREDICT_ALTI_GRID;
   if(!g || !g.nLat || !g.sla) return null;
@@ -10304,16 +10314,26 @@ function sshBreakAt(lat, lng, grid){
   const dLat = radNm/60, dLng = radNm/(60*Math.cos(lat*Math.PI/180));
   const iC = Math.round((lat-g.minLat)/g.step), jC = Math.round((lng-g.minLng)/g.step);
   const di = Math.max(1, Math.round(dLat/g.step)), dj = Math.max(1, Math.round(dLng/g.step));
+  // Coriolis parameter f at this latitude (1/s) for the geostrophic conversion
+  // ∂η/∂x = v·f/g. M_PER_10NM converts the per-metre gradient to m per 10 nm.
+  const fCor = 2 * 7.2921e-5 * Math.sin(Math.abs(lat) * Math.PI / 180);
+  const G = 9.81, M_PER_10NM = 18520, geoFactor = fCor > 0 ? (fCor / G) * M_PER_10NM : 0;
   const near=[];
+  let maxGeoGrad = 0;   // SLA-equivalent gradient (m/10nm) inferred from the jet
   for(let i=iC-di;i<=iC+di;i++){
     for(let j=jC-dj;j<=jC+dj;j++){
       if(i<0||j<0||i>=g.nLat||j>=g.nLng) continue;
-      const v=g.sla[i*g.nLng+j];
+      const idx=i*g.nLng+j;
+      const v=g.sla[idx];
       if(!Number.isFinite(v)) continue;
       near.push({la:g.minLat+i*g.step, ln:g.minLng+j*g.step, v});
+      if(geoFactor > 0){
+        const spd = Math.hypot(g.ugos[idx]||0, g.vgos[idx]||0);   // m/s
+        if(spd > 0){ const geoGrad = spd * geoFactor; if(geoGrad > maxGeoGrad) maxGeoGrad = geoGrad; }
+      }
     }
   }
-  if(near.length<2) return null;
+  if(near.length < 2 && maxGeoGrad <= 0) return null;
   let maxGrad=0;
   for(let a=0;a<near.length;a++){
     for(let b=a+1;b<near.length;b++){
@@ -10323,7 +10343,8 @@ function sshBreakAt(lat, lng, grid){
       if(grad>maxGrad) maxGrad=grad;
     }
   }
-  return maxGrad*10;   // m per 10 nm
+  // Both estimators are in m per 10 nm; feed sshEdgeStrength the stronger one.
+  return Math.max(maxGrad * 10, maxGeoGrad);
 }
 
 function getAltimetryField(lat, lng){
