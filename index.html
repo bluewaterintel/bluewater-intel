@@ -6365,55 +6365,59 @@ function windScore(lat, lng, speciesPrefs, windDir){
 // ════════════════════════════════════════════════════════════════════════════
 const PREDICT_WEIGHTS = {
   offshore: {
-    temperature:   0.26,   // Slightly reduced — pelagics often hold at the EDGE rather than
-                           //   in the warmest water; trim shifts emphasis to thermalBreak.
-    depthStruct:   0.18,   // Picked up part of the removed AIS weight — structure is real.
-    chlorophyll:   0.11,   // Color breaks (reallocated 0.05 into convergence below).
-    thermalBreak:  0.14,   // Temperature break (reallocated 0.07 into convergence below).
-    convergence:   0.12,   // NEW — rewards where SST break + chlorophyll edge COINCIDE.
+    temperature:   0.22,   // Trimmed — warm water alone was over-credited. Pelagics hold at the
+                           //   EDGE, not just the hottest water; emphasis moves to the edge factors.
+    depthStruct:   0.16,   // Structure still matters offshore, but secondary to the thermal/color edge.
+    chlorophyll:   0.11,   // Color breaks.
+    thermalBreak:  0.16,   // Temperature break — a defined thermal wall stacks bait and fish.
+    convergence:   0.18,   // Rewards where SST break + chlorophyll edge COINCIDE (altimetry). Boosted
+                           //   to widen the gap between a true front and warm-but-featureless water.
     reports:       0.00,   // Moved out of weighted sum — pure additive bonus
     aisDwell:      0.00,   // REMOVED — no real AIS feed; the old value was synthetic.
     season:        0.04,
-    pressure:      0.08,
-    solunar:       0.05,
+    pressure:      0.07,
+    solunar:       0.04,
     tide:          0.00,   // Tide irrelevant in deep blue water
     wind:          0.00,   // Removed — captured indirectly via weather change
     weatherChange: 0.02,
     moonPhase:     0.00,   // Not significant for pelagics (not light-sensitive at depth)
   },
   nearshore: {
-    temperature:   0.18,
-    depthStruct:   0.31,   // DOMINANT — find the wreck/ledge/reef first (absorbed AIS weight).
-    chlorophyll:   0.05,   // Reallocated 0.02 into convergence below.
-    thermalBreak:  0.04,   // Reallocated 0.02 into convergence below.
-    convergence:   0.04,   // NEW — modest credit when a break + color edge coincide.
+    temperature:   0.17,
+    depthStruct:   0.25,   // Still the primary anchor (wreck/ledge/reef), but trimmed so a
+                           //   structure-less-but-fishy bait line isn't blind-spotted. Pairs with
+                           //   the raised depth-gate floor to relieve double-counting.
+    chlorophyll:   0.07,   // Bumped — nearshore color changes/edges hold bait.
+    thermalBreak:  0.09,   // Bumped — a temp break along the beach concentrates the bite.
+    convergence:   0.08,   // Bumped — a break + color edge coinciding is a real nearshore tell.
     reports:       0.00,
     aisDwell:      0.00,   // REMOVED — no real AIS feed.
     season:        0.05,
-    pressure:      0.10,
-    solunar:       0.07,
+    pressure:      0.06,
+    solunar:       0.05,
     tide:          0.06,
     wind:          0.06,   // Re-enabled with REAL buoy wind — onshore wind stacks bait on structure
     weatherChange: 0.04,
-    moonPhase:     0.00,   // Minor for nearshore — kept at zero; could activate later
+    moonPhase:     0.02,   // Small credit — full/new moons lift the nearshore bite.
   },
   inshore: {
-    temperature:   0.10,   // Reduced — inshore species care more about WHERE (depth/structure)
-                           //   and WHEN (tide/solunar) than absolute SST
-    depthStruct:   0.27,   // Bumped — inshore fish hold tight to specific structure (absorbed AIS).
+    temperature:   0.14,   // Raised — cold/wrong-temp water should actually suppress the bite
+                           //   (works with the firmer inshore temp gate), not lean on season alone.
+    depthStruct:   0.23,   // Structure still matters, but eased so imprecise synthetic depth doesn't
+                           //   over-penalize; the raised depth-gate floor shares that relief.
     chlorophyll:   0.00,   // Zeroed — satellite chlor is unreliable in shallow water
                            //   (bottom reflectance, sediment contamination)
     thermalBreak:  0.00,   // Inshore species want stable water, not breaks
-    convergence:   0.00,   // NEW — irrelevant inshore (no offshore edges).
+    convergence:   0.00,   // Irrelevant inshore (no offshore edges).
     reports:       0.00,
     aisDwell:      0.00,   // REMOVED — no real AIS feed.
-    season:        0.07,
-    pressure:      0.10,
-    solunar:       0.11,
-    tide:          0.22,   // DOMINANT — real NOAA CO-OPS tide stage
-    wind:          0.05,   // Re-enabled with REAL buoy wind — offshore wind clears inshore water
+    season:        0.11,   // Raised — seasonality drives the inshore pattern hard.
+    pressure:      0.09,
+    solunar:       0.10,
+    tide:          0.20,   // DOMINANT — real NOAA CO-OPS tide stage
+    wind:          0.04,   // Real buoy wind — offshore wind clears inshore water
     weatherChange: 0.04,
-    moonPhase:     0.04,   // full/new moons trigger feeding via tidal range
+    moonPhase:     0.05,   // full/new moons trigger feeding via tidal range
                            //   amplification + nighttime light. Independent of solunar
                            //   (which is time-of-day) and tide (which is local water move).
   },
@@ -7313,7 +7317,7 @@ function scoreCell(lat, lng, speciesId){
   // in FL, lacks seasonal swing), so even the offshore floor stays moderate.
   // Tighten these when real NOAA SST is integrated.
   //   floor by category — gate = floor + (1-floor)*tempScore^exp
-  const _tempGateFloor = speciesCat === "inshore"  ? 0.62   // very forgiving
+  const _tempGateFloor = speciesCat === "inshore"  ? 0.50   // firmer — cold water now actually bites
                        : speciesCat === "nearshore" ? 0.42
                        : 0.30;                                // offshore = firm
   const _tempGateExp   = speciesCat === "inshore"  ? 0.85 : 0.70;
@@ -7321,18 +7325,19 @@ function scoreCell(lat, lng, speciesId){
   finalScore = finalScore * tempGate;
 
   // ── DEPTH GATE ──
-  // Unlike temperature, depth is decisive for ALL categories — a redfish can't
-  // be in 105m and a tuna can't be on an 8m flat. So the depth gate stays firm
-  // across the board. Inshore fish actually hold TIGHTER to specific depth, so
-  // if anything depth matters more for them — we keep one consistent gate.
+  // Depth is decisive for ALL categories — a redfish can't be in 105m and a tuna
+  // can't be on an 8m flat. Offshore stays firm (floor 0.22). Inshore/nearshore
+  // use a softer floor (0.35): those zones already carry a high depthStruct weight
+  // AND lean on imprecise synthetic depth, so a firm gate on top double-penalizes
+  // the same reading. The higher floor relieves that without letting truly
+  // wrong-depth water off the hook.
   //
-  //   depthScore 1.0  → gate 1.00 (no penalty)
-  //   depthScore 0.5  → gate 0.80
-  //   depthScore 0.2  → gate 0.54
-  //   depthScore 0.0  → gate 0.22 (wrong-depth water suppressed, not nuked)
-  // Floor raised to 0.22 because synthetic depth is imprecise; tighten when
-  // real GEBCO bathymetry replaces synthDepth.
-  const depthGate = 0.22 + 0.78 * Math.pow(depthScore, 0.65);
+  //   offshore  depthScore 0.0 → gate 0.22
+  //   in/near   depthScore 0.0 → gate 0.35 (wrong-depth suppressed, not nuked twice)
+  //   depthScore 1.0 → gate 1.00 (no penalty) in every zone
+  // Tighten when real GEBCO bathymetry replaces synthDepth.
+  const _depthGateFloor = (speciesCat === "inshore" || speciesCat === "nearshore") ? 0.35 : 0.22;
+  const depthGate = _depthGateFloor + (1 - _depthGateFloor) * Math.pow(depthScore, 0.65);
   finalScore = finalScore * depthGate;
 
   // ── BLUE-WATER GATE (offshore pelagics only) ───────────────────────────────
