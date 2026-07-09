@@ -4,8 +4,6 @@
 //
 // Creates a Stripe Checkout Session for:
 //   kind="subscription" interval="month"|"year"  → Pro plan (full app incl. all charted waypoints)
-//   kind="lifetime"                               → one-time lifetime (everything)
-//   kind="pack" port="<port name>"                → legacy one-time port pack (deprecated)
 //
 // The user must be signed in (Supabase JWT). We create/reuse a Stripe customer
 // and stamp it on profiles.stripe_customer_id so the webhook + billing portal
@@ -13,8 +11,7 @@
 // trusted from the client.
 //
 // SECRETS: STRIPE_SECRET_KEY, APP_URL, ALLOWED_ORIGINS,
-//   STRIPE_PRICE_MONTHLY, STRIPE_PRICE_ANNUAL, STRIPE_PRICE_LIFETIME,
-//   STRIPE_PRICE_PACK, SUPABASE_URL, SUPABASE_ANON_KEY (auto).
+//   STRIPE_PRICE_MONTHLY, STRIPE_PRICE_ANNUAL, SUPABASE_URL, SUPABASE_ANON_KEY (auto).
 // ============================================================================
 
 import Stripe from "npm:stripe@16";
@@ -29,8 +26,6 @@ const APP_URL = (Deno.env.get("APP_URL") ?? "").replace(/\/$/, "");
 const PRICES = {
   monthly: Deno.env.get("STRIPE_PRICE_MONTHLY") ?? "",
   annual: Deno.env.get("STRIPE_PRICE_ANNUAL") ?? "",
-  lifetime: Deno.env.get("STRIPE_PRICE_LIFETIME") ?? "",
-  pack: Deno.env.get("STRIPE_PRICE_PACK") ?? "",
 };
 
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -64,22 +59,13 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { /* empty body ok */ }
   const kind = String(body.kind ?? "subscription");
   const interval = String(body.interval ?? "month");
-  const port = typeof body.port === "string" ? body.port.slice(0, 80) : "";
   const trial = body.trial === true || body.trial === "true";
 
-  // Resolve the price + checkout mode for the requested product.
-  let price = "", mode: "subscription" | "payment" = "subscription";
-  if (kind === "subscription") {
-    price = interval === "year" ? PRICES.annual : PRICES.monthly;
-    mode = "subscription";
-  } else if (kind === "lifetime") {
-    price = PRICES.lifetime; mode = "payment";
-  } else if (kind === "pack") {
-    if (!port) return json({ error: "Port required for a waypoint pack." }, 400);
-    price = PRICES.pack; mode = "payment";
-  } else {
-    return json({ error: "Unknown product." }, 400);
-  }
+  // Only the Pro subscription is offered (monthly/annual). Lifetime and per-port
+  // "packs" are discontinued.
+  if (kind !== "subscription") return json({ error: "Unknown product." }, 400);
+  const price = interval === "year" ? PRICES.annual : PRICES.monthly;
+  const mode: "subscription" | "payment" = "subscription";
   if (!price) return json({ error: "Price not configured for this product." }, 503);
 
   try {
@@ -96,7 +82,6 @@ Deno.serve(async (req) => {
     }
 
     const meta: Record<string, string> = { user_id: user.id, kind };
-    if (kind === "pack") meta.port = port;
 
     const session = await stripe.checkout.sessions.create({
       mode,

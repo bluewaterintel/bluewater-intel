@@ -2893,19 +2893,19 @@ body.nav-open #ruler-readout{
     <div style="font-size:10px;color:#9ec5e8;line-height:1.45;margin:-2px 0 8px;padding:0 2px">
       Daily satellite data — works on any basemap. 1-2 day processing lag.
     </div>
-    <label class="layer-row" title="NASA GHRSST GAMSSA Sea Surface Temperature (L4, gap-filled, ~25km) via NASA GIBS. Cool blue = cold, warm red = warm. Shows the Gulf Stream wall, upwelling zones, and temp breaks.">
+    <label class="layer-row" title="NASA GHRSST MUR Sea Surface Temperature (L4, 1km, cloud-free) via NASA GIBS — the same product the bite score reads. Cool blue = cold, warm red = warm. Shows the Gulf Stream wall, upwelling zones, and temp breaks.">
       <input type="checkbox" id="chk-sst" onchange="toggleLayer('sst')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:linear-gradient(90deg,#0a2e6b 0%,#0e72b5 25%,#4dbed5 45%,#8fd96b 60%,#e8d65a 75%,#c83520 100%);width:18px;height:8px;border-radius:2px"></span>
-        <span>Sea Surface Temp <span style="font-size:8px;color:#fbbf24;opacity:.85">(GAMSSA SST)</span></span>
+        <span>Sea Surface Temp <span style="font-size:8px;color:#fbbf24;opacity:.85">(MUR 1km)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="NASA MODIS Aqua Chlorophyll-A — water color/productivity. Green/yellow = nutrient-rich; dark blue = clear blue water. Edges where they meet hold bait and predators.">
+    <label class="layer-row" title="NASA VIIRS NOAA-20 Chlorophyll-a (1km) — water color/productivity, same VIIRS sensor family the bite score reads. Green/yellow = nutrient-rich; dark blue = clear blue water. Edges where they meet hold bait and predators.">
       <input type="checkbox" id="chk-chlor" onchange="toggleLayer('chlor')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:linear-gradient(90deg,#1a1a4d 0%,#2563a8 25%,#34d399 55%,#fbbf24 80%,#dc2626 100%);width:18px;height:8px;border-radius:2px"></span>
-        <span>Chlorophyll-A <span style="font-size:8px;color:#34d399;opacity:.85">(MODIS Aqua)</span></span>
+        <span>Chlorophyll-A <span style="font-size:8px;color:#34d399;opacity:.85">(VIIRS 1km)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -3349,7 +3349,7 @@ const SPECIES=[
   {id:"triggerfish", name:"Triggerfish",     color:"#6a4a7a",cat:"nearshore"},
   {id:"tautog",      name:"Tautog",         color:"#0a5c8a",cat:"nearshore"},
   {id:"grouper",     name:"Grouper",        color:"#4a4038",cat:"nearshore"},
-  {id:"snapper",     name:"Red Snapper",    color:"#991010",cat:"inshore"},
+  {id:"snapper",     name:"Red Snapper",    color:"#991010",cat:"nearshore"},
   // ── FLORIDA / TROPICAL SPECIES ──────────────────────────────────────
   {id:"tarpon",      name:"Tarpon",         color:"#a8a8a8",cat:"inshore"},
   {id:"snook",       name:"Snook",          color:"#9a8a4a",cat:"inshore"},
@@ -3728,191 +3728,8 @@ const CANYONS=[
 // (Static HEAT zone data removed — was the data source for the legacy
 //  "Heat Map (Static)" layer. The predictive engine supersedes it.)
 
-// AIS-derived active fishing areas — ANONYMIZED aggregate zones
-// When backend deploys with live AIS feed, vesseltracker/MarineTraffic data
-// will populate this array via /api/vessels endpoint. Individual MMSIs are
-// NEVER exposed — only spatial dwell-time clusters by port and species.
-//
-// To respect captain privacy: zones with <2 vessels are suppressed; named boats
-// are never displayed; only "Area + reported species + nearest port" is shown.
-const VESSELS=[
-  // ── PORTSMOUTH NH / NEW ENGLAND ────────────────────────────────────────
-  {zone:"Area PO-1", lat:43.00,lng:-70.30,moving:true, port:"Portsmouth, NH",  nm:18,reports:["bluefin","cod","haddock"]},
-  {zone:"Area PO-2", lat:42.85,lng:-69.80,moving:false,port:"Portsmouth, NH",  nm:45,reports:["bluefin","cod"]},
-  {zone:"Area JL-1", lat:42.80,lng:-70.10,moving:true, port:"Portsmouth, NH",  nm:25,reports:["bluefin","cod","haddock","striper"]},
-
-  // ── GLOUCESTER / CAPE ANN ──────────────────────────────────────────────
-  {zone:"Area GL-1", lat:42.55,lng:-70.45,moving:true, port:"Gloucester, MA",  nm:12,reports:["bluefin","cod","haddock"]},
-  {zone:"Area GL-2", lat:42.45,lng:-70.20,moving:false,port:"Gloucester, MA",  nm:22,reports:["bluefin","striper"]},
-
-  // ── BOSTON / STELLWAGEN ────────────────────────────────────────────────
-  {zone:"Area BO-1", lat:42.40,lng:-70.30,moving:true, port:"Boston, MA",      nm:25,reports:["bluefin","cod"]},
-  {zone:"Area BO-2", lat:42.30,lng:-70.50,moving:false,port:"Boston, MA",      nm:15,reports:["striper","bluefish"]},
-
-  // ── CAPE COD / NANTUCKET ───────────────────────────────────────────────
-  {zone:"Area CC-1", lat:41.85,lng:-69.85,moving:true, port:"Cape Cod, MA",    nm:28,reports:["bluefin","whitemarlin","yellowfin"]},
-  {zone:"Area CC-2", lat:41.60,lng:-69.60,moving:true, port:"Cape Cod, MA",    nm:45,reports:["yellowfin","bigeye","mahi"]},
-  {zone:"Area CC-3", lat:39.95,lng:-70.18,moving:false,port:"Cape Cod, MA",    nm:140,reports:["bigeye","yellowfin","whitemarlin"]},
-
-  // ── BLOCK ISLAND / POINT JUDITH ────────────────────────────────────────
-  {zone:"Area BI-1", lat:41.05,lng:-71.40,moving:true, port:"Point Judith, RI", nm:8, reports:["striper","bluefish","bonito"]},
-  {zone:"Area BI-2", lat:40.80,lng:-71.30,moving:true, port:"Point Judith, RI", nm:25,reports:["yellowfin","bluefin","mahi"]},
-  {zone:"Area PJ-1", lat:41.20,lng:-71.50,moving:false,port:"Point Judith, RI",nm:10,reports:["striper","bluefish","fluke"]},
-
-  // ── MONTAUK / LONG ISLAND ──────────────────────────────────────────────
-  {zone:"Area MO-1", lat:40.50,lng:-71.45,moving:true, port:"Montauk, NY",     nm:42,reports:["yellowfin","bluefin"]},
-  {zone:"Area MO-2", lat:40.10,lng:-72.20,moving:true, port:"Montauk, NY",     nm:52,reports:["bluefin","mahi"]},
-  {zone:"Area MO-3", lat:39.80,lng:-72.60,moving:false,port:"Montauk, NY",     nm:65,reports:["yellowfin","whitemarlin"]},
-
-  // ── CAPE MAY / NEW JERSEY ──────────────────────────────────────────────
-  {zone:"Area CM-1", lat:39.20,lng:-73.50,moving:true, port:"Cape May, NJ",    nm:42,reports:["bluefin","whitemarlin"]},
-  {zone:"Area CM-2", lat:38.80,lng:-73.30,moving:true, port:"Cape May, NJ",    nm:68,reports:["yellowfin","mahi","wahoo"]},
-  {zone:"Area CM-3", lat:39.60,lng:-72.50,moving:false,port:"Cape May, NJ",    nm:85,reports:["bluefin","tilefish"]},
-
-  // ── OCEAN CITY MD ──────────────────────────────────────────────────────
-  {zone:"Area OC-1", lat:38.40,lng:-74.20,moving:true, port:"Ocean City, MD",  nm:42,reports:["mahi","wahoo"]},
-  {zone:"Area OC-2", lat:38.16,lng:-73.84,moving:false,port:"Ocean City, MD",  nm:58,reports:["whitemarlin","yellowfin","mahi"]},
-  {zone:"Area OC-3", lat:37.95,lng:-73.65,moving:true, port:"Ocean City, MD",  nm:72,reports:["bluemarlin","whitemarlin"]},
-
-  // ── VIRGINIA BEACH ─────────────────────────────────────────────────────
-  {zone:"Area VB-1", lat:37.09,lng:-74.69,moving:true, port:"Virginia Beach, VA",nm:65,reports:["bluemarlin","yellowfin"]},
-  {zone:"Area VB-2", lat:36.85,lng:-75.10,moving:false,port:"Virginia Beach, VA",nm:48,reports:["yellowfin","mahi","wahoo"]},
-  {zone:"Area VB-3", lat:36.50,lng:-74.90,moving:true, port:"Virginia Beach, VA",nm:55,reports:["bluemarlin","sailfish"]},
-  {zone:"Area VB-4", lat:37.44,lng:-74.49,moving:false,port:"Virginia Beach, VA",nm:88,reports:["tilefish","swordfish"]},
-
-  // ── OREGON INLET — high charter density ────────────────────────────────
-  {zone:"Area OI-1", lat:35.78,lng:-74.95,moving:true, port:"Oregon Inlet, NC",nm:32,reports:["yellowfin","mahi"]},
-  {zone:"Area OI-2", lat:35.65,lng:-74.75,moving:true, port:"Oregon Inlet, NC",nm:42,reports:["yellowfin","wahoo","mahi"]},
-  {zone:"Area OI-3", lat:35.50,lng:-74.55,moving:false,port:"Oregon Inlet, NC",nm:55,reports:["bluemarlin","whitemarlin"]},
-  {zone:"Area OI-4", lat:35.35,lng:-74.92,moving:true, port:"Oregon Inlet, NC",nm:48,reports:["bluemarlin","yellowfin","wahoo"]},
-
-  // ── HATTERAS — winter bluefin + summer marlin grounds ──────────────────
-  {zone:"Area HA-1", lat:35.21,lng:-75.30,moving:true, port:"Hatteras, NC",    nm:24,reports:["bluefin","yellowfin"]},
-  {zone:"Area HA-2", lat:35.10,lng:-75.05,moving:true, port:"Hatteras, NC",    nm:38,reports:["yellowfin","wahoo","mahi"]},
-  {zone:"Area HA-3", lat:35.00,lng:-74.70,moving:false,port:"Hatteras, NC",    nm:55,reports:["bluemarlin","sailfish"]},
-  {zone:"Area HA-4", lat:35.08,lng:-75.42,moving:false,port:"Hatteras, NC",    nm:18,reports:["swordfish","tilefish"]},
-
-  // ── MOREHEAD CITY / BIG ROCK GROUNDS ───────────────────────────────────
-  {zone:"Area MH-1", lat:34.55,lng:-76.30,moving:true, port:"Morehead City, NC",nm:38,reports:["bluemarlin","whitemarlin"]},
-  {zone:"Area MH-2", lat:34.30,lng:-76.05,moving:true, port:"Morehead City, NC",nm:52,reports:["bluemarlin","yellowfin","mahi"]},
-  {zone:"Area MH-3", lat:34.10,lng:-76.18,moving:false,port:"Morehead City, NC",nm:65,reports:["bluemarlin","sailfish"]},
-
-  // ── BEAUFORT ───────────────────────────────────────────────────────────
-  {zone:"Area BF-1", lat:34.50,lng:-76.20,moving:true, port:"Morehead City, NC", nm:28,reports:["cobia","blackseabass"]},
-  {zone:"Area BF-2", lat:34.35,lng:-76.45,moving:false,port:"Morehead City, NC", nm:18,reports:["redfish","flounder"]},
-
-  // ── MYRTLE BEACH / MURRELLS INLET / OAK ISLAND ─────────────────────────
-  {zone:"Area MB-1", lat:33.40,lng:-78.40,moving:false,port:"Myrtle Beach, SC",nm:15,reports:["redfish","flounder"]},
-  {zone:"Area MI-1", lat:33.45,lng:-78.85,moving:false,port:"Murrells Inlet, SC",nm:12,reports:["spanishmack","kingmack"]},
-  {zone:"Area MI-2", lat:33.30,lng:-78.55,moving:true, port:"Murrells Inlet, SC",nm:32,reports:["mahi","blackfin","wahoo"]},
-  {zone:"Area OK-1", lat:33.55,lng:-77.85,moving:true, port:"Oak Island, NC",  nm:32,reports:["mahi","king","blackfin"]},
-
-  // ── CHARLESTON ─────────────────────────────────────────────────────────
-  {zone:"Area CH-1", lat:32.60,lng:-79.50,moving:true, port:"Charleston, SC",  nm:18,reports:["sheepshead","spadefish"]},
-  {zone:"Area CH-2", lat:32.40,lng:-79.20,moving:true, port:"Charleston, SC",  nm:38,reports:["mahi","blackfin","wahoo"]},
-  {zone:"Area CH-3", lat:32.20,lng:-78.90,moving:false,port:"Charleston, SC",  nm:58,reports:["bluemarlin","sailfish"]},
-
-  // ── HILTON HEAD / SAVANNAH ─────────────────────────────────────────────
-  {zone:"Area HH-1", lat:32.05,lng:-80.30,moving:true, port:"Savannah, GA", nm:25,reports:["kingmack","cobia"]},
-  {zone:"Area SV-1", lat:31.80,lng:-80.40,moving:true, port:"Savannah, GA",    nm:30,reports:["kingmack","spanishmack"]},
-  {zone:"Area SV-2", lat:31.50,lng:-80.10,moving:false,port:"Savannah, GA",    nm:55,reports:["mahi","sailfish","wahoo"]},
-
-  // ── JACKSONVILLE / ST. AUGUSTINE ───────────────────────────────────────
-  {zone:"Area JX-1", lat:30.40,lng:-81.10,moving:true, port:"Jacksonville, FL",nm:18,reports:["kingmack","cobia"]},
-  {zone:"Area SA-1", lat:29.85,lng:-80.85,moving:true, port:"St. Augustine, FL",nm:24,reports:["kingmack","mahi"]},
-  {zone:"Area SA-2", lat:29.70,lng:-80.45,moving:false,port:"St. Augustine, FL",nm:50,reports:["sailfish","blackfin","wahoo"]},
-
-  // ── DAYTONA / PORT CANAVERAL ───────────────────────────────────────────
-  {zone:"Area DB-1", lat:29.20,lng:-80.55,moving:true, port:"Daytona Beach, FL",nm:25,reports:["snapper","grouper","kingmack"]},
-  {zone:"Area PC-1", lat:28.40,lng:-80.30,moving:true, port:"Port Canaveral, FL",nm:18,reports:["kingmack","mahi"]},
-  {zone:"Area PC-2", lat:28.30,lng:-80.05,moving:false,port:"Port Canaveral, FL",nm:35,reports:["sailfish","wahoo","mahi"]},
-
-  // ── STUART / SAILFISH ALLEY ────────────────────────────────────────────
-  {zone:"Area ST-1", lat:27.20,lng:-80.05,moving:false,port:"Stuart, FL",      nm:8, reports:["sailfish","mahi"]},
-  {zone:"Area ST-2", lat:27.10,lng:-79.90,moving:false,port:"Stuart, FL",      nm:18,reports:["sailfish","blackfin"]},
-  {zone:"Area ST-3", lat:27.00,lng:-79.75,moving:true, port:"Stuart, FL",      nm:30,reports:["mahi","wahoo","blackfin"]},
-
-  // ── PALM BEACH / FT LAUDERDALE ─────────────────────────────────────────
-  {zone:"Area PB-1", lat:26.70,lng:-79.95,moving:false,port:"Palm Beach, FL",  nm:5, reports:["sailfish","kingmack"]},
-  {zone:"Area PB-2", lat:26.60,lng:-79.80,moving:false,port:"Palm Beach, FL",  nm:15,reports:["sailfish","wahoo","blackfin"]},
-  {zone:"Area FL-1", lat:26.10,lng:-79.95,moving:false,port:"Fort Lauderdale, FL",nm:8,reports:["sailfish","mahi"]},
-  {zone:"Area FL-2", lat:26.00,lng:-79.80,moving:true, port:"Fort Lauderdale, FL",nm:18,reports:["mahi","wahoo","blackfin"]},
-
-  // ── MIAMI / SWORD HOLE ──────────────────────────────────────────────────
-  {zone:"Area MI-1", lat:25.80,lng:-79.95,moving:false,port:"Miami, FL",       nm:10,reports:["sailfish","mahi"]},
-  {zone:"Area MI-2", lat:25.85,lng:-79.85,moving:false,port:"Miami, FL",       nm:18,reports:["swordfish","tilefish"]},
-
-  // ── KEYS — ISLAMORADA / MARATHON / KEY WEST ────────────────────────────
-  {zone:"Area IS-1", lat:24.80,lng:-80.55,moving:true, port:"Islamorada, FL",  nm:8, reports:["mahi","sailfish","blackfin"]},
-  {zone:"Area IS-2", lat:24.65,lng:-80.45,moving:false,port:"Islamorada, FL",  nm:12,reports:["blackfin","kingmack","amberjack"]},
-  {zone:"Area MA-1", lat:24.55,lng:-81.00,moving:true, port:"Marathon, FL",    nm:12,reports:["mahi","sailfish","wahoo"]},
-  {zone:"Area MA-2", lat:24.45,lng:-80.95,moving:false,port:"Marathon, FL",    nm:17,reports:["blackfin","kingmack"]},
-  {zone:"Area KW-1", lat:24.35,lng:-81.75,moving:true, port:"Key West, FL",    nm:12,reports:["sailfish","mahi","wahoo"]},
-  {zone:"Area KW-2", lat:24.25,lng:-81.70,moving:false,port:"Key West, FL",    nm:20,reports:["blackfin","sailfish","wahoo"]},
-
-  // ── FL GULF COAST ─────────────────────────────────────────────────────
-  {zone:"Area NA-1", lat:26.05,lng:-82.15,moving:false,port:"Naples, FL",      nm:20,reports:["gaggrouper","snapper","amberjack"]},
-  {zone:"Area NA-2", lat:25.40,lng:-83.30,moving:true, port:"Naples, FL",      nm:100,reports:["muttonsnap","hogfish","gaggrouper"]},
-  {zone:"Area FM-1", lat:26.50,lng:-82.40,moving:true, port:"Fort Myers, FL",  nm:25,reports:["kingmack","snapper","amberjack"]},
-  {zone:"Area TB-1", lat:27.60,lng:-83.20,moving:false,port:"Tampa Bay, FL",   nm:40,reports:["gaggrouper","snapper","kingmack"]},
-  {zone:"Area TB-2", lat:28.30,lng:-84.10,moving:false,port:"Tampa Bay, FL",   nm:90,reports:["gaggrouper","amberjack","snapper"]},
-  // ── FL PANHANDLE ──────────────────────────────────────────────────────
-  {zone:"Area DE-1", lat:30.00,lng:-86.50,moving:true, port:"Destin, FL",      nm:25,reports:["snapper","gaggrouper","amberjack"]},
-  {zone:"Area DE-2", lat:29.40,lng:-87.00,moving:false,port:"Destin, FL",      nm:65,reports:["yellowfin","wahoo","mahi"]},
-  {zone:"Area PE-1", lat:30.00,lng:-87.30,moving:true, port:"Pensacola, FL",   nm:25,reports:["snapper","amberjack","kingmack"]},
-  {zone:"Area PE-2", lat:29.50,lng:-87.50,moving:false,port:"Pensacola, FL",   nm:55,reports:["bluemarlin","yellowfin","wahoo"]},
-  // ── AL / MS ──────────────────────────────────────────────────────────
-  {zone:"Area OB-1", lat:29.80,lng:-87.60,moving:false,port:"Pensacola, FL",nm:30,reports:["snapper","gaggrouper","amberjack"]},
-  {zone:"Area OB-2", lat:29.30,lng:-87.85,moving:false,port:"Pensacola, FL",nm:60,reports:["bluemarlin","yellowfin","wahoo"]},
-  // ── LOUISIANA ────────────────────────────────────────────────────────
-  {zone:"Area VL-1", lat:28.85,lng:-89.50,moving:true, port:"Venice, LA",      nm:25,reports:["yellowfin","blackfin","wahoo"]},
-  {zone:"Area VL-2", lat:28.65,lng:-89.55,moving:true, port:"Venice, LA",      nm:42,reports:["yellowfin","blackfin","mahi"]},
-  {zone:"Area VL-3", lat:28.30,lng:-89.20,moving:false,port:"Venice, LA",      nm:75,reports:["bluemarlin","yellowfin","swordfish"]},
-  {zone:"Area GI-1", lat:28.80,lng:-90.00,moving:true, port:"Grand Isle, LA",  nm:30,reports:["yellowfin","blackfin","kingmack"]},
-  // ── TEXAS ────────────────────────────────────────────────────────────
-  {zone:"Area GV-1", lat:28.50,lng:-94.50,moving:false,port:"Galveston, TX",   nm:55,reports:["snapper","amberjack","kingmack"]},
-  {zone:"Area GV-2", lat:27.90,lng:-93.80,moving:true, port:"Galveston, TX",   nm:110,reports:["yellowfin","blackfin","wahoo"]},
-  {zone:"Area GV-3", lat:27.45,lng:-94.50,moving:false,port:"Galveston, TX",   nm:130,reports:["bluemarlin","yellowfin","swordfish"]},
-  {zone:"Area FR-1", lat:28.10,lng:-94.90,moving:true, port:"Freeport, TX",    nm:90,reports:["yellowfin","amberjack","wahoo"]},
-  {zone:"Area PA-1", lat:27.40,lng:-96.50,moving:false,port:"Port Aransas, TX",nm:55,reports:["snapper","kingmack","amberjack"]},
-  {zone:"Area PA-2", lat:27.10,lng:-96.10,moving:true, port:"Port Aransas, TX",nm:95,reports:["yellowfin","blackfin","wahoo"]},
-  {zone:"Area CC-1", lat:27.30,lng:-96.80,moving:false,port:"Port Aransas, TX",nm:50,reports:["kingmack","snapper","amberjack"]},
-  // ── LONG ISLAND SOUTH SHORE (Long Beach / Freeport, NY) ───────────────
-  {zone:"Area LB-1", lat:40.45,lng:-73.55,moving:false,port:"Long Beach, NY", nm:18,reports:["blackseabass","bluefish","bonito"]},
-  {zone:"Area LB-2", lat:40.22,lng:-73.70,moving:true, port:"Long Beach, NY", nm:24,reports:["flounder","blackseabass","striper"]},
-  {zone:"Area LB-3", lat:40.535,lng:-73.715,moving:false,port:"Long Beach, NY", nm:6, reports:["blackseabass","tautog","flounder"]},
-  {zone:"Area FP-1", lat:40.44,lng:-73.54,moving:false,port:"Freeport, NY",   nm:20,reports:["blackseabass","bluefish","cod"]},
-  {zone:"Area FP-2", lat:40.30,lng:-73.65,moving:true, port:"Freeport, NY",   nm:22,reports:["flounder","blackseabass","striper"]},
-  {zone:"Area FP-3", lat:39.78,lng:-73.10,moving:false,port:"Freeport, NY",   nm:70,reports:["bluefin","yellowfin","mahi"]},
-  // ── CENTRAL NJ (Toms River / Barnegat) ────────────────────────────────
-  {zone:"Area TR-1", lat:39.78,lng:-73.95,moving:true, port:"Toms River, NJ", nm:22,reports:["bonito","bluefish","falsealbacore"]},
-  {zone:"Area TR-2", lat:39.63,lng:-74.01,moving:false,port:"Toms River, NJ", nm:9, reports:["tautog","blackseabass","flounder"]},
-  {zone:"Area TR-3", lat:39.72,lng:-73.53,moving:false,port:"Toms River, NJ", nm:42,reports:["cod","pollock","blackseabass"]},
-  // ── ATLANTIC CITY, NJ ─────────────────────────────────────────────────
-  {zone:"Area AC-1", lat:39.235,lng:-74.20,moving:false,port:"Atlantic City, NJ", nm:8, reports:["blackseabass","tautog","flounder"]},
-  {zone:"Area AC-2", lat:39.47,lng:-74.20,moving:false,port:"Atlantic City, NJ", nm:14,reports:["blackseabass","tautog","flounder"]},
-  {zone:"Area AC-3", lat:39.30,lng:-73.55,moving:true, port:"Atlantic City, NJ", nm:52,reports:["bluefin","yellowfin","mahi"]},
-  // ── BRUNSWICK, GA ─────────────────────────────────────────────────────
-  {zone:"Area BR-1", lat:31.05,lng:-80.75,moving:false,port:"Brunswick, GA", nm:42,reports:["snapper","gaggrouper","vermilion"]},
-  {zone:"Area BR-2", lat:31.20,lng:-81.10,moving:false,port:"Brunswick, GA", nm:22,reports:["blackseabass","kingmack","cobia"]},
-  {zone:"Area BR-3", lat:31.20,lng:-80.30,moving:true, port:"Brunswick, GA", nm:65,reports:["wahoo","blackfin","mahi"]},
-  // ── MELBOURNE, FL ─────────────────────────────────────────────────────
-  {zone:"Area ML-1", lat:28.05,lng:-80.42,moving:false,port:"Melbourne, FL", nm:10,reports:["snapper","cobia","kingmack"]},
-  {zone:"Area ML-2", lat:28.34,lng:-80.19,moving:false,port:"Melbourne, FL", nm:25,reports:["muttonsnap","gaggrouper","amberjack"]},
-  {zone:"Area ML-3", lat:28.10,lng:-79.95,moving:true, port:"Melbourne, FL", nm:45,reports:["sailfish","mahi","blackfin"]},
-  // ── VERO BEACH, FL ────────────────────────────────────────────────────
-  {zone:"Area VB-1", lat:27.62,lng:-80.18,moving:false,port:"Vero Beach, FL", nm:8, reports:["snapper","sheepshead","cobia"]},
-  {zone:"Area VB-2", lat:27.70,lng:-80.20,moving:false,port:"Vero Beach, FL", nm:12,reports:["kingmack","spanishmack","snapper"]},
-  {zone:"Area VB-3", lat:27.50,lng:-79.95,moving:true, port:"Vero Beach, FL", nm:40,reports:["sailfish","mahi","wahoo"]},
-  // ── CLEARWATER, FL ────────────────────────────────────────────────────
-  {zone:"Area CW-1", lat:27.95,lng:-83.05,moving:false,port:"Clearwater, FL", nm:18,reports:["gaggrouper","snapper","hogfish"]},
-  {zone:"Area CW-2", lat:28.05,lng:-83.30,moving:false,port:"Clearwater, FL", nm:35,reports:["gaggrouper","amberjack","vermilion"]},
-  {zone:"Area CW-3", lat:28.55,lng:-84.30,moving:true, port:"Clearwater, FL", nm:95,reports:["gaggrouper","snapper","amberjack"]},
-  // ── VENICE, FL ────────────────────────────────────────────────────────
-  {zone:"Area VN-1", lat:27.05,lng:-82.55,moving:false,port:"Venice, FL", nm:6, reports:["snapper","spanishmack","cobia"]},
-  {zone:"Area VN-2", lat:27.05,lng:-82.80,moving:false,port:"Venice, FL", nm:22,reports:["gaggrouper","snapper","amberjack"]},
-  {zone:"Area VN-3", lat:27.05,lng:-82.95,moving:true, port:"Venice, FL", nm:35,reports:["gaggrouper","vermilion","mahi"]}
-];
+// (AIS-derived "active fishing areas" removed — we never had a live AIS
+//  feed and the static demo zones misrepresented real vessel activity.)
 
 // ════════════════════════════════════════════════════════════════════════════
 // LIVE DATA API CLIENT — connects to backend if available, falls back to demo
@@ -3972,10 +3789,6 @@ const API = {
     }
   },
 
-  async getVessels(){
-    const d = await this.get('/api/vessels');
-    return d?.vessels || null;
-  },
   async getWeather(lat, lng){
     const d = await this.get(`/api/weather/point?lat=${lat}&lng=${lng}`);
     return d || null;
@@ -4193,8 +4006,8 @@ async function loadReports(){
 // ════════════════════════════════════════════════════════════════════════════
 let MAP, activeSpId=null, activePort=null;
 let pinLL=null;
-let portMarkers=[], canyonLayers=[], vesselLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, zones:false, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
+let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
+let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -4356,31 +4169,28 @@ async function initMap(){
   MAP.createPane("ocean-overlays");
   MAP.getPane("ocean-overlays").style.zIndex = 400;       // above basemap (200), below heat (450)
   MAP.getPane("ocean-overlays").style.pointerEvents = "none";
-  // SMOOTHING: GAMSSA SST is a coarse ~28km grid, so when zoomed in past its
-  // native z6 the tiles upscale into hard blocky squares (nearest-neighbour).
-  // Force smooth bilinear interpolation on the overlay tiles so the thermal
-  // gradients blend — cosmetic only (adds no real detail), but the smooth
-  // gradient is a more faithful picture of the water than hard cells. Vendor
-  // prefixes cover Safari/WebKit (your Mac) and Firefox; 'auto' = smooth.
+  // SMOOTHING: both overlays are now 1km (z7) products. Force smooth bilinear
+  // interpolation on the overlay tiles so the gradients blend when zoomed in
+  // past native resolution — cosmetic only (adds no real detail), but a smooth
+  // gradient is a more faithful picture of the water than hard upscaled cells.
+  // Vendor prefixes cover Safari/WebKit and Firefox; 'auto' = smooth.
   (function smoothOceanOverlays(){
     const p = MAP.getPane("ocean-overlays");
-    // Two-part smoothing so the coarse 28km SST cells read as continuous fronts:
+    // Two-part smoothing:
     //  1. image-rendering bilinear on every tile (set inline per-tile below so
     //     nothing can override it), and
-    //  2. a CSS blur applied PER-LAYER (not pane-wide), because SST and chlor
-    //     have very different on-screen cell sizes: GAMSSA SST is native z6
-    //     (~28km cells, upscaled large) while chlor is z7 (~half the linear
-    //     size). A single pane blur strong enough for SST would over-smear chlor,
-    //     and one tuned for chlor (the old 1.4px) barely touched SST's big cells —
-    //     which is exactly why SST stayed blocky while chlor looked smooth.
+    //  2. a light CSS blur applied PER-LAYER (not pane-wide). Both MUR SST and
+    //     VIIRS chlor are now z7 (~1km cells) so they share a gentle blur — the
+    //     old heavy SST blur was tuned for the coarse ~28km GAMSSA grid and
+    //     would smear away the fine fronts MUR actually resolves.
     p.style.imageRendering = "auto";
     p.classList.add("ocean-overlays-smooth");
     const scoped = document.createElement("style");
     scoped.textContent =
       '.ocean-overlays-smooth img.leaflet-tile { image-rendering:auto !important; image-rendering:smooth !important; }' +
       // Blur the whole tile CONTAINER per layer so seams between tiles smooth too.
-      '.sst-smooth   { filter: blur(9px); }' +   // big SST cells need a strong blur
-      '.chlor-smooth { filter: blur(2px); }';    // chlor cells are smaller
+      '.sst-smooth   { filter: blur(2px); }' +   // 1km MUR — keep fronts sharp
+      '.chlor-smooth { filter: blur(2px); }';    // 1km VIIRS chlor
     document.head.appendChild(scoped);
   })();
   // Stamp each ocean-overlay tile inline as it loads — inline styles win over
@@ -4399,17 +4209,33 @@ async function initMap(){
   // ══════════════════════════════════════════════════════════════════════
   // SATELLITE OCEAN OVERLAYS — NASA GIBS WMTS service.
   //
+  // The map overlays are deliberately pointed at the SAME data products the
+  // bite-score engine reads, so what a captain SEES matches what the score
+  // is computed from (no more "the map shows green water but the score
+  // disagrees"):
+  //
   // SST (sea surface temperature):
-  //   GHRSST L4 GAMSSA Sea Surface Temperature — gap-filled global daily SST (~25km).
-  //   Color scale: dark blue (40°F) → cyan → green → yellow → red (84°F+).
+  //   GHRSST L4 MUR (Multi-scale Ultra-high Resolution) — 1km, daily,
+  //   gap-filled (cloud-free by construction). This is the SAME MUR analysis
+  //   the ocean function scores from (jplMURSST41), rendered as GIBS tiles.
+  //   Level7 tile set → ~1km native detail vs GAMSSA's coarse ~25km.
+  //   Color scale: dark blue (cold) → cyan → green → yellow → red (warm).
   //
   // Chlorophyll-a (water color / productivity):
-  //   MODIS Aqua Chlorophyll-A — 1km resolution, daily.
-  //   Color scale: dark blue (clear/low) → green → red (high productivity).
+  //   VIIRS NOAA-20 Chlorophyll-a — 1km, daily. Same VIIRS sensor family the
+  //   score's gap-filled DINEOF product is built from (replaces the old MODIS
+  //   Aqua overlay, a different sensor). Color: blue (clear) → green → red.
   //
-  // Both products have a 1-2 day processing lag, so we request a date 2
-  // days behind UTC. Tile failures degrade to transparent (no broken
-  // images on the chart). Layers are NOT added to the map on init —
+  // Why not 6-8 images/day like some imagery services? Those stitch every
+  // individual polar-orbiter pass (VIIRS on SNPP/NOAA-20/21, MODIS Aqua/Terra)
+  // plus geostationary GOES ABI. We instead render ONE daily gap-filled L4
+  // analysis: it's cloud-free everywhere in a single frame (no swath holes to
+  // slide past) and is the exact grid the bite score uses. Multi-pass
+  // compositing is a backend pipeline we can add later; for planning, one
+  // complete cloud-free frame/day is more useful than 8 partial cloudy ones.
+  //
+  // Both products have a ~1 day processing lag. Tile failures degrade to
+  // transparent (no broken images). Layers are NOT added to the map on init —
   // they're attached via toggleLayer() only when the user enables them.
   // ══════════════════════════════════════════════════════════════════════
   // Factory builders for the satellite layers, so initial creation and the
@@ -4418,20 +4244,20 @@ async function initMap(){
   window.buildSstLayer = function(dayOffset){
     const date = gibsRecentDate(SAT_FRESH_BACK.sst + (dayOffset||0));
     const lyr = L.tileLayer(
-      // GAMSSA — GHRSST L4, gap-filled, global daily SST (~28km). L4 = complete
-      // coverage, no cloud holes. maxNativeZoom keeps it visible (upscaled) past z6.
-      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_GAMSSA_GDS2_Sea_Surface_Temperature/default/${date}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png`,
-      { maxZoom:18, maxNativeZoom:6, minZoom:0, opacity:oceanOpacity.sst, crossOrigin:'anonymous',
-        pane:"ocean-overlays", className:"sst-smooth", attribution:'© NASA GIBS · GHRSST GAMSSA L4 (ABoM)',
+      // MUR — GHRSST L4, 1km, gap-filled (cloud-free). Same product the bite
+      // score reads. Level7 native detail; maxNativeZoom keeps it visible past z7.
+      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/${date}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`,
+      { maxZoom:18, maxNativeZoom:7, minZoom:0, opacity:oceanOpacity.sst, crossOrigin:'anonymous',
+        pane:"ocean-overlays", className:"sst-smooth", attribution:'© NASA GIBS · GHRSST MUR L4 1km (JPL)',
         errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" });
     return attachTileSmoothing(lyr);
   };
   window.buildChlorLayer = function(dayOffset){
     const date = gibsRecentDate(SAT_FRESH_BACK.chlor + (dayOffset||0));
     const lyr = L.tileLayer(
-      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Aqua_L2_Chlorophyll_A/default/${date}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`,
+      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_NOAA20_Chlorophyll_a/default/${date}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`,
       { maxZoom:18, maxNativeZoom:7, minZoom:0, opacity:oceanOpacity.chlor, crossOrigin:'anonymous',
-        pane:"ocean-overlays", className:"chlor-smooth", attribution:'© NASA GIBS · MODIS Aqua L2',
+        pane:"ocean-overlays", className:"chlor-smooth", attribution:'© NASA GIBS · VIIRS NOAA-20 Chlorophyll-a',
         errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" });
     return attachTileSmoothing(lyr);
   };
@@ -4599,7 +4425,6 @@ async function initMap(){
 
   drawCanyons();
   drawPortMarkers();
-  drawVesselZones();
   drawCatchPins();
   drawClosures();
   // User waypoints/catches hydrate from account on sign-in (bwOnSignedIn).
@@ -4897,9 +4722,8 @@ async function dtFetchWaypoints(p){
       p_port: activePort, p_lat: p.lat, p_lng: p.lng, p_radius_nm: radius, p_types: types,
     });
     if(error) return [];
-    // Only non-gated points carry real positions we can use offline; cap for size.
+    // The RPC only returns positions to entitled users; cap for snapshot size.
     return (data || [])
-      .filter(r => !r.gated)
       .slice(0, 2500)
       .map(r => ({ name: r.name, lat: _tround(r.lat,4), lng: _tround(r.lng,4), t: r.type_code, nm: _tround(r.nm,1) }));
   }catch(e){ return []; }
@@ -5359,14 +5183,14 @@ const PREDICT_SPECIES_PREFS = {
   // shelf edge. Two bands: ride-along on Gulf Stream (deep) + shelf
   // weed-line patches (shallower).
   mahi:         {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"edge",    depthBands:[[30,150],[200,1000]], breakPref:"any"},
-  cobia:        {tempIdeal:[68,78], tempWorking:[64,82], chlorPref:"high",    salinityPref:"high", depthBands:[[2,40]],     breakPref:"stable"},
+  cobia:        {tempIdeal:[68,78], tempWorking:[64,82], chlorPref:"high",    salinityPref:"high", depthBands:[[2,40]],     breakPref:"stable", warmAdapted:true },
   redfish:      {tempIdeal:[62,78], tempWorking:[58,84], chlorPref:"high",    depthBands:[[1,15]],     breakPref:"stable"},
   flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable"},
   blackseabass: {tempIdeal:[58,72], tempWorking:[52,76], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable"},
   tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable"},
   tilefish:     {tempIdeal:[48,60], tempWorking:[42,64], chlorPref:"any",     depthBands:[[150,500]],  breakPref:"any", bottom:true },
-  snapper:      {tempIdeal:[68,78], tempWorking:[62,82], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any"  },
-  grouper:      {tempIdeal:[64,76], tempWorking:[58,80], chlorPref:"any",     depthBands:[[30,200]],   breakPref:"any"  },
+  snapper:      {tempIdeal:[68,78], tempWorking:[62,82], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
+  grouper:      {tempIdeal:[64,76], tempWorking:[58,80], chlorPref:"any",     depthBands:[[30,200]],   breakPref:"any", demersal:true },
   sheepshead:   {tempIdeal:[60,76], tempWorking:[55,82], chlorPref:"high",    depthBands:[[2,30]],     breakPref:"stable"},
   // ── NEW ENGLAND / NORTHEAST SPECIES ───────────────────────────────────
   // Striper — also multimodal. Surf + back-bay (shallow) AND offshore
@@ -5382,26 +5206,26 @@ const PREDICT_SPECIES_PREFS = {
   speckledtrout:{tempIdeal:[62,75], tempWorking:[55,82], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,20]],     breakPref:"stable"},
   spadefish:    {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[6,80]],     breakPref:"any"  },
   croaker:      {tempIdeal:[60,75], tempWorking:[55,82], chlorPref:"high",    depthBands:[[2,60]],     breakPref:"stable"},
-  spanishmack:  {tempIdeal:[68,80], tempWorking:[62,84], chlorPref:"edge",    depthBands:[[5,40]],     breakPref:"any"  },
-  kingmack:     {tempIdeal:[70,82], tempWorking:[66,85], chlorPref:"edge",    depthBands:[[15,80]],    breakPref:"any"  },
-  triggerfish:  {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any"  },
+  spanishmack:  {tempIdeal:[68,80], tempWorking:[62,84], chlorPref:"edge",    depthBands:[[5,40]],     breakPref:"any", warmAdapted:true },
+  kingmack:     {tempIdeal:[70,82], tempWorking:[66,85], chlorPref:"edge",    depthBands:[[15,80]],    breakPref:"any", warmAdapted:true },
+  triggerfish:  {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
   // ── FLORIDA / TROPICAL SPECIES ──────────────────────────────────────────
   tarpon:       {tempIdeal:[72,84], tempWorking:[68,88], chlorPref:"high",    salinityPref:"moderate", depthBands:[[3,40]],     breakPref:"stable"},
   snook:        {tempIdeal:[70,84], tempWorking:[64,88], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,30]],     breakPref:"stable"},
   bonefish:     {tempIdeal:[74,84], tempWorking:[70,88], chlorPref:"high",    depthBands:[[1,6]],      breakPref:"stable"},
   permit:       {tempIdeal:[74,84], tempWorking:[70,88], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable"},
-  ceromack:     {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"edge",    depthBands:[[10,80]],    breakPref:"any"  },
-  hogfish:      {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[10,40]],    breakPref:"any"  },
-  muttonsnap:   {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any"  },
+  ceromack:     {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"edge",    depthBands:[[10,80]],    breakPref:"any", warmAdapted:true },
+  hogfish:      {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[10,40]],    breakPref:"any", demersal:true },
+  muttonsnap:   {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
   // ── GULF COAST + DEEP REEF SPECIES ─────────────────────────────────
   bluelinetile: {tempIdeal:[55,68], tempWorking:[50,72], chlorPref:"any",     depthBands:[[120,700]],  breakPref:"any", bottom:true },
-  gaggrouper:   {tempIdeal:[66,76], tempWorking:[60,82], chlorPref:"any",     depthBands:[[20,150]],   breakPref:"any"  },
-  amberjack:    {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any"  },
+  gaggrouper:   {tempIdeal:[66,76], tempWorking:[60,82], chlorPref:"any",     depthBands:[[20,150]],   breakPref:"any", demersal:true },
+  amberjack:    {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
   tripletail:   {tempIdeal:[72,84], tempWorking:[68,88], chlorPref:"any",     depthBands:[[2,40]],     breakPref:"any"  },
   pompano:      {tempIdeal:[68,78], tempWorking:[62,82], chlorPref:"any",     depthBands:[[2,15]],     breakPref:"stable"},
-  vermilion:    {tempIdeal:[66,78], tempWorking:[60,82], chlorPref:"any",     depthBands:[[50,200]],   breakPref:"any"  },
-  lanesnap:     {tempIdeal:[70,82], tempWorking:[66,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any"  },
-  yellowtail:   {tempIdeal:[74,84], tempWorking:[68,86], chlorPref:"low",     depthBands:[[10,40]],    breakPref:"any"  },
+  vermilion:    {tempIdeal:[66,78], tempWorking:[60,82], chlorPref:"any",     depthBands:[[50,200]],   breakPref:"any", demersal:true },
+  lanesnap:     {tempIdeal:[70,82], tempWorking:[66,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
+  yellowtail:   {tempIdeal:[74,84], tempWorking:[68,86], chlorPref:"low",     depthBands:[[10,40]],    breakPref:"any", demersal:true },
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -5895,7 +5719,7 @@ function refreshSatLayerDate(which){
   if(which === "sst"   && typeof window.buildSstLayer   === "function") sstLayer   = window.buildSstLayer(satDayOffset);
   if(which === "chlor" && typeof window.buildChlorLayer === "function") chlorLayer = window.buildChlorLayer(satDayOffset);
 }
-// Probe SST (GAMSSA L4) + chlor (MODIS Aqua L2), tighten SAT_FRESH_BACK/DATE to
+// Probe SST (MUR L4 1km) + chlor (VIIRS NOAA-20), tighten SAT_FRESH_BACK/DATE to
 // the freshest confirmed date, re-point the overlays to it, and refresh the label.
 let _ensuringFreshDates = false;
 async function ensureFreshestSatDates(){
@@ -5903,8 +5727,8 @@ async function ensureFreshestSatDates(){
   _ensuringFreshDates = true;
   try {
     const [sst, chl] = await Promise.all([
-      resolveFreshestGibsDate("GHRSST_L4_GAMSSA_GDS2_Sea_Surface_Temperature", "GoogleMapsCompatible_Level6", "png", 3),
-      resolveFreshestGibsDate("MODIS_Aqua_L2_Chlorophyll_A", "GoogleMapsCompatible_Level7", "png", 3),
+      resolveFreshestGibsDate("GHRSST_L4_MUR_Sea_Surface_Temperature", "GoogleMapsCompatible_Level7", "png", 3),
+      resolveFreshestGibsDate("VIIRS_NOAA20_Chlorophyll_a", "GoogleMapsCompatible_Level7", "png", 3),
     ]);
     let sstChanged = false, chlChanged = false;
     if(sst && sst.atMs){ sstChanged = SAT_FRESH_BACK.sst   !== sst.daysBack; SAT_FRESH_BACK.sst   = sst.daysBack; SAT_FRESH_DATE.sst   = sst.date; }
@@ -5947,7 +5771,6 @@ function reportsBoost(lat, lng, speciesId){
   return Math.min(boost, 0.35);
 }
 
-// AIS dwell — boost cells where vessel zones report this species
 // ── CORE SCORING FUNCTION ────────────────────────────────────────────────────
 // Barometric pressure trend comes ONLY from real NDBC buoy data (the ocean
 // backend computes latest-minus-~24h pressure). No synthetic pressure model.
@@ -5967,10 +5790,10 @@ function reportsBoost(lat, lng, speciesId){
 // Astronomical values (moon phase, tide, solunar) are GENUINELY correct
 // for the forecast time — those are deterministic calculations.
 //
-// Atmospheric values (SST, wind, pressure, wave) are currently synthetic
-// projections. When the app is deployed with real NOAA NWS API access,
-// the same offset parameter will request the forecast hour from NWS
-// instead of using the synthetic models.
+// Environmental values (SST, wind, pressure, wave) come from real sources via
+// the ocean data function (NDBC buoys + Open-Meteo forecast + ERDDAP grids);
+// the same offset selects the forecast hour. When a real value isn't available
+// it is withheld and labeled — never synthesized.
 // ════════════════════════════════════════════════════════════════════════════
 let FORECAST_HOUR_OFFSET = 0;  // 0 | 12 | 24 | 48 | 72
 
@@ -6373,7 +6196,6 @@ const PREDICT_WEIGHTS = {
     convergence:   0.18,   // Rewards where SST break + chlorophyll edge COINCIDE (altimetry). Boosted
                            //   to widen the gap between a true front and warm-but-featureless water.
     reports:       0.00,   // Moved out of weighted sum — pure additive bonus
-    aisDwell:      0.00,   // REMOVED — no real AIS feed; the old value was synthetic.
     season:        0.04,
     pressure:      0.07,
     solunar:       0.04,
@@ -6391,7 +6213,6 @@ const PREDICT_WEIGHTS = {
     thermalBreak:  0.09,   // Bumped — a temp break along the beach concentrates the bite.
     convergence:   0.08,   // Bumped — a break + color edge coinciding is a real nearshore tell.
     reports:       0.00,
-    aisDwell:      0.00,   // REMOVED — no real AIS feed.
     season:        0.05,
     pressure:      0.06,
     solunar:       0.05,
@@ -6410,7 +6231,6 @@ const PREDICT_WEIGHTS = {
     thermalBreak:  0.00,   // Inshore species want stable water, not breaks
     convergence:   0.00,   // Irrelevant inshore (no offshore edges).
     reports:       0.00,
-    aisDwell:      0.00,   // REMOVED — no real AIS feed.
     season:        0.11,   // Raised — seasonality drives the inshore pattern hard.
     pressure:      0.09,
     solunar:       0.10,
@@ -6987,6 +6807,16 @@ function scoreCell(lat, lng, speciesId){
   // subsurface/bottom-temp feed (e.g. HYCOM/GLORYS reanalysis) when available.
   //   ~100m ≈ 60°F, ~200m ≈ 54°F, ~350m ≈ 50°F, ~500m+ ≈ 47°F.
   const _isBottom = !!prefs.bottom;
+  // SHELF DEMERSAL CORRECTION (Gulf fix): reef/bottom species like red &
+  // vermilion snapper, grouper, amberjack, triggerfish etc. live ON structure
+  // in ~20-200m. Below the summer thermocline the water they actually sit in is
+  // meaningfully cooler than the 85-88°F Gulf surface skin. Scoring them purely
+  // on surface SST was pushing them past their warm working edge and zeroing
+  // the bite everywhere in summer — exactly the "no red hotspots for snapper"
+  // symptom. We blend surface SST toward a shelf bottom-temp estimate so the
+  // warm surface is damped without pretending they live in deep cold water like
+  // the true deep tilefish (`bottom`) case above.
+  const _isDemersal = !!prefs.demersal && !_isBottom;
   let tempForScore = sst;
   if(_isBottom && depth != null && depth > 0){
     // Piecewise-linear bottom-temp estimate (°F) from depth (m).
@@ -6997,6 +6827,19 @@ function scoreCell(lat, lng, speciesId){
     else if(depth <= 350) bt = 54 - (depth - 200) / 150 * 4;   // 54→50
     else if(depth <= 600) bt = 50 - (depth - 350) / 250 * 3;   // 50→47
     else                  bt = 47;
+    tempForScore = bt;
+  } else if(_isDemersal && sst != null && depth != null && depth > 0){
+    // Shelf bottom-temp estimate (°F): well-mixed & ~surface in the shallows,
+    // dropping below the thermocline as depth increases. Blend toward it so a
+    // scorching surface can't lethally penalize a fish sitting on a cool reef.
+    let bt;
+    if(depth <= 20)       bt = sst;                              // well-mixed nearshore
+    else if(depth <= 40)  bt = sst - (depth - 20) / 20 * 4;      // -0→4°F into the thermocline
+    else if(depth <= 80)  bt = sst - 4 - (depth - 40) / 40 * 6;  // down to ~-10°F
+    else if(depth <= 150) bt = sst - 10 - (depth - 80) / 70 * 6; // down to ~-16°F
+    else                  bt = sst - 16;
+    // Never estimate colder than a plausible shelf-bottom floor for this region.
+    bt = Math.max(bt, 58);
     tempForScore = bt;
   }
   let tempScore = 0;
@@ -7040,6 +6883,20 @@ function scoreCell(lat, lng, speciesId){
     const span = Math.max(1, warmEdge - prefs.tempIdeal[0]);
     const warmBias = Math.max(0, Math.min(1, (sst - prefs.tempIdeal[0]) / span));
     tempScore = Math.min(1, tempScore * (0.7 + 0.4 * warmBias));
+  }
+
+  // ── Warm-adapted nearshore/inshore pelagics (Gulf fix) ──
+  // King/Spanish/cero mackerel and cobia are warm-water fish that are perfectly
+  // happy — often best — in the 84-88°F Gulf summer surface. The generic
+  // Gaussian warm-side falloff was penalizing them for being in exactly the
+  // water they thrive in, killing the bite map at their peak season. Treat warm
+  // surface as GOOD (full credit through the working edge, gentle falloff only
+  // once genuinely past it), matching how offshore pelagics are handled.
+  if(prefs.warmAdapted && speciesCat !== "offshore" && !_isBottom && sst != null){
+    const warmEdge = prefs.tempWorking[1];
+    if(sst >= prefs.tempIdeal[1]){
+      tempScore = Math.max(tempScore, sst <= warmEdge ? 1.0 : Math.max(0, 1 - (sst - warmEdge) / 5));
+    }
   }
 
   // ── Factor 2: Chlorophyll preference ──
@@ -7325,9 +7182,10 @@ function scoreCell(lat, lng, speciesId){
   // Applying one temp gate to all categories wrongly crushed legitimate
   // inshore spots (e.g. redfish on a Tampa flat reading 86°F synthetic SST).
   //
-  // NOTE ON GATE STRENGTH: the synthetic SST model is also imprecise (runs hot
-  // in FL, lacks seasonal swing), so even the offshore floor stays moderate.
-  // Tighten these when real NOAA SST is integrated.
+  // NOTE ON GATE STRENGTH: SST comes from MUR L4 1km now, but demersal/reef and
+  // warm-adapted species are scored on damped/bottom temps (see tempForScore),
+  // so the gate stays moderate rather than nuking a fish sitting on a cool reef
+  // under a hot surface.
   //   floor by category — gate = floor + (1-floor)*tempScore^exp
   const _tempGateFloor = speciesCat === "inshore"  ? 0.50   // firmer — cold water now actually bites
                        : speciesCat === "nearshore" ? 0.42
@@ -7577,7 +7435,7 @@ function scoreCell(lat, lng, speciesId){
   const wxLabel = "steady";
 
   const allFactors = [
-    {name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: _isBottom ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
+    {name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: (_isBottom || _isDemersal) ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
     {name:"Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
     {name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
     {name:"Chlorophyll",        weight:W.chlorophyll,   score:chlorScore,
@@ -11353,7 +11211,7 @@ function renderExplainerMain(){
         </button>
       </div>
       <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.07);font-size:9px;color:#6b8bab;line-height:1.5;text-align:center">
-        Environmental data: sea-surface temperature &amp; chlorophyll courtesy NASA GIBS (GHRSST, MODIS Aqua); marine &amp; weather data from NOAA/NDBC; ocean currents from NOAA RTOFS. Predictions are estimates for planning only.
+        Environmental data: sea-surface temperature &amp; chlorophyll courtesy NASA GIBS (GHRSST MUR, VIIRS); marine &amp; weather data from NOAA/NDBC; ocean currents from NOAA RTOFS. Predictions are estimates for planning only.
       </div>
     </div>
   `;
@@ -11537,7 +11395,6 @@ function toggleLayer(key){
   if(key==="canyons")drawCanyons();
   else if(key==="spots")drawCanyons();  // unified structure layer (canyons+wrecks+reefs+lumps)
   else if(key==="predict"){ _predictUserOff = !layerVis.predict; drawPrediction(); updateOceanLegend();}
-  else if(key==="zones")drawVesselZones();
   else if(key==="ports")drawPortMarkers();
   else if(key==="loran")drawLoranLines();
   else if(key==="catches")drawCatchPins();
@@ -12362,8 +12219,8 @@ function toggleLayersPanel(){
   }
 }
 
-// Expand/collapse the "Advanced overlays" group (Closures, Active Fishing
-// Areas, LORAN-C). Collapsed by default so the panel opens clean.
+// Expand/collapse the "Advanced overlays" group (Closures, LORAN-C).
+// Collapsed by default so the panel opens clean.
 function toggleBaseMapPanel(){
   const modal = document.getElementById("basemap-modal");
   modal.classList.toggle("open");
@@ -14019,8 +13876,6 @@ const WP_TYPE_STYLE = {
 // Free users see none (only their personal waypoints). Legacy per-port pack
 // purchases still grant access if subscription lapses.
 const BW_OWNER_EMAILS = ["rnovakwvu@gmail.com", "natalienovakm@gmail.com"];
-const WP_TEASER_COUNT = 10;        // teaser size for trial/subscribers
-let _wpTeaserActive = false;       // last waypoint draw was capped to a teaser
 // BW_PREMIUM = app features (heat map, ocean/wind layers, forecast, etc.) —
 //   granted to a 7-day trial, active subscription, or owner.
 // BW_PAID    = the AI Captain's Brief — active subscription / owner
@@ -14204,7 +14059,6 @@ async function drawWaypoints(){
   // free users get none (positions never shipped to non-entitled clients).
   const types = wpTypeFilter ? [...wpTypeFilter] : null;
   let rows = [], status = "live", fullCount = 0;
-  _wpTeaserActive = false;
   try {
     const sbc = window.BW_AUTH && window.BW_AUTH._sb;
     if(!sbc) throw new Error("auth not ready");
@@ -14212,20 +14066,15 @@ async function drawWaypoints(){
       p_port: activePort, p_lat: p.lat, p_lng: p.lng, p_radius_nm: wpRadiusNm, p_types: types,
     });
     if(error) throw error;
-    rows = (data || []).map(r => ({ name: r.name, lat: r.lat, lng: r.lng, t: r.type_code, nm: r.nm, gated: r.gated }));
-    _wpTeaserActive = rows.length > 0 && rows.every(r => r.gated);
-    if(_wpTeaserActive){
-      // Show how many the pack would unlock (count only; positions stay gated).
-      try { const { data: c } = await sbc.rpc("pack_port_count", { p_lat: p.lat, p_lng: p.lng }); fullCount = (typeof c === "number") ? c : rows.length; }
-      catch(e){ fullCount = rows.length; }
-    } else {
-      fullCount = rows.length;
-    }
+    // The RPC returns the full set for entitled users, or nothing for free
+    // accounts (positions are never shipped to non-entitled clients).
+    rows = (data || []).map(r => ({ name: r.name, lat: r.lat, lng: r.lng, t: r.type_code, nm: r.nm }));
+    fullCount = rows.length;
   } catch(e){
     // Offline fallback: use a saved trip snapshot's waypoints for this port.
     const cachedWp = (typeof tripWaypointsFor === "function") ? tripWaypointsFor(activePort) : null;
     if(cachedWp && cachedWp.length){
-      rows = cachedWp.map(w => ({ name:w.name, lat:w.lat, lng:w.lng, t:w.t, nm:w.nm, gated:false }));
+      rows = cachedWp.map(w => ({ name:w.name, lat:w.lat, lng:w.lng, t:w.t, nm:w.nm }));
       fullCount = rows.length; status = "cached";
     } else {
       rows = []; status = "unavailable";
@@ -14409,24 +14258,27 @@ const MCE_MAX_NM = 100;        // hard cap per product spec
 let mceRangeNm = 50;           // default slider value
 let mcePort = null;            // selected port for export — no default; user must choose
 
-// Charted waypoints for an explicit port via the server-enforced gated RPC.
-// Returns { rows, gated, total } — rows are full only if the user is entitled
-// (owner or Pro subscriber); otherwise gated=true with a teaser.
+// Charted waypoints for an explicit port via the server-enforced RPC.
+// Returns { rows, entitled, total } — the RPC returns the full set only for
+// entitled users (owner / Pro subscriber / legacy port-pack owner); non-entitled
+// callers get no positions. For a locked user we still surface the COUNT (via the
+// count-only pack_port_count RPC) so they can see how many a subscription unlocks.
 async function mceChartedRows(portName, radiusNm){
   const p = PORTS[portName];
   const sbc = window.BW_AUTH && window.BW_AUTH._sb;
-  if(!p || !sbc) return { rows: [], gated: false, total: 0 };
+  if(!p || !sbc) return { rows: [], entitled: false, total: 0 };
   try {
     const { data, error } = await sbc.rpc("pack_waypoints_within", {
       p_port: portName, p_lat: p.lat, p_lng: p.lng, p_radius_nm: Math.min(radiusNm, 120), p_types: null,
     });
     if(error) throw error;
-    const rows = (data || []).map(r => ({ name: r.name, lat: r.lat, lng: r.lng, t: r.type_code, nm: r.nm, gated: r.gated }));
-    const gated = rows.length > 0 && rows.every(r => r.gated);
+    const rows = (data || []).map(r => ({ name: r.name, lat: r.lat, lng: r.lng, t: r.type_code, nm: r.nm }));
+    // Premium/owner flag OR the RPC actually returning positions (legacy pack) = entitled.
+    const entitled = (typeof BW_PREMIUM !== "undefined" && BW_PREMIUM) || rows.length > 0;
     let total = rows.length;
-    if(gated){ try { const { data: c } = await sbc.rpc("pack_port_count", { p_lat: p.lat, p_lng: p.lng }); if(typeof c === "number") total = c; } catch(e){} }
-    return { rows, gated, total };
-  } catch(e){ return { rows: [], gated: false, total: 0 }; }
+    if(!entitled){ try { const { data: c } = await sbc.rpc("pack_port_count", { p_lat: p.lat, p_lng: p.lng }); if(typeof c === "number") total = c; } catch(e){} }
+    return { rows, entitled, total };
+  } catch(e){ return { rows: [], entitled: false, total: 0 }; }
 }
 
 function mceBuildGpx(items, portName, radiusNm){
@@ -14485,10 +14337,10 @@ async function mceUpdate(){
     if(btn) btn.disabled = true;
     return;
   }
-  const { rows, gated, total } = await mceChartedRows(mcePort, mceRangeNm);
+  const { rows, entitled, total } = await mceChartedRows(mcePort, mceRangeNm);
   if(countEl) countEl.textContent = total.toLocaleString();
   if(breakdownEl){
-    if(gated){
+    if(!entitled){
       breakdownEl.innerHTML = `<span style="font-size:12px;color:#fbbf24">Locked — subscribe to Pro to export these ${total.toLocaleString()} charted waypoints.</span>`;
     } else {
       const counts = {};
@@ -14501,21 +14353,21 @@ async function mceUpdate(){
       breakdownEl.innerHTML = chips || `<span style="font-size:12px;color:#9ca3af">No waypoints within ${mceRangeNm} nm of this port.</span>`;
     }
   }
-  if(btn) btn.disabled = total === 0;
+  // Locked users keep the button live so a click routes them to upgrade.
+  if(btn) btn.disabled = entitled && total === 0;
 }
 
 async function mceExport(){
   if(!mcePort || !PORTS[mcePort]){ showToast("Select a home port first.", "info"); return; }
-  const { rows, gated } = await mceChartedRows(mcePort, mceRangeNm);
+  const { rows, entitled } = await mceChartedRows(mcePort, mceRangeNm);
   // Charted export requires waypoint access (Pro subscription or owner).
-  // Non-entitled users get gated rows only → send them to upgrade.
-  if(gated || rows.length === 0){
-    if(rows.length === 0 && !gated){ showToast("No waypoints within "+mceRangeNm+" nm of "+mcePort+".", "info"); return; }
+  if(!entitled){
     if(typeof openPricing === "function") openPricing();
     else showToast("Subscribe to Pro to export charted waypoints.", "info");
     return;
   }
-  const items = rows.filter(r => !r.gated);
+  if(rows.length === 0){ showToast("No waypoints within "+mceRangeNm+" nm of "+mcePort+".", "info"); return; }
+  const items = rows;
   const gpx = mceBuildGpx(items, mcePort, mceRangeNm);
   const blob = new Blob([gpx], {type:"application/gpx+xml"});
   const url = URL.createObjectURL(blob);
@@ -14566,13 +14418,9 @@ function updateWaypointPanel(total, drawn, status){
   if(total === undefined){
     const items = waypointsInRange();
     total = items.length;
-    drawn = _wpTeaserActive ? Math.min(total, WP_TEASER_COUNT) : Math.min(total, 1200);
+    drawn = Math.min(total, 1200);
   }
   if(total === 0){ el.textContent = `none within ${wpRadiusNm} nm of ${PORTS[activePort]?.short||activePort}${tag}`; return; }
-  if(_wpTeaserActive && drawn < total){
-    el.innerHTML = `${total} within ${wpRadiusNm} nm — showing nearest ${drawn} <span style="color:#fbbf24;font-weight:700">· Upgrade for full access</span>${tag}`;
-    return;
-  }
   const capped = drawn < total ? ` (showing nearest ${drawn})` : "";
   el.textContent = `${total} within ${wpRadiusNm} nm${capped}${tag}`;
 }
@@ -14643,37 +14491,6 @@ function toggleWpLegend(){
 // Re-evaluate desktop-vs-phone legend behavior when the viewport crosses the
 // breakpoint (rotate/resize), so it doesn't get stuck in the wrong mode.
 window.addEventListener("resize", () => { refreshWpLegendDisplay(); restackBottomControls(); });
-
-function drawVesselZones(){
-  vesselLayers.forEach(l=>MAP.removeLayer(l));vesselLayers=[];
-  if(!layerVis.zones)return;
-  // Only draw vessel zones within the home port's fishable radius. Showing
-  // every vessel from ME to TX would be noise — a user fishing Cape May
-  // doesn't need to see boats loitering off Galveston. Matches the same
-  // 200nm filter we use for canyons and ports.
-  VESSELS.filter(v => withinHomeRadius(v.lat, v.lng)).forEach(v=>{
-    // Single neutral color for all active fishing areas. We deliberately
-    // don't expose the underlying "trolling vs stationary" AIS distinction
-    // — the user just needs to know this is an area where fishing activity
-    // is happening for the listed species.
-    const col="#22d3ee";
-    const circle=L.circle([v.lat,v.lng],{
-      radius:20000,color:col,weight:1.5,dashArray:"5,4",
-      fillColor:col,fillOpacity:.07,interactive:false,
-    }).addTo(MAP);
-    const spNames=v.reports.map(r=>SPECIES.find(s=>s.id===r)?.name||r).join(", ");
-    // Use tooltip (hover) instead of popup — avoids the "open Claude" browser prompt on close
-    const dot=L.marker([v.lat,v.lng],{
-      icon:L.divIcon({className:"",
-        html:`<div style="width:11px;height:11px;background:${col};border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.5)"></div>`,
-        iconSize:[11,11],iconAnchor:[5.5,5.5]}),
-      zIndexOffset:80,
-    }).bindTooltip(`<div style="min-width:150px;font-family:Arial,sans-serif"><div style="font-weight:bold;font-size:11px;color:${col};margin-bottom:2px">${v.zone}</div><div style="font-size:9px;color:#9a9a9a;margin-bottom:3px">${v.port} · ${v.nm}nm</div><div style="font-size:9px"><b>Reporting:</b> ${spNames}</div></div>`,
-      {sticky:false,direction:"top",offset:[0,-8],opacity:0.97}
-    ).addTo(MAP);
-    vesselLayers.push(circle,dot);
-  });
-}
 
 // ════════════════════════════════════════════════════════════════════════════
 // MARINE CLOSURES
@@ -15854,7 +15671,6 @@ function selectPort(name){
   }
   drawCanyons();
   drawPortMarkers();
-  drawVesselZones();
   drawWaypoints();
   drawRamps();
   ensurePredictLayerOn();
@@ -20668,12 +20484,12 @@ function tbClearFavs(){
 // NASA GIBS WMTS layer definitions — these all work without API key.
 // URL pattern: https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/{LAYER}/default/{TIME}/{TILE_SET}/{z}/{y}/{x}.{ext}
 const OC_GIBS_LAYERS = {
-  sst_gamssa: {
-    id: "GHRSST_L4_GAMSSA_GDS2_Sea_Surface_Temperature",
-    name: "Sea Surface Temperature (GAMSSA L4)",
-    desc: "Gap-filled daily blended SST — complete coverage, no cloud holes. Best for the Gulf Stream edge & thermal breaks.",
-    set: "GoogleMapsCompatible_Level6",
-    maxZoom: 6,
+  sst_mur: {
+    id: "GHRSST_L4_MUR_Sea_Surface_Temperature",
+    name: "Sea Surface Temperature (MUR 1km)",
+    desc: "Gap-filled daily 1km SST — complete cloud-free coverage. The same product the bite score reads. Best for the Gulf Stream edge & thermal breaks.",
+    set: "GoogleMapsCompatible_Level7",
+    maxZoom: 7,
     ext: "png",
     legend: "sst",
   },
@@ -20686,10 +20502,10 @@ const OC_GIBS_LAYERS = {
     ext: "png",
     legend: "sst",
   },
-  chlor_aqua: {
-    id: "MODIS_Aqua_L2_Chlorophyll_A",
-    name: "Chlorophyll-a (MODIS Aqua)",
-    desc: "Single-pass chlorophyll — locate green/blue water edges. Daily gaps; slide the date back for a clear pass.",
+  chlor_viirs: {
+    id: "VIIRS_NOAA20_Chlorophyll_a",
+    name: "Chlorophyll-a (VIIRS NOAA-20)",
+    desc: "Daily 1km chlorophyll — locate green/blue water edges. Same VIIRS sensor family the bite score reads. Slide the date back for a clear pass.",
     set: "GoogleMapsCompatible_Level7",
     maxZoom: 7,
     ext: "png",
@@ -20785,7 +20601,7 @@ const OC_CHARTS = [
 let OC_state = {
   tab: "map",
   date: null,           // current display date (YYYY-MM-DD)
-  layerKey: "sst_gamssa",
+  layerKey: "sst_mur",
   opacity: 0.75,
   showBase: true,
   map: null,
@@ -20936,7 +20752,7 @@ function ocApplyLayer(){
   }
 
   // Build NASA GIBS WMTS URL — EPSG:3857 (Web Mercator). Each layer carries its
-  // own TileMatrixSet + maxZoom (they differ: GAMSSA tops at Level6, L2 at
+  // own TileMatrixSet + maxZoom (they differ: MUR/VIIRS at Level7, MODIS L2 at
   // Level7, TrueColor at Level9). Hardcoding one level 404'd most layers.
   const tileSet = def.set || "GoogleMapsCompatible_Level6";
   const maxZ = def.maxZoom || 6;
@@ -21145,7 +20961,7 @@ function ocRenderCharts(){
         <div class="tut-step-title">Use the right-side icon column</div>
         <div class="tut-step-desc" style="line-height:1.7">
           <div style="margin:6px 0"><span class="tut-icon">🗺</span> <b>Base Map</b> — switch between Satellite, <b>Ocean Bathymetric</b>, or Street + SeaMarks. The Ocean Bathymetric basemap (Esri World Ocean Base, from GEBCO/NOAA/NGA) shows shaded depth relief and contours — the right basemap for depth reference.</div>
-          <div style="margin:6px 0"><span class="tut-icon">◆</span> <b>Layers</b> — iOS-style toggles grouped into Predictions, Map Markers, Ocean Data, and an Advanced section. Toggle the <b>Bite Map</b> (the color-coded bite forecast for your target species), <b>Major Fishing Areas</b> (canyons, wrecks, reefs, lumps and ledges — the 15 closest to your port), ports, your catches, satellite <b>SST &amp; Chlorophyll</b>, and the new animated <b>Wind</b> layer. Closures, Active Fishing Areas, and LORAN-C live under Advanced.</div>
+          <div style="margin:6px 0"><span class="tut-icon">◆</span> <b>Layers</b> — iOS-style toggles grouped into Predictions, Map Markers, Ocean Data, and an Advanced section. Toggle the <b>Bite Map</b> (the color-coded bite forecast for your target species), <b>Major Fishing Areas</b> (canyons, wrecks, reefs, lumps and ledges — the 15 closest to your port), ports, your catches, satellite <b>SST &amp; Chlorophyll</b>, and the new animated <b>Wind</b> layer. Closures and LORAN-C live under Advanced.</div>
           <div style="margin:6px 0"><span class="tut-icon">📏</span> <b>Ruler</b> — tap to measure distance in nautical miles. Drop multiple points to plot a route.</div>
           <div style="margin:6px 0"><span class="tut-icon">⚙</span> <b>Settings</b> — set defaults like home port, species, base map, and account preferences.</div>
         </div>
@@ -21197,7 +21013,7 @@ function ocRenderCharts(){
       <div class="tut-feature-icon">🛰</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Satellite ocean data overlays</div>
-        <div class="tut-feature-desc">Two NASA satellite layers, toggleable in the Layers panel under "OCEAN DATA": <b>Sea Surface Temp</b> (GAMSSA SST — gap-filled L4, shows the Gulf Stream wall and temp breaks visually) and <b>Chlorophyll-A</b> (MODIS Aqua — shows water color/productivity, where bait stacks along the green-to-blue boundary). Both work on any basemap. The color legend appears at top-left when active. 1-2 day processing lag is normal for satellite ocean data.</div>
+        <div class="tut-feature-desc">Two NASA satellite layers, toggleable in the Layers panel under "OCEAN DATA": <b>Sea Surface Temp</b> (MUR 1km — cloud-free, hi-res, shows the Gulf Stream wall and temp breaks) and <b>Chlorophyll-A</b> (VIIRS 1km — water color/productivity, where bait stacks along the green-to-blue boundary). These are the same data products the bite score is computed from, so the map matches the forecast. Both work on any basemap. The color legend appears at top-left when active. ~1 day processing lag is normal for satellite ocean data.</div>
       </div>
     </div>
 
@@ -21291,7 +21107,7 @@ function ocRenderCharts(){
       <div class="tut-data-icon">📍</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Recent reports &amp; vessel activity</div>
-        <div class="tut-data-desc">Recent fishing reports for a species near a location bump up scores in that area. Reports decay with an ~8-hour half-life — a 2-hour-old report carries full weight, yesterday's much less. The known-areas table recognizes ~22 named offshore locations (canyons, banks, ledges from New England to Texas) for precise spatial matching; reports without a recognized area fall back to the port location. Areas where commercial and charter fleets are loitering also signal active fishing — toggle "Active Fishing Areas" as a layer to see them.</div>
+        <div class="tut-data-desc">Recent fishing reports for a species near a location bump up scores in that area. Reports decay with an ~8-hour half-life — a 2-hour-old report carries full weight, yesterday's much less. The known-areas table recognizes ~22 named offshore locations (canyons, banks, ledges from New England to Texas) for precise spatial matching; reports without a recognized area fall back to the port location.</div>
       </div>
     </div>
 
@@ -24215,79 +24031,14 @@ var WP_state = {
   editing: null,
 };
 
-// ── PURCHASED PORT PACKS ─────────────────────────────────────────────────────
-// A "port pack" is a bundle of professionally-collected fishing waypoints for a
-// specific port that a user can buy. Once acquired, every waypoint in the pack
-// is merged into the user's ONE personal database (WP_state.userPoints) tagged
-// with a `pack` field, so it behaves exactly like a manually-added waypoint:
-// it shows in My Waypoints, can be shown on the map, edited, exported to GPX,
-// and deleted individually — plus the whole pack can be removed at once.
-//
-// There's no payment backend yet, so DEMO_PORT_PACKS stands in for the catalog
-// and the "Load demo port pack" button imports one for testing. When the store
-// is wired up, a purchase simply calls wpInstallPack() with the real pack.
-const DEMO_PORT_PACKS = [
-  {
-    id: "pack-hatteras-demo",
-    name: "Hatteras, NC — Offshore Pack (Demo)",
-    port: "Hatteras, NC",
-    waypoints: [
-      {name:"Hatteras Inlet Slough",   sourceType:"ledge",  lat:35.2050, lng:-75.7000, depth:"60-90ft",  desc:"Demo pack point — slough edge holding bait."},
-      {name:"Diamond Tower Wreck",     sourceType:"wreck",  lat:35.1520, lng:-75.2980, depth:"110ft",    desc:"Demo pack point — broken hull, amberjack + cobia."},
-      {name:"The Rockpile NE",         sourceType:"rock",   lat:35.2410, lng:-75.3400, depth:"95ft",     desc:"Demo pack point — scattered rock, sea bass."},
-      {name:"Cigar Lump",              sourceType:"bump",   lat:35.0700, lng:-75.2200, depth:"180ft",    desc:"Demo pack point — bottom rise, blackbelly rosefish."},
-      {name:"Hatteras Canyon West Wall",sourceType:"canyon", lat:35.0050, lng:-75.2350, depth:"600ft+",  desc:"Demo pack point — troll the temp break for tuna/billfish."},
-      {name:"Inside Ledge 30",         sourceType:"ledge",  lat:35.2200, lng:-75.5300, depth:"45ft",     desc:"Demo pack point — nearshore ledge, flounder + trout."},
-    ],
-  },
-];
-
-// Install a pack into the personal database. Idempotent per pack: if the pack
-// is already installed it does nothing (so a second tap can't duplicate it).
-function wpInstallPack(pack){
-  if(!pack || !Array.isArray(pack.waypoints)) return 0;
-  const already = WP_state.userPoints.some(p => p.pack && p.pack.id === pack.id);
-  if(already){
-    showToast(`"${pack.name}" is already in your waypoints.`, "info");
-    return 0;
-  }
-  const now = new Date().toISOString();
-  let n = 0;
-  for(const w of pack.waypoints){
-    if(typeof w.lat !== "number" || typeof w.lng !== "number") continue;
-    WP_state.userPoints.push({
-      id: "u-" + Date.now() + "-" + Math.random().toString(36).slice(2,7) + "-" + n,
-      name: w.name,
-      type: "private",
-      sourceType: w.sourceType || "wreck",
-      lat: w.lat, lng: w.lng,
-      depth: w.depth || null,
-      region: pack.port || w.region || null,
-      desc: w.desc || null,
-      addedAt: now,
-      showOnMap: true,                       // purchased points show on the map by default
-      pack: { id: pack.id, name: pack.name }, // group tag for management
-    });
-    n++;
-  }
-  wpSaveUser();
-  const added = WP_state.userPoints.slice(-n);
-  if(window.BW_AUTH && added.length) window.BW_AUTH.saveWaypointsBulk(added).catch(e => console.error("waypoint sync", e));
-  drawUserWaypoints();
-  return n;
-}
-
-// Demo trigger — stands in for a real purchase until the store exists.
-function wpLoadDemoPack(){
-  const pack = DEMO_PORT_PACKS[0];
-  const n = wpInstallPack(pack);
-  if(n > 0){
-    WP_state.tab = "mine";
-    document.querySelectorAll(".wp-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "mine"));
-    wpRender();
-    showToast(`Added ${n} waypoints from "${pack.name}" to My Waypoints.`, "success");
-  }
-}
+// ── LEGACY PORT PACKS ────────────────────────────────────────────────────────
+// A "port pack" was a bundle of waypoints for a specific port, merged into the
+// user's personal database (WP_state.userPoints) tagged with a `pack` field so
+// each point behaves like a manually-added waypoint (shows in My Waypoints,
+// editable, exportable, deletable). Port packs are DISCONTINUED — there is no
+// catalog, demo, or purchase path anymore. The list/remove helpers below are
+// kept only so legacy accounts that already have pack-tagged waypoints can
+// see and remove them.
 
 // List the distinct packs currently present in the user's personal database.
 function wpInstalledPacks(){
@@ -24543,7 +24294,10 @@ function wpSourceFilterBar(){
 // Pack management: one row per installed pack with a "Remove pack" action, plus
 // the demo-pack loader (stands in for a purchase until the store is wired up).
 function wpPackManageBar(){
+  // Port packs are discontinued. Only render this manager for legacy accounts
+  // that still have pack-tagged waypoints, so they can remove them in one tap.
   const packs = wpInstalledPacks();
+  if(packs.length === 0) return "";
   const rows = packs.map(p => {
     const count = WP_state.userPoints.filter(w => w.pack && w.pack.id === p.id).length;
     return `
@@ -24561,11 +24315,8 @@ function wpPackManageBar(){
   }).join("");
   return `
     <div class="wp-pack-manager">
-      <div class="wp-pack-manager-head">
-        <span>📦 Port Packs</span>
-        <button class="wp-btn" onclick="wpLoadDemoPack()" title="Demo: load a sample purchased port pack">+ Load demo port pack</button>
-      </div>
-      ${packs.length ? rows : `<div class="wp-pack-empty">No port packs yet. Purchased packs land here and merge into your waypoints below — each one fully editable and deletable. Try the demo to see how it works.</div>`}
+      <div class="wp-pack-manager-head"><span>📦 Port Packs</span></div>
+      ${rows}
     </div>`;
 }
 
