@@ -449,7 +449,7 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   #radar-loop-btn{ font-size:13px !important; padding:9px 0 !important; width:118px !important; flex:0 0 118px !important; }
   #radar-loop-time{ font-size:12px !important; width:auto !important; flex:0 0 auto !important; min-width:38px !important; }
   /* satellite / altimetry / wind / radar pills — width handled by .map-time-pill */
-  #sat-date-control,#alti-date-control,#wind-forecast-slider,#radar-loop-control{
+  #sat-date-control,#alti-date-control,#wind-forecast-slider,#radar-loop-control,#cloud-loop-control{
     width:calc(100vw - 20px) !important;
     left:10px !important;right:10px !important;transform:none !important;
   }
@@ -994,6 +994,13 @@ body.nav-open #ruler-readout{
 .map-time-pill--green .map-time-pill-slider{background:linear-gradient(90deg,#1c3a5e 0%,#4ade80 100%)}
 .map-time-pill--green .map-time-pill-footer{color:#9ec5e8}
 .map-time-pill--green .map-time-pill-play{color:#bbf7d0;border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.16)}
+.map-time-pill--slate{border:1px solid rgba(203,213,225,.35)}
+.map-time-pill--slate .map-time-pill-title{color:#e2e8f0}
+.map-time-pill--slate .map-time-pill-display{color:#f1f5f9}
+.map-time-pill--slate .map-time-pill-step{color:#f1f5f9;border:1px solid rgba(203,213,225,.4);background:rgba(148,163,184,.14)}
+.map-time-pill--slate .map-time-pill-slider{background:linear-gradient(90deg,#1c3a5e 0%,#cbd5e1 100%)}
+.map-time-pill--slate .map-time-pill-footer{color:#9ec5e8}
+.map-time-pill--slate .map-time-pill-play{color:#f1f5f9;border-color:rgba(203,213,225,.45);background:rgba(148,163,184,.16)}
 #ocean-legend .legend-detail{font-size:13px;line-height:1.45}
 
 /* Legend rows (now living inside the merged panel) */
@@ -2364,14 +2371,6 @@ body.nav-open #ruler-readout{
           </span>
           <span class="nav-badge">ACTIVE</span>
         </button>
-        <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openOcean)">
-          <span class="nav-ico">🛰</span>
-          <span class="nav-row-body">
-            <span class="nav-row-title">Weather &amp; Oceanography</span>
-            <span class="nav-row-sub">SST, chlorophyll, wind, radar &amp; satellite charts</span>
-          </span>
-          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
-        </button>
         <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openReports)">
           <span class="nav-ico">📰</span>
           <span class="nav-row-body">
@@ -2661,6 +2660,24 @@ body.nav-open #ruler-readout{
   </div>
 </div>
 
+<!-- SATELLITE CLOUD IMAGERY — true-color MODIS; pill + scrub + play loop -->
+<div id="cloud-loop-control" class="map-time-pill map-time-pill--slate">
+  <div class="map-time-pill-head">
+    <div class="map-time-pill-title">Satellite Imagery</div>
+    <div id="cloud-loop-time" class="map-time-pill-display">Latest</div>
+  </div>
+  <div class="map-time-pill-row">
+    <button id="cloud-frame-older" type="button" class="map-time-pill-step" onclick="stepCloudFrame(-1)" title="Earlier day">◀</button>
+    <input id="cloud-frame-input" type="range" class="map-time-pill-slider" min="0" max="14" step="1" value="14" oninput="onCloudSliderInput(this.value)">
+    <button id="cloud-frame-newer" type="button" class="map-time-pill-step" onclick="stepCloudFrame(1)" title="Later day">▶</button>
+  </div>
+  <div class="map-time-pill-footer">
+    <span>2 weeks ago</span>
+    <button id="cloud-loop-btn" type="button" class="map-time-pill-play" onclick="toggleCloudLoop()">▶ Play cloud loop</button>
+    <span>Latest →</span>
+  </div>
+</div>
+
 <!-- FISHING WAYPOINTS CONTROL — slim radius-bin selector. GPX import/export now
      lives on the Waypoints page (menu → Import/Export tab), not on this map
      bubble, to keep the on-map footprint minimal. Shown only when the Fishing
@@ -2914,6 +2931,14 @@ body.nav-open #ruler-readout{
       <span class="lyr-label">
         <span class="layer-swatch" style="background:linear-gradient(90deg,#22c55e 0%,#eab308 45%,#ef4444 75%,#a855f7 100%);width:18px;height:8px;border-radius:2px"></span>
         <span>Weather Radar <span style="font-size:8px;color:#7dd3fc;opacity:.85">(NOAA live)</span></span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
+    <label class="layer-row" title="NASA MODIS Aqua true-color satellite imagery — see real clouds, ocean color, sediment plumes, and river runoff over your fishing grounds. Step day-by-day or play a loop to find the last clear pass. ~1 day processing lag.">
+      <input type="checkbox" id="chk-cloud" onchange="toggleLayer('cloud')">
+      <span class="lyr-label">
+        <span class="layer-swatch" style="background:linear-gradient(135deg,#1e3a5f 0%,#94a3b8 35%,#f8fafc 55%,#cbd5e1 75%,#334155 100%);width:18px;height:8px;border-radius:2px"></span>
+        <span>Satellite Imagery <span style="font-size:8px;color:#e2e8f0;opacity:.85">(clouds)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -4044,7 +4069,7 @@ async function loadReports(){
 let MAP, activeSpId=null, activePort=null;
 let pinLL=null;
 let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
+let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, cloud:false, closures:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -4410,6 +4435,15 @@ async function initMap(){
     radarCtl.addEventListener("pointerdown",  stopAllRadar);
     radarCtl.addEventListener("touchstart",   stopAllRadar, {passive: true});
     radarCtl.addEventListener("mousedown",    stopAllRadar);
+  }
+  const cloudCtl = document.getElementById("cloud-loop-control");
+  if(cloudCtl && typeof L !== "undefined" && L.DomEvent){
+    L.DomEvent.disableClickPropagation(cloudCtl);
+    L.DomEvent.disableScrollPropagation(cloudCtl);
+    const stopAllCloud = e => { e.stopPropagation(); };
+    cloudCtl.addEventListener("pointerdown",  stopAllCloud);
+    cloudCtl.addEventListener("touchstart",   stopAllCloud, {passive: true});
+    cloudCtl.addEventListener("mousedown",    stopAllCloud);
   }
   const wpCtl = document.getElementById("waypoint-legend");
   if(wpCtl && typeof L !== "undefined" && L.DomEvent){
@@ -11513,6 +11547,15 @@ function toggleLayer(key){
     updateOceanLegend();
     updateRadarLoopControlVisibility();
   }
+  else if(key==="cloud"){
+    if(layerVis.cloud){
+      ensureCloudFramesBuilt();
+      showCloudFrame(_cloudFrameIdx);
+    } else {
+      stopCloudLoop();
+    }
+    updateCloudLoopControlVisibility();
+  }
   else if(key==="waypoints"){
     drawWaypoints();
     updateWaypointControlVisibility();
@@ -11704,7 +11747,7 @@ function updateAltiDateControlVisibility(){
 // nearest the thumb-friendly bottom edge. Called by every visibility updater.
 // The distance scale bar is then lifted to sit just above the top of the stack
 // so it never overlaps the bars or the Leaflet attribution line.
-const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider", "forecast-slider"];
+const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "radar-loop-control", "cloud-loop-control", "wind-forecast-slider", "forecast-slider"];
 const BOTTOM_STACK_GAP  = 8;    // px gap between stacked bars
 function restackBottomControls(){
   // On phones the Leaflet attribution/credit line sits along the very bottom,
@@ -11986,6 +12029,145 @@ function updateRadarLoopControlVisibility(){
   if(!box) return;
   box.style.display = layerVis.radar ? "block" : "none";
   if(!layerVis.radar) stopRadarLoop();
+  restackBottomControls();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SATELLITE CLOUD IMAGERY — MODIS Aqua true-color day loop
+// Same pill/scrub/play pattern as weather radar, but on a daily timescale so you
+// can find the last clear pass over your grounds. NASA GIBS WMTS, no API key.
+// ════════════════════════════════════════════════════════════════════════════
+const CLOUD_SPAN_DAYS = 14;   // 15 frames: 2 weeks ago → latest
+let _cloudFrames = [];        // [{layer, label, date}] oldest → newest
+let _cloudFrameIdx = 0;
+let _cloudTimer = null;
+let _cloudBuilt = false;
+
+function cloudFrameDates(){
+  const out = [];
+  for(let d = CLOUD_SPAN_DAYS; d >= 0; d--) out.push(gibsRecentDate(d));
+  return out;
+}
+function buildCloudFrames(){
+  clearCloudFrames();
+  const dates = cloudFrameDates();
+  _cloudFrames = dates.map(date => {
+    const layer = L.tileLayer(
+      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Aqua_CorrectedReflectance_TrueColor/default/${date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+      { maxZoom:18, maxNativeZoom:9, minZoom:0, opacity:0, pane:"ocean-overlays",
+        attribution:'© NASA GIBS · MODIS Aqua True Color',
+        errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" });
+    const dt = new Date(date + "T12:00:00Z");
+    const label = dt.toLocaleDateString([], {month:"short", day:"numeric"});
+    return { layer, label, date };
+  });
+  _cloudBuilt = true;
+}
+function clearCloudFrames(){
+  _cloudFrames.forEach(f => { if(MAP && MAP.hasLayer(f.layer)) MAP.removeLayer(f.layer); });
+  _cloudFrames = [];
+  _cloudBuilt = false;
+}
+function showCloudFrame(i){
+  if(!_cloudFrames.length) return;
+  _cloudFrameIdx = (i + _cloudFrames.length) % _cloudFrames.length;
+  _cloudFrames.forEach((f, idx) => {
+    if(!MAP.hasLayer(f.layer)) f.layer.addTo(MAP);
+    f.layer.setOpacity(idx === _cloudFrameIdx ? 0.95 : 0);
+  });
+  syncCloudSlider();
+  updateCloudLoopReadout();
+}
+function ensureCloudFramesBuilt(){
+  if(!_cloudBuilt || !_cloudFrames.length){
+    buildCloudFrames();
+    _cloudFrameIdx = _cloudFrames.length - 1;
+  }
+}
+function syncCloudSlider(){
+  const inp = document.getElementById("cloud-frame-input");
+  const top = Math.max(0, (_cloudFrames.length || (CLOUD_SPAN_DAYS + 1)) - 1);
+  if(inp){
+    if(+inp.max !== top) inp.max = top;
+    if(+inp.value !== _cloudFrameIdx) inp.value = _cloudFrameIdx;
+  }
+  const older = document.getElementById("cloud-frame-older");
+  const newer = document.getElementById("cloud-frame-newer");
+  if(older) older.disabled = !_cloudFrames.length || _cloudFrameIdx <= 0;
+  if(newer) newer.disabled = !_cloudFrames.length || _cloudFrameIdx >= top;
+}
+function stepCloudFrame(delta){
+  if(!layerVis.cloud) return;
+  if(isCloudLooping()) pauseCloudLoop();
+  ensureCloudFramesBuilt();
+  const top = _cloudFrames.length - 1;
+  const next = Math.max(0, Math.min(top, _cloudFrameIdx + (delta|0)));
+  showCloudFrame(next);
+}
+function onCloudSliderInput(val){
+  if(!layerVis.cloud) return;
+  if(isCloudLooping()) pauseCloudLoop();
+  ensureCloudFramesBuilt();
+  showCloudFrame(val|0);
+}
+function isCloudLooping(){ return _cloudTimer !== null; }
+function startCloudLoop(){
+  if(!layerVis.cloud) return;
+  if(_cloudTimer){ clearInterval(_cloudTimer); _cloudTimer = null; }
+  if(!_cloudBuilt || !_cloudFrames.length){
+    buildCloudFrames();
+    _cloudFrameIdx = 0;
+  }
+  showCloudFrame(_cloudFrameIdx);
+  _cloudTimer = setInterval(() => {
+    let next = _cloudFrameIdx + 1;
+    if(next >= _cloudFrames.length) next = 0;
+    showCloudFrame(next);
+  }, 900);
+  updateCloudLoopButton();
+  updateCloudLoopReadout();
+}
+function pauseCloudLoop(){
+  if(_cloudTimer){ clearInterval(_cloudTimer); _cloudTimer = null; }
+  updateCloudLoopButton();
+  updateCloudLoopReadout();
+}
+function stopCloudLoop(){
+  if(_cloudTimer){ clearInterval(_cloudTimer); _cloudTimer = null; }
+  clearCloudFrames();
+  _cloudFrameIdx = 0;
+  const inp = document.getElementById("cloud-frame-input");
+  if(inp) inp.value = inp.max || CLOUD_SPAN_DAYS;
+  syncCloudSlider();
+  updateCloudLoopButton();
+  updateCloudLoopReadout();
+}
+function toggleCloudLoop(){ isCloudLooping() ? pauseCloudLoop() : startCloudLoop(); }
+function updateCloudLoopButton(){
+  const btn = document.getElementById("cloud-loop-btn");
+  if(btn) btn.textContent = isCloudLooping() ? "⏸ Pause loop" : "▶ Play cloud loop";
+}
+function updateCloudLoopReadout(){
+  const el = document.getElementById("cloud-loop-time");
+  if(!el) return;
+  if(_cloudFrames.length && _cloudFrames[_cloudFrameIdx]){
+    const f = _cloudFrames[_cloudFrameIdx];
+    const isNewest = _cloudFrameIdx === _cloudFrames.length - 1;
+    const base = isNewest ? `${f.label} (latest)` : f.label;
+    el.textContent = isCloudLooping() ? base : `${base} ⏸`;
+  } else {
+    el.textContent = "Latest";
+  }
+}
+function updateCloudLoopControlVisibility(){
+  const box = document.getElementById("cloud-loop-control");
+  if(!box) return;
+  box.style.display = layerVis.cloud ? "block" : "none";
+  if(!layerVis.cloud) stopCloudLoop();
+  else {
+    ensureCloudFramesBuilt();
+    showCloudFrame(_cloudFrameIdx);
+  }
   restackBottomControls();
 }
 
@@ -13970,7 +14152,7 @@ const BW_OWNER_EMAILS = ["rnovakwvu@gmail.com", "natalienovakm@gmail.com"];
 let BW_PREMIUM = false;
 let BW_PAID = false;
 // Premium-gated map layers (everything outside the free baseline).
-const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "altimetry", "radar", "ramps", "loran", "waypoints"];
+const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "altimetry", "radar", "cloud", "ramps", "loran", "waypoints"];
 
 async function refreshEntitlement(){
   let premium = false, paid = false;
@@ -14040,8 +14222,8 @@ function applyEntitlementGating(){
 }
 
 // Show/hide the PRO badge and locked styling on Pro menu rows based on
-// entitlement. Free users see a yellow "PRO" tag on Weather & Oceanography,
-// Fishing Reports, and Waypoints; Pro users see them normally.
+// entitlement. Free users see a yellow "PRO" tag on Fishing Reports and
+// Waypoints; Pro users see them normally.
 function applyProMenuBadges(){
   const rows = document.querySelectorAll('.nav-row[data-pro="1"]');
   rows.forEach(row => {
@@ -15948,7 +16130,7 @@ function ensurePredictLayerOn(){
 // ════════════════════════════════════════════════════════════════════════════
 // Menu items that require a Pro subscription (Model B). Free users see them
 // with a PRO badge; tapping opens the upgrade modal instead of the feature.
-const PRO_MENU_FNS = ["openOcean", "openReports", "openWaypoints", "openDownloadTrip"];
+const PRO_MENU_FNS = ["openReports", "openWaypoints", "openDownloadTrip"];
 function navOpenFromMenu(openFn){
   closeNav();
   // If this is a Pro feature and the user isn't entitled, show the upgrade
@@ -20397,572 +20579,8 @@ function tbClearFavs(){
 }
 </script>
 
-<!-- ═══════════════════════════════════════════════════════════════════════════
-     OCEAN CONDITIONS — SST, chlorophyll, satellite & oceanographic charts
-     ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="oc-overlay" style="
-  display:none;position:fixed;inset:0;z-index:5000;
-  background:#0a1a2e;color:#e8f4ff;
-  overflow-y:auto;-webkit-overflow-scrolling:touch;
-  font-family:'Segoe UI',Arial,sans-serif;
-">
-  <!-- Header -->
-  <div style="
-    position:sticky;top:0;z-index:10;
-    background:linear-gradient(180deg,#0a1a2e,#0f2444);
-    border-bottom:1px solid rgba(107,191,234,.18);
-    padding:12px 16px;display:flex;align-items:center;gap:12px;
-    box-shadow:0 4px 16px rgba(0,0,0,.5);
-  ">
-    <button onclick="navBack(closeOcean)" aria-label="Back to menu" style="
-      width:38px;height:38px;flex-shrink:0;
-      background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
-      color:#cfe5ff;border-radius:10px;
-      display:flex;align-items:center;justify-content:center;cursor:pointer;
-    ">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-    </button>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🛰 Weather &amp; Oceanography</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">NASA · NOAA · Rutgers satellite data</div>
-    </div>
-    <div id="oc-date-badge" style="
-      font-size:10px;font-weight:700;letter-spacing:.04em;
-      padding:5px 9px;border-radius:9px;flex-shrink:0;
-      background:rgba(41,121,181,.18);border:1px solid rgba(41,121,181,.4);color:#7dd3fc;
-      white-space:nowrap;
-    "></div>
-  </div>
-
-  <!-- Tab nav -->
-  <div style="display:flex;border-bottom:1px solid rgba(107,191,234,.1);background:rgba(0,0,0,.2)">
-    <button class="oc-tab active" data-tab="map"     onclick="ocSwitchTab('map')">🗺 Live Map</button>
-    <button class="oc-tab"        data-tab="charts"  onclick="ocSwitchTab('charts')">📊 Chart Library</button>
-  </div>
-
-  <!-- Content -->
-  <div id="oc-content" style="position:relative"></div>
-</div>
-
-<style>
-.oc-tab{
-  flex:1;background:transparent;border:none;color:#5d96c4;
-  padding:14px 12px;font-size:12px;font-weight:600;letter-spacing:.05em;
-  cursor:pointer;border-bottom:3px solid transparent;
-  font-family:inherit;transition:all .15s;
-}
-.oc-tab:hover{color:#9ec5e8;background:rgba(255,255,255,.02)}
-.oc-tab.active{color:#7dd3fc;border-bottom-color:#2979b5;background:rgba(41,121,181,.08)}
-
-#oc-map{
-  width:100%;
-  height:calc(100vh - 120px);
-  background:#0d1e33;
-  position:relative;
-}
-#oc-map .leaflet-container{background:#3a4a5a}
-
-.oc-layer-panel{
-  position:absolute;top:12px;right:12px;z-index:600;
-  background:rgba(10,22,40,.94);
-  border:1px solid rgba(107,191,234,.25);
-  border-radius:10px;padding:12px 14px;
-  min-width:240px;max-width:300px;
-  box-shadow:0 4px 16px rgba(0,0,0,.5);
-}
-.oc-layer-panel h4{
-  font-size:10px;color:#6bbfea;letter-spacing:.14em;
-  font-weight:700;text-transform:uppercase;margin-bottom:10px;
-}
-.oc-layer-row{
-  display:flex;align-items:center;gap:8px;
-  padding:6px 4px;font-size:11px;color:#cfe5ff;
-  cursor:pointer;border-radius:5px;
-}
-.oc-layer-row:hover{background:rgba(107,191,234,.06)}
-.oc-layer-row input{accent-color:#2979b5;width:14px;height:14px;cursor:pointer}
-.oc-opacity-row{margin-top:8px;padding:4px;font-size:10px;color:#9ec5e8}
-.oc-opacity-row input{width:100%;accent-color:#2979b5;margin-top:4px}
-
-.oc-date-bar{
-  position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
-  z-index:600;background:rgba(10,22,40,.94);
-  border:1px solid rgba(107,191,234,.25);border-radius:10px;
-  padding:8px 16px;display:flex;align-items:center;gap:10px;
-  box-shadow:0 4px 16px rgba(0,0,0,.6);
-  font-size:11px;color:#cfe5ff;
-}
-.oc-date-bar button{
-  background:rgba(107,191,234,.15);border:1px solid rgba(107,191,234,.3);
-  color:#cfe5ff;padding:4px 10px;border-radius:6px;
-  cursor:pointer;font-family:inherit;font-size:11px;font-weight:600;
-}
-.oc-date-bar button:hover{background:rgba(107,191,234,.25)}
-.oc-date-bar input{
-  background:rgba(255,255,255,.06);border:1px solid rgba(107,191,234,.2);
-  color:#f0f6ff;padding:4px 8px;border-radius:5px;
-  font-family:inherit;font-size:11px;outline:none;
-}
-
-.oc-chart-grid{
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
-  gap:14px;padding:20px;max-width:1100px;margin:0 auto;
-}
-.oc-chart-card{
-  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));
-  border:1px solid rgba(107,191,234,.18);
-  border-radius:12px;overflow:hidden;
-  transition:all .2s;cursor:pointer;
-  text-decoration:none;display:block;
-}
-.oc-chart-card:hover{
-  transform:translateY(-2px);
-  border-color:rgba(107,191,234,.5);
-  box-shadow:0 12px 32px rgba(0,0,0,.5);
-}
-.oc-chart-thumb{
-  width:100%;aspect-ratio:16/9;
-  background:linear-gradient(135deg,#1a3a5a,#0d2440);
-  display:flex;align-items:center;justify-content:center;
-  font-size:48px;
-  border-bottom:1px solid rgba(107,191,234,.1);
-}
-.oc-chart-info{padding:14px}
-.oc-chart-source{font-size:9px;color:#5d96c4;letter-spacing:.12em;font-weight:600;text-transform:uppercase}
-.oc-chart-name{font-size:14px;font-weight:700;color:#f0f6ff;margin-top:3px}
-.oc-chart-desc{font-size:11px;color:#9ec5e8;margin-top:6px;line-height:1.5}
-.oc-chart-region{
-  display:inline-block;font-size:9px;font-weight:600;
-  padding:2px 7px;border-radius:8px;margin-top:8px;
-  background:rgba(41,121,181,.15);color:#7dd3fc;border:1px solid rgba(41,121,181,.3);
-}
-
-.oc-about{padding:24px;max-width:760px;margin:0 auto;line-height:1.7}
-.oc-about h3{font-size:13px;color:#7dd3fc;letter-spacing:.12em;font-weight:700;text-transform:uppercase;margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid rgba(107,191,234,.15)}
-.oc-about p{font-size:13px;color:#c8d8e8;margin-bottom:10px}
-.oc-about a{color:#7dd3fc;text-decoration:none;border-bottom:1px dotted #7dd3fc}
-.oc-about a:hover{color:#a8dff5}
-.oc-about ul{padding-left:24px;margin:10px 0}
-.oc-about li{font-size:13px;color:#c8d8e8;margin-bottom:6px}
-
-.oc-legend{
-  position:absolute;bottom:70px;left:14px;z-index:600;
-  background:rgba(10,22,40,.94);border:1px solid rgba(107,191,234,.25);
-  border-radius:10px;padding:10px 12px;font-size:10px;color:#cfe5ff;
-  box-shadow:0 4px 16px rgba(0,0,0,.5);min-width:160px;max-width:240px;
-  display:none;
-}
-.oc-legend.visible{display:block}
-.oc-legend h5{font-size:9px;color:#6bbfea;letter-spacing:.1em;font-weight:700;margin-bottom:6px}
-.oc-legend-bar{height:12px;border-radius:3px;margin:4px 0}
-.oc-legend-row{display:flex;justify-content:space-between;font-size:9px;color:#9ec5e8}
-
-@media (max-width:680px){
-  .oc-layer-panel{top:8px;right:8px;min-width:0;max-width:calc(100vw - 16px)}
-  .oc-layer-panel h4{font-size:9px}
-  .oc-chart-grid{padding:14px;gap:10px}
-}
-</style>
-
-<script>
-// ════════════════════════════════════════════════════════════════════════════
-// OCEAN CONDITIONS DATA SOURCES
-// ════════════════════════════════════════════════════════════════════════════
-
-// NASA GIBS WMTS layer definitions — these all work without API key.
-// URL pattern: https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/{LAYER}/default/{TIME}/{TILE_SET}/{z}/{y}/{x}.{ext}
-const OC_GIBS_LAYERS = {
-  sst_mur: {
-    id: "GHRSST_L4_MUR_Sea_Surface_Temperature",
-    name: "Sea Surface Temperature (MUR 1km)",
-    desc: "Gap-filled daily 1km SST — complete cloud-free coverage. The same product the bite score reads. Best for the Gulf Stream edge & thermal breaks.",
-    set: "GoogleMapsCompatible_Level7",
-    maxZoom: 7,
-    ext: "png",
-    legend: "sst",
-  },
-  sst_modis_l2: {
-    id: "MODIS_Aqua_L2_Sea_Surface_Temp_Day",
-    name: "MODIS Aqua SST (today's pass)",
-    desc: "Sharp single-pass SST. Higher detail but has daily swath/cloud gaps — slide the date back if your area isn't covered.",
-    set: "GoogleMapsCompatible_Level7",
-    maxZoom: 7,
-    ext: "png",
-    legend: "sst",
-  },
-  chlor_viirs: {
-    id: "VIIRS_NOAA20_Chlorophyll_a",
-    name: "Chlorophyll-a (VIIRS NOAA-20)",
-    desc: "Daily 1km chlorophyll — locate green/blue water edges. Same VIIRS sensor family the bite score reads. Slide the date back for a clear pass.",
-    set: "GoogleMapsCompatible_Level7",
-    maxZoom: 7,
-    ext: "png",
-    legend: "chlor",
-  },
-  truecolor: {
-    id: "MODIS_Aqua_CorrectedReflectance_TrueColor",
-    name: "True Color Satellite",
-    desc: "Real satellite imagery — see clouds, ocean color, sediment",
-    set: "GoogleMapsCompatible_Level9",
-    maxZoom: 9,
-    ext: "jpg",
-    legend: null,
-  },
-  radar: {
-    wms: true,
-    name: "Weather Radar (live)",
-    desc: "NOAA/NWS NEXRAD MRMS base reflectivity — live precipitation & storms, refreshed ~every 4 min. Informational only.",
-    legend: "radar",
-  },
-};
-
-// External chart library (static images / pages — Rutgers, NOAA, ROFFS-style)
-const OC_CHARTS = [
-  {
-    name: "Rutgers RUCOOL · Mid-Atlantic SST",
-    source: "Rutgers University RUCOOL",
-    region: "Mid-Atlantic Bight",
-    icon: "🌡",
-    desc: "Daily 1km AVHRR/VIIRS sea surface temperature for the Mid-Atlantic Bight, NJ to NC. Updated 2-3x daily.",
-    url: "https://marine.rutgers.edu/cool/data/satellites/imagery/",
-  },
-  {
-    name: "NOAA CoastWatch · East Coast Node",
-    source: "NOAA CoastWatch",
-    region: "US East Coast",
-    icon: "🛰",
-    desc: "Operational SST, chlorophyll, and ocean color products for the entire East Coast. Includes anomaly products.",
-    url: "https://eastcoast.coastwatch.noaa.gov/",
-  },
-  {
-    name: "NOAA NESDIS · Gulf Stream Position",
-    source: "NOAA NESDIS",
-    region: "Atlantic",
-    icon: "〰",
-    desc: "Daily Gulf Stream north wall analysis — the most important boundary for offshore fishing.",
-    url: "https://www.ospo.noaa.gov/Products/ocean/marine.html",
-  },
-  {
-    name: "NASA Worldview · Daily Snapshots",
-    source: "NASA EOSDIS",
-    region: "Global",
-    icon: "🌍",
-    desc: "Interactive daily satellite imagery from MODIS, VIIRS, and OLI sensors. Time slider, layer compositing.",
-    url: "https://worldview.earthdata.nasa.gov/",
-  },
-  {
-    name: "NOAA OSPO · Sea Surface Currents",
-    source: "NOAA OSPO",
-    region: "Atlantic",
-    icon: "↻",
-    desc: "Daily sea surface current analysis — direction and speed. Useful for chunking, drift fishing, swordfish drifts.",
-    url: "https://www.ospo.noaa.gov/Products/ocean/marine.html",
-  },
-  {
-    name: "NDBC · Real-Time Buoy Data",
-    source: "NOAA NDBC",
-    region: "All US Waters",
-    icon: "📡",
-    desc: "Live buoy observations: water temp, wave height, period, wind. The real-time ground truth for offshore conditions.",
-    url: "https://www.ndbc.noaa.gov/",
-  },
-  {
-    name: "OceanColor · Chlorophyll Anomaly",
-    source: "NASA OceanColor",
-    region: "Global",
-    icon: "🟢",
-    desc: "Chlorophyll concentration above/below seasonal average. Reveals upwelling and bait aggregation zones.",
-    url: "https://oceancolor.gsfc.nasa.gov/l3/",
-  },
-  {
-    name: "NOAA NESDIS · Satellite Altimetry",
-    source: "NOAA Lab for Satellite Altimetry",
-    region: "Global / Atlantic",
-    icon: "📏",
-    desc: "Near real-time sea surface height anomalies — reveals warm/cold core eddies that concentrate billfish and tuna.",
-    url: "https://www.star.nesdis.noaa.gov/socd/lsa/NearRealTime/",
-  }];
-
-// ════════════════════════════════════════════════════════════════════════════
-// STATE
-// ════════════════════════════════════════════════════════════════════════════
-let OC_state = {
-  tab: "map",
-  date: null,           // current display date (YYYY-MM-DD)
-  layerKey: "sst_mur",
-  opacity: 0.75,
-  showBase: true,
-  map: null,
-  baseLayer: null,
-  dataLayer: null,
-};
-
-// Use yesterday by default (today's imagery often not yet processed)
-function ocDefaultDate() {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0,10);
-}
-
-function openOcean(){
-  if(!OC_state.date) OC_state.date = ocDefaultDate();
-  document.getElementById("oc-overlay").style.display = "block";
-  document.body.style.overflow = "hidden";
-  ocUpdateDateBadge();
-  ocRender();
-}
-function closeOcean(){
-  document.getElementById("oc-overlay").style.display = "none";
-  document.body.style.overflow = "";
-  // Tear down the map so it can be re-created cleanly
-  if(OC_state.map){
-    OC_state.map.remove();
-    OC_state.map = null;
-    OC_state.baseLayer = null;
-    OC_state.dataLayer = null;
-  }
-}
-function ocSwitchTab(tab){
-  OC_state.tab = tab;
-  document.querySelectorAll(".oc-tab").forEach(t => {
-    t.classList.toggle("active", t.dataset.tab === tab);
-  });
-  // If leaving map tab, tear down so it re-inits properly when returning
-  if(tab !== "map" && OC_state.map){
-    OC_state.map.remove();
-    OC_state.map = null;
-  }
-  ocRender();
-}
-function ocUpdateDateBadge(){
-  const d = OC_state.date;
-  if(!d) return;
-  const date = new Date(d + "T12:00:00Z");
-  const now = new Date();
-  const days = Math.floor((now - date) / (24*3600*1000));
-  const label = days === 0 ? "Today" : days === 1 ? "Yesterday" : `${days} days ago`;
-  const el = document.getElementById("oc-date-badge");
-  if(el) el.textContent = `${date.toLocaleDateString([],{month:"short",day:"numeric"})} · ${label}`;
-}
-
-function ocRender(){
-  const root = document.getElementById("oc-content");
-  if(OC_state.tab === "charts"){
-    root.innerHTML = ocRenderCharts();
-  } else {
-    // Default to map for "map" or any unknown state (defensive)
-    root.innerHTML = ocRenderMap();
-    setTimeout(ocInitMap, 50);
-  }
-}
-
-// ── MAP TAB ──────────────────────────────────────────────────────────────────
-function ocRenderMap(){
-  return `
-    <div id="oc-map"></div>
-
-    <!-- Layer selector panel -->
-    <div class="oc-layer-panel">
-      <h4>🛰 Data Layer</h4>
-      ${Object.entries(OC_GIBS_LAYERS).map(([k,l]) => `
-        <label class="oc-layer-row">
-          <input type="radio" name="oc-layer" value="${k}" ${k === OC_state.layerKey ? "checked" : ""} onchange="ocSetLayer('${k}')">
-          <span>${l.name}</span>
-        </label>
-      `).join("")}
-      <div class="oc-opacity-row">
-        Layer Opacity: <span id="oc-opacity-pct">${Math.round(OC_state.opacity*100)}%</span>
-        <input type="range" min="0" max="100" value="${Math.round(OC_state.opacity*100)}"
-          oninput="ocSetOpacity(this.value/100)"/>
-      </div>
-    </div>
-
-    <!-- Date picker bar -->
-    <div class="oc-date-bar">
-      <button onclick="ocChangeDate(-1)">◀</button>
-      <input type="date" value="${OC_state.date}" max="${ocDefaultDate()}" onchange="ocSetDate(this.value)"/>
-      <button onclick="ocChangeDate(1)">▶</button>
-      <button onclick="ocSetDate(ocDefaultDate())" style="margin-left:6px">Latest</button>
-    </div>
-
-    <!-- Legend -->
-    <div id="oc-legend" class="oc-legend"></div>
-  `;
-}
-
-function ocInitMap(){
-  if(OC_state.map) return; // already initialized
-  const el = document.getElementById("oc-map");
-  if(!el) return;
-
-  OC_state.map = L.map("oc-map", {
-    center: [37.5, -73.5],
-    zoom: 6,
-    zoomControl: true,
-    zoomControlOptions: {position: 'bottomright'},
-    attributionControl: true,
-  });
-  // Move zoom control to bottom-right to avoid overlapping the layer panel
-  OC_state.map.zoomControl.setPosition('bottomright');
-
-  // Light base layer underneath the data overlay
-  OC_state.baseLayer = L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
-    {maxZoom:13, attribution:'© Esri'}
-  ).addTo(OC_state.map);
-
-  // Apply currently selected layer
-  ocApplyLayer();
-}
-
-function ocApplyLayer(){
-  if(!OC_state.map) return;
-  // Remove existing data layer
-  if(OC_state.dataLayer){
-    OC_state.map.removeLayer(OC_state.dataLayer);
-    OC_state.dataLayer = null;
-  }
-  const def = OC_GIBS_LAYERS[OC_state.layerKey];
-  if(!def) return;
-
-  // Radar is a NOAA WMS service (not a GIBS XYZ product), so build it differently.
-  // nowCOAST GeoServer WMS — confirmed working layer name.
-  if(def.wms){
-    OC_state.dataLayer = L.tileLayer.wms(
-      "https://nowcoast.noaa.gov/geoserver/observations/weather_radar/ows",
-      { layers:"weather_radar:conus_base_reflectivity_mosaic", format:"image/png",
-        transparent:true, version:"1.3.0",
-        maxZoom:18, minZoom:1, opacity:OC_state.opacity,
-        attribution:'NOAA/NWS nowCOAST · '+def.name });
-    OC_state.dataLayer.addTo(OC_state.map);
-    ocUpdateLegend(def);
-    return;
-  }
-
-  // Build NASA GIBS WMTS URL — EPSG:3857 (Web Mercator). Each layer carries its
-  // own TileMatrixSet + maxZoom (they differ: MUR/VIIRS at Level7, MODIS L2 at
-  // Level7, TrueColor at Level9). Hardcoding one level 404'd most layers.
-  const tileSet = def.set || "GoogleMapsCompatible_Level6";
-  const maxZ = def.maxZoom || 6;
-  const url = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${def.id}/default/${OC_state.date}/${tileSet}/{z}/{y}/{x}.${def.ext}`;
-
-  OC_state.dataLayer = L.tileLayer(url, {
-    maxZoom: 18,           // keep visible at all panel zooms…
-    minZoom: 1,
-    maxNativeZoom: maxZ,   // …fetch only to the layer's native max, then upscale
-    opacity: OC_state.opacity,
-    attribution: 'NASA GIBS · ' + def.name,
-    tileSize: 256,
-    errorTileUrl: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
-  });
-
-  // Tile error tracking (sandbox notice disabled ahead of backend wiring)
-  let errCount = 0;
-  let loadCount = 0;
-  OC_state.dataLayer.on('tileload', () => loadCount++);
-
-  OC_state.dataLayer.addTo(OC_state.map);
-
-  // Update legend
-  ocUpdateLegend(def);
-}
-
-function ocUpdateLegend(def){
-  const lg = document.getElementById("oc-legend");
-  if(!lg) return;
-  if(!def.legend){
-    lg.classList.remove("visible");
-    return;
-  }
-  if(def.legend === "sst"){
-    lg.innerHTML = `
-      <h5>SST · °F</h5>
-      <div class="oc-legend-bar" style="background:linear-gradient(90deg,#0033cc 0%,#0077ff 20%,#00ccff 40%,#33ff66 55%,#ffff00 70%,#ff8800 85%,#ff0000 100%)"></div>
-      <div class="oc-legend-row"><span>50°</span><span>65°</span><span>80°</span><span>95°</span></div>
-    `;
-    lg.classList.add("visible");
-  } else if(def.legend === "chlor"){
-    lg.innerHTML = `
-      <h5>Chlorophyll · mg/m³</h5>
-      <div class="oc-legend-bar" style="background:linear-gradient(90deg,#1a1a8a 0%,#0066cc 25%,#00aacc 50%,#33cc33 70%,#cccc33 85%,#cc6633 100%)"></div>
-      <div class="oc-legend-row"><span>0.01</span><span>0.1</span><span>1</span><span>10+</span></div>
-      <div style="margin-top:5px;font-size:9px;color:#9ec5e8;line-height:1.4">Edges between low (blue) &amp; high (green) concentration are bait-rich.</div>
-    `;
-    lg.classList.add("visible");
-  } else if(def.legend === "radar"){
-    lg.innerHTML = `
-      <h5>Radar · reflectivity (dBZ)</h5>
-      <div class="oc-legend-bar" style="background:linear-gradient(90deg,#04e9e7 0%,#019ff4 15%,#0300f4 28%,#02fd02 42%,#01c501 52%,#fdf802 64%,#e5bc00 72%,#fd9500 80%,#fd0000 90%,#bc0000 100%)"></div>
-      <div class="oc-legend-row"><span>light</span><span>moderate</span><span>heavy</span><span>intense</span></div>
-      <div style="margin-top:5px;font-size:9px;color:#9ec5e8;line-height:1.4">Live NOAA NEXRAD. Informational only — not for navigation or storm avoidance.</div>
-    `;
-    lg.classList.add("visible");
-  } else {
-    lg.classList.remove("visible");
-  }
-}
-
-function ocSetLayer(key){
-  OC_state.layerKey = key;
-  ocApplyLayer();
-}
-function ocSetOpacity(o){
-  OC_state.opacity = o;
-  document.getElementById("oc-opacity-pct").textContent = Math.round(o*100) + "%";
-  if(OC_state.dataLayer) OC_state.dataLayer.setOpacity(o);
-}
-function ocSetDate(d){
-  OC_state.date = d;
-  ocUpdateDateBadge();
-  ocApplyLayer();
-}
-function ocChangeDate(days){
-  const cur = new Date(OC_state.date + "T12:00:00Z");
-  cur.setUTCDate(cur.getUTCDate() + days);
-  const max = new Date(ocDefaultDate() + "T12:00:00Z");
-  if(cur > max) return;
-  OC_state.date = cur.toISOString().slice(0,10);
-  ocUpdateDateBadge();
-  // Update the input
-  const inp = document.querySelector('.oc-date-bar input[type="date"]');
-  if(inp) inp.value = OC_state.date;
-  ocApplyLayer();
-}
-
-// ── CHART LIBRARY TAB ────────────────────────────────────────────────────────
-function ocRenderCharts(){
-  const cards = OC_CHARTS.map(c => `
-    <a href="${c.url}" target="_blank" rel="noopener" class="oc-chart-card">
-      <div class="oc-chart-thumb">${c.icon}</div>
-      <div class="oc-chart-info">
-        <div class="oc-chart-source">${c.source}</div>
-        <div class="oc-chart-name">${c.name}</div>
-        <div class="oc-chart-desc">${c.desc}</div>
-        <span class="oc-chart-region">${c.region}</span>
-      </div>
-    </a>
-  `).join("");
-
-  return `
-    <div style="padding:20px 20px 0;max-width:1100px;margin:0 auto">
-      <div style="background:rgba(41,121,181,.08);border:1px solid rgba(41,121,181,.25);border-radius:10px;padding:14px 18px;margin-bottom:6px">
-        <div style="font-size:13px;color:#cfe5ff;line-height:1.6">
-          <b>📊 Chart Library</b> — curated links to the best satellite and oceanographic data sources for offshore fishing. Each opens in a new tab.
-        </div>
-      </div>
-    </div>
-    <div class="oc-chart-grid">${cards}</div>
-    <div style="text-align:center;padding:20px;font-size:10px;color:#5d96c4">
-      All sources are free public services. ROFFS, FishTrack, Hilton's premium analyses available by subscription.
-    </div>
-  `;
-}
-
-// ── ABOUT TAB ────────────────────────────────────────────────────────────────
-// (ocRenderAbout removed — the Data Sources tab was deprecated as redundant
-//  with the Chart Library, and its copy described the prediction engine as
-//  future work, which is no longer accurate.)
-</script>
+<!-- Weather & Oceanography overlay removed — SST/chlor/wind/radar/altimetry
+     are map layers; satellite cloud imagery is the Satellite Imagery layer. -->
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TUTORIAL — how to use the app + what data drives predictions
@@ -21061,7 +20679,7 @@ function ocRenderCharts(){
       <div class="tut-step-num">5</div>
       <div class="tut-step-body">
         <div class="tut-step-title">Explore the menu</div>
-        <div class="tut-step-desc">Tap <b>MENU</b> in the top right. It's organized into grouped sections like iOS Settings: <b>Map &amp; Data</b> (Offshore Chart, Weather &amp; Oceanography, Fishing Reports), <b>My Tools</b> (My Catches with logging + pattern analytics, Waypoints &amp; Structure, AI Catch Measure, Virtual Tackle Box), and <b>Reference</b> (Regulations, Terminal Tackle, Fish Encyclopedia, Tutorial, Help &amp; Contact). To log a catch, open <b>My Catches</b> and tap <b>Log a Catch</b>.</div>
+        <div class="tut-step-desc">Tap <b>MENU</b> in the top right. It's organized into grouped sections like iOS Settings: <b>Map &amp; Data</b> (Offshore Chart, Fishing Reports), <b>My Tools</b> (My Catches with logging + pattern analytics, Waypoints &amp; Structure, AI Catch Measure, Virtual Tackle Box, Download My Trip), and <b>Reference</b> (Regulations, Terminal Tackle, Fish Encyclopedia, Tutorial, Help &amp; Contact). Ocean layers — SST, chlorophyll, wind, radar, satellite cloud imagery, currents, and altimetry — are toggled on the map itself under <b>Layers</b>. To log a catch, open <b>My Catches</b> and tap <b>Log a Catch</b>.</div>
       </div>
     </div>
 
