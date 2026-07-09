@@ -10196,7 +10196,10 @@ function _altiIsoSegs(A,B,C,D,L,latA,lngA,step){
 // "break" peaks (the steepest fronts). Grid-only, so it's cached alongside the
 // smooth canvas. A break must clear ~0.06 m/10nm (a real edge, not noise) and
 // sit ≥ ~1.1° from a stronger one so we surface separate fronts, not one blob.
-function _altiComputeBreaks(g){
+// Magenta highlights are limited to ALTI_BREAK_PORT_RADIUS_NM of the home port
+// so captains only see breaks they can actually run to.
+const ALTI_BREAK_PORT_RADIUS_NM = 150;
+function _altiComputeBreaks(g, portLat, portLng, maxNm){
   const n=g.nLat, m=g.nLng, gm=new Float32Array(n*m);
   const latOf=(i)=>g.minLat+i*g.step;
   for(let i=1;i<n-1;i++){
@@ -10209,8 +10212,15 @@ function _altiComputeBreaks(g){
       gm[i*m+j]=Math.hypot(dLat,dLng);
     }
   }
+  if(!Number.isFinite(portLat)||!Number.isFinite(portLng)||!(maxNm>0)) return { gm, peaks: [] };
   const cand=[];
-  for(let i=1;i<n-1;i++) for(let j=1;j<m-1;j++){ const v=gm[i*m+j]; if(v>=0.06) cand.push({i,j,v}); }
+  for(let i=1;i<n-1;i++) for(let j=1;j<m-1;j++){
+    const v=gm[i*m+j];
+    if(v<0.06) continue;
+    const lat=latOf(i), lng=g.minLng+j*g.step;
+    if(nmBetween(portLat,portLng,lat,lng)>maxNm) continue;
+    cand.push({i,j,v});
+  }
   cand.sort((a,b)=>b.v-a.v);
   const peaks=[], minSep=1.1;
   for(const c of cand){
@@ -10378,8 +10388,13 @@ const AltimetryLayer = L.Layer.extend({
     // ── 4) STRONGEST BREAKS (magenta) ────────────────────────────────────────
     // Trace the SSH contour through each of the up-to-3 steepest fronts, limited
     // to that break's steep neighborhood, in glowing magenta — the #1 spots to
-    // fish. This is the primary edge the whole layer is pointing you toward.
-    if(this._breaksFor!==g){ this._breaks=_altiComputeBreaks(g); this._breaksFor=g; }
+    // fish. Only breaks within 150 nm of the selected home port qualify.
+    const portName=(typeof activePort!=="undefined"&&activePort)?activePort:"";
+    if(this._breaksFor!==g||this._breaksPort!==portName){
+      const po=portName&&PORTS[portName]?PORTS[portName]:null;
+      this._breaks=_altiComputeBreaks(g, po?po.lat:null, po?po.lng:null, ALTI_BREAK_PORT_RADIUS_NM);
+      this._breaksFor=g; this._breaksPort=portName;
+    }
     const brk=this._breaks;
     if(brk && brk.peaks.length){
       ctx.save();
@@ -12796,6 +12811,10 @@ function updateOceanLegend(){
       : (ALTIMETRY_STATUS==="unavailable"
         ? `<div style="font-size:8.5px;color:#f8a5a5;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Altimetry unavailable</div>`
         : `<div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">NOAA altimetry · ${altiDate}</div>`);
+    const altiPort = (typeof activePort!=="undefined"&&activePort&&PORTS[activePort]) ? activePort.split(",")[0] : null;
+    const altiRangeNote = altiPort
+      ? `within <b style="color:#e8f4ff">${ALTI_BREAK_PORT_RADIUS_NM} nm</b> of <b style="color:#e8f4ff">${altiPort}</b>`
+      : `within <b style="color:#e8f4ff">${ALTI_BREAK_PORT_RADIUS_NM} nm</b> of your home port <span style="color:#fbbf24">(select a port)</span>`;
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:11px;font-weight:700;color:#e879f9;letter-spacing:.08em;margin-bottom:2px">SEA-SURFACE HEIGHT</div>
@@ -12804,10 +12823,10 @@ function updateOceanLegend(){
           <span>Cold / low</span><span>Flat</span><span>Warm / high</span>
         </div>
         ${statusRow}
-        <div style="font-size:11px;color:#7aa8c8;margin-top:5px;line-height:1.4"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> — the #1 spots for tuna &amp; billfish. White contours are equal SSH; where they bunch tightest is a break.</div>
+        <div style="font-size:11px;color:#7aa8c8;margin-top:5px;line-height:1.4"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote} — the #1 spots for tuna &amp; billfish you can actually run to. White contours are equal SSH; where they bunch tightest is a break.</div>
         ${detail(`
         <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:4px 6px;align-items:start;font-size:11px;color:#cfe5ff;line-height:1.35">
-          <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. The sharpest SSH edges in view (up to 3). Fish these first.</span>
+          <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${ALTI_BREAK_PORT_RADIUS_NM}-nm fishing range are highlighted — farther breaks are ignored even if sharper.</span>
           <span style="justify-self:center;color:#f87171;font-size:13px;line-height:1">●</span><span><b style="color:#f8b4b4">Red — warm bulge</b> (Gulf Stream, warm-core eddy). Bait &amp; pelagics stack on the edges — not the center.</span>
           <span style="justify-self:center;color:#60a5fa;font-size:13px;line-height:1">●</span><span><b style="color:#bcd6f8">Blue — cool depression</b> (cold-core eddy, upwelling). Nutrient-rich; good for bait and surface feeding.</span>
           <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">〜</span><span><b style="color:#eef0f6">White contours — equal SSH.</b> Tightly-packed lines = a steep gradient = a temperature/current break.</span>
@@ -15036,6 +15055,7 @@ function selectPort(name){
   drawRamps();
   ensurePredictLayerOn();
   drawPrediction();
+  if(layerVis.altimetry&&altimetryLayer) altimetryLayer._draw();
   updateEmptyState();
   updateHeaderConditions();
 }
