@@ -7491,6 +7491,16 @@ function scoreCell(lat, lng, speciesId){
   .map(f => ({...f, score:f.score*f.weight}))
   .sort((a,b) => b.score - a.score);
 
+  // Human-readable top-factor summary for the brief & explainer. allFactors is
+  // already sorted by weighted contribution, so [0] is the single biggest driver
+  // of this cell's score. We surface the top few with their raw readings so the
+  // Captain's Brief can explain the "why" in the SAME language as the map.
+  const _rankedFactors = allFactors
+    .filter(f => f && f.name)
+    .map(f => ({ factor: String(f.name).replace(/^[^\w]+\s*/, ""), detail: (f.raw != null && f.raw !== "—") ? String(f.raw) : null }));
+  const topFactor = _rankedFactors.length ? _rankedFactors[0].factor : null;
+  const topFactors = _rankedFactors.slice(0, 3);
+
   return {
     score: Math.max(0, Math.min(1, finalScore)),
     confidence,
@@ -7500,6 +7510,14 @@ function scoreCell(lat, lng, speciesId){
     weatherShift: wxLabel,
     speciesCat,
     factors: allFactors,
+    // Surfaced for the Captain's Brief (were previously missing → brief showed
+    // "Top factor: Not specified"). inSeason reflects whether this species
+    // actually belongs in this area/time; seasonStrength is the 0–1 seasonal fit.
+    topFactor,
+    topFactors,
+    inSeason: !_seasonOutOfRange,
+    outOfRange: _seasonOutOfRange,
+    seasonStrength: Math.round(seasonScore * 100) / 100,
   };
 }
 
@@ -14881,13 +14899,78 @@ function renderBrief(){
   `);
 }
 function toggleBriefSp(id){briefSp=briefSp.includes(id)?briefSp.filter(x=>x!==id):[...briefSp,id];renderBrief();}
-function structureNear(lat, lng, maxNm = 15, limit = 3){
+function structureNear(lat, lng, maxNm = 40, limit = 4){
   if(typeof CANYONS === "undefined") return [];
+  // Great-circle initial bearing (deg) from the pin toward a structure, so the
+  // brief can say which way to slide (e.g. "the canyon edge 6 nm SE").
+  const bearingTo = (la2, ln2) => {
+    const toRad = d => d * Math.PI / 180;
+    const y = Math.sin(toRad(ln2 - lng)) * Math.cos(toRad(la2));
+    const x = Math.cos(toRad(lat)) * Math.sin(toRad(la2)) -
+              Math.sin(toRad(lat)) * Math.cos(toRad(la2)) * Math.cos(toRad(ln2 - lng));
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  };
   return CANYONS
-    .map(c => ({ name: c.name, nm: nmBetween(lat, lng, c.lat, c.lng) }))
+    .map(c => ({
+      name: c.name,
+      nm: Math.round(nmBetween(lat, lng, c.lat, c.lng)),
+      bearing: (typeof bwiCompass16 === "function") ? bwiCompass16(bearingTo(c.lat, c.lng)) : null,
+      // Short human description + the species this structure is known for, so
+      // the brief has real context instead of just a name and distance.
+      desc: c.desc || null,
+      fish: Array.isArray(c.fish) ? c.fish : null,
+    }))
     .filter(c => c.nm <= maxNm)
     .sort((a,b) => a.nm - b.nm)
     .slice(0, limit);
+}
+
+// Are the shared ocean-data grids already loaded with coverage at this pin? The
+// AI brief reads water temp, chlorophyll, thermal break, and the bite-score
+// factors from the SAME grids that power the Bite Map (SST_GRID / CHLOR_GRID /
+// OCEAN_FIELD / PREDICT_CUR_GRID). Those grids are normally built when the heat
+// map renders — so a captain who just drops a pin and hits "Generate Brief"
+// without ever turning on an overlay would otherwise send an empty payload and
+// get a data-poor brief. This lets runBrief() know when it must load them first.
+function briefGridsCoverPin(pinLL){
+  const sstOk = (typeof sstGridAt === "function" && !!sstGridAt(pinLL.lat, pinLL.lng)) ||
+                (typeof SST_GRID !== "undefined" && SST_GRID && SST_GRID.median != null);
+  const fieldOk = (typeof OCEAN_FIELD !== "undefined" && OCEAN_FIELD.samples && OCEAN_FIELD.samples.length > 0);
+  return !!(sstOk && fieldOk);
+}
+
+// Proactively load the ocean/prediction grids for the area we're briefing, so
+// the brief is DATA-RICH even when no map overlay is on. Scopes a bounding box
+// around the departure port's fishing range (falling back to a box around the
+// pin) and calls the same one-request loader the Bite Map uses. Best-effort:
+// on any failure the brief still builds from whatever data is already present.
+async function ensureBriefOceanData(pinLL, portObj){
+  try {
+    if(briefGridsCoverPin(pinLL)) return;
+    if(typeof buildPredictInputs !== "function") return;
+    const LAT_MIN = 24.0, LAT_MAX = 43.5, LNG_MIN = -97.5, LNG_MAX = -68.5;
+    let latMin, latMax, lngMin, lngMax;
+    if(portObj){
+      const maxRange = (typeof maxRangeForPort === "function") ? maxRangeForPort(portObj) : 100;
+      const degLat = (maxRange / 60) + 0.15;
+      const degLng = (maxRange / (60 * Math.cos(portObj.lat * Math.PI / 180))) + 0.15;
+      latMin = portObj.lat - degLat; latMax = portObj.lat + degLat;
+      lngMin = portObj.lng - degLng; lngMax = portObj.lng + degLng;
+    } else {
+      const pad = 1.2;
+      latMin = pinLL.lat - pad; latMax = pinLL.lat + pad;
+      lngMin = pinLL.lng - pad; lngMax = pinLL.lng + pad;
+    }
+    // Guarantee the pin itself is inside the box — an offshore pin can sit at or
+    // just beyond the port's nominal range.
+    const edge = 0.25;
+    latMin = Math.min(latMin, pinLL.lat - edge); latMax = Math.max(latMax, pinLL.lat + edge);
+    lngMin = Math.min(lngMin, pinLL.lng - edge); lngMax = Math.max(lngMax, pinLL.lng + edge);
+    // Clamp to the coastal data extent.
+    latMin = Math.max(LAT_MIN, latMin); latMax = Math.min(LAT_MAX, latMax);
+    lngMin = Math.max(LNG_MIN, lngMin); lngMax = Math.min(LNG_MAX, lngMax);
+    await buildPredictInputs(latMin, latMax, lngMin, lngMax);
+  } catch(e){ /* best-effort — brief still builds from whatever loaded */ }
 }
 async function runBrief(){
   if(!pinLL||aiLoading)return;
@@ -14900,6 +14983,12 @@ async function runBrief(){
   const speciesNames = sp.map(id => SPECIES.find(s=>s.id===id)?.name).filter(Boolean);
   const port = activePort || null;
   const portObj = port && PORTS[port] ? PORTS[port] : null;
+
+  // Make the app's rich SST/chlorophyll/current/ocean-field data available for
+  // this spot BEFORE we build the payload — even if the captain never turned on
+  // a map overlay. Without this the grids are empty and the brief reports "no
+  // water temp / no chlorophyll / no break" despite the data existing.
+  await ensureBriefOceanData(pinLL, portObj);
 
   // ── Gather the REAL conditions the app already has for this pin, so the brief
   //    is grounded in data instead of generic guesses. We pull live ocean/marine
@@ -14961,19 +15050,36 @@ async function runBrief(){
         cond = cond || {};
         if(fd.airHiF != null) cond.airTempHiF = fd.airHiF;
         if(fd.airLoF != null) cond.airTempLoF = fd.airLoF;
+        // Open-Meteo weather code → a plain-language sky summary for the brief.
+        if(fd.wxCode != null && typeof bwiWeatherIcon === "function"){
+          const wx = bwiWeatherIcon(fd.wxCode, fd.precip);
+          if(wx && wx.label) cond.sky = wx.label;
+        }
+        if(fd.precip != null) cond.precipChancePct = fd.precip;
         if(briefDayOffset > 0){
-          // Future day → the live buoy reading isn't for that day; use the forecast.
+          // Future day → the live buoy reading isn't for that day; use the forecast
+          // as the authoritative source for the whole conditions block.
           if(fd.windKt  != null) cond.windKt      = fd.windKt;
           if(fd.windDir != null) cond.windDir     = (typeof bwiCompass16==="function"?bwiCompass16(fd.windDir):fd.windDir);
           if(fd.gustKt  != null) cond.windGustKt  = fd.gustKt;
           if(fd.waveFt  != null) cond.waveHtFt    = fd.waveFt;
           if(fd.wavePer != null) cond.wavePeriodS = fd.wavePer;
+          if(fd.sstF    != null && cond.waterTempF == null){ cond.waterTempF = fd.sstF; cond.waterTempSource = "Open-Meteo marine forecast"; }
           cond.source = "Open-Meteo forecast";
         } else {
-          // Today → keep the live values; only fill gaps from the forecast.
+          // Today → keep the live buoy values, but fill ANY gap from the forecast.
+          // Previously wind speed/direction were never gap-filled on "today", so an
+          // offshore spot with no nearby buoy showed empty wind even though a real
+          // forecast was available — the exact failure captains reported.
+          if(cond.windKt      == null && fd.windKt  != null) cond.windKt      = fd.windKt;
+          if(cond.windDir     == null && fd.windDir != null) cond.windDir     = (typeof bwiCompass16==="function"?bwiCompass16(fd.windDir):fd.windDir);
           if(cond.windGustKt  == null && fd.gustKt  != null) cond.windGustKt  = fd.gustKt;
           if(cond.waveHtFt    == null && fd.waveFt  != null) cond.waveHtFt    = fd.waveFt;
           if(cond.wavePeriodS == null && fd.wavePer != null) cond.wavePeriodS = fd.wavePer;
+          if(cond.waterTempF  == null && fd.sstF    != null){ cond.waterTempF = fd.sstF; cond.waterTempSource = "Open-Meteo marine forecast"; }
+          // If the live block had no buoy AND the wind now comes from the model,
+          // reflect that in the source label so the brief attributes it honestly.
+          if(!cond.buoy && cond.windKt != null && (cond.source == null || cond.source === "forecast model")) cond.source = "forecast model";
         }
       }
     }
@@ -14982,6 +15088,75 @@ async function runBrief(){
   // Depth at the pin (for sea-state / structure context).
   let depthFt = null;
   try { if(typeof realDepthAt === "function"){ const m = realDepthAt(pinLL.lat, pinLL.lng); if(m!=null) depthFt = Math.round(m*3.281); } } catch(e){}
+
+  // ── Fill water temp / chlorophyll from the SAME grids the Bite Map uses ──────
+  // BW_OCEAN.fetchOcean() often returns null SST/chlor for a single offshore pin
+  // (satellite cloud gaps, no point sample). But the app has already loaded a
+  // dense SST/chlor grid for the map, with a regional-median fallback. Sample it
+  // here so the brief reports real water temp/color instead of "no data", exactly
+  // like the map does. Regional values are labeled so the prompt can caveat them.
+  try {
+    cond = cond || {};
+    if(cond.waterTempF == null){
+      let s = (typeof sstGridAt === "function") ? sstGridAt(pinLL.lat, pinLL.lng) : null;
+      if((!s || s.value == null) && typeof SST_GRID !== "undefined" && SST_GRID && SST_GRID.median != null){
+        s = { value: SST_GRID.median, observedAtMs: SST_GRID.freshestMs, _regional: true };
+      }
+      if(s && s.value != null){
+        cond.waterTempF = Math.round(s.value*10)/10;
+        cond.waterTempObservedAtMs = cond.waterTempObservedAtMs ?? s.observedAtMs ?? null;
+        cond.waterTempSource = s._regional ? "satellite SST (area median)" : "satellite SST grid";
+        if(s._regional) cond.waterTempRegional = true;
+      }
+    }
+    if(cond.chlorophyll == null && typeof chlorGridAt === "function"){
+      const ch = chlorGridAt(pinLL.lat, pinLL.lng);
+      if(ch && ch.value != null) cond.chlorophyll = Math.round(ch.value*100)/100;
+    }
+    // Thermal (temperature) break strength at the pin, in °F per 10 nm, from the
+    // dense SST grid — the single most important offshore tuna signal. Non-null
+    // only where the grid has coverage around the pin.
+    if(typeof thermalBreakReal === "function"){
+      const tb = thermalBreakReal(pinLL.lat, pinLL.lng);
+      if(tb != null && tb > 0) cond.thermalBreakFper10nm = Math.round(tb*10)/10;
+    }
+    // Ocean current at the pin from the RTOFS grid the Bite Map uses. The single
+    // offshore-pin fetch above usually has no current; the grid does. Drift in
+    // knots + set (compass direction the water flows toward).
+    if(cond.currentDriftKt == null && typeof sampleCurrentGrid === "function" &&
+       typeof PREDICT_CUR_GRID !== "undefined" && PREDICT_CUR_GRID){
+      const c = sampleCurrentGrid(PREDICT_CUR_GRID, pinLL.lat, pinLL.lng);
+      if(c && c.driftKts != null){
+        cond.currentDriftKt = Math.round(c.driftKts*10)/10;
+        cond.currentSetDir = (typeof bwiCompass16==="function") ? bwiCompass16(c.setDeg) : Math.round(c.setDeg);
+      }
+    }
+    // Current EDGE / shear (kt per 10 nm) — the drift line (Gulf Stream wall,
+    // eddy rim) where bait and weed stack. A strong edge is a prime target.
+    if(typeof currentShearAt === "function"){
+      const sh = currentShearAt(pinLL.lat, pinLL.lng);
+      if(sh != null && sh > 0) cond.currentEdgeKtPer10nm = Math.round(sh*100)/100;
+    }
+  } catch(e){ /* grid sampling is best-effort */ }
+
+  // ── Tide: use the DEPARTURE PORT (inlet) when the offshore pin has none ──────
+  // Offshore spots have no nearby NOAA tide station, so the pin fetch returns no
+  // tide. But the inlet the captain leaves from does — and inlet tide timing is
+  // exactly what matters for the run out and back. Fill it from the port.
+  if(!tide && portObj && typeof BW_OCEAN !== "undefined" && BW_OCEAN.fetchOcean){
+    try {
+      const op = await BW_OCEAN.fetchOcean(portObj.lat, portObj.lng);
+      if(op && op.tide){
+        tide = {
+          state: op.tide.state || null,
+          nextHigh: op.tide.nextHigh || null,
+          nextLow: op.tide.nextLow || null,
+          station: op.sources?.tide || null,
+          atPort: true,
+        };
+      }
+    } catch(e){ /* port tide is best-effort */ }
+  }
 
   // Per-species bite score + top factor + confidence at this exact pin, from the
   // same engine that drives the Bite Map — so the brief's "why" matches the map.
@@ -14995,8 +15170,15 @@ async function runBrief(){
             species: SPECIES.find(s=>s.id===id)?.name || id,
             score: r.score != null ? Math.round(r.score*100) : null,
             topFactor: r.topFactor || null,
+            // Top 3 weighted drivers with their raw readings, so the brief can
+            // explain WHY the score is what it is in concrete terms.
+            topFactors: Array.isArray(r.topFactors) ? r.topFactors : null,
             confidence: r.confidence != null ? Math.round(r.confidence*100) : null,
             inSeason: r.inSeason !== false,
+            outOfRange: r.outOfRange === true,
+            seasonStrength: r.seasonStrength != null ? r.seasonStrength : null,
+            sstF: r.sst != null ? Math.round(r.sst*10)/10 : null,
+            thermalBreakFper10nm: r.tBreak != null && r.tBreak > 0 ? Math.round(r.tBreak*10)/10 : null,
           });
         }
       }
@@ -15024,6 +15206,27 @@ async function runBrief(){
     conditions: cond,
     tide,
     biteScores: scored,
+  };
+
+  // A quick manifest of which REAL signals we actually have for this trip. Lets
+  // the model lead with what it knows and only briefly note genuine gaps, instead
+  // of writing "no data" paragraphs when data is in fact present elsewhere.
+  payload.dataAvailability = {
+    airTemp:      !!(cond && (cond.airTempHiF != null || cond.airTempF != null)),
+    wind:         !!(cond && cond.windKt != null),
+    windDir:      !!(cond && cond.windDir != null),
+    seas:         !!(cond && cond.waveHtFt != null),
+    waterTemp:    !!(cond && cond.waterTempF != null),
+    waterTempRegional: !!(cond && cond.waterTempRegional),
+    chlorophyll:  !!(cond && cond.chlorophyll != null),
+    thermalBreak: !!(cond && cond.thermalBreakFper10nm != null),
+    current:      !!(cond && cond.currentDriftKt != null),
+    currentEdge:  !!(cond && cond.currentEdgeKtPer10nm != null),
+    tide:         !!tide,
+    tideAtPort:   !!(tide && tide.atPort),
+    biteScores:   scored.length > 0,
+    structure:    Array.isArray(payload.nearbyStructure) && payload.nearbyStructure.length > 0,
+    sky:          !!(cond && cond.sky),
   };
 
   try {
@@ -24823,7 +25026,7 @@ function closeForecast(){
 async function fetchForecast(lat, lng){
   const base = `latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&forecast_days=6&timezone=auto`;
   const marineUrl  = `https://marine-api.open-meteo.com/v1/marine?${base}` +
-    `&daily=wave_height_max,wave_period_max,wave_direction_dominant`;
+    `&daily=wave_height_max,wave_period_max,wave_direction_dominant,sea_surface_temperature_max`;
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?${base}` +
     `&daily=weather_code,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,temperature_2m_max,temperature_2m_min,precipitation_probability_max`;
 
@@ -24851,6 +25054,8 @@ async function fetchForecast(lat, lng){
     const airLoF = (wd.temperature_2m_min && wd.temperature_2m_min[i]!=null) ? (wd.temperature_2m_min[i] * 9/5 + 32) : null;
     const waveFt = (md.wave_height_max && md.wave_height_max[i]!=null) ? bwiMToFt(md.wave_height_max[i]) : null;
     const wavePer = (md.wave_period_max && md.wave_period_max[i]!=null) ? md.wave_period_max[i] : null;
+    const sstC = (md.sea_surface_temperature_max && md.sea_surface_temperature_max[i]!=null) ? md.sea_surface_temperature_max[i] : null;
+    const sstF = sstC!=null ? (sstC * 9/5 + 32) : null;
     const wxCode = (wd.weather_code && wd.weather_code[i]!=null) ? wd.weather_code[i] : null;
     const precip = (wd.precipitation_probability_max && wd.precipitation_probability_max[i]!=null) ? wd.precipitation_probability_max[i] : null;
     out.push({
@@ -24863,6 +25068,7 @@ async function fetchForecast(lat, lng){
       airLoF: airLoF!=null ? Math.round(airLoF) : null,
       waveFt: waveFt!=null ? Math.round(waveFt*10)/10 : null,
       wavePer: wavePer!=null ? Math.round(wavePer) : null,
+      sstF: sstF!=null ? Math.round(sstF*10)/10 : null,
       wxCode,
       precip,
     });

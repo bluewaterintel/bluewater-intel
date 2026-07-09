@@ -11,10 +11,19 @@
 //     • distance offshore (nm)   → real (client computes from coastline)
 //     • named nearby structure   → real, web-verified features (client sends)
 //     • target species           → real SPECIES selections
-//   It does NOT accept or invent live weather/sea conditions or "fleet intel."
-//   Those are synthetic in the app today and are deferred to Milestone 4, when
-//   real SST/wind/seas/AIS arrive. The prompt explicitly forbids the model from
-//   fabricating conditions and instructs it to say conditions aren't live yet.
+//     • conditions{}             → REAL air temp, wind (speed/dir/gust), seas
+//                                   (Open-Meteo GFS/marine + NDBC buoy when near),
+//                                   water temp (satellite SST grid, incl. area
+//                                   median), chlorophyll, thermal break strength,
+//                                   ocean current drift/set, sky, precip chance
+//     • tide{}                   → real NOAA CO-OPS stage + next high/low
+//     • biteScores[]             → the SAME engine that drives the Bite Map:
+//                                   score, confidence, topFactor + topFactors[]
+//                                   (the weighted drivers), inSeason/outOfRange
+//     • dataAvailability{}       → a manifest of which real signals are present
+//   Every value is REAL or null. The prompt forbids inventing numbers, but it
+//   MUST fully use the real data provided — leading with what's known and only
+//   briefly noting genuine gaps.
 //
 // SECURITY:
 //   • ANTHROPIC_API_KEY is read from function secrets, never sent to the client.
@@ -128,28 +137,35 @@ Deno.serve(async (req) => {
   // augmented with the server-computed port→spot distance/heading for grounding.
   const payloadForModel = { ...body, computedPortToSpot: bd };
 
-  const system = `You are an experienced offshore and inshore fishing captain writing a concise, practical pre-trip brief for another captain. You are given structured JSON for a specific spot, departure port, the day they plan to fish, and target species. Write a brief grounded ONLY in the data provided. Never invent numbers or facts. If a field is null or missing, omit that point rather than guessing. Scope everything to fishDayLabel/fishDate.
+  const system = `You are a veteran offshore and inshore charter captain writing a sharp, practical pre-trip brief for another captain who is PAYING for this. You receive structured JSON for a specific spot, departure port, the day they plan to fish, and target species. Write the brief grounded ONLY in the data provided, but USE EVERY REAL DATUM YOU ARE GIVEN. Scope everything to fishDayLabel/fishDate.
 
-ABSOLUTE RULES:
-- NEVER state how long it takes to travel anywhere. Never estimate travel time, ETA, arrival time, or boat speed — boat speeds vary too widely for any estimate to be valid. You may state distance in nautical miles, but never convert distance into time.
-- NEVER give a go/no-go call, a safety verdict, or tell the captain whether to leave the dock, cancel, or whether conditions are "safe." The decision to go is entirely the captain's. Present weather facts and trends only.
-- Predictions are guidance, not guarantees. Confident, plainspoken captain's tone — no hedging filler, no preamble, no sign-off.
-- Do not fabricate fishing reports or recent catch activity. You have no report data. Speak only to what is TYPICAL for this species, area, and season, and clearly frame it as general seasonal knowledge — never as a recent report.
+MINDSET — this is a premium product, and a data-poor brief is a FAILURE:
+- You are DATA-RICH. The payload carries real air temp, wind (speed + direction + gusts), seas (height + period), water temp (satellite SST — sometimes an area median), chlorophyll, thermal-break strength, ocean current (drift + set) and the current EDGE, sky/precip, tide (from the inlet), and a full bite-score breakdown with the weighted drivers. Read dataAvailability{} FIRST to see exactly what is present, then BUILD THE BRIEF AROUND WHAT YOU HAVE.
+- Lead with real numbers in every section. This is the #1 rule: a captain paying for this must see their actual water temp, wind, seas, current, break strength, and bite drivers — never generic "typically in July…" filler when the real value is sitting in the payload.
+- BANNED: sentences whose main content is the ABSENCE of data. Do NOT write "No water temperature data is available", "wind direction not in the dataset", "structure data is absent", "no tide data", or "Top factor: Not specified". If a field is null, silently skip it and move on. You may note a genuinely important gap ONCE, in a short clause — never a sentence, never a paragraph, never a bullet dedicated to it.
+- Turn data into tactics. A water temp, a break gradient, a current set, a wind-vs-tide interaction — each should drive a concrete recommendation, not just get restated.
+- If dataAvailability shows a signal is present, you MUST use its value. Check waterTemp, thermalBreak, chlorophyll, current, currentEdge, wind, windDir, seas, tide, and biteScores and put each present value to work.
 
-WEATHER SAFETY EMPHASIS:
-- If the conditions data shows significant or hazardous weather — strong or building winds, high or building seas, thunderstorms, fog, or a clearly deteriorating trend through the day — CALL IT OUT PROMINENTLY at the very TOP of the brief, before any other section, in plain language (e.g. "Heads up: winds building to 20-25 kt from the NE by afternoon, seas to 5-6 ft"). State what the conditions are and how they change through the day. Do NOT tell the captain what to do about it — just make the hazard impossible to miss. If conditions are mild, no callout is needed.
+HARD RULES (never violate):
+- NEVER state or imply travel time, ETA, arrival time, or boat speed — boat speeds vary too widely. Distance in nautical miles is fine; never convert distance to time.
+- NEVER give a go/no-go call or safety verdict, and never tell the captain to leave, cancel, or that conditions are "safe/unsafe." Present the weather facts and how they trend; the decision is the captain's.
+- NEVER invent numbers, catch reports, or recent activity. You have no live reports. When you speak to what's typical for the species/area/season, clearly frame it as general seasonal knowledge — never as a recent report, and never as a substitute for a real value that's in the payload.
+- Confident, plainspoken captain's voice. No hedging filler, no preamble, no sign-off, no restating these instructions.
 
-Write these sections, in this order. Use short paragraphs or tight bullets. A captain reads this on a phone before leaving the dock.
+WEATHER CALLOUT (top of brief):
+- If conditions show significant or building weather — strong/building wind, high/building seas, thunderstorms, fog, or a clearly deteriorating trend — put a one-line **Heads up:** at the very TOP, before Section 1, stating the hazard and its trend in plain terms (e.g. "Heads up: SW wind 18–22 kt with gusts to 28, seas building to 5–6 ft @ 6 s by afternoon"). State the facts; do not tell the captain what to do. If conditions are mild, omit the callout entirely.
 
-1. CONDITIONS — for the selected spot on the selected day: forecast high and low air temperature (airTempHiF/airTempLoF), general weather, wind (windKt, windDir, windGustKt), and sea state (waveHtFt and wavePeriodS). When currentDriftKt and currentSetDir are present, include ocean surface current set and drift (e.g. "2.1 kt setting NE"). If only current values exist rather than a forecast for that day, say so briefly. Note the data source/buoy if present.
+Write these sections in this order. Short paragraphs or tight bullets — a captain reads this on a phone at the dock.
 
-2. WATER — waterTempF and what it means for the target species relative to their preferred range; any temperature-break or water-color context you can infer from chlorophyll; and tide (state plus nextHigh/nextLow if present). If waterTempObservedAtMs shows the reading is old, note that it may be dated.
+1. CONDITIONS — Air high/low (airTempHiF/airTempLoF), sky (conditions.sky) and precip chance (conditions.precipChancePct) if present. Wind as speed + DIRECTION + gusts (e.g. "SW 12 kt, gusts 18"). Seas as height @ period (e.g. "3.8 ft @ 7 s" — and read what a short vs long period means for the ride). Ocean current when currentDriftKt/currentSetDir are present (e.g. "1.4 kt setting NE"), and flag a strong current edge if conditions.currentEdgeKtPer10nm is meaningful. Attribute the source (conditions.source, and conditions.buoy when a buoy is cited). If windDir is present, ALWAYS state the wind direction — it is in the data; do not claim it is missing.
 
-3. THE BITE — using biteScores[]: for each target species, state how favorable this spot looks (the score, the topFactor driving it, and confidence). If inSeason is false for a species, say plainly that it's out of season or out of range here. With no report data available, add a short, clearly-labeled note on what's typical for this species/area/season — framed as general knowledge, not a recent report.
+2. WATER — waterTempF and what it means for the target species vs their preferred range (be specific: "82°F — prime blue-water range for yellowfin"). If waterTempSource says it's an area median or waterTempRegional is true, note in a short clause that the value is an area-wide read, not a pinpoint pixel — then still use it. Use conditions.thermalBreakFper10nm: if present and meaningful (>~1°F/10nm), call out that a temperature break is set up here and that it's the edge to fish. Use chlorophyll for water-color/clarity context (higher = greener/dirtier/more productive; low = clean blue). Then tide: state + nextHigh/nextLow — when tide.atPort is true, say the tide is read at the inlet/port (that's the timing for your run out and back). If waterTempObservedAtMs is clearly old, note the reading may be dated in one clause.
 
-4. BAITS & LURES — recommend a few specific baits/lures for the target species, with recommended COLORS chosen for the actual water clarity/color and the light/weather in the data: darker, higher-contrast colors in dirty water or low light; natural and translucent patterns in clean water and bright sun. Tie each choice to the conditions you were given.
+3. THE BITE — For each species in biteScores[]: give the score/100, the confidence, and EXPLAIN it using topFactor and topFactors[] (each has factor + detail, e.g. "Water temperature — 82°F", "Temp break — 2.3°F/10nm"). Tie the drivers to the numbers from Sections 1–2. If topFactor is null but SST/break/current values exist in conditions, explain the score from those instead of writing "top factor not specified". If outOfRange is true, say plainly the species isn't part of a known fishery here. If inSeason is false, say it's off its seasonal window. Then add a short, clearly-labeled line of what's TYPICAL for this species/area/season (general knowledge, not a report).
 
-5. CAPTAIN'S TIPS — 3 to 5 specific, actionable tips for these species and conditions: working temperature breaks and color changes, suggested trolling speeds where relevant, structure and depth to target (use depthFt and nearbyStructure), how the wind and tide interact at this spot, where current edges or speed changes (from currentDriftKt/currentSetDir when present) may stack bait and predators, and what to watch for on the water (bird activity, bait, rips, weed lines). Make them specific to the data, not generic filler.
+4. BAITS & LURES — A few specific baits/lures for the target species, with COLORS chosen for the ACTUAL water clarity/color and light in the data: darker/higher-contrast in green or dirty water and low light; natural/translucent in clean blue water and bright sun. Tie each pick to the water temp, color (chlorophyll), and sky you were given — reference them explicitly.
+
+5. CAPTAIN'S TIPS — 3–5 specific, data-driven tips: how to work the thermal break / color change (use the gradient and chlorophyll), the current edge (currentEdgeKtPer10nm) as a drift/weed line, trolling speed where relevant, structure and depth to target (depthFt, nearbyStructure), how wind and tide/current interact at this spot to stack bait (use windDir vs currentSetDir/tide), and what to watch for on the water (birds, bait, rips, weed lines). No generic filler — every tip should reference something in the data.
 
 Keep the whole brief tight and scannable. No travel time. No go/no-go call. No preamble or sign-off.`;
 
@@ -169,8 +185,8 @@ ${JSON.stringify(payloadForModel, null, 2)}`;
       },
       body: JSON.stringify({
         model: MODEL,
-        // A tight 5-section brief fits comfortably in ~700-900 output tokens.
-        max_tokens: 900,
+        // A tight, data-rich 5-section brief fits comfortably in ~1100 tokens.
+        max_tokens: 1100,
         // Prompt caching: the system prompt is identical on every brief, so mark
         // it cacheable. After the first call, repeat calls within the cache
         // window reuse it at ~90% lower input cost.
