@@ -7048,7 +7048,19 @@ function scoreCell(lat, lng, speciesId){
     chlorScore = 0.5;
     if(prefs.chlorPref === "low")  chlorScore = chlor < 0.2 ? 1.0 : chlor < 0.5 ? 0.6 : 0.2;
     if(prefs.chlorPref === "high") chlorScore = chlor > 1.0 ? 1.0 : chlor > 0.5 ? 0.6 : 0.2;
-    if(prefs.chlorPref === "edge") chlorScore = (chlor >= 0.15 && chlor <= 0.5) ? 1.0 : 0.4;
+    if(prefs.chlorPref === "edge"){
+      // "Edge" species want the COLOR CHANGE, not flat green water. A concentration
+      // in the productive band is necessary but NOT sufficient: a uniform field
+      // (no break) scores only moderate, and the score climbs toward 1.0 only when
+      // a real chlorophyll gradient is present at this cell. chlorBreak (mg/m³ per
+      // 10nm) is the gradient computed above; chlorEdgeStrength normalizes it 0..1.
+      // This stops the map from rewarding areas that are simply green.
+      const gradScore = (typeof BW_BREAKS !== "undefined" && BW_BREAKS.chlorEdgeStrength)
+        ? BW_BREAKS.chlorEdgeStrength(chlorBreak) : 0;
+      const inBand = (chlor >= 0.1 && chlor <= 0.45);      // clean-to-productive edge water
+      const bandScore = inBand ? 1.0 : (chlor < 0.1 ? 0.5 : 0.35); // sterile blue mid / pea-green low
+      chlorScore = Math.min(1, 0.35 * bandScore + 0.65 * gradScore);
+    }
     if(prefs.chlorPref === "any")  chlorScore = 0.7;
   }
 
@@ -7568,7 +7580,10 @@ function scoreCell(lat, lng, speciesId){
     {name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: _isBottom ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
     {name:"Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
     {name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
-    {name:"Chlorophyll edge",   weight:W.chlorophyll,   score:chlorScore,       raw:chlor != null ? `${chlor.toFixed(2)} mg/m³` : "—"},
+    {name:"Chlorophyll",        weight:W.chlorophyll,   score:chlorScore,
+     raw: chlor != null
+          ? `${chlor.toFixed(2)} mg/m³` + (prefs.chlorPref === "edge" && chlorBreak > 0 ? ` · ${chlorBreak.toFixed(2)}/10nm edge` : "")
+          : "—"},
     // Reports: only shown when there ARE positive nearby reports. Absence of
     // reports is not a negative signal so we don't display a "—" row that
     // suggests one. Weight shown is an effective bonus weight.
