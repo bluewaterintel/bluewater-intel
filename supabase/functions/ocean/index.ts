@@ -1313,7 +1313,12 @@ async function fetchCudemRows(latMin: number, latMax: number, lngMin: number, ln
   }
   const horizStride = Math.max(1, Math.round(targetStep / CUDEM_NATIVE_STEP));
   const tiles = cudemTilesForBBox(a0, a1, o0, o1);
-  const parts = await pool(tiles, 4, (t) => fetchCudemTileRows(t, a0, a1, o0, o1, horizStride));
+  // Coastal predict boxes fan out into dozens–hundreds of 0.25° CUDEM tiles. At
+  // concurrency 4 they drained in slow serial batches (the top cold-load cost
+  // for both the bite map and the currents coast mask). 10 keeps us well within
+  // NCEI's tolerance while cutting wall time; tiles are cached 7 days after.
+  const cudemConc = Number(Deno.env.get("CUDEM_CONCURRENCY") ?? "10");
+  const parts = await pool(tiles, cudemConc, (t) => fetchCudemTileRows(t, a0, a1, o0, o1, horizStride));
   const byKey = new Map<string, unknown[]>();
   for (const part of parts) {
     for (const row of part) {
@@ -1416,13 +1421,19 @@ async function fetchChlorRowsWithLookback(
 
 async function fetchChlorRows(latMin: number, latMax: number, lngMin: number, lngMax: number) {
   const maxLb = Number(Deno.env.get("CHLGRID_MAX_LOOKBACK") ?? String(CHL_MAX_LOOKBACK));
-  let last = { stepDeg: Number(Deno.env.get("CHL_STEP_DEG") ?? "0.0417"), rows: [] as unknown[][] };
-  for (let lb = 0; lb <= maxLb; lb++) {
-    const out = await fetchChlorRowsWithLookback(latMin, latMax, lngMin, lngMax, lb);
-    last = out;
-    if (out.rows.length > 0) return out;
+  const fallback = { stepDeg: Number(Deno.env.get("CHL_STEP_DEG") ?? "0.0417"), rows: [] as unknown[][] };
+  // Fire every lookback slice concurrently rather than walking them one at a
+  // time. Each ERDDAP call can take up to 20s, so a couple of empty-latest
+  // misses used to stack serially (~40-60s). We still prefer the freshest slice
+  // that returned data (lowest lookback index) — identical result, less waiting.
+  const lbs = Array.from({ length: maxLb + 1 }, (_, i) => i);
+  const results = await Promise.all(
+    lbs.map((lb) => fetchChlorRowsWithLookback(latMin, latMax, lngMin, lngMax, lb).catch(() => null)),
+  );
+  for (const out of results) {
+    if (out && out.rows.length > 0) return out;
   }
-  return last;
+  return results.find((r) => r) ?? fallback;
 }
 
 // Run an async task over items with bounded concurrency.

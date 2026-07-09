@@ -6532,7 +6532,39 @@ function applyChlorData(data){
   // rows: [lat, lng, value, observedAtMs]
   let freshest = 0;
   for(const r of data.rows){ if(r[3] > freshest) freshest = r[3]; }
-  CHLOR_GRID = { step: data.stepDeg || 0.08, rows: data.rows, freshestMs: freshest || null };
+  const step = data.stepDeg || 0.08;
+  // Spatial bucket index. The bite map calls chlorGridAt/chlorBreakGrid for
+  // hundreds of cells; a linear scan of every chlor row per call was millions of
+  // nmBetween ops. Bucketing rows by a coarse cell lets each lookup touch only
+  // the handful of rows near the query point — identical results, far less work.
+  const bucketDeg = Math.max(0.1, step * 2);
+  const index = new Map();
+  for(const r of data.rows){
+    const key = Math.floor(r[0] / bucketDeg) + "," + Math.floor(r[1] / bucketDeg);
+    let arr = index.get(key);
+    if(!arr){ arr = []; index.set(key, arr); }
+    arr.push(r);
+  }
+  CHLOR_GRID = { step, rows: data.rows, freshestMs: freshest || null, index, bucketDeg };
+}
+
+// Candidate chlor rows within radNm of a point, using the bucket index. Falls
+// back to all rows if an older snapshot has no index. Callers still do the exact
+// nmBetween check, so this only prunes the search — it never changes results.
+function _chlorRowsNear(g, lat, lng, radNm){
+  if(!g || !g.index) return (g && g.rows) || [];
+  const latRad = radNm / 60 + g.bucketDeg;
+  const lngRad = radNm / (60 * Math.max(0.2, Math.cos(lat * Math.PI / 180))) + g.bucketDeg;
+  const biMin = Math.floor((lat - latRad) / g.bucketDeg), biMax = Math.floor((lat + latRad) / g.bucketDeg);
+  const bjMin = Math.floor((lng - lngRad) / g.bucketDeg), bjMax = Math.floor((lng + lngRad) / g.bucketDeg);
+  const out = [];
+  for(let bi = biMin; bi <= biMax; bi++){
+    for(let bj = bjMin; bj <= bjMax; bj++){
+      const arr = g.index.get(bi + "," + bj);
+      if(arr) for(const r of arr) out.push(r);
+    }
+  }
+  return out;
 }
 
 // Nearest gap-filled chlorophyll value to a point (within ~2 grid cells).
@@ -6541,7 +6573,8 @@ function chlorGridAt(lat, lng){
   if(!g || !g.rows.length) return null;
   const maxNm = (g.step * 60) * 2.5;
   let best = null, bestNm = Infinity;
-  for(const r of g.rows){
+  const cand = _chlorRowsNear(g, lat, lng, maxNm);
+  for(const r of cand){
     const d = nmBetween(lat, lng, r[0], r[1]);
     if(d <= maxNm && d < bestNm){ bestNm = d; best = r; }
   }
@@ -6627,7 +6660,7 @@ function chlorBreakGrid(lat, lng){
   if(!g || !g.rows || !g.rows.length) return null;
   const radNm = 18;
   const near = [];
-  for(const r of g.rows){
+  for(const r of _chlorRowsNear(g, lat, lng, radNm)){
     if(r[2] == null) continue;
     if(nmBetween(lat, lng, r[0], r[1]) <= radNm) near.push({ la:r[0], ln:r[1], v:r[2] });
   }
@@ -9868,6 +9901,18 @@ function _curGridCoversView(){
       && b.getWest()  >= g.minLng - g.stepLng && b.getEast()  <= g.minLng + (g.nLng-1)*g.stepLng + g.stepLng;
 }
 
+// Does the already-loaded bathymetry grid fully cover this box? Bathy (CUDEM
+// depth=0) is the coast mask for the current streaks, and it's expensive to
+// build (a fan-out of CUDEM tiles). If the bite map or a prior currents view
+// already loaded a grid that covers here, reuse it instead of refetching.
+function _bathyGridCoversView(latMin, latMax, lngMin, lngMax){
+  const g = BATHY_GRID; if(!g) return false;
+  const gLatMax = g.minLat + (g.nLat - 1) * g.step;
+  const gLngMax = g.minLng + (g.nLng - 1) * g.step;
+  return latMin >= g.minLat - g.step && latMax <= gLatMax + g.step
+      && lngMin >= g.minLng - g.step && lngMax <= gLngMax + g.step;
+}
+
 async function buildCurrentFieldForMap(){
   if(!MAP) return;
   if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchCurrentGrid){
@@ -9887,14 +9932,19 @@ async function buildCurrentFieldForMap(){
     const padLat = (b.getNorth()-b.getSouth()) * 0.4, padLng = (b.getEast()-b.getWest()) * 0.4;
     const latMin = b.getSouth()-padLat, latMax = b.getNorth()+padLat;
     const lngMin = b.getWest()-padLng, lngMax = b.getEast()+padLng;
-    // Bathy in parallel — CUDEM depth=0 is the authoritative coast mask for streaks.
-    const bathyP = (typeof buildBathyGrid === "function")
-      ? buildBathyGrid(latMin, latMax, lngMin, lngMax).catch(() => {})
-      : Promise.resolve();
-    const [data] = await Promise.all([
-      BW_OCEAN.fetchCurrentGrid(latMin, latMax, lngMin, lngMax),
-      bathyP,
-    ]);
+    // Load bathy (coast mask) in the BACKGROUND — do NOT block the current field
+    // on it. Previously both were awaited together, so the slow CUDEM tile
+    // fan-out (which can rival or exceed the RTOFS fetch) held up the currents
+    // display even though the vectors come straight from RTOFS (which has its
+    // own land mask). The streaks now paint the moment RTOFS returns; when bathy
+    // arrives it refines the coast edge with a repaint. Skip the fetch entirely
+    // if a grid already covers this view (e.g. the bite map just built one).
+    if(typeof buildBathyGrid === "function" && !_bathyGridCoversView(latMin, latMax, lngMin, lngMax)){
+      buildBathyGrid(latMin, latMax, lngMin, lngMax)
+        .then(() => { if(seq === _curFetchSeq && currentsLayer && typeof currentsLayer._drawShade === "function") currentsLayer._drawShade(); })
+        .catch(() => {});
+    }
+    const data = await BW_OCEAN.fetchCurrentGrid(latMin, latMax, lngMin, lngMax);
     if(seq !== _curFetchSeq) return;
     setCurrentGridFromData(data);
     CURRENT_STATUS = CURRENT_GRID ? "ready" : "unavailable";
