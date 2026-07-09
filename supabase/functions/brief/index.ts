@@ -8,7 +8,8 @@
 // GOVERNING PRINCIPLE — real data or an honest absence of data:
 //   The brief is built ONLY from real inputs the client sends:
 //     • port + spot coordinates  → real bearing & distance (computed here)
-//     • distance offshore (nm)   → real (client computes from coastline)
+//     • runFromPortNm (nm)       → real great-circle run from port → spot
+//                                   (client-computed; the ONLY run distance cited)
 //     • named nearby structure   → real, web-verified features (client sends)
 //     • target species           → real SPECIES selections
 //     • conditions{}             → REAL air temp, wind (speed/dir/gust), seas
@@ -147,6 +148,7 @@ MINDSET — this is a premium product, and a data-poor brief is a FAILURE:
 - If dataAvailability shows a signal is present, you MUST use its value. Check waterTemp, thermalBreak, chlorophyll, current, currentEdge, wind, windDir, seas, tide, and biteScores and put each present value to work.
 
 HARD RULES (never violate):
+- DISTANCE: the ONLY run distance you may cite is computedPortToSpot.distNm (great-circle nm from the departure port to the spot) or the equivalent runFromPortNm field — use that exact number and its compass bearing (computedPortToSpot.compass). NEVER invent, round up, or estimate a different distance, and NEVER describe the spot as "X nm offshore" using any other figure. If neither field is present, do not state a run distance at all.
 - NEVER state or imply travel time, ETA, arrival time, or boat speed — boat speeds vary too widely. Distance in nautical miles is fine; never convert distance to time.
 - NEVER give a go/no-go call or safety verdict, and never tell the captain to leave, cancel, or that conditions are "safe/unsafe." Present the weather facts and how they trend; the decision is the captain's.
 - NEVER invent numbers, catch reports, or recent activity. You have no live reports. When you speak to what's typical for the species/area/season, clearly frame it as general seasonal knowledge — never as a recent report, and never as a substitute for a real value that's in the payload.
@@ -155,7 +157,9 @@ HARD RULES (never violate):
 WEATHER CALLOUT (top of brief):
 - If conditions show significant or building weather — strong/building wind, high/building seas, thunderstorms, fog, or a clearly deteriorating trend — put a one-line **Heads up:** at the very TOP, before Section 1, stating the hazard and its trend in plain terms (e.g. "Heads up: SW wind 18–22 kt with gusts to 28, seas building to 5–6 ft @ 6 s by afternoon"). State the facts; do not tell the captain what to do. If conditions are mild, omit the callout entirely.
 
-Write these sections in this order. Short paragraphs or tight bullets — a captain reads this on a phone at the dock.
+Write these sections in this order. Short paragraphs or tight bullets — a captain reads this on a phone at the dock. Use "## " markdown headers for each numbered section (e.g. "## 1. CONDITIONS") and bold with **…**. Finish EVERY section — never stop mid-sentence; if you are running long, tighten earlier prose so BAITS & LURES and CAPTAIN'S TIPS are always complete.
+
+Open with a one-line spot header before the Heads up / Section 1: the depth (depthFt) if present and the run as "computedPortToSpot.distNm nm computedPortToSpot.compass of <port>" — using ONLY that distance.
 
 1. CONDITIONS — Air high/low (airTempHiF/airTempLoF), sky (conditions.sky) and precip chance (conditions.precipChancePct) if present. Wind as speed + DIRECTION + gusts (e.g. "SW 12 kt, gusts 18"). Seas as height @ period (e.g. "3.8 ft @ 7 s" — and read what a short vs long period means for the ride). Ocean current when currentDriftKt/currentSetDir are present (e.g. "1.4 kt setting NE"), and flag a strong current edge if conditions.currentEdgeKtPer10nm is meaningful. Attribute the source (conditions.source, and conditions.buoy when a buoy is cited). If windDir is present, ALWAYS state the wind direction — it is in the data; do not claim it is missing.
 
@@ -185,8 +189,11 @@ ${JSON.stringify(payloadForModel, null, 2)}`;
       },
       body: JSON.stringify({
         model: MODEL,
-        // A tight, data-rich 5-section brief fits comfortably in ~1100 tokens.
-        max_tokens: 1100,
+        // A full 5-section brief (conditions, water, per-species bite, baits &
+        // lures, captain's tips) needs headroom so it never truncates mid-section
+        // — the earlier 1100 cap cut off BAITS & LURES entirely. 2400 covers a
+        // multi-species brief with margin.
+        max_tokens: 2400,
         // Prompt caching: the system prompt is identical on every brief, so mark
         // it cacheable. After the first call, repeat calls within the cache
         // window reuse it at ~90% lower input cost.

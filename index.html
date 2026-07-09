@@ -1142,8 +1142,77 @@ body.nav-open #ruler-readout{
 }
 #brief-btn:not([disabled]){background:#1c3a5e;color:#f0e8d0;box-shadow:0 2px 8px rgba(28,58,94,.4)}
 #brief-btn[disabled]{background:#c8b060;color:#8a7030;cursor:not-allowed}
-#brief-out{padding:14px 16px;background:#f0fdf4;border:1.5px solid #16a34a;border-radius:6px;font-size:13px;line-height:1.8;font-family:Georgia,serif;white-space:pre-wrap}
+#brief-out{padding:14px 16px;background:#f0fdf4;border:1.5px solid #16a34a;border-radius:10px;font-size:13px;line-height:1.6}
 .bout-hdr{font-size:10px;color:#166534;letter-spacing:.09em;margin-bottom:8px;font-weight:700}
+
+/* ── AI CAPTAIN'S BRIEF — modern modal + rendered markdown ──────────────────── */
+#brief-modal{
+  position:fixed;inset:0;z-index:100000;display:none;
+  align-items:flex-start;justify-content:center;
+  background:rgba(4,12,24,.72);backdrop-filter:blur(4px);
+  padding:max(24px,env(safe-area-inset-top)) 16px 24px;overflow-y:auto;
+}
+#brief-modal.open{display:flex}
+.brief-card{
+  width:min(680px,100%);margin:auto 0;
+  background:linear-gradient(180deg,#0e2036 0%,#0b1a2e 100%);
+  border:1px solid rgba(125,211,252,.22);border-radius:18px;
+  box-shadow:0 24px 70px rgba(0,0,0,.6);
+  color:#e8f4ff;font-family:'Segoe UI',system-ui,Arial,sans-serif;
+  overflow:hidden;animation:briefPop .22s cubic-bezier(.2,.8,.3,1);
+}
+@keyframes briefPop{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+.brief-card-head{
+  position:sticky;top:0;z-index:2;
+  display:flex;align-items:flex-start;gap:12px;
+  padding:18px 20px 14px;
+  background:linear-gradient(180deg,#12294a 0%,rgba(14,32,54,.96) 100%);
+  border-bottom:1px solid rgba(125,211,252,.16);
+}
+.brief-card-head .bc-eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;color:#7dd3fc;text-transform:uppercase}
+.brief-card-head .bc-title{font-size:19px;font-weight:800;color:#f6fbff;line-height:1.2;margin-top:2px}
+.brief-card-head .bc-sub{font-size:12.5px;color:#9ec5e8;margin-top:4px;font-weight:600;line-height:1.35}
+.brief-card-x{
+  margin-left:auto;flex:0 0 auto;width:38px;height:38px;border-radius:50%;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);
+  color:#f0f6ff;font-size:22px;font-weight:700;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.brief-card-x:hover{background:rgba(255,255,255,.16)}
+.brief-card-body{padding:6px 20px 22px;max-height:min(70vh,760px);overflow-y:auto}
+
+/* Rendered-markdown styling — shared by the modal and the inline panel copy */
+.brief-md{font-size:14.5px;line-height:1.62;color:#dce9f7}
+.brief-md h2{
+  font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:#7dd3fc;margin:22px 0 8px;padding-bottom:6px;
+  border-bottom:1px solid rgba(125,211,252,.16);
+}
+.brief-md h2:first-child{margin-top:8px}
+.brief-md h3{font-size:15.5px;font-weight:800;color:#f6fbff;margin:16px 0 6px}
+.brief-md p{margin:8px 0}
+.brief-md b,.brief-md strong{color:#fbbf24;font-weight:700}
+.brief-md ul{margin:8px 0;padding-left:4px;list-style:none}
+.brief-md li{position:relative;padding-left:20px;margin:6px 0}
+.brief-md li::before{content:"";position:absolute;left:4px;top:9px;width:6px;height:6px;border-radius:50%;background:#38bdf8}
+.brief-md hr{display:none}
+.brief-md .brief-headsup{
+  display:flex;gap:10px;align-items:flex-start;
+  background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.4);
+  border-radius:12px;padding:12px 14px;margin:4px 0 14px;
+  color:#ffe9b8;font-weight:600;line-height:1.5;
+}
+.brief-headsup .bh-icon{font-size:18px;line-height:1;flex:0 0 auto}
+.brief-headsup b,.brief-headsup strong{color:#fde68a}
+.brief-empty{color:#9ec5e8;font-size:13px;padding:10px 0}
+/* Inline panel copy of the finished brief (dark, rendered — no typewriter serif) */
+#brief-out.brief-rendered{background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.2);border-radius:12px;padding:14px 16px}
+.brief-view-btn{
+  width:100%;margin-top:10px;padding:12px;border-radius:10px;cursor:pointer;
+  font-family:inherit;font-weight:800;font-size:13px;letter-spacing:.04em;
+  background:linear-gradient(90deg,#0ea5e9,#38bdf8);color:#05233a;border:none;
+  box-shadow:0 4px 14px rgba(56,189,248,.35);
+}
 .gng-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
 .gng-card{padding:10px 8px;background:white;border:1px solid #d0b860;border-radius:6px;text-align:center}
 .gng-lbl{font-size:10px;color:#7a5020;margin-bottom:4px;font-weight:600}
@@ -2537,10 +2606,10 @@ body.nav-open #ruler-readout{
     <div id="wind-forecast-display" style="display:none"></div>
   </div>
 
-  <!-- SATELLITE IMAGERY — SST & chlorophyll; manual day stepping (no autoplay) -->
+  <!-- SATELLITE IMAGERY — SST or chlorophyll; manual day stepping (no autoplay) -->
   <div id="sat-date-control" class="map-time-pill map-time-pill--amber">
     <div class="map-time-pill-head">
-      <div class="map-time-pill-title">Satellite Imagery</div>
+      <div id="sat-date-title" class="map-time-pill-title">SST</div>
       <div id="sat-date-display" class="map-time-pill-display">Latest imagery</div>
     </div>
     <div class="map-time-pill-row">
@@ -2550,7 +2619,7 @@ body.nav-open #ruler-readout{
     </div>
     <div class="map-time-pill-footer">
       <span>2 weeks ago</span>
-      <span class="map-time-pill-hint">SST &amp; chlorophyll · step day-by-day</span>
+      <span id="sat-date-hint" class="map-time-pill-hint">Step day-by-day</span>
       <span>Latest →</span>
     </div>
   </div>
@@ -2895,7 +2964,7 @@ body.nav-open #ruler-readout{
       color:#fff;padding:13px 16px;border-radius:10px;font-size:15px;font-weight:800;
       cursor:pointer;font-family:inherit;letter-spacing:.02em;
       box-shadow:0 6px 18px rgba(36,112,176,.35);
-    ">⬇ Open Download My Trip</button>
+    ">Download My Trip</button>
 
     <hr class="layers-divider">
     <div class="layers-section">DIAGNOSTICS</div>
@@ -11523,6 +11592,14 @@ function updateSatDateControlVisibility(){
   const show = !!(layerVis.sst || layerVis.chlor);
   box.style.display = show ? "block" : "none";
   if(show){
+    // Label the pill for whichever ocean overlay is active — SST and chlorophyll
+    // share one control but each layer should read as its own (not "SST & chlorophyll").
+    const titleEl = document.getElementById("sat-date-title");
+    const hintEl = document.getElementById("sat-date-hint");
+    const chlorOnly = layerVis.chlor && !layerVis.sst;
+    const label = chlorOnly ? "Chlorophyll" : "SST";
+    if(titleEl) titleEl.textContent = label;
+    if(hintEl) hintEl.textContent = "Step day-by-day";
     // Confirm/refresh the freshest published date when an overlay is turned on,
     // and show its real observed date/age right away.
     if(typeof ensureFreshestSatDates === "function") ensureFreshestSatDates();
@@ -13183,8 +13260,8 @@ function updateOceanLegend(){
           <span>Cold / low</span><span>Flat</span><span>Warm / high</span>
         </div>
         ${statusRow}
-        <div style="font-size:13px;color:#7aa8c8;margin-top:6px;line-height:1.45"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">Altimetry Date</b> bar to step day-by-day and read eddy drift. Faint magenta = prior day; amber arrow = how far the break moved.</div>
         ${detail(`
+        <div style="font-size:13px;color:#7aa8c8;margin-top:6px;line-height:1.45"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">Altimetry Date</b> bar to step day-by-day and read eddy drift. Faint magenta = prior day; amber arrow = how far the break moved.</div>
         <div style="margin-top:7px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
           <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${ALTI_BREAK_PORT_RADIUS_NM}-nm fishing range are highlighted.</span>
           <span style="justify-self:center;color:#f9a8d4;font-size:13px;line-height:1">▬</span><span><b style="color:#fbcfe8">Faint magenta</b> — same break on the <b>previous day</b> (only shown when tracked). Step ◀▶ or the slider to compare passes.</span>
@@ -14868,6 +14945,83 @@ function renderReports(){
 }
 
 // ── BRIEF ─────────────────────────────────────────────────────────────────────
+// Render the model's markdown brief into clean, styled HTML. Deliberately small
+// and safe: escape everything first, then translate the limited markdown the
+// prompt emits (## headers, ### species, **bold**, - bullets, --- rules, and a
+// leading "Heads up:" line into a callout). No raw HTML from the model is ever
+// trusted — we only add our own tags around escaped text.
+function briefMarkdownToHtml(md){
+  if(!md || typeof md !== "string") return `<div class="brief-empty">No brief content.</div>`;
+  const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const inline = s => esc(s)
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/(?<!\*)\*(?!\s)([^*]+?)\*(?!\*)/g, "<i>$1</i>");
+  const lines = md.replace(/\r/g, "").split("\n");
+  let html = "", listOpen = false;
+  const closeList = () => { if(listOpen){ html += "</ul>"; listOpen = false; } };
+  for(let raw of lines){
+    const line = raw.trim();
+    if(!line){ closeList(); continue; }
+    // Heads-up safety callout (with or without bold markers)
+    const hu = line.match(/^\*{0,2}heads up:?\*{0,2}\s*(.*)$/i);
+    if(hu){
+      closeList();
+      const body = hu[1].replace(/\*\*/g, "");
+      html += `<div class="brief-headsup"><span class="bh-icon">⚠️</span><div><b>Heads up:</b> ${inline(body)}</div></div>`;
+      continue;
+    }
+    if(/^---+$/.test(line) || /^\*\*\*+$/.test(line)){ closeList(); continue; }
+    if(line.startsWith("### ")){ closeList(); html += `<h3>${inline(line.slice(4))}</h3>`; continue; }
+    if(line.startsWith("## ")){ closeList(); html += `<h2>${inline(line.slice(3))}</h2>`; continue; }
+    if(line.startsWith("# ")){ closeList(); html += `<h2>${inline(line.slice(2))}</h2>`; continue; }
+    const bullet = line.match(/^[-*•]\s+(.*)$/);
+    if(bullet){
+      if(!listOpen){ html += "<ul>"; listOpen = true; }
+      html += `<li>${inline(bullet[1])}</li>`;
+      continue;
+    }
+    closeList();
+    html += `<p>${inline(line)}</p>`;
+  }
+  closeList();
+  return html;
+}
+
+// Show the finished brief front-and-center in a modal so the captain doesn't
+// have to scroll a side panel to find it. Header shows port + day + run/depth.
+function briefModalSubtitle(){
+  const parts = [];
+  if(activePort) parts.push(activePort);
+  parts.push(briefDayLabel(briefDayOffset));
+  if(pinLL && typeof activePort !== "undefined" && activePort && typeof PORTS !== "undefined" && PORTS[activePort] && typeof nmBetween === "function"){
+    const p = PORTS[activePort];
+    const nm = Math.round(nmBetween(p.lat, p.lng, pinLL.lat, pinLL.lng));
+    if(Number.isFinite(nm)) parts.push(`${nm} nm run`);
+  }
+  return parts.join("  ·  ");
+}
+function openBriefModal(){
+  const modal = document.getElementById("brief-modal");
+  const body = document.getElementById("brief-modal-body");
+  const sub = document.getElementById("brief-modal-sub");
+  if(!modal || !body) return;
+  body.innerHTML = `<div class="brief-md">${briefMarkdownToHtml(aiCOA)}</div>`;
+  if(sub) sub.textContent = briefModalSubtitle();
+  modal.classList.add("open");
+  body.scrollTop = 0;
+}
+function closeBriefModal(){
+  const modal = document.getElementById("brief-modal");
+  if(modal) modal.classList.remove("open");
+}
+// Close on Escape for desktop users.
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape"){
+    const m = document.getElementById("brief-modal");
+    if(m && m.classList.contains("open")) closeBriefModal();
+  }
+});
+
 function briefDayLabel(off){
   const d = new Date(); d.setDate(d.getDate() + off);
   if(off === 0) return "Today";
@@ -14895,7 +15049,7 @@ function renderBrief(){
     <div class="sp-pills">${pills}</div>
     <button id="brief-btn" ${!hasPin||aiLoading?"disabled":""} onclick="runBrief()">
       ${aiLoading?"GENERATING BRIEF...":"GENERATE AI CAPTAIN'S BRIEF"}</button>
-    ${aiCOA?`<div id="brief-out"><div class="bout-hdr">AI CAPTAIN'S BRIEF · DEPARTING ${(activePort||"Oregon Inlet, NC").toUpperCase()} · ${briefDayLabel(briefDayOffset).toUpperCase()}</div>${aiCOA}</div>`:""}
+    ${aiCOA?`<div id="brief-out" class="brief-rendered"><div class="bout-hdr">AI CAPTAIN'S BRIEF · DEPARTING ${(activePort||"Oregon Inlet, NC").toUpperCase()} · ${briefDayLabel(briefDayOffset).toUpperCase()}</div><div class="brief-md">${briefMarkdownToHtml(aiCOA)}</div><button type="button" class="brief-view-btn" onclick="openBriefModal()">View full brief ↗</button></div>`:""}
   `);
 }
 function toggleBriefSp(id){briefSp=briefSp.includes(id)?briefSp.filter(x=>x!==id):[...briefSp,id];renderBrief();}
@@ -15195,7 +15349,14 @@ async function runBrief(){
     port: port || "",
     portLat: portObj ? portObj.lat : null,
     portLng: portObj ? portObj.lng : null,
-    nmOffshore: (typeof nmOffshore === "function") ? Math.round(nmOffshore(pinLL.lat, pinLL.lng)) : null,
+    // ACCURATE run from the departure port to the spot (great-circle nm). This is
+    // THE distance the brief should cite. We used to send nmOffshore (distance
+    // from the mainland coast behind the sounds), which near Cape Hatteras reads
+    // ~90 nm even for a 40 nm run from Oregon Inlet — the model then quoted that
+    // as the "run," which was flat wrong. Send the real port→spot run instead.
+    runFromPortNm: (portObj && typeof nmBetween === "function")
+      ? Math.round(nmBetween(portObj.lat, portObj.lng, pinLL.lat, pinLL.lng))
+      : null,
     depthFt,
     nearbyStructure: structureNear(pinLL.lat, pinLL.lng),
     species: speciesNames,
@@ -15229,15 +15390,20 @@ async function runBrief(){
     sky:          !!(cond && cond.sky),
   };
 
+  let briefOk = false;
   try {
     const { brief } = await window.BW_AUTH.callBrief(payload);
     aiCOA = brief || "Brief unavailable.";
+    briefOk = !!brief;
   } catch (e) {
     aiCOA = (e && /sign in/i.test(e.message))
       ? "Sign in to generate a Captain's Brief."
       : "Captain's Brief is unavailable right now. Please try again.";
   }
   aiLoading=false;renderBrief();
+  // Pop the finished brief up front-and-center so the captain sees it
+  // immediately instead of scrolling the side panel.
+  if(briefOk) openBriefModal();
 }
 
 // ── MATRIX ────────────────────────────────────────────────────────────────────
@@ -25221,6 +25387,24 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
   .fc-metric-val{font-size:17px}
 }
 </style>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     AI CAPTAIN'S BRIEF — modern modal. Pops up front-and-center when a brief
+     finishes generating, rendering the model's markdown as clean styled HTML.
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="brief-modal" role="dialog" aria-modal="true" aria-labelledby="brief-modal-title" onclick="if(event.target===this)closeBriefModal()">
+  <div class="brief-card">
+    <div class="brief-card-head">
+      <div style="min-width:0">
+        <div class="bc-eyebrow">🤖 AI Captain's Brief</div>
+        <div id="brief-modal-title" class="bc-title">Pre-Trip Brief</div>
+        <div id="brief-modal-sub" class="bc-sub"></div>
+      </div>
+      <button class="brief-card-x" aria-label="Close brief" onclick="closeBriefModal()">×</button>
+    </div>
+    <div id="brief-modal-body" class="brief-card-body"><div class="brief-md"></div></div>
+  </div>
+</div>
 
 </body>
 </html>
