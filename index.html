@@ -1209,6 +1209,37 @@ body.nav-open #ruler-readout{
   border:1px solid rgba(52,211,153,.3);
 }
 
+/* Download My Trip — readable type on phone + boat glare */
+#dt-overlay{font-size:16px;line-height:1.5}
+#dt-overlay .dt-lead{font-size:16px;color:#cfe5ff;line-height:1.55;margin:0 0 16px}
+#dt-overlay .dt-section-title{font-size:13px;font-weight:800;color:#7dd3fc;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px}
+#dt-overlay .dt-checklist{margin:0;padding:0 0 0 4px;list-style:none}
+#dt-overlay .dt-checklist li{font-size:15px;color:#e8f4ff;line-height:1.45;padding:6px 0 6px 26px;position:relative}
+#dt-overlay .dt-checklist li::before{content:"✓";position:absolute;left:0;color:#34d399;font-weight:800}
+#dt-overlay .dt-what-box{background:rgba(41,121,181,.12);border:1px solid rgba(125,211,252,.22);border-radius:14px;padding:16px 18px;margin-bottom:18px}
+#dt-overlay .dt-note{font-size:14px;color:#9ec5e8;margin:10px 0 0;line-height:1.45}
+#dt-overlay .dt-status{font-size:15px;font-weight:600;line-height:1.45}
+#dt-overlay .dt-status-warn{color:#fbbf24}
+#dt-overlay .dt-status-ok{color:#8fd3a8}
+#dt-overlay .dt-body{font-size:15px;color:#9ec5e8;line-height:1.55;margin:0 0 12px}
+#dt-overlay .dt-advanced{margin-top:22px;padding-top:18px;border-top:1px solid rgba(107,191,234,.14)}
+#dt-overlay .dt-advanced-box{background:rgba(255,255,255,.03);border:1px solid rgba(107,191,234,.12);border-radius:12px;padding:14px 16px;margin-top:10px}
+#dt-overlay .dt-cache-state{font-size:15px;color:#9ec5e8;line-height:1.45}
+#dt-overlay .dt-cache-size{font-size:14px;color:#7d9bb8;margin-top:4px}
+#dt-overlay .dt-footer{font-size:14px;color:#7d9bb8;line-height:1.5;margin:0;padding-top:14px;border-top:1px solid rgba(107,191,234,.08)}
+#dt-overlay .dt-primary-btn{width:100%;margin-top:14px;padding:16px 18px;border-radius:12px;border:none;cursor:pointer;font-family:inherit;font-size:17px;font-weight:800;letter-spacing:.02em}
+#dt-overlay .dt-primary-btn:disabled{cursor:not-allowed;color:#5d7690;background:rgba(255,255,255,.05);box-shadow:none}
+#dt-overlay .dt-primary-btn:not(:disabled){color:#fff;background:linear-gradient(180deg,#2f8fd6,#2470b0);box-shadow:0 6px 18px rgba(36,112,176,.4)}
+#dt-overlay .dt-secondary-btn{width:100%;margin-top:8px;padding:13px 14px;border-radius:10px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer}
+#dt-overlay .dt-chip{display:inline-block;background:rgba(41,121,181,.22);border:1px solid rgba(125,211,252,.25);color:#bfe3f5;font-size:13px;font-weight:600;padding:5px 11px;border-radius:20px;margin:0 6px 6px 0}
+#dt-overlay .dt-saved-card{margin:10px 0 0;padding:16px 18px;background:rgba(41,121,181,.10);border:1px solid rgba(125,211,252,.22);border-radius:14px}
+#dt-overlay .dt-saved-title{font-size:18px;font-weight:800;color:#f0f6ff}
+#dt-overlay .dt-saved-age{font-size:13px;color:#7d9bb8;white-space:nowrap}
+#dt-overlay .dt-step-label{display:block;font-size:16px;color:#e8f4ff;font-weight:600}
+#dt-overlay .dt-step-note{display:block;font-size:14px;color:#7d9bb8;margin-top:2px}
+#dt-overlay .dt-progress-title{font-size:17px;font-weight:800;color:#bfe3f5;margin-bottom:14px}
+#dt-overlay .dt-header-sub{font-size:13px;color:#6bbfea;letter-spacing:.04em;font-weight:500}
+
 /* Port labels — clean & compact */
 .leaflet-tooltip.port-label-home{
   background:rgba(240,200,60,.95);
@@ -2210,7 +2241,7 @@ body.nav-open #ruler-readout{
           <span class="nav-ico">⬇</span>
           <span class="nav-row-body">
             <span class="nav-row-title">Download My Trip</span>
-            <span class="nav-row-sub">Save bite map, brief, tides &amp; charts for offline</span>
+            <span class="nav-row-sub">Full offline snapshot — bite map, tides, waypoints &amp; charts</span>
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
@@ -2353,8 +2384,8 @@ body.nav-open #ruler-readout{
     color:#e8f4ff;font-size:10px;
     box-shadow:0 4px 14px rgba(0,0,0,.55);
     pointer-events:none;
-    max-width:min(420px, 92vw);
-    min-width:210px;
+    max-width:min(480px, 94vw);
+    min-width:230px;
   ">
     <div id="ocean-legend-content"></div>
   </div>
@@ -2811,28 +2842,16 @@ body.nav-open #ruler-readout{
     </div>
 
     <hr class="layers-divider">
-    <div class="layers-section">OFFLINE CACHE</div>
-    <div id="offline-section">
-      <div id="offline-status" style="padding:6px 4px;font-size:12px;color:#9ec5e8;line-height:1.5">
-        <div id="offline-state">Checking...</div>
-        <div id="offline-size" style="font-size:11px;color:#5d96c4;margin-top:2px"></div>
-      </div>
-      <button type="button" onclick="prefetchCurrentView()" id="offline-prefetch-btn" style="
-        width:100%;background:rgba(41,121,181,.18);border:1px solid rgba(41,121,181,.4);
-        color:#7dd3fc;padding:9px 12px;border-radius:7px;font-size:13px;font-weight:600;
-        cursor:pointer;font-family:inherit;margin-top:6px;
-      ">📥 Cache current view</button>
-      <button type="button" onclick="clearTileCache()" id="offline-clear-btn" style="
-        width:100%;background:rgba(220,38,38,.10);border:1px solid rgba(220,38,38,.3);
-        color:#f87171;padding:8px 12px;border-radius:7px;font-size:12px;font-weight:600;
-        cursor:pointer;font-family:inherit;margin-top:5px;
-      ">🗑 Clear cache</button>
-      <div style="font-size:12px;color:#9ec5e8;line-height:1.55;margin-top:8px;padding:8px 10px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:7px">
-        <b style="color:#86efac">Works offline:</b> your saved waypoints, the full
-        fishing-spot dataset, and the map (for areas you've cached) stay available
-        with no signal. Forecasts you've opened before show their last update.
-      </div>
+    <div class="layers-section">OFFLINE</div>
+    <div style="font-size:14px;color:#9ec5e8;line-height:1.55;margin:2px 0 12px">
+      Before you leave the dock, use <b style="color:#e8f4ff">Download My Trip</b> to save your bite map, tides, waypoints, brief, and chart tiles — everything you need if you lose signal offshore.
     </div>
+    <button type="button" onclick="openDownloadTripGated()" style="
+      width:100%;background:linear-gradient(180deg,#2f8fd6,#2470b0);border:none;
+      color:#fff;padding:13px 16px;border-radius:10px;font-size:15px;font-weight:800;
+      cursor:pointer;font-family:inherit;letter-spacing:.02em;
+      box-shadow:0 6px 18px rgba(36,112,176,.35);
+    ">⬇ Open Download My Trip</button>
 
     <hr class="layers-divider">
     <div class="layers-section">DIAGNOSTICS</div>
@@ -4504,19 +4523,24 @@ let swReg = null;
 async function initOfflineCache(){
   const stateEl = document.getElementById("offline-state");
   const sizeEl  = document.getElementById("offline-size");
+  if(!stateEl || !sizeEl) return;   // tile controls live on Download My Trip screen
   if(!("serviceWorker" in navigator)){
     stateEl.textContent = "⚠ Not supported by this browser";
     sizeEl.textContent = "Offline caching needs a modern browser.";
-    document.getElementById("offline-prefetch-btn").disabled = true;
-    document.getElementById("offline-clear-btn").disabled = true;
+    const pf = document.getElementById("offline-prefetch-btn");
+    const cl = document.getElementById("offline-clear-btn");
+    if(pf) pf.disabled = true;
+    if(cl) cl.disabled = true;
     return;
   }
   // Service Workers require a secure context (HTTPS or localhost). file:// will fail.
   if(location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1"){
     stateEl.textContent = "⚠ Offline cache requires HTTPS";
     sizeEl.textContent = "Available when the app is served from a secure server.";
-    document.getElementById("offline-prefetch-btn").disabled = true;
-    document.getElementById("offline-clear-btn").disabled = true;
+    const pf = document.getElementById("offline-prefetch-btn");
+    const cl = document.getElementById("offline-clear-btn");
+    if(pf) pf.disabled = true;
+    if(cl) cl.disabled = true;
     return;
   }
   try {
@@ -4529,6 +4553,13 @@ async function initOfflineCache(){
     sizeEl.textContent = String(err).slice(0, 80);
     console.error("Offline cache init failed:", err);
   }
+}
+
+// Refresh tile-cache status on the Download My Trip screen after render.
+function dtRefreshOfflineUI(){
+  const stateEl = document.getElementById("offline-state");
+  if(!stateEl) return;
+  initOfflineCache();
 }
 
 function postToSW(msg){
@@ -4575,8 +4606,8 @@ async function prefetchCurrentView(){
     return;
   }
   const btn = document.getElementById("offline-prefetch-btn");
-  btn.disabled = true;
-  const origText = btn.textContent;
+  if(btn) btn.disabled = true;
+  const origText = btn ? btn.textContent : "";
   const bounds = MAP.getBounds();
 
   // Determine which base layer is active to pick the right tile URLs
@@ -4633,12 +4664,11 @@ async function prefetchCurrentView(){
         .then(r => { if(r.ok) done++; else errored++; })
         .catch(() => { errored++; })
     ));
-    btn.textContent = `Caching... ${i + batch.length}/${total}`;
+    if(btn) btn.textContent = `Caching... ${i + batch.length}/${total}`;
   }
-  btn.textContent = `✓ Cached ${done} tiles`;
+  if(btn) btn.textContent = `✓ Cached ${done} tiles`;
   setTimeout(() => {
-    btn.textContent = origText;
-    btn.disabled = false;
+    if(btn){ btn.textContent = origText; btn.disabled = false; }
     refreshCacheStats();
   }, 1500);
 }
@@ -4646,16 +4676,14 @@ async function prefetchCurrentView(){
 async function clearTileCache(){
   if(!confirm("Clear all cached tiles? You'll need to be online to view them again.")) return;
   const btn = document.getElementById("offline-clear-btn");
-  btn.disabled = true;
-  const origText = btn.textContent;
-  btn.textContent = "Clearing...";
+  if(btn){ btn.disabled = true; btn.textContent = "Clearing..."; }
+  const origText = btn ? "🗑 Clear tile cache" : "";
   await postToSW({type:"CLEAR"});
   // Also try clearing directly in case the SW didn't respond
   try { await caches.delete(TILE_CACHE_NAME); } catch(e){}
-  btn.textContent = "✓ Cleared";
+  if(btn) btn.textContent = "✓ Cleared";
   setTimeout(() => {
-    btn.textContent = origText;
-    btn.disabled = false;
+    if(btn){ btn.textContent = origText; btn.disabled = false; }
     refreshCacheStats();
   }, 1200);
 }
@@ -4947,6 +4975,14 @@ function openDownloadTrip(){
   document.body.style.overflow = "hidden";
   dtRender();
 }
+// Entry points from the map UI (layers panel, forecast bar) — same Pro gate as
+// the nav menu item.
+function openDownloadTripGated(){
+  if(!BW_PREMIUM){ if(typeof openPricing === "function") openPricing(); return; }
+  const lm = document.getElementById("layers-modal");
+  if(lm && lm.classList.contains("open")) toggleLayersPanel();
+  openDownloadTrip();
+}
 function closeDownloadTrip(){
   const ov = document.getElementById("dt-overlay");
   if(!ov) return;
@@ -4987,16 +5023,47 @@ function dtRenderProgress(){
   const body = document.getElementById("dt-body");
   if(!body) return;
   body.innerHTML = `
-    <div style="padding:18px 18px 6px">
-      <div style="font-size:13px;font-weight:700;color:#bfe3f5;margin-bottom:12px">Downloading your trip…</div>
+    <div style="padding:20px 20px 8px">
+      <div class="dt-progress-title">Downloading your trip…</div>
       ${DT_STEPS.map(s => `
-        <div id="dt-step-${s.id}" style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid rgba(107,191,234,.08)">
-          <span class="dt-step-ic" style="width:16px;text-align:center;flex-shrink:0;font-weight:800">${dtStepIcon("wait")}</span>
+        <div id="dt-step-${s.id}" style="display:flex;align-items:center;gap:13px;padding:11px 0;border-bottom:1px solid rgba(107,191,234,.08)">
+          <span class="dt-step-ic" style="width:20px;text-align:center;flex-shrink:0;font-weight:800;font-size:16px">${dtStepIcon("wait")}</span>
           <span style="flex:1;min-width:0">
-            <span style="display:block;font-size:13px;color:#e8f4ff;font-weight:600">${s.label}</span>
-            <span class="dt-step-note" style="display:block;font-size:11px;color:#7d9bb8">waiting…</span>
+            <span class="dt-step-label">${s.label}</span>
+            <span class="dt-step-note">waiting…</span>
           </span>
         </div>`).join("")}
+    </div>`;
+}
+function dtWhatGetsSavedHtml(){
+  return `
+    <div class="dt-what-box">
+      <div class="dt-section-title">What Download My Trip saves</div>
+      <ul class="dt-checklist">
+        <li>Bite map scores &amp; hotspots for your species</li>
+        <li>Tide predictions for your port</li>
+        <li>Waypoints in range</li>
+        <li>Captain's Brief (if you generated one)</li>
+        <li>Chart tiles for your fishing area</li>
+      </ul>
+      <p class="dt-note">This is the full package for offshore. One download — reopen anytime, even with no signal.</p>
+    </div>`;
+}
+function dtTileOnlyHtml(){
+  return `
+    <div class="dt-advanced">
+      <div class="dt-section-title">Map tiles only (optional)</div>
+      <p class="dt-body">Download My Trip already caches chart tiles for your fishing area. Use this section only if you want extra map background for a <b style="color:#e8f4ff">different</b> area you're viewing right now — chart imagery only, no bite data or tides.</p>
+      <div class="dt-advanced-box">
+        <div id="offline-state" class="dt-cache-state">Checking tile cache…</div>
+        <div id="offline-size" class="dt-cache-size"></div>
+        <button type="button" onclick="prefetchCurrentView()" id="offline-prefetch-btn" class="dt-secondary-btn" style="
+          background:rgba(41,121,181,.18);border:1px solid rgba(41,121,181,.4);color:#7dd3fc;
+        ">📥 Cache tiles for current map view</button>
+        <button type="button" onclick="clearTileCache()" id="offline-clear-btn" class="dt-secondary-btn" style="
+          background:rgba(220,38,38,.10);border:1px solid rgba(220,38,38,.3);color:#f87171;
+        ">🗑 Clear tile cache</button>
+      </div>
     </div>`;
 }
 function dtRender(){
@@ -5011,12 +5078,12 @@ function dtRender(){
 
   const canDownload = portReady && spReady && online;
   const readyLine = !online
-    ? `<div style="color:#fbbf24;font-size:12px;font-weight:600">You're offline — connect to download a new trip.</div>`
+    ? `<div class="dt-status dt-status-warn">You're offline — connect to download a new trip.</div>`
     : (!portReady
-      ? `<div style="color:#fbbf24;font-size:12px;font-weight:600">Pick a home port to enable download.</div>`
+      ? `<div class="dt-status dt-status-warn">Pick a home port to enable download.</div>`
       : (!spReady
-        ? `<div style="color:#fbbf24;font-size:12px;font-weight:600">Pick a target species to enable download.</div>`
-        : `<div style="color:#8fd3a8;font-size:12px;font-weight:600">Ready: <b style="color:#e8f4ff">${spName}</b> out of <b style="color:#e8f4ff">${activePort}</b></div>`));
+        ? `<div class="dt-status dt-status-warn">Pick a target species to enable download.</div>`
+        : `<div class="dt-status dt-status-ok">Ready: <b style="color:#e8f4ff">${spName}</b> out of <b style="color:#e8f4ff">${activePort}</b></div>`));
 
   let savedBlock = "";
   if(t){
@@ -5026,42 +5093,34 @@ function dtRender(){
       t.counts.waypoints ? `${t.counts.waypoints.toLocaleString()} waypoints` : null,
       t.counts.hasTides ? "tides" : null,
       t.counts.hasBrief ? "brief" : null,
-    ].filter(Boolean).map(c => `<span style="display:inline-block;background:rgba(41,121,181,.22);border:1px solid rgba(125,211,252,.25);color:#bfe3f5;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:20px;margin:0 5px 5px 0">${c}</span>`).join("");
+    ].filter(Boolean).map(c => `<span class="dt-chip">${c}</span>`).join("");
     savedBlock = `
-      <div style="margin:8px 18px 0;padding:15px 16px;background:rgba(41,121,181,.10);border:1px solid rgba(125,211,252,.22);border-radius:14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
-          <div style="font-size:15px;font-weight:800;color:#f0f6ff">${t.speciesName} · ${t.port}</div>
-          <span style="font-size:10px;color:#7d9bb8;white-space:nowrap">saved ${dtFmtAge(t.savedAtMs)}</span>
+      <div class="dt-saved-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px">
+          <div class="dt-saved-title">${t.speciesName} · ${t.port}</div>
+          <span class="dt-saved-age">saved ${dtFmtAge(t.savedAtMs)}</span>
         </div>
-        <div style="margin:9px 0 4px">${chips || '<span style="color:#7d9bb8;font-size:12px">Snapshot saved</span>'}</div>
-        <div style="display:flex;gap:9px;margin-top:12px;flex-wrap:wrap">
-          <button onclick="dtOpenTrip()" style="flex:1;min-width:140px;background:linear-gradient(180deg,#2f8fd6,#2470b0);border:none;color:#fff;font-weight:700;font-size:13px;padding:11px 14px;border-radius:10px;cursor:pointer;font-family:inherit">Open this trip</button>
-          <button onclick="dtConfirmClear()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,120,120,.35);color:#fca5a5;font-weight:600;font-size:13px;padding:11px 16px;border-radius:10px;cursor:pointer;font-family:inherit">Delete</button>
+        <div style="margin:8px 0 4px">${chips || '<span style="color:#7d9bb8;font-size:15px">Snapshot saved</span>'}</div>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+          <button onclick="dtOpenTrip()" class="dt-primary-btn" style="flex:1;min-width:160px;margin-top:0;padding:14px 16px;font-size:16px">Open this trip</button>
+          <button onclick="dtConfirmClear()" class="dt-secondary-btn" style="flex:0 0 auto;min-width:100px;background:rgba(255,255,255,.06);border:1px solid rgba(255,120,120,.35);color:#fca5a5">Delete</button>
         </div>
       </div>`;
   }
 
   body.innerHTML = `
-    <div style="padding:18px 18px 4px">
-      <div style="font-size:12.5px;color:#9ec5e8;line-height:1.55;margin-bottom:14px">
-        Save your bite map, brief, tides, waypoints, and chart tiles to this device so the run keeps working if you lose signal offshore.
-      </div>
+    <div style="padding:20px 20px 28px">
+      <p class="dt-lead">Save everything for your run before you leave the dock. If you lose cell service offshore, open your saved trip and keep fishing with the same intel.</p>
+      ${dtWhatGetsSavedHtml()}
       ${readyLine}
-      <button onclick="dtDownload()" ${canDownload ? "" : "disabled"} style="
-        width:100%;margin-top:13px;padding:14px;border-radius:12px;border:none;cursor:${canDownload?"pointer":"not-allowed"};
-        font-family:inherit;font-size:14px;font-weight:800;letter-spacing:.02em;
-        color:${canDownload?"#fff":"#5d7690"};
-        background:${canDownload?"linear-gradient(180deg,#2f8fd6,#2470b0)":"rgba(255,255,255,.05)"};
-        box-shadow:${canDownload?"0 6px 18px rgba(36,112,176,.4)":"none"};">
+      <button onclick="dtDownload()" class="dt-primary-btn" ${canDownload ? "" : "disabled"}>
         ${t ? "⬇  Update this trip" : "⬇  Download this trip"}
       </button>
-    </div>
-    ${savedBlock}
-    <div style="padding:16px 18px 26px">
-      <div style="font-size:10px;color:#5d7690;line-height:1.5;border-top:1px solid rgba(107,191,234,.08);padding-top:12px">
-        Stored privately on this device. Tiles use your offline map cache; data uses local storage. Open a trip anytime — even in airplane mode — from this screen.
-      </div>
+      ${savedBlock}
+      ${dtTileOnlyHtml()}
+      <p class="dt-footer">Stored privately on this device. Open a saved trip anytime — even in airplane mode — from MENU → My Tools → Download My Trip.</p>
     </div>`;
+  dtRefreshOfflineUI();
 }
 function dtConfirmClear(){
   if(!confirm("Delete the saved trip from this device?")) return;
@@ -7351,17 +7410,18 @@ function scoreCell(lat, lng, speciesId){
     // suggests one. Weight shown is an effective bonus weight.
     ...(reportScore > 0.05 ? [{name:"🎣 Recent catch reports", weight:0.18, score:Math.min(1, reportScore * 2.5), raw:"+bonus"}] : []),
     {name:"Solunar window",     weight:W.solunar,       score:solunarScoreVal,  raw:solunar > 0.7 ? "MAJOR" : solunar > 0.4 ? "minor" : "off"},
-    {name:"Front strength",     weight:W.thermalBreak,  score:breakScore,
+    {name:"Temp break",         weight:W.thermalBreak,  score:breakScore,
      raw: frontSensor === "ssh"
-          ? (tBreak > 0 ? `SSH edge · ${tBreak.toFixed(1)}°F/10nm` : "SSH edge (SST cloudy)")
+          ? (tBreak > 0 ? `SSH · ${tBreak.toFixed(1)}°F/10nm` : "SSH edge")
           : (tBreak > 0 ? `${tBreak.toFixed(1)}°F/10nm` : (_sshEdge01 > 0 ? "SSH edge" : "—"))},
-    {name:"Front convergence", weight:(W.convergence||0), score:convergence,
+    {name:"Altimetry",          weight:(W.convergence||0), score:convergence,
      raw: convergence > 0
-          ? `${Math.round(convergence*100)}%` + [
-              chlorBreak>0 ? `${chlorBreak.toFixed(2)} mg/m³/10nm` : null,
-              _sshEdge01>0 ? "SSH" : null,
-              _curEdge01>0 ? "current" : null,
-            ].filter(Boolean).map((s,i)=> (i===0?" · ":" + ")+s).join("")
+          ? `${Math.round(convergence*100)}%` + (
+              [_sshEdge01>0?"SSH":null, _curEdge01>0?"current":null, chlorBreak>0?"chlor":null]
+                .filter(Boolean).length
+                ? ` · ` + [_sshEdge01>0?"SSH":null, _curEdge01>0?"current":null, chlorBreak>0?"chlor":null].filter(Boolean).join("+")
+                : ""
+            )
           : "—"},
     {name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
     {name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw:wxLabel},
@@ -10083,6 +10143,84 @@ function _altimetryColor(slaM){
     return `rgba(30,${gr},${b},${(a*0.62).toFixed(2)})`;
   }
 }
+// Same color ramp as _altimetryColor but returns [r,g,b,a0-255] for ImageData,
+// or null for near-flat / no-data cells (drawn transparent). Used by the
+// smooth-fill offscreen canvas so SSH renders as a continuous gradient instead
+// of blocky cells.
+function _altimetryRGBA(slaM){
+  const a=Math.min(1, Math.abs(slaM)*4.0);
+  if(a < 0.04) return null;
+  const alpha=Math.round(a*0.62*255);
+  if(slaM > 0){
+    return [Math.round(220+35*Math.min(1,slaM*3)), Math.round(80-60*Math.min(1,slaM*3)), 30, alpha];
+  }
+  return [30, Math.round(180-80*Math.min(1,(-slaM)*3)), Math.round(200+55*Math.min(1,(-slaM)*3)), alpha];
+}
+// Build a grid-resolution offscreen canvas (one pixel per SSH cell, north at
+// top). Drawn scaled-up with image smoothing → free bilinear interpolation, the
+// classic technique for smooth heat fields. Also records min/max SSH so the
+// contour pass only walks iso-levels that actually occur in view.
+function _altiBuildSmallCanvas(g){
+  const c=document.createElement("canvas");
+  c.width=g.nLng; c.height=g.nLat;
+  const cx=c.getContext("2d");
+  const img=cx.createImageData(g.nLng, g.nLat);
+  let mn=Infinity, mx=-Infinity;
+  for(let i=0;i<g.nLat;i++){
+    for(let j=0;j<g.nLng;j++){
+      const sla=g.sla[i*g.nLng+j];
+      const y=g.nLat-1-i;               // flip: grid row 0 = south → image bottom
+      const o=(y*g.nLng+j)*4;
+      if(!isFinite(sla)){ img.data[o+3]=0; continue; }
+      if(sla<mn) mn=sla; if(sla>mx) mx=sla;
+      const rgba=_altimetryRGBA(sla);
+      if(!rgba){ img.data[o+3]=0; continue; }
+      img.data[o]=rgba[0]; img.data[o+1]=rgba[1]; img.data[o+2]=rgba[2]; img.data[o+3]=rgba[3];
+    }
+  }
+  cx.putImageData(img,0,0);
+  return { canvas:c, min:isFinite(mn)?mn:0, max:isFinite(mx)?mx:0 };
+}
+// Marching-squares crossings for one cell at iso-level L. Corners:
+//   A=SW(latA,lngA)  B=SE(latA,lngA+step)  C=NE(latA+step,lngA+step)  D=NW(latA+step,lngA)
+// Returns 0, 2, or 4 latLng points (4 = saddle → two segments).
+function _altiIsoSegs(A,B,C,D,L,latA,lngA,step){
+  const pts=[];
+  if((A>=L)!==(B>=L)){ const t=(L-A)/(B-A); pts.push([latA, lngA+t*step]); }              // bottom
+  if((B>=L)!==(C>=L)){ const t=(L-B)/(C-B); pts.push([latA+t*step, lngA+step]); }          // right
+  if((C>=L)!==(D>=L)){ const t=(L-C)/(D-C); pts.push([latA+step, lngA+step-t*step]); }     // top
+  if((D>=L)!==(A>=L)){ const t=(L-D)/(A-D); pts.push([latA+step-t*step, lngA]); }          // left
+  return pts;
+}
+// Node-wise SSH gradient magnitude (m per 10 nm) + up to 3 spatially-distinct
+// "break" peaks (the steepest fronts). Grid-only, so it's cached alongside the
+// smooth canvas. A break must clear ~0.06 m/10nm (a real edge, not noise) and
+// sit ≥ ~1.1° from a stronger one so we surface separate fronts, not one blob.
+function _altiComputeBreaks(g){
+  const n=g.nLat, m=g.nLng, gm=new Float32Array(n*m);
+  const latOf=(i)=>g.minLat+i*g.step;
+  for(let i=1;i<n-1;i++){
+    const stepLatNm=g.step*60, stepLngNm=g.step*60*Math.cos(latOf(i)*Math.PI/180)||1e-6;
+    for(let j=1;j<m-1;j++){
+      const up=g.sla[(i+1)*m+j], dn=g.sla[(i-1)*m+j], rt=g.sla[i*m+j+1], lf=g.sla[i*m+j-1];
+      if(!isFinite(up)||!isFinite(dn)||!isFinite(rt)||!isFinite(lf)) continue;
+      const dLat=(up-dn)/(2*stepLatNm)*10;   // m per 10 nm
+      const dLng=(rt-lf)/(2*stepLngNm)*10;
+      gm[i*m+j]=Math.hypot(dLat,dLng);
+    }
+  }
+  const cand=[];
+  for(let i=1;i<n-1;i++) for(let j=1;j<m-1;j++){ const v=gm[i*m+j]; if(v>=0.06) cand.push({i,j,v}); }
+  cand.sort((a,b)=>b.v-a.v);
+  const peaks=[], minSep=1.1;
+  for(const c of cand){
+    const lat=latOf(c.i), lng=g.minLng+c.j*g.step;
+    let ok=true;
+    for(const p of peaks){ if(Math.abs(p.lat-lat)<minSep && Math.abs(p.lng-lng)<minSep){ ok=false; break; } }
+    if(ok){ peaks.push({i:c.i,j:c.j,lat,lng,level:g.sla[c.i*m+c.j],gmag:c.v}); if(peaks.length>=3) break; }
+  }
+  return { gm, peaks };
+}
 
 // Build the altimetry request box: modest padding for smooth panning, but the
 // total span is capped because ERDDAP's blended-altimetry griddap store returns
@@ -10162,26 +10300,53 @@ const AltimetryLayer = L.Layer.extend({
     const w=this._canvas.width, h=this._canvas.height;
     ctx.clearRect(0,0,w,h);
     if(!ALTIMETRY_GRID) return;
-    // Draw SSH as filled 0.25° cells, skipping transparent ones
-    const cellPad=0.001; // tiny overlap to avoid hairlines between cells
     const g=ALTIMETRY_GRID;
-    for(let i=0;i<g.nLat;i++){
-      for(let j=0;j<g.nLng;j++){
-        const slaM=g.sla[i*g.nLng+j];
-        if(!isFinite(slaM)) continue;
-        const col=_altimetryColor(slaM);
-        if(!col) continue;
-        const lat=g.minLat+i*g.step;
-        const lng=g.minLng+j*g.step;
-        const p0=this._map.latLngToContainerPoint([lat-g.step*0.5-cellPad, lng-g.step*0.5-cellPad]);
-        const p1=this._map.latLngToContainerPoint([lat+g.step*0.5+cellPad, lng+g.step*0.5+cellPad]);
-        const x=Math.min(p0.x,p1.x), y=Math.min(p0.y,p1.y);
-        const cw=Math.abs(p1.x-p0.x), ch=Math.abs(p1.y-p0.y);
-        ctx.fillStyle=col;
-        ctx.fillRect(Math.floor(x),Math.floor(y),Math.ceil(cw),Math.ceil(ch));
+
+    // ── 1) SMOOTH FILL ──────────────────────────────────────────────────────
+    // Rebuild the grid-resolution offscreen canvas only when the grid changes,
+    // then blit it scaled to the view with smoothing on → continuous gradient.
+    if(this._smallFor!==g){ this._small=_altiBuildSmallCanvas(g); this._smallFor=g; }
+    const north=g.bounds.n+g.step*0.5, south=g.bounds.s-g.step*0.5;
+    const west=g.bounds.w-g.step*0.5,  east=g.bounds.e+g.step*0.5;
+    const pTL=this._map.latLngToContainerPoint([north, west]);
+    const pBR=this._map.latLngToContainerPoint([south, east]);
+    const prevSmooth=ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled=true;
+    if("imageSmoothingQuality" in ctx) ctx.imageSmoothingQuality="high";
+    ctx.drawImage(this._small.canvas, pTL.x, pTL.y, pBR.x-pTL.x, pBR.y-pTL.y);
+    ctx.imageSmoothingEnabled=prevSmooth;
+
+    // ── 2) CONTOUR ISOLINES ─────────────────────────────────────────────────
+    // SSH contours every 0.05 m (like a real altimetry chart). Where lines pack
+    // tightly = the strongest gradient = the break to fish. Only walk levels
+    // that occur in view. Every third line (0.15 m) is brighter for reference.
+    const step=g.step, lo=Math.floor(this._small.min/0.05)*0.05, hi=Math.ceil(this._small.max/0.05)*0.05;
+    const toPt=(p)=>this._map.latLngToContainerPoint(p);
+    ctx.lineCap="round"; ctx.lineJoin="round";
+    for(let L=lo; L<=hi+1e-9; L+=0.05){
+      const major=Math.abs(Math.round(L/0.05)%3)===0;
+      ctx.beginPath();
+      for(let i=0;i<g.nLat-1;i++){
+        const latA=g.minLat+i*step;
+        for(let j=0;j<g.nLng-1;j++){
+          const A=g.sla[i*g.nLng+j], B=g.sla[i*g.nLng+(j+1)],
+                C=g.sla[(i+1)*g.nLng+(j+1)], D=g.sla[(i+1)*g.nLng+j];
+          if(!isFinite(A)||!isFinite(B)||!isFinite(C)||!isFinite(D)) continue;
+          if(L<Math.min(A,B,C,D)||L>Math.max(A,B,C,D)) continue;
+          const pts=_altiIsoSegs(A,B,C,D,L,latA,g.minLng+j*step,step);
+          if(pts.length>=2){
+            let a=toPt(pts[0]), b=toPt(pts[1]);
+            ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+            if(pts.length===4){ a=toPt(pts[2]); b=toPt(pts[3]); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); }
+          }
+        }
       }
+      ctx.strokeStyle=major?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.26)";
+      ctx.lineWidth=major?1.4:0.9;
+      ctx.stroke();
     }
-    // Draw geostrophic velocity arrows for cells with significant flow (> 0.3 kt)
+
+    // ── 3) GEOSTROPHIC FLOW ARROWS (subtle, so contours read) ────────────────
     const _MS_KT=1.943844;
     for(let i=0;i<g.nLat;i++){
       for(let j=0;j<g.nLng;j++){
@@ -10195,20 +10360,63 @@ const AltimetryLayer = L.Layer.extend({
         const len=Math.min(14, 6+spd*2.5);
         const ax=Math.cos(ang), ay=Math.sin(ang);
         const tx=pc.x+ax*len, ty=pc.y+ay*len;
-        ctx.strokeStyle="rgba(255,255,255,0.72)";
-        ctx.lineWidth=1.2; ctx.lineCap="round";
+        ctx.strokeStyle="rgba(255,255,255,0.55)";
+        ctx.lineWidth=1.1; ctx.lineCap="round";
         ctx.beginPath(); ctx.moveTo(pc.x,pc.y); ctx.lineTo(tx,ty); ctx.stroke();
-        // Arrowhead
         const hl=5, hw=2.5;
         const bx=tx-ax*hl, by=ty-ay*hl;
         const nx=-ay, ny=ax;
-        ctx.fillStyle="rgba(255,255,255,0.72)";
+        ctx.fillStyle="rgba(255,255,255,0.55)";
         ctx.beginPath();
         ctx.moveTo(tx,ty);
         ctx.lineTo(bx+nx*hw,by+ny*hw);
         ctx.lineTo(bx-nx*hw,by-ny*hw);
         ctx.closePath(); ctx.fill();
       }
+    }
+
+    // ── 4) STRONGEST BREAKS (magenta) ────────────────────────────────────────
+    // Trace the SSH contour through each of the up-to-3 steepest fronts, limited
+    // to that break's steep neighborhood, in glowing magenta — the #1 spots to
+    // fish. This is the primary edge the whole layer is pointing you toward.
+    if(this._breaksFor!==g){ this._breaks=_altiComputeBreaks(g); this._breaksFor=g; }
+    const brk=this._breaks;
+    if(brk && brk.peaks.length){
+      ctx.save();
+      ctx.lineCap="round"; ctx.lineJoin="round";
+      ctx.shadowColor="rgba(236,72,153,0.85)"; ctx.shadowBlur=8;
+      ctx.strokeStyle="rgba(236,72,153,0.95)"; ctx.lineWidth=3;
+      const gmA=brk.gm, R=1.3;
+      for(const pk of brk.peaks){
+        const L=pk.level, gth=0.5*pk.gmag;
+        ctx.beginPath();
+        for(let i=0;i<g.nLat-1;i++){
+          const latA=g.minLat+i*g.step;
+          if(Math.abs(latA-pk.lat)>R+g.step) continue;
+          for(let j=0;j<g.nLng-1;j++){
+            const lngA=g.minLng+j*g.step;
+            if(Math.abs(lngA-pk.lng)>R+g.step) continue;
+            const A=g.sla[i*g.nLng+j], B=g.sla[i*g.nLng+(j+1)],
+                  C=g.sla[(i+1)*g.nLng+(j+1)], D=g.sla[(i+1)*g.nLng+j];
+            if(!isFinite(A)||!isFinite(B)||!isFinite(C)||!isFinite(D)) continue;
+            if(L<Math.min(A,B,C,D)||L>Math.max(A,B,C,D)) continue;
+            const cg=Math.max(gmA[i*g.nLng+j], gmA[i*g.nLng+(j+1)], gmA[(i+1)*g.nLng+(j+1)], gmA[(i+1)*g.nLng+j]);
+            if(cg<gth) continue;
+            const pts=_altiIsoSegs(A,B,C,D,L,latA,lngA,g.step);
+            if(pts.length>=2){
+              let a=this._map.latLngToContainerPoint(pts[0]), b=this._map.latLngToContainerPoint(pts[1]);
+              ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+              if(pts.length===4){ a=this._map.latLngToContainerPoint(pts[2]); b=this._map.latLngToContainerPoint(pts[3]); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); }
+            }
+          }
+        }
+        ctx.stroke();
+        // Marker dot at the break's steepest point
+        const pc=this._map.latLngToContainerPoint([pk.lat,pk.lng]);
+        ctx.beginPath(); ctx.arc(pc.x,pc.y,3.4,0,Math.PI*2);
+        ctx.fillStyle="rgba(236,72,153,0.95)"; ctx.fill();
+      }
+      ctx.restore();
     }
   },
 });
@@ -10599,10 +10807,10 @@ function renderExplainerMain(){
     const pct = Math.round((f.score / 0.30) * 100);
     const w = Math.min(100, Math.max(0, pct));
     return `
-      <div style="margin-bottom:7px">
-        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
-          <span style="color:#cfe5ff">${f.name}</span>
-          <span style="color:#9ec5e8;font-weight:600">${f.raw}</span>
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;margin-bottom:3px">
+          <span style="color:#cfe5ff;font-weight:600;white-space:nowrap;flex-shrink:0">${f.name}</span>
+          <span style="color:#9ec5e8;font-weight:600;text-align:right;white-space:nowrap">${f.raw}</span>
         </div>
         <div style="height:5px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden">
           <div style="height:100%;width:${w}%;background:linear-gradient(90deg,#65a30d,#f59e0b,#dc2626)"></div>
@@ -10637,8 +10845,7 @@ function renderExplainerMain(){
         <div style="font-size:14px;font-weight:bold;color:${verdict.color}">${verdict.label}</div>
         <div style="font-size:12px;color:#9ec5e8">Conditions for ${species.name}</div>
       </div>
-      <button id="explainer-speak-btn" onclick="speakExplainer()" title="Read aloud" aria-label="Read brief aloud" style="background:rgba(125,211,252,.10);border:1px solid rgba(125,211,252,.35);color:#7dd3fc;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0">🔊</button>
-      <button onclick="closeExplainer()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:#cfe5ff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>
+      <button onclick="closeExplainer()" aria-label="Close" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#f0f6ff;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:22px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>
     </div>
 
     <div style="margin-bottom:10px;padding:8px 10px;background:rgba(41,121,181,.07);border:1px solid rgba(41,121,181,.20);border-radius:8px">
@@ -10711,18 +10918,6 @@ function renderExplainerMain(){
     </div>
   `;
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// READ ALOUD — Web Speech API
-// Builds a natural-language brief from the current explainer state and
-// speaks it via the browser's built-in text-to-speech. Useful when the
-// user is driving / running the boat and wants hands-free intel.
-//
-// Uses navigator's built-in synth, so it's free, works offline, and respects
-// the device's selected voice. Quality varies by device — iOS Safari and
-// Android Chrome both have decent default voices.
-// ════════════════════════════════════════════════════════════════════════════
-let _currentUtterance = null;
 
 // ════════════════════════════════════════════════════════════════════════════
 // SET FORECAST HOUR
@@ -10836,140 +11031,11 @@ function updateForecastSliderVisibility(){
   restackBottomControls();
 }
 
-// Pick the most natural-sounding available voice. Browsers expose a mix of
-// robotic built-ins and higher-quality "natural"/"neural" cloud voices; we
-// prefer the latter, prefer en-US/en-GB, and cache the choice. getVoices() is
-// often empty on first call until the voiceschanged event fires, so callers
-// should invoke this after that event when possible.
-let _ttsVoice = null;
-function pickNaturalVoice(){
-  if(_ttsVoice) return _ttsVoice;
-  const synth = window.speechSynthesis;
-  if(!synth) return null;
-  const voices = synth.getVoices() || [];
-  if(!voices.length) return null;
-  // Preference tiers, best first. These name fragments identify the modern
-  // high-quality voices across Chrome, Edge, Safari and iOS/Android.
-  const prefer = [
-    /natural/i, /neural/i, /enhanced/i, /premium/i,
-    /Google US English/i, /Samantha/i, /Aaron/i, /Ava/i, /Siri/i,
-    /Microsoft (Aria|Jenny|Guy|Ana|Michelle)/i,
-  ];
-  const en = voices.filter(v => /^en(-|_|$)/i.test(v.lang));
-  const pool = en.length ? en : voices;
-  for(const rx of prefer){
-    const hit = pool.find(v => rx.test(v.name));
-    if(hit){ _ttsVoice = hit; return hit; }
-  }
-  // Fall back to the first local en-US voice, else the first English voice.
-  _ttsVoice = pool.find(v => /en[-_]US/i.test(v.lang)) || pool[0];
-  return _ttsVoice;
-}
-// Warm up the voice list as soon as it's available so the first tap isn't robotic.
-if(window.speechSynthesis){
-  try {
-    window.speechSynthesis.onvoiceschanged = () => { _ttsVoice = null; pickNaturalVoice(); };
-    pickNaturalVoice();
-  } catch(e){}
-}
-
-function speakExplainer(){
-  if(!_explainerState) return;
-  const synth = window.speechSynthesis;
-  if(!synth){
-    showToast("Read Aloud isn't supported on this browser.", "warning");
-    return;
-  }
-  // If already speaking, tapping the button again stops it
-  if(synth.speaking){
-    synth.cancel();
-    _currentUtterance = null;
-    updateSpeakBtn(false);
-    return;
-  }
-
-  const {cell, species} = _explainerState;
-  const scorePct = Math.round(cell.score * 100);
-  // Use the same canonical verdict scale as the on-screen popup so the spoken
-  // word matches what the user sees (EXCELLENT/GOOD/FAIR/POOR), just lowercased
-  // and with an article that reads naturally aloud.
-  const v = biteVerdict(scorePct);
-  const verdict = v.label.toLowerCase();          // "excellent" | "good" | "fair" | "poor"
-  const verdictArticle = (verdict === "excellent") ? "an" : "a";
-  const verdictDetail = scorePct >= 75 ? "Prime conditions, and a high-confidence target zone." :
-                        scorePct >= 60 ? "Strong indicators here — this one's worth the run." :
-                        scorePct >= 40 ? "Mixed signals, so a little local knowledge will go a long way." :
-                                         "Conditions are below average for this species right now.";
-  // Top 3 contributing factors, phrased as a natural spoken list.
-  const factorList = (cell.factors || []).slice(0, 3).map(f => `${f.name}, ${f.raw}`);
-  let factorsSpoken = "";
-  if(factorList.length === 1){
-    factorsSpoken = `The main factor is ${factorList[0]}.`;
-  } else if(factorList.length === 2){
-    factorsSpoken = `The biggest factors are ${factorList[0]}, and ${factorList[1]}.`;
-  } else if(factorList.length >= 3){
-    factorsSpoken = `The biggest factors are ${factorList[0]}; ${factorList[1]}; and ${factorList[2]}.`;
-  }
-  const distLine = (cell.distNm != null && activePort)
-    ? `It's about ${cell.distNm} nautical miles out of ${activePort.split(",")[0]}. `
-    : "";
-  const forecastPrefix = FORECAST_HOUR_OFFSET > 0
-    ? `Here's the forecast for ${forecastTimeDisplay()}. `
-    : "";
-
-  // Conversational phrasing reads far less robotically than clipped data.
-  // Numbers are spoken as natural quantities ("an 87 percent bite score").
-  const text =
-    forecastPrefix +
-    `This looks like ${verdictArticle} ${verdict} day for ${species.name}. ` +
-    `I'm showing an ${scorePct} percent bite score, with ${cell.confidence} percent confidence. ` +
-    `${verdictDetail} ` +
-    distLine +
-    factorsSpoken;
-
-  const utter = new SpeechSynthesisUtterance(text);
-  const voice = pickNaturalVoice();
-  if(voice){ utter.voice = voice; utter.lang = voice.lang; }
-  // Slightly slower and a touch lower than the default removes the rushed,
-  // synthetic quality; natural voices respond well to these settings.
-  utter.rate = 0.95;
-  utter.pitch = 0.95;
-  utter.volume = 1.0;
-  utter.onend = () => { _currentUtterance = null; updateSpeakBtn(false); };
-  utter.onerror = () => { _currentUtterance = null; updateSpeakBtn(false); };
-  _currentUtterance = utter;
-  updateSpeakBtn(true);
-  synth.speak(utter);
-}
-
-function updateSpeakBtn(speaking){
-  const btn = document.getElementById("explainer-speak-btn");
-  if(!btn) return;
-  if(speaking){
-    btn.innerHTML = "⏸";
-    btn.title = "Stop reading";
-    btn.style.background = "rgba(220,38,38,.18)";
-    btn.style.borderColor = "rgba(220,38,38,.45)";
-    btn.style.color = "#fca5a5";
-  } else {
-    btn.innerHTML = "🔊";
-    btn.title = "Read aloud";
-    btn.style.background = "rgba(125,211,252,.10)";
-    btn.style.borderColor = "rgba(125,211,252,.35)";
-    btn.style.color = "#7dd3fc";
-  }
-}
-
 function closeExplainer(){
   const el = document.getElementById("predict-explainer");
   if(el) el.remove();
   _explainerState = null;
   if(wxAutoRefreshTimer){ clearInterval(wxAutoRefreshTimer); wxAutoRefreshTimer = null; }
-  // Stop any in-flight read-aloud — don't leave audio playing after dismiss
-  if(window.speechSynthesis && window.speechSynthesis.speaking){
-    window.speechSynthesis.cancel();
-  }
-  _currentUtterance = null;
 }
 
 // Open a sub-panel inside the explainer (replaces main content with weather,
@@ -10990,7 +11056,7 @@ function openSubPanel(kind){
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(107,191,234,.15)">
       <button onclick="renderExplainerMain()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:#cfe5ff;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600">← Back</button>
       <div style="flex:1;font-size:13px;font-weight:bold;color:${t.color}">${t.emoji} ${t.label}</div>
-      <button onclick="closeExplainer()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:#cfe5ff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">×</button>
+      <button onclick="closeExplainer()" aria-label="Close" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#f0f6ff;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:22px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center">×</button>
     </div>
     <div id="explainer-subpanel-content" data-kind="${kind}" style="font-size:11px;color:#cfe5ff">
       <div style="padding:20px 10px;text-align:center;color:#9ec5e8;font-size:11px">
@@ -12645,6 +12711,11 @@ function catchPhotoFromFile(file){
 // are toggled on. Hidden when both are off. Built dynamically based on
 // which layers are currently active.
 // ──────────────────────────────────────────────────────────────────────────
+let oceanLegendExpanded = false;
+function toggleOceanLegendDetail(){
+  oceanLegendExpanded = !oceanLegendExpanded;
+  updateOceanLegend();
+}
 function updateOceanLegend(){
   const el = document.getElementById("ocean-legend");
   const content = document.getElementById("ocean-legend-content");
@@ -12656,6 +12727,11 @@ function updateOceanLegend(){
   }
   const parts = [];
   const gap = () => parts.length ? 'margin-top:6px' : '';
+  // Verbose bullet explanations are collapsed by default so the panel doesn't
+  // run down the middle of the map. `detail()` wraps that content; a toggle at
+  // the bottom expands/collapses all of it at once.
+  let _hasDetail = false;
+  const detail = (html) => { _hasDetail = true; return `<div class="legend-detail" style="display:${oceanLegendExpanded?'block':'none'}">${html}</div>`; };
   // NOTE: the bite-score legend is rendered as a slim banner across the top of
   // the map (see updateBiteBanner), not in this side panel — it was taking up
   // too much room here. This panel now only covers the gradient overlays.
@@ -12700,13 +12776,14 @@ function updateOceanLegend(){
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
         </div>
         <div style="font-size:8.5px;color:#9ec5e8;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
+        ${detail(`
         <div style="margin-top:5px;display:grid;grid-template-columns:14px 1fr;gap:4px 6px;align-items:start;font-size:11px;color:#cfe5ff;line-height:1.35">
           <span style="justify-self:center;color:#94a3b8;font-size:13px;line-height:1">●</span><span><b style="color:#e2eaf2">Gray/faint</b> — barely moving (&lt;0.5 kt). Negligible drift.</span>
           <span style="justify-self:center;color:#2dd4bf;font-size:13px;line-height:1">●</span><span><b style="color:#99f6e4">Teal</b> — solid current (0.5–2 kt). Note the direction; adjust your drift.</span>
           <span style="justify-self:center;color:#67e8f9;font-size:13px;line-height:1">●</span><span><b style="color:#a5f3fc">Cyan</b> — strong current (2–3 kt). Edges concentrate bait &amp; fish.</span>
           <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">●</span><span><b style="color:#fde68a">Amber</b> — Gulf Stream core (3+ kt). Fish the western edge, not the core.</span>
         </div>
-        <div style="font-size:11px;color:#7aa8c8;margin-top:6px;line-height:1.4"><b style="color:#2dd4bf">Tip:</b> streaks show where the water is going (set). The edges between fast and slow water hold the most fish — same as a rip line.</div>
+        <div style="font-size:11px;color:#7aa8c8;margin-top:6px;line-height:1.4"><b style="color:#2dd4bf">Tip:</b> streaks show where the water is going (set). The edges between fast and slow water hold the most fish — same as a rip line.</div>`)}
       </div>`);
   }
   if(layerVis.altimetry){
@@ -12727,12 +12804,16 @@ function updateOceanLegend(){
           <span>Cold / low</span><span>Flat</span><span>Warm / high</span>
         </div>
         ${statusRow}
+        <div style="font-size:11px;color:#7aa8c8;margin-top:5px;line-height:1.4"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> — the #1 spots for tuna &amp; billfish. White contours are equal SSH; where they bunch tightest is a break.</div>
+        ${detail(`
         <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:4px 6px;align-items:start;font-size:11px;color:#cfe5ff;line-height:1.35">
+          <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. The sharpest SSH edges in view (up to 3). Fish these first.</span>
           <span style="justify-self:center;color:#f87171;font-size:13px;line-height:1">●</span><span><b style="color:#f8b4b4">Red — warm bulge</b> (Gulf Stream, warm-core eddy). Bait &amp; pelagics stack on the edges — not the center.</span>
           <span style="justify-self:center;color:#60a5fa;font-size:13px;line-height:1">●</span><span><b style="color:#bcd6f8">Blue — cool depression</b> (cold-core eddy, upwelling). Nutrient-rich; good for bait and surface feeding.</span>
-          <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">→</span><span><b style="color:#eef0f6">Arrows — geostrophic flow</b> (derived from the SSH slope, not direct measurement). Shows the rotation and circulation pattern around eddies — longer = stronger gradient.</span>
+          <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">〜</span><span><b style="color:#eef0f6">White contours — equal SSH.</b> Tightly-packed lines = a steep gradient = a temperature/current break.</span>
+          <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">→</span><span><b style="color:#eef0f6">Arrows — geostrophic flow</b> (from the SSH slope, not a direct measurement). Shows eddy rotation; longer = stronger.</span>
         </div>
-        <div style="font-size:11px;color:#7aa8c8;margin-top:6px;line-height:1.4"><b style="color:#f0abfc">Key:</b> the sharpest red↔blue boundary is the temperature/current break — the #1 place to find billfish and tuna. Use the <b style="color:#2dd4bf">Ocean Currents layer</b> for actual drift direction; these arrows show eddy circulation pattern only.</div>
+        <div style="font-size:11px;color:#7aa8c8;margin-top:6px;line-height:1.4">Use the <b style="color:#2dd4bf">Ocean Currents layer</b> for actual drift direction; these arrows show eddy circulation pattern only.</div>`)}
       </div>`);
   }
   if(layerVis.radar){
@@ -12745,11 +12826,27 @@ function updateOceanLegend(){
         </div>
       </div>`);
   }
+  // Single toggle controlling every collapsed detail block, so the panel stays
+  // compact (scale + status only) until the user asks for the full key.
+  if(_hasDetail){
+    parts.push(`
+      <button type="button" onclick="toggleOceanLegendDetail()" style="
+        width:100%;margin-top:8px;padding:6px 8px;border-radius:6px;cursor:pointer;pointer-events:auto;
+        background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+        color:#bfe3f5;font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.06em;
+        text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:5px">
+        ${oceanLegendExpanded ? "Hide details ▴" : "How to read ▾"}
+      </button>`);
+  }
   content.innerHTML = parts.join("");
   el.style.display = "block";
   // If the bite-score banner is also showing at the top, push this panel down so
   // they don't overlap; otherwise sit at the normal top inset.
   el.style.top = (layerVis.predict ? 70 : 10) + "px";
+  // Never let the panel run off the map — cap height and scroll the overflow.
+  const mapH = (MAP && MAP.getSize) ? MAP.getSize().y : window.innerHeight;
+  el.style.maxHeight = Math.max(140, mapH - (layerVis.predict ? 90 : 30)) + "px";
+  el.style.overflowY = "auto";
   updateBiteBanner();
 }
 
@@ -22622,8 +22719,8 @@ function knRenderData(){
       display:flex;align-items:center;justify-content:center;cursor:pointer;
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
-      <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⬇ Download My Trip</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Offline bite map · brief · tides · waypoints · charts</div>
+      <div style="font-size:20px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⬇ Download My Trip</div>
+      <div class="dt-header-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Full offline snapshot for your run</div>
     </div>
   </div>
   <div id="dt-body" style="max-width:560px;margin:0 auto"></div>
