@@ -8823,10 +8823,15 @@ function speciesAllowedAtLat(speciesId, lat, lng){
 //  • Gulf: the deepwater floaters, Midnight Lump-to-canyon runs out of Venice,
 //    East Breaks from Galveston (~120nm), and Pulley Ridge from Naples (~140nm)
 //    all need real reach. 160nm covers them.
+//  • Pacific (SoCal): the productive grounds are much closer to port — the
+//    Coronados/9-Mile/425 (~10-30nm), San Clemente/Catalina (~50-60nm), and the
+//    Tanner/Cortes Banks (~100nm) are all inside 125nm. A tighter cap keeps the
+//    bite map from recommending unreachable water 150-200 mi offshore.
 // A distance penalty still gently fades the score toward the cap so nearer water
 // is favored, but the canyons now stay in range instead of dropping off.
 const MAX_PORT_RANGE_NM_ATLANTIC = 140;
 const MAX_PORT_RANGE_NM_GULF = 160;
+const MAX_PORT_RANGE_NM_PACIFIC = 125;
 const PREDICT_HEAT_SCORE_MIN = 0.01;
 const PREDICT_HOTSPOT_SCORE_MIN = 0.30;
 
@@ -8839,9 +8844,11 @@ function heatDisplayIntensity(score){
 }
 
 // Determines the fishing radius based on which coast the port is on.
-// Gulf-coast ports get the wider 150nm radius.
+// Gulf-coast ports get the wider 160nm radius; Pacific (SoCal) ports get a
+// tighter 125nm cap matched to where the West-Coast grounds actually are.
 function maxRangeForPort(portObj){
   if(!portObj) return MAX_PORT_RANGE_NM_ATLANTIC;
+  if(typeof isPacificContext === "function" && isPacificContext(portObj.lat, portObj.lng)) return MAX_PORT_RANGE_NM_PACIFIC;
   return isGulfContext(portObj.lat, portObj.lng) ? MAX_PORT_RANGE_NM_GULF : MAX_PORT_RANGE_NM_ATLANTIC;
 }
 
