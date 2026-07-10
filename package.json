@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:waypoints": "node scripts/build-waypoints.mjs",
     "seed": "node supabase-m1/seed/load.mjs",
     "integrity": "node scripts/integrity-check.mjs",
     "config": "node scripts/generate-bw-config.mjs",

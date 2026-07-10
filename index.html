@@ -20,16 +20,12 @@
 <script src="bw-wind.js"></script>
 <script src="bw-breaks.js?v=20260708"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<!-- Master fishing-waypoint dataset (~23k points), loaded as a companion file so the
+<!-- Master fishing-waypoint dataset (~12.6k points), loaded as a companion file so the
      main app stays lean. Defines window.BW_WAYPOINTS = {version, types, count, wp:[[name,lat,lng,typecode],…]}.
+     Rebuilt from data/Master_Waypoint_Combined_1.csv via scripts/build-waypoints.mjs.
      Loaded via <script src> (not fetch) so it works from a local file:// path with no CORS.
      If this file is missing the app still runs; the Waypoints feature just stays empty. -->
-<script>
-/* Inlined master waypoint dataset (~23k points) — embedded so the app is a single
-   self-contained file that works when opened directly from disk (file://), with no
-   separate companion file to misplace. */
-window.BW_WAYPOINTS={"version":6,"types":{"wk":"Wreck","rf":"Reef","st":"Structure","ld":"Ledge","rk":"Rock","hl":"Hole","hp":"Hump","cy":"Canyon","tw":"Tower","pf":"Platform","rg":"Rig"},"count":0,"wp":[]};
-</script>
+<script src="bw-waypoints.js"></script>
 <!-- Boat-ramp dataset companion. EMPTY by default so the app runs fine until a ramp CSV
      is wired in (same one-step swap as the waypoints). Format mirrors BW_WAYPOINTS:
      window.BW_RAMPS = {version, count, rp:[[name, lat, lng], ...]}. Distance-from-port
@@ -3318,6 +3314,21 @@ const PORTS={
   // Rio Hondo, and the Brownsville-area ramps 80–110nm from Port Aransas.
   "Port Mansfield, TX":{lat:26.55,  lng:-97.43,  short:"Port Mansfield"},
   "Port Isabel, TX":   {lat:26.073, lng:-97.21,  short:"Port Isabel"},
+  // ── CALIFORNIA (Monterey → San Diego) ────────────────────────────────
+  "Monterey, CA":          {lat:36.604, lng:-121.888, short:"Monterey"},
+  "Moss Landing, CA":      {lat:36.804, lng:-121.786, short:"Moss Landing"},
+  "Morro Bay, CA":         {lat:35.369, lng:-120.854, short:"Morro Bay"},
+  "Port San Luis, CA":     {lat:35.171, lng:-120.754, short:"Port San Luis"},
+  "Santa Barbara, CA":     {lat:34.403, lng:-119.692, short:"Santa Barbara"},
+  "Ventura, CA":           {lat:34.248, lng:-119.264, short:"Ventura"},
+  "Channel Islands, CA":   {lat:34.165, lng:-119.227, short:"Channel Islands"},
+  "Marina del Rey, CA":    {lat:33.978, lng:-118.451, short:"Marina del Rey"},
+  "San Pedro, CA":         {lat:33.736, lng:-118.272, short:"San Pedro"},
+  "Long Beach, CA":        {lat:33.754, lng:-118.195, short:"Long Beach CA"},
+  "Newport Beach, CA":     {lat:33.618, lng:-117.929, short:"Newport Beach"},
+  "Dana Point, CA":        {lat:33.461, lng:-117.698, short:"Dana Point"},
+  "Oceanside, CA":         {lat:33.195, lng:-117.385, short:"Oceanside"},
+  "San Diego, CA":         {lat:32.723, lng:-117.174, short:"San Diego"},
 };
 
 const SPECIES=[
@@ -13924,9 +13935,10 @@ function drawPortMarkers(){
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// FISHING WAYPOINTS — master dataset (~23k points) binned by distance from the
-// selected home port. Data is in the companion file wp/waypoints.js as
-// window.BW_WAYPOINTS. We compute distance at runtime (23k haversines is trivial)
+// FISHING WAYPOINTS — master dataset (~12.6k points) binned by distance from the
+// selected home port. Data is in bw-waypoints.js (built from
+// data/Master_Waypoint_Combined_1.csv) as window.BW_WAYPOINTS. We compute distance
+// at runtime (12k haversines is trivial)
 // rather than pre-binning per port, which keeps the data file minimal.
 //
 //   • User picks a radius band (20/40/60/100/120/140 nm) → only waypoints within
@@ -15636,7 +15648,8 @@ const PORT_GROUPS = [
   {label:"Florida Panhandle", ports:["Apalachicola, FL","Panama City, FL","Destin, FL","Pensacola, FL"]},
   {label:"Alabama / Mississippi", ports:["Dauphin Island, AL","Biloxi, MS"]},
   {label:"Louisiana", ports:["Venice, LA","Grand Isle, LA","Houma, LA","Morgan City, LA","New Iberia, LA","Cameron, LA","Lake Charles, LA"]},
-  {label:"Texas Coast", ports:["Sabine Pass, TX","Galveston, TX","Freeport, TX","Matagorda, TX","Port O'Connor, TX","Port Aransas, TX","Port Mansfield, TX","Port Isabel, TX"]}];
+  {label:"Texas Coast", ports:["Sabine Pass, TX","Galveston, TX","Freeport, TX","Matagorda, TX","Port O'Connor, TX","Port Aransas, TX","Port Mansfield, TX","Port Isabel, TX"]},
+  {label:"California", ports:["Monterey, CA","Moss Landing, CA","Morro Bay, CA","Port San Luis, CA","Santa Barbara, CA","Ventura, CA","Channel Islands, CA","Marina del Rey, CA","San Pedro, CA","Long Beach, CA","Newport Beach, CA","Dana Point, CA","Oceanside, CA","San Diego, CA"]}];
 
 function buildPortDropdown(){
   let html="";
@@ -20448,7 +20461,7 @@ function tbClearFavs(){
       <div class="tut-step-num">1</div>
       <div class="tut-step-body">
         <div class="tut-step-title">Pick your home port</div>
-        <div class="tut-step-desc">Tap <b>HOME PORT</b> in the top bar and pick the port you're fishing from. The map zooms to your area and a range circle shows how far offshore is reachable. <b>53 ports</b> are supported from Portsmouth, NH to Port Aransas, TX. Until you pick a port, no port shows as "home" on the chart — your home port appears as a larger gold anchor badge with a white ring, and fishing spots only load once a port is selected.</div>
+        <div class="tut-step-desc">Tap <b>HOME PORT</b> in the top bar and pick the port you're fishing from. The map zooms to your area and a range circle shows how far offshore is reachable. <b>97 ports</b> are supported from Portsmouth, NH to San Diego, CA (plus Bahamas crossings). Until you pick a port, no port shows as "home" on the chart — your home port appears as a larger gold anchor badge with a white ring, and fishing spots only load once a port is selected.</div>
       </div>
     </div>
 

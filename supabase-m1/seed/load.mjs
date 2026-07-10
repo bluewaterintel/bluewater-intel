@@ -2,7 +2,7 @@
 /**
  * Bluewater Intel — Milestone 1 seed loader
  * ----------------------------------------------------------------------------
- * Loads waypoint_types, waypoints (12,027) and ramps (643) into Supabase Postgres.
+ * Loads waypoint_types, waypoints (12,592) and ramps (643) into Supabase Postgres.
  *
  * RUN THIS SERVER-SIDE ONLY. It uses the SERVICE ROLE key, which bypasses RLS.
  * The service role key must NEVER ship to the client or be committed to git.
@@ -107,8 +107,8 @@ async function main() {
   // ── verify ───────────────────────────────────────────────────────────────────
   const { count: wpCount } = await db.from('waypoints').select('*', { head: true, count: 'exact' });
   const { count: rpCount } = await db.from('ramps').select('*', { head: true, count: 'exact' });
-  console.log(`\nDone. waypoints=${wpCount} (expect 12027), ramps=${rpCount} (expect 643).`);
-  if (wpCount !== 12027 || rpCount !== 643) {
+  console.log(`\nDone. waypoints=${wpCount} (expect 12592), ramps=${rpCount} (expect 643).`);
+  if (wpCount !== 12592 || rpCount !== 643) {
     console.error('COUNT MISMATCH — investigate before wiring the client.');
     process.exit(1);
   }
