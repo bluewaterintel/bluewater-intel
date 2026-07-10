@@ -12,32 +12,43 @@
  *   SUPABASE_SERVICE_ROLE_KEY=eyJ... \
  *   node seed/load.mjs
  *
+ * Prefer SUPABASE_DB_URL in .env when using the new sb_secret_ API keys — the
+ * REST client rejects them with "Unregistered API key"; direct Postgres works.
+ *
  * Idempotent: it truncates the three tables first, then re-inserts. Safe to
  * re-run. (Truncate is appropriate here because this is public reference data
  * with no foreign keys from user tables yet — Milestone 2 will add those, and
  * at that point reference data should be updated, not truncated.)
  *
- * Requires: @supabase/supabase-js v2  (npm i @supabase/supabase-js)
+ * Requires: @supabase/supabase-js v2, pg (for direct Postgres seeding)
  */
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
+import pg from 'pg';
 import { loadEnv } from '../../scripts/load-env.mjs';
 
-loadEnv(join(dirname(fileURLToPath(import.meta.url)), '../..'));
+const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
+loadEnv(root);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!URL || !KEY) {
-  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars.');
+const DB_URL = process.env.SUPABASE_DB_URL;
+const EXPECT_WP = 12592;
+const EXPECT_RP = 643;
+
+if (!DB_URL && (!URL || !KEY)) {
+  console.error('Missing SUPABASE_DB_URL or SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.');
   process.exit(1);
 }
 
-const db = createClient(URL, KEY, { auth: { persistSession: false } });
+const db = URL && KEY
+  ? createClient(URL, KEY, { auth: { persistSession: false } })
+  : null;
 
 const readNdjson = (f) =>
   readFileSync(join(__dirname, f), 'utf8')
@@ -52,7 +63,89 @@ const chunk = (arr, n) =>
 // PostGIS geography literal from lat/lng. SRID 4326, lon-lat order.
 const pt = (lat, lng) => `SRID=4326;POINT(${lng} ${lat})`;
 
+async function seedViaPg() {
+  const client = new pg.Client({
+    connectionString: DB_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  await client.connect();
+
+  const types = JSON.parse(readFileSync(join(__dirname, 'waypoint_types.json'), 'utf8'));
+  const typeRows = Object.entries(types).map(([code, label]) => ({ code, label }));
+  const wps = readNdjson('waypoints.ndjson');
+  const rps = readNdjson('ramps.ndjson');
+
+  console.log('Truncating tables (Postgres)…');
+  await client.query('truncate table public.waypoints, public.ramps, public.waypoint_types restart identity cascade');
+
+  console.log(`Inserting ${typeRows.length} waypoint_types…`);
+  for (const row of typeRows) {
+    await client.query(
+      'insert into public.waypoint_types (code, label) values ($1, $2)',
+      [row.code, row.label],
+    );
+  }
+
+  console.log(`Inserting ${wps.length} waypoints in chunks of ${CHUNK}…`);
+  let n = 0;
+  for (const c of chunk(wps, CHUNK)) {
+    const vals = [];
+    const params = [];
+    let i = 1;
+    for (const w of c) {
+      vals.push(`($${i++}, $${i++}, $${i++}, $${i++}, ST_SetSRID(ST_MakePoint($${i++}, $${i++}), 4326)::geography)`);
+      params.push(w.name, w.t, w.lat, w.lng, w.lng, w.lat);
+    }
+    await client.query(
+      `insert into public.waypoints (name, type_code, lat, lng, geog) values ${vals.join(',')}`,
+      params,
+    );
+    n += c.length;
+    process.stdout.write(`\r  ${n}/${wps.length}`);
+  }
+  process.stdout.write('\n');
+
+  console.log(`Inserting ${rps.length} ramps…`);
+  for (const c of chunk(rps, CHUNK)) {
+    const vals = [];
+    const params = [];
+    let i = 1;
+    for (const r of c) {
+      vals.push(`($${i++}, $${i++}, $${i++}, ST_SetSRID(ST_MakePoint($${i++}, $${i++}), 4326)::geography)`);
+      params.push(r.name, r.lat, r.lng, r.lng, r.lat);
+    }
+    await client.query(
+      `insert into public.ramps (name, lat, lng, geog) values ${vals.join(',')}`,
+      params,
+    );
+  }
+
+  const { rows: [counts] } = await client.query(`
+    select
+      (select count(*)::int from public.waypoints) as wp,
+      (select count(*)::int from public.ramps) as rp
+  `);
+  console.log(`\nDone. waypoints=${counts.wp} (expect ${EXPECT_WP}), ramps=${counts.rp} (expect ${EXPECT_RP}).`);
+  if (counts.wp !== EXPECT_WP || counts.rp !== EXPECT_RP) {
+    await client.end();
+    console.error('COUNT MISMATCH — investigate before wiring the client.');
+    process.exit(1);
+  }
+
+  const { rows: probe } = await client.query(
+    'select name, nm from public.waypoints_within($1, $2, $3, $4) limit 1',
+    [35.7972, -75.5495, 40, null],
+  );
+  const hit = probe[0];
+  console.log(`RPC probe (Oregon Inlet, 40nm): ${probe.length ? 1 : 0}+ waypoints, nearest "${hit?.name}" @ ${hit?.nm?.toFixed?.(1) ?? '?'} nm.`);
+  await client.end();
+}
+
 async function main() {
+  if (DB_URL) {
+    console.log('Seeding via direct Postgres (SUPABASE_DB_URL)…');
+    return seedViaPg();
+  }
   // ── waypoint_types ────────────────────────────────────────────────────────
   const types = JSON.parse(readFileSync(join(__dirname, 'waypoint_types.json'), 'utf8'));
   const typeRows = Object.entries(types).map(([code, label]) => ({ code, label }));
@@ -107,8 +200,8 @@ async function main() {
   // ── verify ───────────────────────────────────────────────────────────────────
   const { count: wpCount } = await db.from('waypoints').select('*', { head: true, count: 'exact' });
   const { count: rpCount } = await db.from('ramps').select('*', { head: true, count: 'exact' });
-  console.log(`\nDone. waypoints=${wpCount} (expect 12592), ramps=${rpCount} (expect 643).`);
-  if (wpCount !== 12592 || rpCount !== 643) {
+  console.log(`\nDone. waypoints=${wpCount} (expect ${EXPECT_WP}), ramps=${rpCount} (expect ${EXPECT_RP}).`);
+  if (wpCount !== EXPECT_WP || rpCount !== EXPECT_RP) {
     console.error('COUNT MISMATCH — investigate before wiring the client.');
     process.exit(1);
   }
