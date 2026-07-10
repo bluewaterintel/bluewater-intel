@@ -449,7 +449,7 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   #radar-loop-btn{ font-size:13px !important; padding:9px 0 !important; width:118px !important; flex:0 0 118px !important; }
   #radar-loop-time{ font-size:12px !important; width:auto !important; flex:0 0 auto !important; min-width:38px !important; }
   /* satellite / altimetry / wind / radar pills — width handled by .map-time-pill */
-  #sat-date-control,#alti-date-control,#wind-forecast-slider,#radar-loop-control,#cloud-loop-control{
+  #sat-date-control,#alti-date-control,#wind-forecast-slider,#radar-loop-control{
     width:calc(100vw - 20px) !important;
     left:10px !important;right:10px !important;transform:none !important;
   }
@@ -994,13 +994,6 @@ body.nav-open #ruler-readout{
 .map-time-pill--green .map-time-pill-slider{background:linear-gradient(90deg,#1c3a5e 0%,#4ade80 100%)}
 .map-time-pill--green .map-time-pill-footer{color:#9ec5e8}
 .map-time-pill--green .map-time-pill-play{color:#bbf7d0;border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.16)}
-.map-time-pill--slate{border:1px solid rgba(203,213,225,.35)}
-.map-time-pill--slate .map-time-pill-title{color:#e2e8f0}
-.map-time-pill--slate .map-time-pill-display{color:#f1f5f9}
-.map-time-pill--slate .map-time-pill-step{color:#f1f5f9;border:1px solid rgba(203,213,225,.4);background:rgba(148,163,184,.14)}
-.map-time-pill--slate .map-time-pill-slider{background:linear-gradient(90deg,#1c3a5e 0%,#cbd5e1 100%)}
-.map-time-pill--slate .map-time-pill-footer{color:#9ec5e8}
-.map-time-pill--slate .map-time-pill-play{color:#f1f5f9;border-color:rgba(203,213,225,.45);background:rgba(148,163,184,.16)}
 #ocean-legend .legend-detail{font-size:13px;line-height:1.45}
 
 /* Legend rows (now living inside the merged panel) */
@@ -2660,24 +2653,6 @@ body.nav-open #ruler-readout{
   </div>
 </div>
 
-<!-- SATELLITE CLOUD IMAGERY — true-color MODIS; pill + scrub + play loop -->
-<div id="cloud-loop-control" class="map-time-pill map-time-pill--slate">
-  <div class="map-time-pill-head">
-    <div class="map-time-pill-title">Satellite Imagery</div>
-    <div id="cloud-loop-time" class="map-time-pill-display">Latest</div>
-  </div>
-  <div class="map-time-pill-row">
-    <button id="cloud-frame-older" type="button" class="map-time-pill-step" onclick="stepCloudFrame(-1)" title="Earlier day">◀</button>
-    <input id="cloud-frame-input" type="range" class="map-time-pill-slider" min="0" max="14" step="1" value="14" oninput="onCloudSliderInput(this.value)">
-    <button id="cloud-frame-newer" type="button" class="map-time-pill-step" onclick="stepCloudFrame(1)" title="Later day">▶</button>
-  </div>
-  <div class="map-time-pill-footer">
-    <span>2 weeks ago</span>
-    <button id="cloud-loop-btn" type="button" class="map-time-pill-play" onclick="toggleCloudLoop()">▶ Play cloud loop</button>
-    <span>Latest →</span>
-  </div>
-</div>
-
 <!-- FISHING WAYPOINTS CONTROL — slim radius-bin selector. GPX import/export now
      lives on the Waypoints page (menu → Import/Export tab), not on this map
      bubble, to keep the on-map footprint minimal. Shown only when the Fishing
@@ -2931,14 +2906,6 @@ body.nav-open #ruler-readout{
       <span class="lyr-label">
         <span class="layer-swatch" style="background:linear-gradient(90deg,#22c55e 0%,#eab308 45%,#ef4444 75%,#a855f7 100%);width:18px;height:8px;border-radius:2px"></span>
         <span>Weather Radar <span style="font-size:8px;color:#7dd3fc;opacity:.85">(NOAA live)</span></span>
-      </span>
-      <span class="lyr-toggle"></span>
-    </label>
-    <label class="layer-row" title="NASA MODIS Aqua true-color satellite imagery — see real clouds, ocean color, sediment plumes, and river runoff over your fishing grounds. Step day-by-day or play a loop to find the last clear pass. ~1 day processing lag.">
-      <input type="checkbox" id="chk-cloud" onchange="toggleLayer('cloud')">
-      <span class="lyr-label">
-        <span class="layer-swatch" style="background:linear-gradient(135deg,#1e3a5f 0%,#94a3b8 35%,#f8fafc 55%,#cbd5e1 75%,#334155 100%);width:18px;height:8px;border-radius:2px"></span>
-        <span>Satellite Imagery <span style="font-size:8px;color:#e2e8f0;opacity:.85">(clouds)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -3300,18 +3267,14 @@ const PORTS={
   "Fort Lauderdale, FL":{lat:26.10, lng:-80.10,  short:"Ft. Lauderdale"},
   "Miami, FL":         {lat:25.77,  lng:-80.18,  short:"Miami"},
   // ── BAHAMAS (common crossings from Florida + marquee grounds) ────────
-  // The three classic FL-crossing gateways plus the marquee offshore
-  // grounds, selectable as a fishing center. All sit on the Atlantic side
-  // (Gulf Stream / Northwest Providence Channel / Tongue of the Ocean) and
-  // draw full ocean data: MUR SST, VIIRS chlorophyll, altimetry, RTOFS
-  // currents, and ETOPO bathymetry (global — CUDEM is US-only).
+  // The three classic FL-crossing gateways plus Abacos hubs. Fishing grounds
+  // (Bimini Wall, Tongue of the Ocean, etc.) are Major Fishing Areas on the
+  // map — not ports.
   "Bimini, Bahamas":            {lat:25.735, lng:-79.297, short:"Bimini"},
   "West End, Bahamas":          {lat:26.686, lng:-78.977, short:"West End"},
   "Chub Cay, Bahamas":          {lat:25.412, lng:-77.882, short:"Chub Cay"},
-  "Bimini Wall, Bahamas":       {lat:25.740, lng:-79.420, short:"Bimini Wall"},
-  "Tongue of the Ocean, Bahamas":{lat:24.700,lng:-77.750, short:"Tongue of the Ocean"},
-  "NW Providence Channel, Bahamas":{lat:26.300,lng:-78.300,short:"NW Prov. Channel"},
-  "Great Isaac, Bahamas":       {lat:26.030, lng:-79.090, short:"Great Isaac"},
+  "Walker's Cay, Bahamas":      {lat:27.259, lng:-78.399, short:"Walker's Cay"},
+  "Marsh Harbour, Bahamas":     {lat:26.541, lng:-77.063, short:"Marsh Harbour"},
   // ── FLORIDA KEYS ─────────────────────────────────────────────────────
   "Islamorada, FL":    {lat:24.93,  lng:-80.62,  short:"Islamorada"},
   "Marathon, FL":      {lat:24.72,  lng:-81.09,  short:"Marathon"},
@@ -3517,6 +3480,18 @@ const CANYONS=[
   {name:"Cat Cay / Gun Cay Cut", color:"#1a4fa8", lat:25.550, lng:-79.290, type:"ledge",
    desc:"South Bimini chain — troll the Gun Cay cut and Cat Cay wall for wahoo, tuna, and marlin, while the reef edges hold mutton snapper, yellowtail, and grouper.",
    fish:["wahoo","yellowfin","blackfin","muttonsnap","yellowtail","grouper","kingmack"]},
+  {name:"Hole in the Wall", color:"#1a4fa8", lat:25.70, lng:-76.88, type:"ledge",
+   desc:"Offshore ledge at the southwest tip of Great Abaco — ~20nm SE of the Hole in the Wall lighthouse. Classic Abaco run for wahoo, tuna, and billfish on the shelf edge.",
+   fish:["wahoo","yellowfin","blackfin","bluemarlin","sailfish","mahi","kingmack"]},
+  {name:"The Hump (Marsh Harbour)", color:"#1a4fa8", lat:26.18, lng:-76.82, type:"lump",
+   desc:"Seamount ~25nm ESE of Marsh Harbour where the bottom rises into the 200-400 ft range. Bait stacks and pelagics — tuna, wahoo, mahi, and billfish — work the upwelling.",
+   fish:["yellowfin","blackfin","wahoo","mahi","bluemarlin","sailfish","amberjack"]},
+  {name:"The Canyons (West End)", color:"#1a4fa8", lat:26.24, lng:-79.18, type:"canyon",
+   desc:"Northwest Providence Channel bottom peaks and valleys S/SW of West End — including Tuna Canyon. Yellowfin, wahoo, and billfish when eddies push blue water onto the structure.",
+   fish:["yellowfin","blackfin","wahoo","bluemarlin","mahi","kingmack"]},
+  {name:"The Drop Off (West End)", color:"#1a4fa8", lat:26.70, lng:-79.05, type:"ledge",
+   desc:"Steep Little Bahama Bank edge just outside the West End cut — minutes from Old Bahama Bay. Fast wahoo and yellowfin when the current is tight on the drop.",
+   fish:["wahoo","yellowfin","blackfin","mahi","kingmack","sailfish"]},
 
   // ═════════════════ GULF OF MEXICO STRUCTURES ════════════════════════
   // ── FLORIDA GULF COAST ──────────────────────────────────────────────
@@ -4069,7 +4044,7 @@ async function loadReports(){
 let MAP, activeSpId=null, activePort=null;
 let pinLL=null;
 let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, cloud:false, closures:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
+let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -4435,15 +4410,6 @@ async function initMap(){
     radarCtl.addEventListener("pointerdown",  stopAllRadar);
     radarCtl.addEventListener("touchstart",   stopAllRadar, {passive: true});
     radarCtl.addEventListener("mousedown",    stopAllRadar);
-  }
-  const cloudCtl = document.getElementById("cloud-loop-control");
-  if(cloudCtl && typeof L !== "undefined" && L.DomEvent){
-    L.DomEvent.disableClickPropagation(cloudCtl);
-    L.DomEvent.disableScrollPropagation(cloudCtl);
-    const stopAllCloud = e => { e.stopPropagation(); };
-    cloudCtl.addEventListener("pointerdown",  stopAllCloud);
-    cloudCtl.addEventListener("touchstart",   stopAllCloud, {passive: true});
-    cloudCtl.addEventListener("mousedown",    stopAllCloud);
   }
   const wpCtl = document.getElementById("waypoint-legend");
   if(wpCtl && typeof L !== "undefined" && L.DomEvent){
@@ -11547,15 +11513,6 @@ function toggleLayer(key){
     updateOceanLegend();
     updateRadarLoopControlVisibility();
   }
-  else if(key==="cloud"){
-    if(layerVis.cloud){
-      ensureCloudFramesBuilt();
-      showCloudFrame(_cloudFrameIdx);
-    } else {
-      stopCloudLoop();
-    }
-    updateCloudLoopControlVisibility();
-  }
   else if(key==="waypoints"){
     drawWaypoints();
     updateWaypointControlVisibility();
@@ -11747,7 +11704,7 @@ function updateAltiDateControlVisibility(){
 // nearest the thumb-friendly bottom edge. Called by every visibility updater.
 // The distance scale bar is then lifted to sit just above the top of the stack
 // so it never overlaps the bars or the Leaflet attribution line.
-const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "radar-loop-control", "cloud-loop-control", "wind-forecast-slider", "forecast-slider"];
+const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider", "forecast-slider"];
 const BOTTOM_STACK_GAP  = 8;    // px gap between stacked bars
 function restackBottomControls(){
   // On phones the Leaflet attribution/credit line sits along the very bottom,
@@ -12029,145 +11986,6 @@ function updateRadarLoopControlVisibility(){
   if(!box) return;
   box.style.display = layerVis.radar ? "block" : "none";
   if(!layerVis.radar) stopRadarLoop();
-  restackBottomControls();
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// SATELLITE CLOUD IMAGERY — MODIS Aqua true-color day loop
-// Same pill/scrub/play pattern as weather radar, but on a daily timescale so you
-// can find the last clear pass over your grounds. NASA GIBS WMTS, no API key.
-// ════════════════════════════════════════════════════════════════════════════
-const CLOUD_SPAN_DAYS = 14;   // 15 frames: 2 weeks ago → latest
-let _cloudFrames = [];        // [{layer, label, date}] oldest → newest
-let _cloudFrameIdx = 0;
-let _cloudTimer = null;
-let _cloudBuilt = false;
-
-function cloudFrameDates(){
-  const out = [];
-  for(let d = CLOUD_SPAN_DAYS; d >= 0; d--) out.push(gibsRecentDate(d));
-  return out;
-}
-function buildCloudFrames(){
-  clearCloudFrames();
-  const dates = cloudFrameDates();
-  _cloudFrames = dates.map(date => {
-    const layer = L.tileLayer(
-      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Aqua_CorrectedReflectance_TrueColor/default/${date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
-      { maxZoom:18, maxNativeZoom:9, minZoom:0, opacity:0, pane:"ocean-overlays",
-        attribution:'© NASA GIBS · MODIS Aqua True Color',
-        errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" });
-    const dt = new Date(date + "T12:00:00Z");
-    const label = dt.toLocaleDateString([], {month:"short", day:"numeric"});
-    return { layer, label, date };
-  });
-  _cloudBuilt = true;
-}
-function clearCloudFrames(){
-  _cloudFrames.forEach(f => { if(MAP && MAP.hasLayer(f.layer)) MAP.removeLayer(f.layer); });
-  _cloudFrames = [];
-  _cloudBuilt = false;
-}
-function showCloudFrame(i){
-  if(!_cloudFrames.length) return;
-  _cloudFrameIdx = (i + _cloudFrames.length) % _cloudFrames.length;
-  _cloudFrames.forEach((f, idx) => {
-    if(!MAP.hasLayer(f.layer)) f.layer.addTo(MAP);
-    f.layer.setOpacity(idx === _cloudFrameIdx ? 0.95 : 0);
-  });
-  syncCloudSlider();
-  updateCloudLoopReadout();
-}
-function ensureCloudFramesBuilt(){
-  if(!_cloudBuilt || !_cloudFrames.length){
-    buildCloudFrames();
-    _cloudFrameIdx = _cloudFrames.length - 1;
-  }
-}
-function syncCloudSlider(){
-  const inp = document.getElementById("cloud-frame-input");
-  const top = Math.max(0, (_cloudFrames.length || (CLOUD_SPAN_DAYS + 1)) - 1);
-  if(inp){
-    if(+inp.max !== top) inp.max = top;
-    if(+inp.value !== _cloudFrameIdx) inp.value = _cloudFrameIdx;
-  }
-  const older = document.getElementById("cloud-frame-older");
-  const newer = document.getElementById("cloud-frame-newer");
-  if(older) older.disabled = !_cloudFrames.length || _cloudFrameIdx <= 0;
-  if(newer) newer.disabled = !_cloudFrames.length || _cloudFrameIdx >= top;
-}
-function stepCloudFrame(delta){
-  if(!layerVis.cloud) return;
-  if(isCloudLooping()) pauseCloudLoop();
-  ensureCloudFramesBuilt();
-  const top = _cloudFrames.length - 1;
-  const next = Math.max(0, Math.min(top, _cloudFrameIdx + (delta|0)));
-  showCloudFrame(next);
-}
-function onCloudSliderInput(val){
-  if(!layerVis.cloud) return;
-  if(isCloudLooping()) pauseCloudLoop();
-  ensureCloudFramesBuilt();
-  showCloudFrame(val|0);
-}
-function isCloudLooping(){ return _cloudTimer !== null; }
-function startCloudLoop(){
-  if(!layerVis.cloud) return;
-  if(_cloudTimer){ clearInterval(_cloudTimer); _cloudTimer = null; }
-  if(!_cloudBuilt || !_cloudFrames.length){
-    buildCloudFrames();
-    _cloudFrameIdx = 0;
-  }
-  showCloudFrame(_cloudFrameIdx);
-  _cloudTimer = setInterval(() => {
-    let next = _cloudFrameIdx + 1;
-    if(next >= _cloudFrames.length) next = 0;
-    showCloudFrame(next);
-  }, 900);
-  updateCloudLoopButton();
-  updateCloudLoopReadout();
-}
-function pauseCloudLoop(){
-  if(_cloudTimer){ clearInterval(_cloudTimer); _cloudTimer = null; }
-  updateCloudLoopButton();
-  updateCloudLoopReadout();
-}
-function stopCloudLoop(){
-  if(_cloudTimer){ clearInterval(_cloudTimer); _cloudTimer = null; }
-  clearCloudFrames();
-  _cloudFrameIdx = 0;
-  const inp = document.getElementById("cloud-frame-input");
-  if(inp) inp.value = inp.max || CLOUD_SPAN_DAYS;
-  syncCloudSlider();
-  updateCloudLoopButton();
-  updateCloudLoopReadout();
-}
-function toggleCloudLoop(){ isCloudLooping() ? pauseCloudLoop() : startCloudLoop(); }
-function updateCloudLoopButton(){
-  const btn = document.getElementById("cloud-loop-btn");
-  if(btn) btn.textContent = isCloudLooping() ? "⏸ Pause loop" : "▶ Play cloud loop";
-}
-function updateCloudLoopReadout(){
-  const el = document.getElementById("cloud-loop-time");
-  if(!el) return;
-  if(_cloudFrames.length && _cloudFrames[_cloudFrameIdx]){
-    const f = _cloudFrames[_cloudFrameIdx];
-    const isNewest = _cloudFrameIdx === _cloudFrames.length - 1;
-    const base = isNewest ? `${f.label} (latest)` : f.label;
-    el.textContent = isCloudLooping() ? base : `${base} ⏸`;
-  } else {
-    el.textContent = "Latest";
-  }
-}
-function updateCloudLoopControlVisibility(){
-  const box = document.getElementById("cloud-loop-control");
-  if(!box) return;
-  box.style.display = layerVis.cloud ? "block" : "none";
-  if(!layerVis.cloud) stopCloudLoop();
-  else {
-    ensureCloudFramesBuilt();
-    showCloudFrame(_cloudFrameIdx);
-  }
   restackBottomControls();
 }
 
@@ -14152,7 +13970,7 @@ const BW_OWNER_EMAILS = ["rnovakwvu@gmail.com", "natalienovakm@gmail.com"];
 let BW_PREMIUM = false;
 let BW_PAID = false;
 // Premium-gated map layers (everything outside the free baseline).
-const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "altimetry", "radar", "cloud", "ramps", "loran", "waypoints"];
+const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "altimetry", "radar", "ramps", "loran", "waypoints"];
 
 async function refreshEntitlement(){
   let premium = false, paid = false;
@@ -15812,7 +15630,7 @@ const PORT_GROUPS = [
   {label:"Carolinas", ports:["Oregon Inlet, NC","Hatteras, NC","Morehead City, NC","Oak Island, NC","Myrtle Beach, SC","Murrells Inlet, SC","Charleston, SC"]},
   {label:"South Atlantic", ports:["Savannah, GA","Brunswick, GA","St. Augustine, FL","Jacksonville, FL","Daytona Beach, FL","Port Canaveral, FL","Melbourne, FL","Vero Beach, FL"]},
   {label:"Florida East Coast", ports:["Stuart, FL","Palm Beach, FL","Fort Lauderdale, FL","Miami, FL"]},
-  {label:"Bahamas", ports:["Bimini, Bahamas","West End, Bahamas","Chub Cay, Bahamas","Bimini Wall, Bahamas","Tongue of the Ocean, Bahamas","NW Providence Channel, Bahamas","Great Isaac, Bahamas"]},
+  {label:"Bahamas", ports:["Bimini, Bahamas","West End, Bahamas","Chub Cay, Bahamas","Walker's Cay, Bahamas","Marsh Harbour, Bahamas"]},
   {label:"Florida Keys", ports:["Islamorada, FL","Marathon, FL","Key West, FL"]},
   {label:"Florida Gulf Coast", ports:["Clearwater, FL","Tampa Bay, FL","Sarasota, FL","Venice, FL","Fort Myers, FL","Naples, FL","Crystal River, FL","Cedar Key, FL","Steinhatchee, FL"]},
   {label:"Florida Panhandle", ports:["Apalachicola, FL","Panama City, FL","Destin, FL","Pensacola, FL"]},
@@ -20579,8 +20397,7 @@ function tbClearFavs(){
 }
 </script>
 
-<!-- Weather & Oceanography overlay removed — SST/chlor/wind/radar/altimetry
-     are map layers; satellite cloud imagery is the Satellite Imagery layer. -->
+<!-- Weather & Oceanography overlay removed — SST/chlor/wind/radar/altimetry are map layers. -->
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TUTORIAL — how to use the app + what data drives predictions
@@ -20679,7 +20496,7 @@ function tbClearFavs(){
       <div class="tut-step-num">5</div>
       <div class="tut-step-body">
         <div class="tut-step-title">Explore the menu</div>
-        <div class="tut-step-desc">Tap <b>MENU</b> in the top right. It's organized into grouped sections like iOS Settings: <b>Map &amp; Data</b> (Offshore Chart, Fishing Reports), <b>My Tools</b> (My Catches with logging + pattern analytics, Waypoints &amp; Structure, AI Catch Measure, Virtual Tackle Box, Download My Trip), and <b>Reference</b> (Regulations, Terminal Tackle, Fish Encyclopedia, Tutorial, Help &amp; Contact). Ocean layers — SST, chlorophyll, wind, radar, satellite cloud imagery, currents, and altimetry — are toggled on the map itself under <b>Layers</b>. To log a catch, open <b>My Catches</b> and tap <b>Log a Catch</b>.</div>
+        <div class="tut-step-desc">Tap <b>MENU</b> in the top right. It's organized into grouped sections like iOS Settings: <b>Map &amp; Data</b> (Offshore Chart, Fishing Reports), <b>My Tools</b> (My Catches with logging + pattern analytics, Waypoints &amp; Structure, AI Catch Measure, Virtual Tackle Box, Download My Trip), and <b>Reference</b> (Regulations, Terminal Tackle, Fish Encyclopedia, Tutorial, Help &amp; Contact). Ocean layers — SST, chlorophyll, wind, radar, currents, and altimetry — are toggled on the map itself under <b>Layers</b>. To log a catch, open <b>My Catches</b> and tap <b>Log a Catch</b>.</div>
       </div>
     </div>
 
