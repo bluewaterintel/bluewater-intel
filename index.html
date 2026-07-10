@@ -5287,7 +5287,7 @@ const PREDICT_SPECIES_PREFS = {
   // Coronados/San Diego up the SoCal bight. Cool-temperate range (upper 50s-low
   // 70s°F), roaming (not strictly demersal) so it scores over banks and the
   // shelf edge, not just the bottom.
-  cayellowtail: {tempIdeal:[62,70], tempWorking:[58,74], chlorPref:"edge",    depthBands:[[10,90]],    breakPref:"any" },
+  cayellowtail: {tempIdeal:[63,71], tempWorking:[58,74], chlorPref:"edge",    depthBands:[[6,90]],     breakPref:"any" },
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -6793,8 +6793,14 @@ function thermalBreakReal(lat, lng){
 }
 
 function scoreCell(lat, lng, speciesId){
-  const prefs = PREDICT_SPECIES_PREFS[speciesId];
+  let prefs = PREDICT_SPECIES_PREFS[speciesId];
   if(!prefs) return null;
+  // Pacific tuning pass: score West-Coast cells against Pacific-specific habitat
+  // prefs (e.g. offshore-only bluefin) while leaving Atlantic/Gulf scores intact.
+  if(typeof isPacificContext === "function" && isPacificContext(lat, lng) &&
+     typeof PACIFIC_SPECIES_PREFS !== "undefined" && PACIFIC_SPECIES_PREFS[speciesId]){
+    prefs = PACIFIC_SPECIES_PREFS[speciesId];
+  }
 
   // ── Get the right weight table for this species category ──
   const W = predictWeightsFor(speciesId);
@@ -8754,6 +8760,27 @@ const PACIFIC_SPECIES = {
   yellowfin:    [28.0, 35.5],   // warm-water/warm-year SoCal yellowfin
   bonito:       [28.0, 40.0],   // Pacific bonito — abundant off SoCal
   mahi:         [28.0, 34.5],   // dorado — warm months off SoCal/Baja
+};
+
+// ── Pacific habitat overrides (West-Coast tuning pass) ──────────────────────
+// Some species (notably bluefin) behave very differently on the Pacific coast
+// than on the Atlantic/Gulf, so scoreCell swaps in these prefs ONLY when the
+// cell being scored is in Pacific waters (isPacificContext). The base
+// PREDICT_SPECIES_PREFS — and therefore every East-Coast/Gulf score — is left
+// completely untouched. Species not listed here fall back to their base prefs.
+const PACIFIC_SPECIES_PREFS = {
+  // SoCal bluefin is an OFFSHORE bank / shelf-edge / kelp-paddy fishery in
+  // warmer summer water than the Atlantic giants — not the Cape-Hatteras
+  // shallow fall-run pattern. So we:
+  //   • drop the shallow 18-40 m beach band (that lit up the whole coastal
+  //     strip and produced the solid-red nearshore blob),
+  //   • warm the temperature window to the 63-70 °F sweet spot (working to
+  //     74 °F, since they're caught well into the low-70s off SoCal), and
+  //   • key hard on the temperature/color break (breakPref "edge"), which —
+  //     because bluefin is an offshore, edge-seeking species — also unlocks
+  //     the SSH / surface-current FRONT-FUSION path so the map lights up real
+  //     fronts and offshore structure instead of every patch of warm water.
+  bluefin: { tempIdeal:[63,70], tempWorking:[60,74], chlorPref:"edge", depthBands:[[50,200],[200,900]], breakPref:"edge" },
 };
 
 // Bahamas / Bahama-Bank water east of the Florida crossings. Several US
