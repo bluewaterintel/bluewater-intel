@@ -3321,10 +3321,8 @@ const PORTS={
   "Port San Luis, CA":     {lat:35.171, lng:-120.754, short:"Port San Luis"},
   "Santa Barbara, CA":     {lat:34.403, lng:-119.692, short:"Santa Barbara"},
   "Ventura, CA":           {lat:34.248, lng:-119.264, short:"Ventura"},
-  "Channel Islands, CA":   {lat:34.165, lng:-119.227, short:"Channel Islands"},
   "Marina del Rey, CA":    {lat:33.978, lng:-118.451, short:"Marina del Rey"},
   "San Pedro, CA":         {lat:33.736, lng:-118.272, short:"San Pedro"},
-  "Long Beach, CA":        {lat:33.754, lng:-118.195, short:"Long Beach CA"},
   "Newport Beach, CA":     {lat:33.618, lng:-117.929, short:"Newport Beach"},
   "Dana Point, CA":        {lat:33.461, lng:-117.698, short:"Dana Point"},
   "Oceanside, CA":         {lat:33.195, lng:-117.385, short:"Oceanside"},
@@ -3384,7 +3382,9 @@ const SPECIES=[
   {id:"pompano",     name:"Florida Pompano",color:"#c4b078",cat:"inshore"},
   {id:"vermilion",   name:"Vermilion Snapper",color:"#c43030",cat:"nearshore"},
   {id:"lanesnap",    name:"Lane Snapper",   color:"#b04848",cat:"nearshore"},
-  {id:"yellowtail",  name:"Yellowtail Snapper",color:"#e8b820",cat:"nearshore"}];
+  {id:"yellowtail",  name:"Yellowtail Snapper",color:"#e8b820",cat:"nearshore"},
+  // ── PACIFIC / SOUTHERN CALIFORNIA SPECIES ───────────────────────────
+  {id:"cayellowtail",name:"California Yellowtail",color:"#d9a520",cat:"nearshore"}];
 
 // Canyon diamonds — labeled markers at verified 100fm center coords + dashed shelf break line
 // Sources: Tidal Fish Forum GPS, ROFFS oceanographic analysis, NOAA bathymetry, Wikipedia
@@ -5281,6 +5281,13 @@ const PREDICT_SPECIES_PREFS = {
   vermilion:    {tempIdeal:[66,82], tempWorking:[60,85], chlorPref:"any",     depthBands:[[30,120]],   breakPref:"any", demersal:true },
   lanesnap:     {tempIdeal:[70,82], tempWorking:[66,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
   yellowtail:   {tempIdeal:[74,84], tempWorking:[68,86], chlorPref:"low",     depthBands:[[10,40]],    breakPref:"any", demersal:true },
+  // ── PACIFIC / SOUTHERN CALIFORNIA ───────────────────────────────────
+  // California yellowtail (Seriola lalandi) — a structure-oriented pelagic jack
+  // that stacks on offshore banks, hard bottom, kelp edges and paddies from the
+  // Coronados/San Diego up the SoCal bight. Cool-temperate range (upper 50s-low
+  // 70s°F), roaming (not strictly demersal) so it scores over banks and the
+  // shelf edge, not just the bottom.
+  cayellowtail: {tempIdeal:[62,70], tempWorking:[58,74], chlorPref:"edge",    depthBands:[[10,90]],    breakPref:"any" },
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -5586,6 +5593,14 @@ const REGIONAL_SEASONS = {
     {centerLat: 28.5, centerLng: -88.5, radiusNm: 200, label: "Gulf spawning",
      // Mississippi/Desoto Canyons, East Breaks — spring spawning Apr-Jun
      seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:1,Aug:0,Sep:0,Oct:0,Nov:0,Dec:1}},
+    // ── PACIFIC — Southern California ──────────────────────────────────
+    // The modern SoCal Pacific-bluefin fishery (San Diego/Coronados up through
+    // the Channel Islands): building in late spring, prime summer through fall,
+    // tapering in winter. Centered offshore of San Diego with a radius that
+    // reaches the full CA port list. This region is ~2,000 nm from every
+    // Atlantic/Gulf region, so it never affects East Coast/Gulf scoring.
+    {centerLat: 32.8, centerLng: -118.5, radiusNm: 340, label: "Southern California",
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:2,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
   ],
 
   // ── BLACKFIN TUNA ────────────────────────────────────────────────────
@@ -7592,9 +7607,23 @@ function scoreCell(lat, lng, speciesId){
 // region (water-is-east-of-shore). The threshold roughly follows the FL
 // peninsula's tip and the FL panhandle.
 function isGulfContext(lat, lng){
+  // West of the Gulf of Mexico's western edge (~-98°) is the Pacific / Mexican
+  // Pacific — NOT the Gulf. Without this guard the old `lng < -84` rule wrongly
+  // classified the entire US West Coast as "Gulf", which broke Pacific ranges,
+  // shelf depth, and offshore reach for California ports.
+  if(lng < -98.5) return false;
   if(lng < -82.0 && lat < 30.7) return true;
   if(lng < -84.0) return true;
   return false;
+}
+
+// US Pacific (Southern/Central California) context. Kept fully separate from the
+// Atlantic/Gulf model so West-Coast fishing gets its own bite-map extent and
+// species list without changing any East Coast behavior. All US Pacific fishing
+// water sits west of ~-116.5°; no Atlantic/Gulf port is anywhere near that
+// longitude, so this can never trigger for an East Coast/Gulf location.
+function isPacificContext(lat, lng){
+  return lng != null && lng <= -116.5 && lat >= 28.0 && lat <= 42.5;
 }
 
 // ── Florida peninsula coast constraint ──────────────────────────────────────
@@ -8557,6 +8586,8 @@ const SPECIES_HABITAT = {
   vermilion:     ["nearshore"],                     // Deeper reefs
   lanesnap:      ["nearshore", "inshore"],          // Gulf reefs
   yellowtail:    ["nearshore", "inshore"],          // FL Keys reefs, classic Keys species
+  // ── PACIFIC / SOUTHERN CALIFORNIA ─────────────────────────────────
+  cayellowtail:  ["nearshore", "offshore"],         // SoCal banks, kelp edges, hard bottom, paddies
 };
 
 function speciesAllowedInWater(speciesId, waterType){
@@ -8695,8 +8726,34 @@ const SPECIES_LAT_RANGE = {
   cod:           [40.0, 45.0],   // GOM + Georges Bank
   haddock:       [40.0, 45.0],   // GOM + Georges Bank
   pollock:       [40.0, 45.0],   // GOM + Georges Bank
+  // ── PACIFIC-ONLY — never on the Atlantic or Gulf ─────────────────────
+  // California yellowtail is a Pacific fish. Null bands on both Atlantic/Gulf
+  // coasts exclude it everywhere East-Coast/Gulf; the Pacific gate below allows
+  // it in California water. (Without this it would have no entry and default to
+  // "allowed everywhere," lighting up the East Coast.)
+  cayellowtail:  {atlantic: null, gulf: null},
   // Everything else (yellowfin, blue marlin, mahi, wahoo, sailfish, etc.)
   // has no entry — they range coast-wide.
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// PACIFIC (SOUTHERN CALIFORNIA) SPECIES
+//
+// An explicit allow-list of species that actually occur in the US Pacific
+// (SoCal) fishery, each with its Pacific latitude band. Kept separate from the
+// Atlantic/Gulf ranges so that:
+//   • Atlantic/Gulf-only species (redfish, striper, snapper, etc.) never light
+//     up the bite map in Pacific water — anything NOT in this list is excluded.
+//   • Focused on the core West-Coast targets for now (yellowtail + bluefin),
+//     plus the obvious pelagics that share those grounds.
+// A value of [minLat, maxLat] bounds the species; the check runs only for
+// Pacific coordinates, so it can never affect the East Coast.
+const PACIFIC_SPECIES = {
+  bluefin:      [28.0, 42.0],   // Pacific bluefin — Baja/SoCal through central CA
+  cayellowtail: [28.0, 36.5],   // California yellowtail — SoCal banks/kelp; strays to Monterey
+  yellowfin:    [28.0, 35.5],   // warm-water/warm-year SoCal yellowfin
+  bonito:       [28.0, 40.0],   // Pacific bonito — abundant off SoCal
+  mahi:         [28.0, 34.5],   // dorado — warm months off SoCal/Baja
 };
 
 // Bahamas / Bahama-Bank water east of the Florida crossings. Several US
@@ -8725,6 +8782,13 @@ function speciesAllowedAtLat(speciesId, lat, lng){
      && lat >= BAHAMAS_EXCLUDE_BOX.latMin && lat <= BAHAMAS_EXCLUDE_BOX.latMax
      && lng >= BAHAMAS_EXCLUDE_BOX.lngMin && lng <= BAHAMAS_EXCLUDE_BOX.lngMax){
     return false;
+  }
+  // US Pacific (SoCal) water uses its own curated species list — handled here
+  // and returned early so none of the Atlantic/Gulf range logic below applies.
+  if(typeof isPacificContext === "function" && isPacificContext(lat, lng)){
+    const pac = PACIFIC_SPECIES[speciesId];
+    if(!pac) return false;                          // not a Pacific species → no bite here
+    return lat >= pac[0] && lat <= pac[1];
   }
   const range = SPECIES_LAT_RANGE[speciesId];
   if(!range) return true;
@@ -8849,8 +8913,16 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
 
   const port = (typeof activePort !== "undefined" && activePort) ? PORTS[activePort] : null;
   const maxRange = maxRangeForPort(port);
-  // Full-coast extent — used only as the fallback when no port is selected.
-  const LAT_MIN = 24.0, LAT_MAX = 43.5, LNG_MIN = -97.5, LNG_MAX = -68.5;
+  // Full-coast extent clamp. The Atlantic/Gulf box (default) is unchanged, so
+  // East Coast behavior is identical. Pacific ports get their own West-Coast
+  // box; without this the Atlantic-only longitude clamp collapsed the San Diego
+  // bounding box (min > max), producing zero cells and a hung ocean fetch — the
+  // "Generating heat map…" spinner that never finished.
+  const _pac = !!port && typeof isPacificContext === "function" && isPacificContext(port.lat, port.lng);
+  const LAT_MIN = _pac ? 29.0  : 24.0;
+  const LAT_MAX = _pac ? 42.5  : 43.5;
+  const LNG_MIN = _pac ? -126.0 : -97.5;
+  const LNG_MAX = _pac ? -116.0 : -68.5;
 
   // ── Scope the fine grid to the active port's fishing range ──────────────────
   // Scoring the whole coast at a fine step would cover tens of thousands of
@@ -15649,7 +15721,7 @@ const PORT_GROUPS = [
   {label:"Alabama / Mississippi", ports:["Dauphin Island, AL","Biloxi, MS"]},
   {label:"Louisiana", ports:["Venice, LA","Grand Isle, LA","Houma, LA","Morgan City, LA","New Iberia, LA","Cameron, LA","Lake Charles, LA"]},
   {label:"Texas Coast", ports:["Sabine Pass, TX","Galveston, TX","Freeport, TX","Matagorda, TX","Port O'Connor, TX","Port Aransas, TX","Port Mansfield, TX","Port Isabel, TX"]},
-  {label:"California", ports:["Monterey, CA","Moss Landing, CA","Morro Bay, CA","Port San Luis, CA","Santa Barbara, CA","Ventura, CA","Channel Islands, CA","Marina del Rey, CA","San Pedro, CA","Long Beach, CA","Newport Beach, CA","Dana Point, CA","Oceanside, CA","San Diego, CA"]}];
+  {label:"California", ports:["Monterey, CA","Moss Landing, CA","Morro Bay, CA","Port San Luis, CA","Santa Barbara, CA","Ventura, CA","Marina del Rey, CA","San Pedro, CA","Newport Beach, CA","Dana Point, CA","Oceanside, CA","San Diego, CA"]}];
 
 function buildPortDropdown(){
   let html="";
@@ -20461,7 +20533,7 @@ function tbClearFavs(){
       <div class="tut-step-num">1</div>
       <div class="tut-step-body">
         <div class="tut-step-title">Pick your home port</div>
-        <div class="tut-step-desc">Tap <b>HOME PORT</b> in the top bar and pick the port you're fishing from. The map zooms to your area and a range circle shows how far offshore is reachable. <b>97 ports</b> are supported from Portsmouth, NH to San Diego, CA (plus Bahamas crossings). Until you pick a port, no port shows as "home" on the chart — your home port appears as a larger gold anchor badge with a white ring, and fishing spots only load once a port is selected.</div>
+        <div class="tut-step-desc">Tap <b>HOME PORT</b> in the top bar and pick the port you're fishing from. The map zooms to your area and a range circle shows how far offshore is reachable. <b>95 ports</b> are supported from Portsmouth, NH to San Diego, CA (plus Bahamas crossings). Until you pick a port, no port shows as "home" on the chart — your home port appears as a larger gold anchor badge with a white ring, and fishing spots only load once a port is selected.</div>
       </div>
     </div>
 
