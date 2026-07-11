@@ -14849,12 +14849,97 @@ function openAdmin(){
   adminShowMsg("", true);
   adminLoadStats();
   adminLoadUsers(true);
+  adminLoadHealth();
 }
 
 function closeAdmin(){
   const ov = document.getElementById("admin-overlay");
   if(ov) ov.style.display = "none";
   document.body.style.overflow = "";
+}
+
+// ── System Health (dataset drift monitor) ──────────────────────────────────
+// Reads the public snapshot from the dataset-health edge function; the "Run
+// check now" button POSTs an owner-authed run so you can force a fresh probe.
+function healthFnBase(){
+  const cfg = window.BW_SUPABASE_CONFIG || window.BW_DATA_CONFIG || {};
+  return ((cfg.supabaseUrl || cfg.url || "https://mealpzwbjamkjdrsszqe.supabase.co").replace(/\/$/,"")) + "/functions/v1";
+}
+function healthDot(status){
+  const c = status === "red" ? "#ef4444" : status === "amber" ? "#f59e0b" : status === "green" ? "#22c55e" : "#94a3b8";
+  return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};box-shadow:0 0 6px ${c}88;flex-shrink:0"></span>`;
+}
+function healthOverallPill(status){
+  const map = { red:["#ef4444","Feed down"], amber:["#f59e0b","Degraded"], green:["#22c55e","All feeds healthy"], unknown:["#94a3b8","Not checked yet"] };
+  const [c,label] = map[status] || map.unknown;
+  return `<span class="admin-pill" style="background:${c}22;color:${c};border-color:${c}55">${label}</span>`;
+}
+function healthAge(h){
+  if(h == null) return "—";
+  if(h < 1) return Math.round(h*60) + "m";
+  if(h < 48) return Math.round(h) + "h";
+  return Math.round(h/24) + "d";
+}
+function adminRenderHealth(data){
+  const overallEl = document.getElementById("admin-health-overall");
+  if(overallEl) overallEl.innerHTML = data ? healthOverallPill(data.overall) : "";
+  const updEl = document.getElementById("admin-health-updated");
+  if(updEl) updEl.textContent = data && data.checked_at ? ("Last checked " + adminFmtDate(data.checked_at)) : "";
+  const el = document.getElementById("admin-health-list");
+  if(!el) return;
+  const rows = (data && data.datasets) || [];
+  if(!rows.length){ el.innerHTML = `<div class="admin-empty">No health data yet. Tap “Run check now”.</div>`; return; }
+  el.innerHTML = rows.map(d => `
+    <div class="admin-user-row" style="cursor:default;align-items:flex-start">
+      <div style="flex:1;min-width:0">
+        <div class="admin-user-email" style="display:flex;align-items:center;gap:8px">
+          ${healthDot(d.status)} ${escapeHtml(d.label || d.id)}
+          ${d.category === "supporting" ? `<span style="font-size:9.5px;color:#6b8cae;border:1px solid rgba(107,140,174,.4);border-radius:5px;padding:0 4px">SUPPORTING</span>` : ""}
+        </div>
+        <div class="admin-user-meta" style="margin-top:3px">
+          ${escapeHtml(d.message || "")}
+          ${d.age_hours != null ? ` · newest ${healthAge(d.age_hours)} old` : ""}
+          ${d.latency_ms != null ? ` · ${d.latency_ms}ms` : ""}
+          ${d.sample_value != null ? ` · sample ${d.sample_value}` : ""}
+        </div>
+      </div>
+    </div>`).join("");
+}
+async function adminLoadHealth(){
+  const el = document.getElementById("admin-health-list");
+  if(el) el.innerHTML = `<div class="admin-empty">Loading data-feed health…</div>`;
+  try {
+    const res = await fetch(`${healthFnBase()}/dataset-health`, { method: "GET" });
+    const j = await res.json().catch(() => ({}));
+    if(!res.ok) throw new Error(j.error || "Could not load health");
+    adminRenderHealth(j);
+  } catch(e){
+    if(el) el.innerHTML = `<div class="admin-empty">Health unavailable: ${escapeHtml(e.message || "error")}</div>`;
+  }
+}
+async function adminRunHealthCheck(){
+  const btn = document.getElementById("admin-health-run");
+  if(btn){ btn.disabled = true; btn.textContent = "Checking…"; }
+  try {
+    const cfg = window.BW_SUPABASE_CONFIG || window.BW_DATA_CONFIG || {};
+    const s = window.BW_AUTH && window.BW_AUTH._sb;
+    if(!s) throw new Error("Not ready");
+    const { data:{ session } } = await s.auth.getSession();
+    if(!session) throw new Error("Sign in required.");
+    const res = await fetch(`${healthFnBase()}/dataset-health`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}`, apikey: cfg.supabaseAnonKey || "" },
+      body: JSON.stringify({ action: "run" }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if(!res.ok) throw new Error(j.error || "Health check failed");
+    adminRenderHealth(j);
+    adminShowMsg(j.alert && j.alert.emailed ? "Health check done — alert emailed." : "Health check complete.", true);
+  } catch(e){
+    adminShowMsg(e.message || "Health check failed", false);
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = "Run check now"; }
+  }
 }
 
 // Show/hide the PRO badge and locked styling on Pro menu rows based on
@@ -21842,6 +21927,18 @@ function tbClearFavs(){
       <div class="admin-card-hdr">Profile &amp; subscription</div>
       <div id="admin-detail"><div class="admin-empty">Select a user to view and edit their profile.</div></div>
     </div>
+  </div>
+
+  <div class="admin-card" style="margin:14px 16px 20px">
+    <div class="admin-card-hdr" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+      <span>System Health <span id="admin-health-overall"></span></span>
+      <span style="display:flex;gap:8px">
+        <button type="button" class="admin-btn" onclick="adminLoadHealth()">Refresh</button>
+        <button type="button" class="admin-btn ok" id="admin-health-run" onclick="adminRunHealthCheck()">Run check now</button>
+      </span>
+    </div>
+    <div id="admin-health-updated" style="font-size:11px;color:#6bbfea;padding:0 4px 8px"></div>
+    <div id="admin-health-list"><div class="admin-empty">Loading data-feed health…</div></div>
   </div>
 </div>
 
