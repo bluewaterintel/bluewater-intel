@@ -63,6 +63,9 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   }
 
   const EMAIL_CONFIRM_REDIRECT = "https://app.bluewaterintel.com/?confirmed=1";
+  const PASSWORD_RECOVERY_REDIRECT = (typeof window !== "undefined" && window.location && /^https?:\/\/(localhost|127\.0\.0\.1)/.test(window.location.origin))
+    ? (window.location.origin + "/?recovery=1")
+    : "https://app.bluewaterintel.com/?recovery=1";
 
   async function signUp(email, password, meta) {
     const { data, error } = await client.auth.signUp({
@@ -112,7 +115,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
 
   async function resetPassword(email) {
     const { error } = await client.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
+      redirectTo: PASSWORD_RECOVERY_REDIRECT,
     });
     if (error) throw error;
   }
@@ -268,13 +271,17 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   client.auth.onAuthStateChange(async (event, session) => {
     emit(session ? session.user : null);
     if (event === "PASSWORD_RECOVERY") {
-      const pw = prompt("Enter a new password (min 6 characters):");
-      if (pw && pw.length >= 6) {
-        try {
-          await updatePassword(pw);
-          alert("Password updated. You're signed in.");
-        } catch (e) {
-          alert("Could not update password: " + (e.message || e));
+      if (typeof window.openPasswordRecoveryModal === "function") {
+        window.openPasswordRecoveryModal();
+      } else {
+        const pw = prompt("Enter a new password (min 6 characters):");
+        if (pw && pw.length >= 6) {
+          try {
+            await updatePassword(pw);
+            alert("Password updated. You're signed in.");
+          } catch (e) {
+            alert("Could not update password: " + (e.message || e));
+          }
         }
       }
     }

@@ -1625,6 +1625,12 @@ body.nav-open #ruler-readout{
         ✓ Welcome to Bluewater Intel! Your email is confirmed — sign in to get started.
       </div>
     </div>
+    <div id="bw-auth-reset-sent" style="display:none;margin-bottom:14px;padding:12px 14px;border-radius:10px;
+         background:rgba(56,189,248,.10);border:1px solid rgba(56,189,248,.35);text-align:center">
+      <div style="font-size:13px;font-weight:700;color:#7dd3fc;line-height:1.45">
+        Password reset email sent. Check your inbox (and spam folder) — the link expires in one hour.
+      </div>
+    </div>
     <div id="bw-auth-msg" style="display:none;font-size:12px;color:#fca5a5;margin-bottom:12px;text-align:center"></div>
     <label style="display:block;font-size:11px;color:#9ec5e8;margin-bottom:4px">Email</label>
     <input id="bw-auth-email" type="email" autocomplete="email" placeholder="you@example.com" style="
@@ -1655,6 +1661,18 @@ body.nav-open #ruler-readout{
   const forgotEl = document.getElementById("bw-auth-forgot");
 
   function showErr(t){ msg.textContent=t; msg.style.color="#fca5a5"; msg.style.display="block"; }
+  function showOk(t){
+    const resetSent = document.getElementById("bw-auth-reset-sent");
+    if(resetSent){ resetSent.style.display = "none"; }
+    msg.textContent=t; msg.style.color="#86efac"; msg.style.display="block";
+  }
+  function showResetSentBanner(){
+    if(welcome) welcome.style.display="none";
+    msg.style.display="none";
+    const resetSent = document.getElementById("bw-auth-reset-sent");
+    if(resetSent) resetSent.style.display="block";
+    showGate();
+  }
   function showWelcomeBanner(){
     if(welcome) welcome.style.display="block";
     showGate();
@@ -1741,6 +1759,23 @@ body.nav-open #ruler-readout{
         }, 100);
       }
     }
+    if (q.get("recovery") === "1") {
+      history.replaceState({}, "", location.origin + location.pathname);
+      const handleRecoveryReturn = () => {
+        if (typeof window.openPasswordRecoveryModal === "function") {
+          window.openPasswordRecoveryModal();
+        }
+      };
+      if (window.BW_AUTH) {
+        setTimeout(handleRecoveryReturn, 600);
+      } else {
+        const waitAuth = setInterval(() => {
+          if (!window.BW_AUTH) return;
+          clearInterval(waitAuth);
+          setTimeout(handleRecoveryReturn, 400);
+        }, 100);
+      }
+    }
   } catch (e) {}
 
   // Basic field validation so an empty submit can't fall through to an
@@ -1766,7 +1801,7 @@ body.nav-open #ruler-readout{
     if(!em) return showErr("Enter your email above first, then tap Forgot password.");
     try {
       await window.BW_AUTH.resetPassword(em);
-      showErr("Password reset email sent. Check your inbox.");
+      showResetSentBanner();
     } catch(err){ showErr(err?.message || "Could not send reset email."); }
   });
   document.getElementById("bw-auth-signup").addEventListener("click", () => {
@@ -1866,6 +1901,26 @@ body.nav-open #ruler-readout{
     <div id="verify-email-addr" style="font-size:14px;color:#86efac;font-weight:700;margin-bottom:22px word-break:break-all"></div>
     <div style="font-size:13px;color:#9ab3cc;line-height:1.6;margin-bottom:28px">Once you confirm your email, sign in to choose your plan (Free or Pro) and start fishing. Don't see it? Check your spam folder — it can take a minute to arrive.</div>
     <button type="button" onclick="verifyEmailContinue()" style="width:100%;max-width:280px;padding:13px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:16px;cursor:pointer;font-family:inherit;margin-bottom:14px">Continue to Sign In</button>
+  </div>
+</div>
+
+<!-- PASSWORD RECOVERY — set new password after email link ------------------- -->
+<div id="password-recovery-page" style="display:none;position:fixed;inset:0;z-index:100007;
+     background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
+     overflow-y:auto;padding:0;font-family:'Segoe UI',system-ui,sans-serif">
+  <div style="max-width:420px;margin:0 auto;padding:48px 26px 40px">
+    <div style="font-size:22px;font-weight:800;color:#f0f6ff;margin-bottom:8px;text-align:center">Choose a new password</div>
+    <div style="font-size:13px;color:#9ec5e8;line-height:1.55;margin-bottom:18px;text-align:center">You're signed in via the reset link. Enter a new password below.</div>
+    <div id="pw-recovery-msg" style="display:none;font-size:12px;margin-bottom:12px;text-align:center"></div>
+    <label style="display:block;font-size:11px;color:#9ec5e8;margin-bottom:4px">New password</label>
+    <input id="pw-recovery-new" type="password" autocomplete="new-password" placeholder="At least 6 characters" style="
+      width:100%;box-sizing:border-box;margin-bottom:12px;padding:11px 12px;border-radius:8px;border:1px solid rgba(107,191,234,.3);
+      background:#0a1628;color:#f0f6ff;font-size:14px;font-family:inherit"/>
+    <label style="display:block;font-size:11px;color:#9ec5e8;margin-bottom:4px">Confirm password</label>
+    <input id="pw-recovery-confirm" type="password" autocomplete="new-password" placeholder="Re-enter password" style="
+      width:100%;box-sizing:border-box;margin-bottom:18px;padding:11px 12px;border-radius:8px;border:1px solid rgba(107,191,234,.3);
+      background:#0a1628;color:#f0f6ff;font-size:14px;font-family:inherit"/>
+    <button type="button" onclick="submitPasswordRecovery()" style="width:100%;padding:13px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:15px;cursor:pointer;font-family:inherit">Update password</button>
   </div>
 </div>
 
@@ -2049,6 +2104,47 @@ body.nav-open #ruler-readout{
     const p = document.getElementById("verify-email-page"); if(p) p.style.display = "none";
     // Take them to the sign-in screen; they'll sign in after confirming.
     if(typeof showGate === "function") showGate();
+  };
+  window.openPasswordRecoveryModal = function(){
+    const p = document.getElementById("password-recovery-page");
+    const m = document.getElementById("pw-recovery-msg");
+    const gate = document.getElementById("bw-auth-gate");
+    const newEl = document.getElementById("pw-recovery-new");
+    const confirmEl = document.getElementById("pw-recovery-confirm");
+    if(m){ m.style.display = "none"; m.textContent = ""; }
+    if(newEl) newEl.value = "";
+    if(confirmEl) confirmEl.value = "";
+    if(gate) gate.style.display = "none";
+    if(p) p.style.display = "block";
+  };
+  window.closePasswordRecoveryModal = function(){
+    const p = document.getElementById("password-recovery-page");
+    if(p) p.style.display = "none";
+  };
+  window.submitPasswordRecovery = async function(){
+    const msg = document.getElementById("pw-recovery-msg");
+    const show = (text, ok) => {
+      if(!msg) return;
+      msg.style.display = "block";
+      msg.textContent = text;
+      msg.style.color = ok ? "#86efac" : "#fca5a5";
+    };
+    const newPw = (document.getElementById("pw-recovery-new").value || "");
+    const confirmPw = (document.getElementById("pw-recovery-confirm").value || "");
+    if(!newPw || newPw.length < 6){ show("Password must be at least 6 characters.", false); return; }
+    if(newPw !== confirmPw){ show("Passwords do not match.", false); return; }
+    if(!window.BW_AUTH || !window.BW_AUTH.updatePassword){
+      show("Sign-in service not ready. Refresh the page and try again.", false);
+      return;
+    }
+    try {
+      await window.BW_AUTH.updatePassword(newPw);
+      window.closePasswordRecoveryModal();
+      const gate = document.getElementById("bw-auth-gate");
+      if(gate) gate.style.display = "none";
+    } catch(e){
+      show(e?.message || "Could not update password. Request a new reset link and try again.", false);
+    }
   };
   window.submitCreateAccount = async function(){
     const msg = document.getElementById("ca-msg");
