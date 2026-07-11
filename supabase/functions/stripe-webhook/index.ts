@@ -6,9 +6,8 @@
 //   • subscription active/trialing/past_due/canceled → profiles.subscription_status
 //     + current_period_end
 //
-// (Legacy one-time "lifetime" and per-port "pack" purchases are discontinued and
-// no longer sold; any rows written before that change are still honored by
-// has_premium()/has_waypoint_access() in the database.)
+// (Legacy one-time "lifetime" and per-port "pack" purchases are discontinued.
+// Charted waypoints are included with Pro via has_premium()/has_waypoint_access().)
 //
 // Uses the SERVICE ROLE key (auto-injected) to bypass RLS — there is no user
 // context in a webhook. Customer→user mapping is via profiles.stripe_customer_id

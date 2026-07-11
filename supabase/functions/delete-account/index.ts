@@ -49,7 +49,6 @@ async function deleteUserData(admin: ReturnType<typeof createClient>, userId: st
   { table: "user_catches", column: "user_id" },
   { table: "user_logs", column: "user_id" },
   { table: "fishing_reports", column: "user_id" },
-  { table: "waypoint_pack_entitlements", column: "user_id" },
   { table: "user_brief_usage", column: "user_id" },
   { table: "profiles", column: "id" },
   ] as const;

@@ -1230,6 +1230,41 @@ body.nav-open #ruler-readout{
 .brief-history-btn--active{border-color:rgba(168,85,247,.55);background:rgba(168,85,247,.12)}
 .brief-history-btn-title{font-size:12.5px;font-weight:700}
 .brief-history-btn-meta{font-size:11px;color:#9ec5e8;margin-top:3px;line-height:1.35}
+/* Owner admin panel */
+#admin-overlay{color:#e8f4ff;font-family:'Segoe UI',system-ui,Arial,sans-serif}
+.admin-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:14px 20px}
+.admin-stat{padding:10px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.18);border-radius:10px}
+.admin-stat-val{font-size:20px;font-weight:800;color:#f0f6ff;line-height:1.1}
+.admin-stat-lbl{font-size:9px;color:#9ec5e8;letter-spacing:.08em;text-transform:uppercase;margin-top:4px;font-weight:700}
+.admin-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:0 20px 12px;align-items:center}
+.admin-search{flex:1;min-width:180px;padding:10px 12px;border-radius:9px;border:1px solid rgba(125,211,252,.28);background:rgba(255,255,255,.06);color:#f0f6ff;font-family:inherit;font-size:13px}
+.admin-btn{padding:9px 12px;border-radius:9px;border:1px solid rgba(125,211,252,.35);background:rgba(56,189,248,.12);color:#7dd3fc;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.admin-btn:hover{background:rgba(56,189,248,.2)}
+.admin-btn.danger{background:rgba(220,38,38,.12);border-color:rgba(220,38,38,.4);color:#f87171}
+.admin-btn.ok{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.4);color:#86efac}
+.admin-layout{display:grid;grid-template-columns:1fr;gap:12px;margin:0 20px 24px}
+@media (min-width:900px){ .admin-layout{grid-template-columns:1.1fr .9fr} }
+.admin-card{background:rgba(255,255,255,.04);border:1px solid rgba(107,191,234,.18);border-radius:12px;overflow:hidden}
+.admin-card-hdr{padding:10px 14px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#7dd3fc;border-bottom:1px solid rgba(107,191,234,.12)}
+.admin-user-row{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;transition:background .12s}
+.admin-user-row:hover,.admin-user-row.sel{background:rgba(125,211,252,.08)}
+.admin-user-row:last-child{border-bottom:none}
+.admin-user-email{font-size:13px;font-weight:700;color:#f0f6ff;word-break:break-all}
+.admin-user-meta{font-size:11px;color:#9ec5e8;margin-top:3px;line-height:1.4}
+.admin-pill{display:inline-block;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.04em;margin-right:4px}
+.admin-pill.active{background:rgba(34,197,94,.18);color:#86efac;border:1px solid rgba(34,197,94,.35)}
+.admin-pill.trial{background:rgba(168,85,247,.15);color:#c084fc;border:1px solid rgba(168,85,247,.35)}
+.admin-pill.free{background:rgba(255,255,255,.06);color:#9ec5e8;border:1px solid rgba(255,255,255,.12)}
+.admin-pill.owner{background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.35)}
+.admin-form{padding:14px}
+.admin-field{margin-bottom:10px}
+.admin-field label{display:block;font-size:10px;color:#9ec5e8;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.admin-field input,.admin-field select{width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1px solid rgba(125,211,252,.25);background:rgba(255,255,255,.06);color:#f0f6ff;font-family:inherit;font-size:13px}
+.admin-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.admin-empty{padding:24px 14px;text-align:center;color:#9ec5e8;font-size:13px}
+.admin-msg{margin:0 20px 10px;padding:10px 12px;border-radius:9px;font-size:12px;display:none}
+.admin-msg.err{display:block;background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.35);color:#fca5a5}
+.admin-msg.ok{display:block;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#86efac}
 /* Inline panel copy of the finished brief (dark, rendered — no typewriter serif) */
 #brief-out.brief-rendered{background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.2);border-radius:12px;padding:14px 16px}
 .brief-view-btn{
@@ -2376,6 +2411,16 @@ body.nav-open #ruler-readout{
     <!-- Rendered dynamically by renderAccountSection() based on USER_PREFS.account.
          Logged out: shows Sign In / Create Account. Logged in: name + Sign Out. -->
     <div id="nav-account" style="padding:12px 18px;border-bottom:1px solid rgba(107,191,234,.12);background:rgba(7,17,33,.4)"></div>
+    <div id="nav-admin-wrap" style="display:none;padding:0 14px 10px;border-bottom:1px solid rgba(107,191,234,.12)">
+      <button type="button" class="nav-row" onclick="navOpenFromMenu(openAdmin)" style="margin:0">
+        <span class="nav-ico" style="background:rgba(251,191,36,.18)">🛡</span>
+        <span class="nav-row-body">
+          <span class="nav-row-title">User Admin</span>
+          <span class="nav-row-sub">Profiles, subscriptions &amp; access</span>
+        </span>
+        <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+      </button>
+    </div>
 
     <div style="padding:6px 14px 14px">
 
@@ -4607,6 +4652,7 @@ async function initMap(){
   // Populate the account section so it's correct from first menu open.
   if(typeof renderAccountSection === "function") renderAccountSection();
   if(typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
+  if(typeof applyAdminNavVisibility === "function") applyAdminNavVisibility();
 
   // Initialize offline tile caching (Service Worker)
   initOfflineCache();
@@ -14391,8 +14437,7 @@ const WP_TYPE_STYLE = {
 // ── Entitlement / freemium gating ────────────────────────────────────────────
 // Charted fishing waypoints: Pro subscribers (trial or paid), lifetime, and
 // owners get the full set for their port radius via pack_waypoints_within RPC.
-// Free users see none (only their personal waypoints). Legacy per-port pack
-// purchases still grant access if subscription lapses.
+// Free users see none (only their personal waypoints).
 const BW_OWNER_EMAILS = ["rnovakwvu@gmail.com", "natalienovakm@gmail.com"];
 // BW_PREMIUM = app features (heat map, ocean/wind layers, forecast, etc.) —
 //   granted to a 7-day trial, active subscription, or owner.
@@ -14400,30 +14445,33 @@ const BW_OWNER_EMAILS = ["rnovakwvu@gmail.com", "natalienovakm@gmail.com"];
 //   only (the trial does NOT include the brief).
 let BW_PREMIUM = false;
 let BW_PAID = false;
+let BW_ADMIN = false;
 // Premium-gated map layers (everything outside the free baseline).
 const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "altimetry", "radar", "ramps", "loran", "waypoints"];
 
 async function refreshEntitlement(){
-  let premium = false, paid = false;
+  let premium = false, paid = false, admin = false;
   try {
     const u = (window.BW_AUTH && window.BW_AUTH.getUser) ? window.BW_AUTH.getUser() : null;
     const email = (u && u.email) ? u.email.toLowerCase() : "";
     if(email && BW_OWNER_EMAILS.includes(email)){
-      premium = true; paid = true;                     // owner fast-path
+      premium = true; paid = true; admin = true;                     // owner fast-path
     } else if(u && window.BW_AUTH && window.BW_AUTH._sb){
       const { data: p } = await window.BW_AUTH._sb
         .from("profiles").select("is_owner, subscription_status, current_period_end").maybeSingle();
       if(p){
         const st = p.subscription_status;
         const cpe = p.current_period_end ? new Date(p.current_period_end).getTime() : 0;
-        if(p.is_owner){ premium = true; paid = true; }              // owner: full access
+        if(p.is_owner){ premium = true; paid = true; admin = true; }              // owner: full access
         else if(st === "active"){ premium = true; paid = true; }
         else if(st === "trialing"){ premium = true; paid = false; }   // trial: app yes, brief no
         else if(cpe > Date.now() && st !== "canceled"){ premium = true; paid = true; } // grace period
       }
+      if(!admin && email && BW_OWNER_EMAILS.includes(email)) admin = true;
     }
-  } catch(e){ premium = false; paid = false; }
-  BW_PREMIUM = premium; BW_PAID = paid;
+  } catch(e){ premium = false; paid = false; admin = false; }
+  BW_PREMIUM = premium; BW_PAID = paid; BW_ADMIN = admin;
+  applyAdminNavVisibility();
   applyEntitlementGating();
   if(typeof drawWaypoints === "function" && layerVis.waypoints) drawWaypoints();
   if(typeof renderNavPlan === "function") renderNavPlan();
@@ -14468,6 +14516,263 @@ function applyEntitlementGating(){
     }
   }
   if(changed && typeof updateOceanLegend === "function") updateOceanLegend();
+}
+
+function applyAdminNavVisibility(){
+  const wrap = document.getElementById("nav-admin-wrap");
+  if(wrap) wrap.style.display = BW_ADMIN ? "block" : "none";
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// OWNER ADMIN — profiles & subscription management (server-gated edge function)
+// ════════════════════════════════════════════════════════════════════════════
+const _adminState = { q: "", users: [], selectedId: null, offset: 0, limit: 40, stats: null, loading: false };
+
+async function adminApi(body){
+  const cfg = window.BW_SUPABASE_CONFIG || window.BW_DATA_CONFIG || {};
+  const base = ((cfg.supabaseUrl || cfg.url || "https://mealpzwbjamkjdrsszqe.supabase.co").replace(/\/$/,"")) + "/functions/v1";
+  const s = window.BW_AUTH && window.BW_AUTH._sb;
+  if(!s) throw new Error("Not ready");
+  const { data:{ session } } = await s.auth.getSession();
+  if(!session) throw new Error("Sign in required.");
+  const res = await fetch(`${base}/admin`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+      apikey: cfg.supabaseAnonKey || "",
+    },
+    body: JSON.stringify(body),
+  });
+  const j = await res.json().catch(() => ({}));
+  if(!res.ok) throw new Error(j.error || "Admin request failed");
+  return j;
+}
+
+function adminStatusPill(st, isOwner){
+  if(isOwner) return `<span class="admin-pill owner">OWNER</span>`;
+  const s = (st || "none").toLowerCase();
+  if(s === "active" || s === "lifetime") return `<span class="admin-pill active">${s.toUpperCase()}</span>`;
+  if(s === "trialing") return `<span class="admin-pill trial">TRIAL</span>`;
+  return `<span class="admin-pill free">${s === "none" ? "FREE" : s.toUpperCase()}</span>`;
+}
+
+function adminFmtDate(iso){
+  if(!iso) return "—";
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+}
+
+function adminShowMsg(text, ok){
+  const el = document.getElementById("admin-msg");
+  if(!el) return;
+  if(!text){ el.style.display = "none"; el.textContent = ""; el.className = "admin-msg"; return; }
+  el.textContent = text;
+  el.className = "admin-msg " + (ok ? "ok" : "err");
+  el.style.display = "block";
+}
+
+function adminSelectedUser(){
+  return _adminState.users.find(u => u.id === _adminState.selectedId) || null;
+}
+
+function adminRenderDetail(){
+  const el = document.getElementById("admin-detail");
+  if(!el) return;
+  const u = adminSelectedUser();
+  if(!u){
+    el.innerHTML = `<div class="admin-empty">Select a user to view and edit their profile.</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="admin-form">
+      <div style="font-size:13px;font-weight:700;color:#f0f6ff;margin-bottom:4px;word-break:break-all">${escapeHtml(u.email || u.id)}</div>
+      <div style="font-size:11px;color:#9ec5e8;margin-bottom:12px;line-height:1.45">
+        Joined ${adminFmtDate(u.created_at)} · Last sign-in ${adminFmtDate(u.last_sign_in_at)}<br>
+        Briefs today: <b style="color:#7dd3fc">${u.briefs_today}</b> · Stripe: ${u.stripe_customer_id ? escapeHtml(u.stripe_customer_id) : "—"}
+      </div>
+      <div class="admin-actions" style="margin-top:0;margin-bottom:12px">
+        <button type="button" class="admin-btn ok" onclick="adminPreset('grant_pro')">Grant Pro (1yr)</button>
+        <button type="button" class="admin-btn" onclick="adminPreset('grant_trial')">Grant Trial (7d)</button>
+        <button type="button" class="admin-btn" onclick="adminPreset('grant_owner')">Make Owner</button>
+        <button type="button" class="admin-btn danger" onclick="adminPreset('revoke')">Revoke Access</button>
+      </div>
+      <div class="admin-field"><label>Display name</label><input id="admin-f-name" value="${escapeHtml(u.display_name || "")}"></div>
+      <div class="admin-field"><label>Home port</label><input id="admin-f-port" value="${escapeHtml(u.home_port || "")}"></div>
+      <div class="admin-field"><label>Subscription status</label>
+        <select id="admin-f-status">
+          ${["none","trialing","active","canceled","lifetime","past_due"].map(s =>
+            `<option value="${s}" ${u.subscription_status===s?"selected":""}>${s}</option>`).join("")}
+        </select>
+      </div>
+      <div class="admin-field"><label>Billing interval</label>
+        <select id="admin-f-interval">
+          <option value="" ${!u.subscription_interval?"selected":""}>—</option>
+          <option value="month" ${u.subscription_interval==="month"?"selected":""}>month</option>
+          <option value="year" ${u.subscription_interval==="year"?"selected":""}>year</option>
+        </select>
+      </div>
+      <div class="admin-field"><label>Current period end</label><input id="admin-f-cpe" type="datetime-local" value="${u.current_period_end ? new Date(u.current_period_end).toISOString().slice(0,16) : ""}"></div>
+      <div class="admin-field"><label>Trial end</label><input id="admin-f-trial" type="datetime-local" value="${u.trial_end ? new Date(u.trial_end).toISOString().slice(0,16) : ""}"></div>
+      <div class="admin-field"><label>Stripe customer ID</label><input id="admin-f-stripe" value="${escapeHtml(u.stripe_customer_id || "")}"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#cfe5ff;margin:8px 0 12px">
+        <input type="checkbox" id="admin-f-owner" ${u.is_owner ? "checked" : ""} style="width:16px;height:16px"> Owner account (full access, unlimited briefs)
+      </label>
+      <div class="admin-actions">
+        <button type="button" class="admin-btn ok" onclick="adminSaveUser()">Save changes</button>
+      </div>
+    </div>`;
+}
+
+function adminRenderList(){
+  const el = document.getElementById("admin-user-list");
+  if(!el) return;
+  if(_adminState.loading){
+    el.innerHTML = `<div class="admin-empty">Loading users…</div>`;
+    return;
+  }
+  if(!_adminState.users.length){
+    el.innerHTML = `<div class="admin-empty">No users found.</div>`;
+    return;
+  }
+  el.innerHTML = _adminState.users.map(u => `
+    <div class="admin-user-row ${_adminState.selectedId===u.id?"sel":""}" onclick="adminSelectUser('${u.id}')">
+      <div style="flex:1;min-width:0">
+        <div class="admin-user-email">${escapeHtml(u.email || u.id)}</div>
+        <div class="admin-user-meta">
+          ${adminStatusPill(u.subscription_status, u.is_owner)}
+          ${u.subscription_interval ? `<span>${u.subscription_interval}</span> · ` : ""}
+          ${u.display_name ? escapeHtml(u.display_name) + " · " : ""}
+          briefs ${u.briefs_today}/2
+        </div>
+      </div>
+    </div>`).join("");
+}
+
+function adminRenderStats(){
+  const el = document.getElementById("admin-stats");
+  const s = _adminState.stats;
+  if(!el || !s) return;
+  el.innerHTML = `
+    <div class="admin-stat"><div class="admin-stat-val">${s.total_auth_users ?? "—"}</div><div class="admin-stat-lbl">Auth users</div></div>
+    <div class="admin-stat"><div class="admin-stat-val">${s.active ?? 0}</div><div class="admin-stat-lbl">Active Pro</div></div>
+    <div class="admin-stat"><div class="admin-stat-val">${s.trialing ?? 0}</div><div class="admin-stat-lbl">Trialing</div></div>
+    <div class="admin-stat"><div class="admin-stat-val">${s.free ?? 0}</div><div class="admin-stat-lbl">Free</div></div>
+    <div class="admin-stat"><div class="admin-stat-val">${s.owners ?? 0}</div><div class="admin-stat-lbl">Owners</div></div>`;
+}
+
+async function adminLoadUsers(resetOffset){
+  if(resetOffset) _adminState.offset = 0;
+  _adminState.loading = true;
+  adminRenderList();
+  try {
+    const data = await adminApi({ action: "list", q: _adminState.q, limit: _adminState.limit, offset: _adminState.offset });
+    _adminState.users = data.users || [];
+    if(!_adminState.selectedId && _adminState.users.length) _adminState.selectedId = _adminState.users[0].id;
+    else if(_adminState.selectedId && !_adminState.users.some(u => u.id === _adminState.selectedId)){
+      _adminState.selectedId = _adminState.users[0] ? _adminState.users[0].id : null;
+    }
+  } catch(e){
+    adminShowMsg(e.message || "Could not load users", false);
+    _adminState.users = [];
+  } finally {
+    _adminState.loading = false;
+    adminRenderList();
+    adminRenderDetail();
+  }
+}
+
+async function adminLoadStats(){
+  try {
+    const data = await adminApi({ action: "stats" });
+    _adminState.stats = data.stats || null;
+    adminRenderStats();
+  } catch(e){ /* non-fatal */ }
+}
+
+function adminSelectUser(id){
+  _adminState.selectedId = id;
+  adminRenderList();
+  adminRenderDetail();
+}
+
+function adminOnSearchInput(v){
+  _adminState.q = (v || "").trim();
+}
+
+let _adminSearchTimer = null;
+function adminOnSearch(v){
+  adminOnSearchInput(v);
+  clearTimeout(_adminSearchTimer);
+  _adminSearchTimer = setTimeout(() => adminLoadUsers(true), 350);
+}
+
+function adminReadPatch(){
+  const u = adminSelectedUser();
+  if(!u) return null;
+  const cpe = document.getElementById("admin-f-cpe");
+  const trial = document.getElementById("admin-f-trial");
+  return {
+    display_name: (document.getElementById("admin-f-name") || {}).value || null,
+    home_port: (document.getElementById("admin-f-port") || {}).value || null,
+    subscription_status: (document.getElementById("admin-f-status") || {}).value || "none",
+    subscription_interval: (document.getElementById("admin-f-interval") || {}).value || null,
+    current_period_end: cpe && cpe.value ? new Date(cpe.value).toISOString() : null,
+    trial_end: trial && trial.value ? new Date(trial.value).toISOString() : null,
+    stripe_customer_id: (document.getElementById("admin-f-stripe") || {}).value || null,
+    is_owner: !!(document.getElementById("admin-f-owner") || {}).checked,
+  };
+}
+
+async function adminSaveUser(){
+  const u = adminSelectedUser();
+  if(!u) return;
+  try {
+    const patch = adminReadPatch();
+    const data = await adminApi({ action: "update", userId: u.id, patch });
+    if(data.user){
+      const idx = _adminState.users.findIndex(x => x.id === u.id);
+      if(idx >= 0) _adminState.users[idx] = data.user;
+      adminRenderList();
+      adminRenderDetail();
+    }
+    adminShowMsg("Saved.", true);
+    adminLoadStats();
+  } catch(e){ adminShowMsg(e.message || "Save failed", false); }
+}
+
+async function adminPreset(preset){
+  const u = adminSelectedUser();
+  if(!u) return;
+  const labels = { grant_pro: "Grant Pro for 1 year", grant_trial: "Grant 7-day trial", grant_owner: "Make owner", revoke: "Revoke all access" };
+  if(!confirm(`${labels[preset] || preset} for ${u.email || u.id}?`)) return;
+  try {
+    const data = await adminApi({ action: "preset", userId: u.id, preset });
+    if(data.user){
+      const idx = _adminState.users.findIndex(x => x.id === u.id);
+      if(idx >= 0) _adminState.users[idx] = data.user;
+      adminRenderList();
+      adminRenderDetail();
+    }
+    adminShowMsg("Updated.", true);
+    adminLoadStats();
+  } catch(e){ adminShowMsg(e.message || "Update failed", false); }
+}
+
+function openAdmin(){
+  if(!BW_ADMIN){ adminShowMsg("Admin access required.", false); return; }
+  const ov = document.getElementById("admin-overlay");
+  if(!ov) return;
+  ov.style.display = "block";
+  document.body.style.overflow = "hidden";
+  adminShowMsg("", true);
+  adminLoadStats();
+  adminLoadUsers(true);
+}
+
+function closeAdmin(){
+  const ov = document.getElementById("admin-overlay");
+  if(ov) ov.style.display = "none";
+  document.body.style.overflow = "";
 }
 
 // Show/hide the PRO badge and locked styling on Pro menu rows based on
@@ -14778,9 +15083,9 @@ let mcePort = null;            // selected port for export — no default; user 
 
 // Charted waypoints for an explicit port via the server-enforced RPC.
 // Returns { rows, entitled, total } — the RPC returns the full set only for
-// entitled users (owner / Pro subscriber / legacy port-pack owner); non-entitled
-// callers get no positions. For a locked user we still surface the COUNT (via the
-// count-only pack_port_count RPC) so they can see how many a subscription unlocks.
+// entitled users (owner / Pro subscriber); non-entitled callers get no positions.
+// For a locked user we still surface the COUNT (via pack_port_count RPC) so they
+// can see how many a subscription unlocks.
 async function mceChartedRows(portName, radiusNm){
   const p = PORTS[portName];
   const sbc = window.BW_AUTH && window.BW_AUTH._sb;
@@ -14791,8 +15096,7 @@ async function mceChartedRows(portName, radiusNm){
     });
     if(error) throw error;
     const rows = (data || []).map(r => ({ name: r.name, lat: r.lat, lng: r.lng, t: r.type_code, nm: r.nm }));
-    // Premium/owner flag OR the RPC actually returning positions (legacy pack) = entitled.
-    const entitled = (typeof BW_PREMIUM !== "undefined" && BW_PREMIUM) || rows.length > 0;
+    const entitled = (typeof BW_PREMIUM !== "undefined" && BW_PREMIUM);
     let total = rows.length;
     if(!entitled){ try { const { data: c } = await sbc.rpc("pack_port_count", { p_lat: p.lat, p_lng: p.lng }); if(typeof c === "number") total = c; } catch(e){} }
     return { rows, entitled, total };
@@ -16765,6 +17069,7 @@ function toggleNav(){
   // any state changes (sign-in/out) since last open.
   if(opening) renderAccountSection();
   if(opening && typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
+  if(opening && typeof applyAdminNavVisibility === "function") applyAdminNavVisibility();
 }
 function closeNav(){
   document.getElementById('nav-menu').style.display='none';
@@ -21353,6 +21658,53 @@ function tbClearFavs(){
 
   <!-- Content sections (filled by renderRegulations) -->
   <div id="regs-content" style="padding:0 20px 30px"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     OWNER ADMIN — profiles & subscription management
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="admin-overlay" style="
+  display:none;position:fixed;inset:0;z-index:100006;
+  background:#0a1a2e;color:#e8f4ff;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+">
+  <div style="
+    position:sticky;top:0;z-index:10;
+    background:linear-gradient(180deg,#0a1a2e,#0f2444);
+    border-bottom:1px solid rgba(107,191,234,.18);
+    padding:12px 16px;display:flex;align-items:center;gap:12px;
+    box-shadow:0 4px 16px rgba(0,0,0,.5);
+  ">
+    <button onclick="navBack(closeAdmin)" aria-label="Back to menu" style="
+      width:38px;height:38px;flex-shrink:0;
+      background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
+      color:#cfe5ff;border-radius:10px;
+      display:flex;align-items:center;justify-content:center;cursor:pointer;
+    "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:17px;font-weight:800;color:#f0f6ff">🛡 User Admin</div>
+      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500">Profiles · subscriptions · access</div>
+    </div>
+  </div>
+
+  <div id="admin-msg" class="admin-msg"></div>
+  <div id="admin-stats" class="admin-stat-grid"></div>
+
+  <div class="admin-toolbar">
+    <input id="admin-search" class="admin-search" type="search" placeholder="Search email, name, or user ID…" oninput="adminOnSearch(this.value)">
+    <button type="button" class="admin-btn" onclick="adminLoadUsers(true)">Refresh</button>
+  </div>
+
+  <div class="admin-layout">
+    <div class="admin-card">
+      <div class="admin-card-hdr">Users</div>
+      <div id="admin-user-list"></div>
+    </div>
+    <div class="admin-card">
+      <div class="admin-card-hdr">Profile &amp; subscription</div>
+      <div id="admin-detail"><div class="admin-empty">Select a user to view and edit their profile.</div></div>
+    </div>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
