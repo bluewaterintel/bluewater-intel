@@ -2542,35 +2542,11 @@ body.nav-open #ruler-readout{
 
       <div class="nav-section-label">My Tools</div>
       <div class="nav-group">
-        <button type="button" class="nav-row" onclick="navOpenFromMenu(openRecentBriefs)">
-          <span class="nav-ico">🤖</span>
-          <span class="nav-row-body">
-            <span class="nav-row-title">Recent Captain's Briefs</span>
-            <span class="nav-row-sub" id="nav-brief-recall-sub">Reopen briefs from the last 48 hours</span>
-          </span>
-          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
-        </button>
-        <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openDownloadTrip)">
-          <span class="nav-ico">⬇</span>
-          <span class="nav-row-body">
-            <span class="nav-row-title">Download My Trip</span>
-            <span class="nav-row-sub">Full offline snapshot — bite map, tides, waypoints &amp; charts</span>
-          </span>
-          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
-        </button>
         <button type="button" class="nav-row" onclick="navOpenFromMenu(openMyCatches)">
           <span class="nav-ico">🎣</span>
           <span class="nav-row-body">
             <span class="nav-row-title">My Catches</span>
             <span class="nav-row-sub">Personal catch log with conditions auto-filled</span>
-          </span>
-          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
-        </button>
-        <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openWaypoints)">
-          <span class="nav-ico">📍</span>
-          <span class="nav-row-body">
-            <span class="nav-row-title">Waypoints &amp; Structure</span>
-            <span class="nav-row-sub">Wrecks, reefs, ledges · import/export GPX</span>
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
@@ -2587,6 +2563,30 @@ body.nav-open #ruler-readout{
           <span class="nav-row-body">
             <span class="nav-row-title">Virtual Tackle Box</span>
             <span class="nav-row-sub">Smart lure &amp; bait recommendations by conditions</span>
+          </span>
+          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+        </button>
+        <button type="button" class="nav-row" data-paid="1" onclick="navOpenFromMenu(openRecentBriefs)">
+          <span class="nav-ico">🤖</span>
+          <span class="nav-row-body">
+            <span class="nav-row-title">Recent Captain's Briefs</span>
+            <span class="nav-row-sub" id="nav-brief-recall-sub">Reopen briefs from the last 48 hours</span>
+          </span>
+          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+        </button>
+        <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openDownloadTrip)">
+          <span class="nav-ico">⬇</span>
+          <span class="nav-row-body">
+            <span class="nav-row-title">Download My Trip</span>
+            <span class="nav-row-sub">Full offline snapshot — bite map, tides, waypoints &amp; charts</span>
+          </span>
+          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+        </button>
+        <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openWaypoints)">
+          <span class="nav-ico">📍</span>
+          <span class="nav-row-body">
+            <span class="nav-row-title">Waypoints &amp; Structure</span>
+            <span class="nav-row-sub">Wrecks, reefs, ledges · import/export GPX</span>
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
@@ -3381,7 +3381,7 @@ body.nav-open #ruler-readout{
 
       <hr class="layers-divider">
       <div class="layers-section">AI CAPTAIN'S BRIEF</div>
-      <button type="button" id="settings-recent-briefs-btn" onclick="openRecentBriefs()" style="
+      <button type="button" id="settings-recent-briefs-btn" data-paid="1" onclick="openRecentBriefs()" style="
         width:100%;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);
         color:#7dd3fc;padding:11px 12px;border-radius:8px;font-size:13px;font-weight:700;
         cursor:pointer;font-family:inherit;margin-top:4px;text-align:left;
@@ -11630,7 +11630,7 @@ function renderExplainerMain(){
   const div = document.getElementById("predict-explainer");
   if(!div || !_explainerState) return;
   const {cell, species} = _explainerState;
-  const savedBriefCount = briefHistoryLoad().length;
+  const savedBriefCount = BW_PAID ? briefHistoryLoad().length : 0;
 
   const factorBars = cell.factors.map(f => {
     const pct = Math.round((f.score / 0.30) * 100);
@@ -14873,25 +14873,50 @@ function closeAdmin(){
 
 // Show/hide the PRO badge and locked styling on Pro menu rows based on
 // entitlement. Free users see a yellow "PRO" tag on Fishing Reports and
-// Waypoints; Pro users see them normally.
+// Waypoints; Pro users see them normally. Paid-only rows (brief recall) use
+// BW_PAID so trial users stay locked out of the AI brief features.
+function applyNavRowLock(row, entitled){
+  let badge = row.querySelector(".pro-badge");
+  if(!entitled){
+    row.classList.add("pro-locked");
+    if(!badge){
+      badge = document.createElement("span");
+      badge.className = "pro-badge";
+      badge.textContent = "★ PRO";
+      const chev = row.querySelector(".nav-chevron");
+      if(chev) row.insertBefore(badge, chev); else row.appendChild(badge);
+    }
+  } else {
+    row.classList.remove("pro-locked");
+    if(badge) badge.remove();
+  }
+}
 function applyProMenuBadges(){
-  const rows = document.querySelectorAll('.nav-row[data-pro="1"]');
-  rows.forEach(row => {
-    let badge = row.querySelector(".pro-badge");
-    if(!BW_PREMIUM){
-      row.classList.add("pro-locked");
+  document.querySelectorAll('.nav-row[data-pro="1"]').forEach(row => {
+    applyNavRowLock(row, BW_PREMIUM);
+  });
+  document.querySelectorAll('.nav-row[data-paid="1"]').forEach(row => {
+    applyNavRowLock(row, BW_PAID);
+  });
+  const settingsBriefBtn = document.getElementById("settings-recent-briefs-btn");
+  if(settingsBriefBtn){
+    let badge = settingsBriefBtn.querySelector(".pro-badge");
+    if(!BW_PAID){
+      settingsBriefBtn.classList.add("pro-locked");
+      settingsBriefBtn.style.opacity = ".45";
       if(!badge){
         badge = document.createElement("span");
         badge.className = "pro-badge";
         badge.textContent = "★ PRO";
-        const chev = row.querySelector(".nav-chevron");
-        if(chev) row.insertBefore(badge, chev); else row.appendChild(badge);
+        badge.style.float = "right";
+        settingsBriefBtn.appendChild(badge);
       }
     } else {
-      row.classList.remove("pro-locked");
+      settingsBriefBtn.classList.remove("pro-locked");
+      settingsBriefBtn.style.opacity = "";
       if(badge) badge.remove();
     }
-  });
+  }
   // Premium MAP LAYER rows (Bite Map, SST, chlorophyll, radar, wind): tag each
   // label with a PRO badge for free users so it's clear they're subscription
   // features. The toggle handler already opens the upgrade modal on tap.
@@ -15873,6 +15898,7 @@ function openBriefModal(){
   body.scrollTop = 0;
 }
 function openRecentBriefs(){
+  if(!requirePaid()) return;
   const settings = document.getElementById("settings-modal");
   if(settings && settings.classList.contains("open") && typeof toggleSettingsPanel === "function"){
     toggleSettingsPanel();
@@ -15880,6 +15906,7 @@ function openRecentBriefs(){
   openRecentBriefsModal();
 }
 function openRecentBriefsModal(){
+  if(!requirePaid()) return;
   const modal = document.getElementById("brief-modal");
   const body = document.getElementById("brief-modal-body");
   const sub = document.getElementById("brief-modal-sub");
@@ -16947,11 +16974,16 @@ function ensurePredictLayerOn(){
 // Menu items that require a Pro subscription (Model B). Free users see them
 // with a PRO badge; tapping opens the upgrade modal instead of the feature.
 const PRO_MENU_FNS = ["openReports", "openWaypoints", "openDownloadTrip"];
+const PAID_MENU_FNS = ["openRecentBriefs"];
 function navOpenFromMenu(openFn){
   closeNav();
   // If this is a Pro feature and the user isn't entitled, show the upgrade
   // modal rather than the feature.
   const fnName = (openFn && openFn.name) ? openFn.name : "";
+  if(PAID_MENU_FNS.includes(fnName) && !BW_PAID){
+    if(typeof openPricing === "function") openPricing();
+    return;
+  }
   if(PRO_MENU_FNS.includes(fnName) && !BW_PREMIUM){
     if(typeof openPricing === "function") openPricing();
     return;
