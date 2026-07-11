@@ -705,7 +705,7 @@ body.nav-open #ruler-readout{
   background:rgba(255,255,255,.06);
 }
 .wp-fc-popup .leaflet-popup-close-button:hover{ background:rgba(255,255,255,.14); }
-#layers-toggle, #ruler-toggle, #basemap-toggle, #settings-toggle, #catch-log-toggle{
+#layers-toggle, #ruler-toggle, #wpdrop-toggle, #basemap-toggle, #settings-toggle, #catch-log-toggle{
   width:52px;height:52px;
   background:rgba(10,22,40,.92);
   border:1px solid rgba(255,255,255,.18);
@@ -716,13 +716,13 @@ body.nav-open #ruler-readout{
   user-select:none;
   transition:background .15s, transform .12s;
 }
-#layers-toggle:hover, #ruler-toggle:hover, #basemap-toggle:hover, #settings-toggle:hover, #catch-log-toggle:hover{
+#layers-toggle:hover, #ruler-toggle:hover, #wpdrop-toggle:hover, #basemap-toggle:hover, #settings-toggle:hover, #catch-log-toggle:hover{
   background:rgba(20,40,70,.97);
 }
-#layers-toggle:active, #ruler-toggle:active, #basemap-toggle:active, #settings-toggle:active, #catch-log-toggle:active{
+#layers-toggle:active, #ruler-toggle:active, #wpdrop-toggle:active, #basemap-toggle:active, #settings-toggle:active, #catch-log-toggle:active{
   transform:scale(.95);
 }
-#layers-toggle svg, #ruler-toggle svg, #basemap-toggle svg, #settings-toggle svg, #catch-log-toggle svg{
+#layers-toggle svg, #ruler-toggle svg, #wpdrop-toggle svg, #basemap-toggle svg, #settings-toggle svg, #catch-log-toggle svg{
   display:block;pointer-events:none;width:26px;height:26px;
 }
 /* Ruler tool ACTIVE state — visually indicates measurement mode is on */
@@ -731,6 +731,21 @@ body.nav-open #ruler-readout{
   border-color:rgba(255,255,255,.4);
 }
 #ruler-toggle.active svg{stroke:#fff}
+/* Drop-waypoint tool ACTIVE state — teal to distinguish from the red ruler */
+#wpdrop-toggle.active{
+  background:rgba(14,165,165,.9);
+  border-color:rgba(255,255,255,.45);
+}
+#wpdrop-toggle.active svg{stroke:#fff}
+/* Small hint pill shown while drop-waypoint mode is armed */
+#wpdrop-hint{
+  position:absolute;bottom:18px;left:50%;transform:translateX(-50%);
+  z-index:600;display:none;align-items:center;gap:8px;
+  background:rgba(10,22,40,.96);border:1.5px solid rgba(14,165,165,.65);
+  border-radius:30px;padding:10px 20px;box-shadow:0 6px 18px rgba(0,0,0,.65);
+  font:700 14px 'Segoe UI',Arial,sans-serif;color:#d7f7f4;white-space:nowrap;
+}
+#wpdrop-hint.active{display:flex}
 
 /* RULER READOUT — appears at bottom-center while measuring. Pill design
    sized for easy reading and tapping on a phone. */
@@ -2759,6 +2774,14 @@ body.nav-open #ruler-readout{
       <path d="M13 7 L15 9"/>
     </svg>
   </div>
+  <div id="wpdrop-toggle" onclick="toggleWpDrop()" title="Drop a waypoint" aria-label="Drop a waypoint on the map">
+    <!-- Map pin with a plus — tap, then click the map to mark & save a spot -->
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#e8f0ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 21s-6-5.686-6-10a6 6 0 0 1 12 0c0 4.314-6 10-6 10Z"/>
+      <line x1="12" y1="8.4" x2="12" y2="13.6"/>
+      <line x1="9.4" y1="11" x2="14.6" y2="11"/>
+    </svg>
+  </div>
   <div id="settings-toggle" onclick="toggleSettingsPanel()" title="Settings &amp; preferences" aria-label="Settings">
     <!-- Gear icon -->
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#e8f0ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2773,6 +2796,12 @@ body.nav-open #ruler-readout{
 <div id="ruler-readout" aria-live="polite">
   <span id="ruler-total">0.0 nm</span>
   <button type="button" onclick="rulerClear()" id="ruler-clear-btn">Clear</button>
+</div>
+
+<!-- DROP-WAYPOINT HINT — shown while the drop tool is armed. -->
+<div id="wpdrop-hint" aria-live="polite">
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#5eead4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6-5.686-6-10a6 6 0 0 1 12 0c0 4.314-6 10-6 10Z"/><circle cx="12" cy="11" r="1.6"/></svg>
+  <span>Tap the map to drop a waypoint</span>
 </div>
 
 <!-- OCEAN OPACITY SLIDER — vertical dimmer for the active ocean overlay.
@@ -3770,7 +3799,68 @@ const CANYONS=[
    fish:["snapper","spanishmack","kingmack","cobia"]},
   {name:"Venice Offshore Live Bottom", type:"ledge", color:"#16a34a", lat:27.05, lng:-82.95,
    desc:"Live bottom, ledges, and wrecks ~20-40nm off Venice in 70-175ft. Red and gag grouper, scamp, vermilion and yellowtail snapper, amberjack; mahi and blackfin on the troll. Reference only — not for navigation.",
-   fish:["gaggrouper","snapper","vermilion","amberjack","mahi"]}
+   fish:["gaggrouper","snapper","vermilion","amberjack","mahi"]},
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SOUTHERN CALIFORNIA — major fishing areas (San Diego → Santa Barbara)
+  // Well-known banks, kelp beds, and island grounds for the SoCal fleet:
+  // yellowtail, Pacific bluefin, dorado (mahi) and bonito, plus calico bass and
+  // white seabass on the hard-bottom/kelp spots. Species chips use the app's
+  // Pacific species IDs (cayellowtail, bluefin, yellowfin, bonito, mahi).
+  // Coordinates are approximate area references — NOT for navigation.
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── SAN DIEGO ──
+  {name:"Point Loma Kelp", type:"reef", color:"#16a34a", lat:32.667, lng:-117.267,
+   desc:"The classic San Diego inshore kelp line off Point Loma, ~40-120ft. Yellowtail, calico bass, bonito and barracuda in the stringers; white seabass at first light. Reference only — not for navigation.",
+   fish:["cayellowtail","bonito","yellowfin"]},
+  {name:"La Jolla Kelp / Canyon Edge", type:"ledge", color:"#1e63c0", lat:32.85, lng:-117.29,
+   desc:"Kelp beds and the head of La Jolla Canyon just off the beach. Yellowtail, calico bass and white seabass on the hard bottom; bluefin and yellowfin push in over the canyon on warm years. Reference only — not for navigation.",
+   fish:["cayellowtail","bluefin","yellowfin"]},
+  {name:"Los Coronados Islands", type:"rock", color:"#16a34a", lat:32.417, lng:-117.258,
+   desc:"Island group ~18nm S of San Diego (Mexican waters — Mexican fishing license required). Yellowtail on the hard-bottom high spots, bonito and calico bass in the boiler rocks. Reference only — not for navigation.",
+   fish:["cayellowtail","bonito"]},
+  {name:"Nine Mile Bank", type:"lump", color:"#0ea5a5", lat:32.60, lng:-117.42,
+   desc:"Productive bank ~9nm off Point Loma paralleling the shelf. A prime kelp-paddy troll zone — yellowtail, dorado and bonito on the paddies, bluefin schools sweeping through in summer. Reference only — not for navigation.",
+   fish:["cayellowtail","bluefin","mahi","yellowfin"]},
+  {name:"The 425 Bank", type:"lump", color:"#0ea5a5", lat:32.55, lng:-117.73,
+   desc:"Offshore high spot SW of San Diego (~425 fathom area). Bluefin and yellowfin over the structure, yellowtail and dorado on the paddies along the temperature break. Reference only — not for navigation.",
+   fish:["bluefin","yellowfin","cayellowtail","mahi"]},
+  // ── OCEANSIDE / DANA POINT / NEWPORT ──
+  {name:"The 267 / 277 (Oceanside)", type:"lump", color:"#0ea5a5", lat:33.20, lng:-117.75,
+   desc:"Offshore banks and paddy grounds SW of Oceanside. Summer/fall bluefin and yellowfin, yellowtail and dorado on kelp paddies at the color/temp break. Reference only — not for navigation.",
+   fish:["bluefin","yellowfin","cayellowtail","mahi"]},
+  {name:"14 Mile Bank", type:"lump", color:"#0ea5a5", lat:33.35, lng:-117.98,
+   desc:"Deep-water bank off Newport/Dana Point, a well-known bluefin and dorado paddy zone in the warm months; yellowtail and bonito along the edges. Reference only — not for navigation.",
+   fish:["bluefin","mahi","cayellowtail","yellowfin"]},
+  // ── OFFSHORE BANKS & ISLANDS ──
+  {name:"San Clemente Island", type:"rock", color:"#16a34a", lat:32.90, lng:-118.49,
+   desc:"Offshore island ~55nm off San Diego. Yellowtail and white seabass on the hard bottom and boiler rocks, calico bass in the kelp, bonito on top. Reference only — not for navigation.",
+   fish:["cayellowtail","bonito"]},
+  {name:"Tanner Bank", type:"lump", color:"#0ea5a5", lat:32.72, lng:-119.12,
+   desc:"Offshore seamount NW of San Clemente Island. Big yellowtail on the structure and bluefin over the top in season — a long run for quality fish. Reference only — not for navigation.",
+   fish:["cayellowtail","bluefin","yellowfin"]},
+  {name:"Cortes Bank", type:"lump", color:"#0ea5a5", lat:32.45, lng:-119.18,
+   desc:"Legendary offshore bank ~100nm off San Diego rising near the surface (Bishop Rock). Trophy yellowtail, bluefin and white seabass over the seamount. Reference only — not for navigation.",
+   fish:["cayellowtail","bluefin","yellowfin"]},
+  {name:"Santa Catalina Island", type:"rock", color:"#16a34a", lat:33.35, lng:-118.42,
+   desc:"Island ~22nm off the LA coast. Yellowtail and calico bass on the front-side kelp and hard bottom, bonito on the surface; marlin and dorado offshore in late summer. Reference only — not for navigation.",
+   fish:["cayellowtail","bonito","mahi"]},
+  {name:"Farnsworth Bank", type:"lump", color:"#0ea5a5", lat:33.34, lng:-118.52,
+   desc:"Pinnacle bank off the west end of Catalina. Yellowtail and white seabass over the structure, calico bass on the reef; bluefin over the top on warm years. Reference only — not for navigation.",
+   fish:["cayellowtail","bluefin"]},
+  {name:"Horseshoe Kelp", type:"reef", color:"#16a34a", lat:33.68, lng:-118.23,
+   desc:"Hard-bottom reef complex off the LA/Long Beach breakwater. Yellowtail, calico and sand bass, bonito and barracuda — the classic close-in LA grounds. Reference only — not for navigation.",
+   fish:["cayellowtail","bonito"]},
+  // ── CHANNEL ISLANDS (Santa Barbara / Ventura) ──
+  {name:"Santa Barbara Island", type:"rock", color:"#16a34a", lat:33.475, lng:-119.04,
+   desc:"Small offshore island SW of the LA basin. Yellowtail and white seabass on the hard bottom, calico bass and bonito in the kelp. Reference only — not for navigation.",
+   fish:["cayellowtail","bonito"]},
+  {name:"Anacapa Island", type:"reef", color:"#16a34a", lat:34.01, lng:-119.42,
+   desc:"Eastern Channel Islands reef and kelp off Ventura/Oxnard. Calico bass, yellowtail and white seabass on the reefs; a reliable inshore island run. Reference only — not for navigation.",
+   fish:["cayellowtail","bonito"]},
+  {name:"Santa Cruz Island", type:"reef", color:"#16a34a", lat:34.02, lng:-119.75,
+   desc:"Largest Channel Island, off Santa Barbara. Kelp and hard-bottom grounds for calico bass, yellowtail and white seabass; bonito on top. Reference only — not for navigation.",
+   fish:["cayellowtail","bonito"]}
 ];
 
 // (Static HEAT zone data removed — was the data source for the legacy
@@ -8589,7 +8679,12 @@ const SPECIES_HABITAT = {
   amberjack:     ["nearshore", "offshore"],         // Wrecks, reefs, rigs
   tripletail:    ["nearshore", "inshore"],          // Floating debris, buoys
   pompano:       ["inshore", "bay"],            // Surf and inshore beaches
-  vermilion:     ["nearshore"],                     // Deeper reefs
+  // Vermilion (beeliner) live on hard bottom / ledges in ~100-300 ft. Since
+  // classifyWaterType() calls anything ≥100 ft "offshore", a nearshore-only mask
+  // blanked out the ENTIRE depth range where they actually hold (the Gulf shelf
+  // edge off Pensacola etc.), so the bite map rendered nothing. Allow both the
+  // 30-100 ft nearshore band AND the 100 ft+ shelf so their real grounds paint.
+  vermilion:     ["nearshore", "offshore"],          // Deeper reefs / shelf ledges
   lanesnap:      ["nearshore", "inshore"],          // Gulf reefs
   yellowtail:    ["nearshore", "inshore"],          // FL Keys reefs, classic Keys species
   // ── PACIFIC / SOUTHERN CALIFORNIA ─────────────────────────────────
@@ -11011,8 +11106,11 @@ function bindPredictInteractionHandlers(){
         .addTo(MAP);
     });
   });
-  // Click → open the explainer for the nearest cell.
+  // Click → open the explainer for the nearest cell. Suppressed while the
+  // drop-waypoint tool is armed so a tap marks a spot instead of opening the
+  // hotspot explainer.
   MAP.on('click', (e) => {
+    if(typeof wpDropMode !== "undefined" && wpDropMode){ return; }
     if(!layerVis.predict || !_predictGrid){ return; }
     const cell = nearestPredictCell(e.latlng);
     if(cell) showPredictionExplainer(cell, _predictSpecies);
@@ -13543,6 +13641,8 @@ function toggleRuler(){
 }
 
 function rulerActivate(){
+  // Only one map-click tool at a time — disarm the drop-waypoint tool if on.
+  if(typeof wpDropMode !== "undefined" && wpDropMode && typeof wpDropDeactivate === "function") wpDropDeactivate();
   rulerActive = true;
   document.getElementById("ruler-toggle").classList.add("active");
   document.getElementById("ruler-readout").classList.add("active");
@@ -13717,6 +13817,125 @@ function onMapClick(e){
   // (Brief generator, Reports filter) read from it. But we do nothing else.
   const {lat, lng} = e.latlng;
   pinLL = {lat, lng};
+
+  // DROP-WAYPOINT MODE: when the drop tool is armed, a tap on the map opens a
+  // coordinate popup with a "Save to My Waypoints" action. We disarm on the
+  // NEXT tick (not synchronously) so the other click handlers registered on the
+  // map — notably the heat-map explainer — stay suppressed for THIS click.
+  if(typeof wpDropMode !== "undefined" && wpDropMode){
+    wpShowDropPopup(lat, lng);
+    setTimeout(wpDropDeactivate, 0);
+  }
+}
+
+// ── DROP-A-WAYPOINT TOOL ─────────────────────────────────────────────────────
+// A deliberate "mark this spot" mode: arm it from the map toolbar, then tap the
+// chart (e.g. on a specific edge of the SST/chlorophyll imagery) to see the
+// exact latitude/longitude and optionally save it to My Waypoints. Kept as an
+// explicit mode so a normal tap on the map stays a no-op and never fights the
+// heat-map hotspot explainer.
+let wpDropMode = false;
+function toggleWpDrop(){
+  if(wpDropMode) wpDropDeactivate();
+  else wpDropActivate();
+}
+function wpDropActivate(){
+  // Don't run two map-click tools at once — turn the ruler off if it's on.
+  if(typeof rulerActive !== "undefined" && rulerActive && typeof rulerDeactivate === "function") rulerDeactivate();
+  wpDropMode = true;
+  const btn = document.getElementById("wpdrop-toggle"); if(btn) btn.classList.add("active");
+  const hint = document.getElementById("wpdrop-hint"); if(hint) hint.classList.add("active");
+  if(typeof MAP !== "undefined" && MAP && MAP.getContainer) MAP.getContainer().style.cursor = "crosshair";
+}
+function wpDropDeactivate(){
+  wpDropMode = false;
+  const btn = document.getElementById("wpdrop-toggle"); if(btn) btn.classList.remove("active");
+  const hint = document.getElementById("wpdrop-hint"); if(hint) hint.classList.remove("active");
+  if(typeof MAP !== "undefined" && MAP && MAP.getContainer) MAP.getContainer().style.cursor = "";
+}
+
+// Format a lat/lng pair for display in both decimal degrees and the
+// degrees-decimal-minutes chartplotters use (e.g. 32°43.380'N  117°10.440'W).
+function bwiFormatLatLng(lat, lng){
+  const dec = `${Math.abs(lat).toFixed(5)}°${lat >= 0 ? "N" : "S"}, ${Math.abs(lng).toFixed(5)}°${lng >= 0 ? "E" : "W"}`;
+  const dm = (v, pos, neg) => {
+    const hemi = v >= 0 ? pos : neg;
+    const a = Math.abs(v);
+    const d = Math.floor(a);
+    const m = (a - d) * 60;
+    return `${d}°${m.toFixed(3)}'${hemi}`;
+  };
+  const dms = `${dm(lat, "N", "S")}  ${dm(lng, "E", "W")}`;
+  return { dec, dms };
+}
+
+// Coordinate popup opened by the drop tool. Shows the tapped position and lets
+// the user save it (opens the waypoint editor prefilled) or pull a forecast.
+function wpShowDropPopup(lat, lng){
+  if(typeof MAP === "undefined" || !MAP) return;
+  const { dec, dms } = bwiFormatLatLng(lat, lng);
+  let depthLine = "";
+  try {
+    if(typeof realDepthAt === "function"){
+      const m = realDepthAt(lat, lng);
+      if(m != null && m > 0) depthLine = `<div style="font-size:12px;color:#9ec5e8;margin-top:2px">Depth ~${Math.round(m * 3.281)} ft</div>`;
+    }
+  } catch(e){}
+  const html =
+    `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:190px">
+      <div style="font-weight:700;color:#f0f6ff;font-size:13px;margin-bottom:4px;padding:0 16px">Dropped Waypoint</div>
+      <div style="font-size:13px;color:#e8f4ff;font-weight:600">${dms}</div>
+      <div style="font-size:11px;color:#9ec5e8;margin-top:2px">${dec}</div>
+      ${depthLine}
+      <button onclick="wpCreateAt(${lat},${lng})" style="
+        width:100%;background:#0ea5a5;color:#fff;border:none;border-radius:8px;
+        padding:9px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;
+        display:flex;align-items:center;justify-content:center;gap:6px;margin-top:10px">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        Save to My Waypoints
+      </button>
+      <button onclick="showForecast(${lat},${lng},'Dropped waypoint')" style="
+        width:100%;background:#2979b5;color:#fff;border:none;border-radius:8px;
+        padding:8px 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;
+        margin-top:6px">6-Day Forecast</button>
+    </div>`;
+  L.popup({ offset:[0,-4], className:"wp-fc-popup", maxWidth:280, closeButton:true })
+    .setLatLng([lat, lng])
+    .setContent(html)
+    .openOn(MAP);
+}
+
+// Open the waypoint editor prefilled with a tapped/dropped location so the user
+// can name it and save it into My Waypoints (persists locally + syncs to their
+// account via BW_AUTH, exactly like a manually-added waypoint).
+function wpCreateAt(lat, lng){
+  if(typeof MAP !== "undefined" && MAP) MAP.closePopup();
+  if(!WP_state.userPoints.length) WP_state.userPoints = wpLoadUser();
+  let depth = "";
+  try {
+    if(typeof realDepthAt === "function"){
+      const m = realDepthAt(lat, lng);
+      if(m != null && m > 0) depth = Math.round(m * 3.281) + "ft";
+    }
+  } catch(e){}
+  let region = "";
+  try {
+    if(typeof activePort !== "undefined" && activePort && typeof PORTS !== "undefined" && PORTS[activePort]){
+      region = PORTS[activePort].short || activePort;
+    }
+  } catch(e){}
+  WP_state.editing = {
+    id: "u-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+    name: "",
+    type: "private",
+    sourceType: "reef",
+    lat: Math.round(lat * 1e5) / 1e5,
+    lng: Math.round(lng * 1e5) / 1e5,
+    depth,
+    region,
+    desc: "",
+  };
+  wpShowEditor(true);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -15509,9 +15728,21 @@ async function runBrief(){
     aiCOA = brief || "Brief unavailable.";
     briefOk = !!brief;
   } catch (e) {
-    aiCOA = (e && /sign in/i.test(e.message))
-      ? "Sign in to generate a Captain's Brief."
-      : "Captain's Brief is unavailable right now. Please try again.";
+    // Surface the REAL reason instead of a blanket "try again." callBrief()
+    // throws with the server's own message (premium gate, daily limit, upstream
+    // generation failure, "Brief service not configured", etc.), which is far
+    // more actionable for the captain — and for us diagnosing it.
+    const msg = (e && e.message) ? String(e.message) : "";
+    console.error("Captain's Brief failed:", e);
+    if(/sign in/i.test(msg)){
+      aiCOA = "Sign in to generate a Captain's Brief.";
+    } else if(!msg || /failed to fetch|networkerror|load failed|timed? ?out|aborted/i.test(msg)){
+      // Network / CORS / timeout — the server response never reached the client.
+      aiCOA = "Couldn't reach the Captain's Brief service. Check your connection and try again.";
+    } else {
+      // A real, user-readable reason from the server — show it verbatim.
+      aiCOA = msg;
+    }
   }
   aiLoading=false;renderBrief();
   // Pop the finished brief up front-and-center so the captain sees it
