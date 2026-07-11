@@ -205,14 +205,39 @@ ${JSON.stringify(payloadForModel, null, 2)}`;
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
       console.error("Anthropic error", r.status, detail.slice(0, 300));
-      return new Response(JSON.stringify({ error: "Brief generation failed upstream." }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+      // Surface a SAFE, specific reason to the (signed-in, premium) caller so a
+      // failure is diagnosable instead of a dead-end "try again". The Anthropic
+      // error body contains an error type/message (e.g. a retired/unknown model,
+      // an invalid key, or an exhausted credit balance) — never the API key — so
+      // a trimmed copy is safe to return. We also map the common cases to plain
+      // guidance since model retirements are the usual culprit over time.
+      let reason = "";
+      try { const j = JSON.parse(detail); reason = j?.error?.message || j?.error?.type || ""; } catch { reason = detail.slice(0, 160); }
+      let msg: string;
+      if (r.status === 404 || /model/i.test(reason)) {
+        msg = `Brief model "${MODEL}" was rejected by Anthropic (it may be retired or misspelled). Update BRIEF_MODEL to a current model and redeploy.`;
+      } else if (r.status === 401 || /api[-_ ]?key|authentication|x-api-key/i.test(reason)) {
+        msg = "Anthropic rejected the API key (invalid or expired). Update the ANTHROPIC_API_KEY secret and redeploy.";
+      } else if (r.status === 429 || /rate limit|overloaded|credit balance/i.test(reason)) {
+        msg = "Anthropic is rate-limited or the account is out of credits. Try again shortly or top up the Anthropic account.";
+      } else {
+        msg = `Brief generation failed upstream (${r.status})${reason ? ": " + reason.slice(0, 160) : ""}.`;
+      }
+      return new Response(JSON.stringify({ error: msg, upstreamStatus: r.status }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
     }
     const d = await r.json();
     const brief = d?.content?.[0]?.text ?? null;
     if (!brief) return new Response(JSON.stringify({ error: "Empty brief." }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
     return new Response(JSON.stringify({ brief }), { headers: { ...cors, "Content-Type": "application/json" } });
   } catch (e) {
-    console.error("Brief exception", (e as Error)?.message);
-    return new Response(JSON.stringify({ error: "Brief generation failed." }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+    const em = (e as Error)?.message || "";
+    console.error("Brief exception", em);
+    // Distinguish a timeout (the 30s AbortSignal fired) from other failures so
+    // the caller knows whether to simply retry.
+    const timedOut = (e as Error)?.name === "TimeoutError" || /abort|timed? ?out/i.test(em);
+    const msg = timedOut
+      ? "The brief timed out generating (Anthropic took too long). Please try again."
+      : "Brief generation failed before reaching Anthropic. Please try again.";
+    return new Response(JSON.stringify({ error: msg }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
   }
 });
