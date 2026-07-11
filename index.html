@@ -15734,10 +15734,16 @@ async function runBrief(){
     // more actionable for the captain — and for us diagnosing it.
     const msg = (e && e.message) ? String(e.message) : "";
     console.error("Captain's Brief failed:", e);
+    // Only a GENUINE network failure throws a TypeError (fetch could not reach
+    // the endpoint). Server-side problems come back as a normal Error carrying
+    // the server's own message — including its own "timed out generating" text —
+    // so those must pass through VERBATIM. (The earlier version matched the word
+    // "timed out" here and wrongly relabeled a server timeout as "couldn't reach".)
+    const isNetworkError = (e && (e.name === "TypeError" || e instanceof TypeError))
+      || /failed to fetch|networkerror|load failed/i.test(msg);
     if(/sign in/i.test(msg)){
       aiCOA = "Sign in to generate a Captain's Brief.";
-    } else if(!msg || /failed to fetch|networkerror|load failed|timed? ?out|aborted/i.test(msg)){
-      // Network / CORS / timeout — the server response never reached the client.
+    } else if(isNetworkError || !msg){
       aiCOA = "Couldn't reach the Captain's Brief service. Check your connection and try again.";
     } else {
       // A real, user-readable reason from the server — show it verbatim.

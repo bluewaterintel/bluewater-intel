@@ -200,7 +200,11 @@ ${JSON.stringify(payloadForModel, null, 2)}`;
         system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content: user }],
       }),
-      signal: AbortSignal.timeout(30000),
+      // A full multi-species 5-section brief can take well over 30s to generate,
+      // so the old 30s abort was firing mid-generation and surfacing as a
+      // "timed out" failure. 90s leaves ample headroom while staying inside the
+      // platform's request budget.
+      signal: AbortSignal.timeout(90000),
     });
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
