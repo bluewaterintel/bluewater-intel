@@ -1,7 +1,13 @@
 -- ============================================================================
 -- Bluewater Intel — Migration 0005: billing entitlements + brief limits
 --
--- Model:
+-- NOTE (superseded): the model below is historical. Migration 0011 made Pro
+-- include ALL charted waypoints, and 0012 dropped per-port packs entirely.
+-- Lifetime is no longer sold (checkout is subscription-only), and coverage now
+-- spans Maine → Southern California (not just ME→TX). See 0011/0012 for the
+-- current entitlement model.
+--
+-- Model (as of 0005):
 --   • Subscription (monthly/annual) → has_premium = true. Unlocks app features
 --     and up to 2 AI briefs/day. Does NOT include charted waypoints.
 --   • Lifetime (one-time)           → subscription_status='lifetime'. Everything,

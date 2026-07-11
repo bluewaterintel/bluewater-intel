@@ -1,8 +1,14 @@
 # Privacy text fixes — device-only → account-based
 
+> **Historical — already applied.** These edits live in the current app,
+> `index.html` (formerly `bluewater-intel_9_4_1_4.html`). NOTE: the "purchased
+> port packs" wording in EDIT 2's NEW block below is itself now outdated — port
+> packs were discontinued (migration 0012), and that phrase has since been
+> removed from the live waypoint-database copy.
+
 Two user-facing strings in the HTML still claimed data is stored only on the
 device. With required accounts + cross-device sync, that's now false. Both are
-already fixed in the updated `bluewater-intel_9_4_1_4.html` in this bundle — if
+already fixed in the current `index.html` — if
 you're patching your own copy in Cursor instead, here are the exact edits.
 
 The legal/privacy policy section was reviewed and is ALREADY correct on the

@@ -3,8 +3,9 @@
 --
 -- Paid subscribers (trial, active, lifetime, owner) get the FULL charted
 -- waypoint dataset for their port radius — not a teaser and not a separate pack.
--- Legacy per-port pack purchases (waypoint_pack_entitlements) still work if
--- someone bought one before this change and later lapses subscription.
+-- NOTE (superseded): the per-port pack path mentioned below was fully removed in
+-- migration 0012 (no customers had purchased packs); has_waypoint_access() is now
+-- has_premium() only.
 -- ============================================================================
 
 create or replace function public.has_waypoint_access(p_port text)

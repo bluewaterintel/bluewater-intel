@@ -1,6 +1,10 @@
 # Milestone 1 — Client wiring patch (apply in Cursor against your repo)
 
-These are the **exact** edits to `bluewater-intel_9_4_1_4.html` to swap the inlined
+> **Historical — already applied.** This M1 patch has been integrated into the
+> current single-file app, which is now `index.html` (not `bluewater-intel_9_4_1_4.html`).
+> Kept for reference on how the Supabase-backed DataSource wiring was introduced.
+
+These are the **exact** edits to `index.html` (originally `bluewater-intel_9_4_1_4.html`) to swap the inlined
 waypoint/ramp lookups for the Supabase-backed `BW_DATA` DataSource. Line numbers
 drift with edits — locate each block by its **anchor text** (search for the
 `OLD` snippet), not by line number.

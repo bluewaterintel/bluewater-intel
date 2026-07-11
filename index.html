@@ -3161,7 +3161,7 @@ body.nav-open #ruler-readout{
 <!-- ═══════════════════════════════════════════════════════════════════════
      LOG CATCH MODAL
      User-facing form for entering a new catch entry. Mobile-first layout.
-     Conditions section auto-fills from synthetic data when location changes.
+     Conditions section auto-fills from real ocean data when location changes.
      ═══════════════════════════════════════════════════════════════════════ -->
 <div id="catch-modal" onclick="if(event.target===this)closeLogCatch()" style="
   display:none;position:fixed;inset:0;z-index:10001;
@@ -4758,9 +4758,6 @@ async function initMap(){
   // Show empty-state overlay until user picks port + species
   updateEmptyState();
 
-  // Start live data polling (no-op until a backend is connected)
-  startLivePolling();
-
   // If we opened with no connectivity and a trip is saved, load it straight onto
   // the map — the whole point of "Download my trip".
   try{
@@ -4769,8 +4766,6 @@ async function initMap(){
     }
   }catch(e){}
 }
-
-let livePollTimer = null;
 
 // ════════════════════════════════════════════════════════════════════════════
 // OFFLINE TILE CACHING via Service Worker
@@ -5459,13 +5454,14 @@ function showDiagnostics(){
 
 // ════════════════════════════════════════════════════════════════════════════
 // PREDICTIVE HEAT MAP ENGINE
-// Combines SST, chlorophyll, bathymetry, reports, AIS dwell, and Gulf Stream
-// proximity to produce per-cell probability scores for the target species.
+// Combines SST, chlorophyll, bathymetry, ocean currents/altimetry, recent catch
+// reports, and Gulf Stream proximity to produce per-cell probability scores for
+// the target species.
 //
-// NOTE: This implementation runs entirely client-side with the SAME algorithm
-// the backend will use — it just substitutes synthetic data for the inputs we
-// don't have live yet. When the backend deploys with real NASA/NOAA/AIS feeds,
-// only the data-fetch layer changes; scoring math is identical.
+// The scoring runs client-side but reads ONLY real data — the ocean edge
+// function serves live NASA/NOAA/ERDDAP grids (MUR SST, VIIRS chlorophyll,
+// bathymetry, currents) which this engine scores. There is no synthetic data
+// fallback: cells with no real input are left unscored rather than invented.
 // ════════════════════════════════════════════════════════════════════════════
 
 // Species temperature & habitat preferences (research-derived).
@@ -5984,8 +5980,8 @@ function getRegionalSeasons(speciesId, lat, lng){
   return blended;
 }
 
-// Synthetic data generators — replaced with API calls when backend is live.
-// All produce realistic East Coast values keyed to lat/lng.
+// Ocean data helpers — date math for satellite tiles plus the real-data
+// resolvers the scoring engine reads. No synthetic generators remain here.
 
 // ── NASA GIBS DATE HELPER ──
 // Returns a YYYY-MM-DD (UTC) date string for use in GIBS tile URLs. Defaults to
@@ -6518,7 +6514,7 @@ function windScore(lat, lng, speciesPrefs, windDir){
 //
 // INSHORE (bays/sounds/<80ft): Tide is dominant — moving water makes the bite,
 // solunar windows are huge for predators, Gulf Stream is COMPLETELY irrelevant
-// (sheepshead never see it), and recent reports/AIS are less useful since
+// (sheepshead never see it), and recent reports are less useful since
 // inshore fishing is more dispersed across small craft.
 //
 // All weight tables sum to exactly 1.000.
@@ -6561,7 +6557,7 @@ const PREDICT_WEIGHTS = {
   inshore: {
     temperature:   0.14,   // Raised — cold/wrong-temp water should actually suppress the bite
                            //   (works with the firmer inshore temp gate), not lean on season alone.
-    depthStruct:   0.23,   // Structure still matters, but eased so imprecise synthetic depth doesn't
+    depthStruct:   0.23,   // Structure still matters, but eased so imprecise/coarse depth doesn't
                            //   over-penalize; the raised depth-gate floor shares that relief.
     chlorophyll:   0.00,   // Zeroed — satellite chlor is unreliable in shallow water
                            //   (bottom reflectance, sediment contamination)
@@ -7544,7 +7540,7 @@ function scoreCell(lat, lng, speciesId){
   //     dawn/dusk rather than leaving. Temperature should barely gate them.
   //   • Nearshore sits in between.
   // Applying one temp gate to all categories wrongly crushed legitimate
-  // inshore spots (e.g. redfish on a Tampa flat reading 86°F synthetic SST).
+  // inshore spots (e.g. redfish on a Tampa flat reading 86°F SST).
   //
   // NOTE ON GATE STRENGTH: SST comes from MUR L4 1km now, but demersal/reef and
   // warm-adapted species are scored on damped/bottom temps (see tempForScore),
@@ -7562,7 +7558,7 @@ function scoreCell(lat, lng, speciesId){
   // Depth is decisive for ALL categories — a redfish can't be in 105m and a tuna
   // can't be on an 8m flat. Offshore stays firm (floor 0.22). Inshore/nearshore
   // use a softer floor (0.35): those zones already carry a high depthStruct weight
-  // AND lean on imprecise synthetic depth, so a firm gate on top double-penalizes
+  // AND lean on imprecise/coarse depth, so a firm gate on top double-penalizes
   // the same reading. The higher floor relieves that without letting truly
   // wrong-depth water off the hook.
   //
@@ -13279,12 +13275,11 @@ function refreshSettingsModal(){
 //
 // User catch journal. Each entry captures what was caught, where, when, and
 // what the conditions were — most users never log conditions because looking
-// them up is tedious. We auto-fill from the same synthetic data the
+// them up is tedious. We auto-fill from the same real ocean data the
 // prediction engine uses, so the data is consistent across the app.
 //
-// Storage is in-memory for this session. In production, swap to:
-//   - localStorage for offline persistence
-//   - Account-synced backend storage once auth is wired
+// Storage: catches persist to the signed-in account (Supabase via BW_AUTH),
+// with localStorage as the offline/local fallback.
 //
 // Entry shape:
 //   {
@@ -14181,15 +14176,6 @@ function wpCreateAt(lat, lng){
 // detail view" — the hotspot popup's sub-panel. The sub-panel uses a dark
 // background, so wrap content in a CSS adapter that recolors the cream-themed
 // panel components (.wx-card, .zcard, info-box, etc.) for dark backgrounds.
-// LIVE DATA POLLING (existing)
-// ════════════════════════════════════════════════════════════════════════════
-async function startLivePolling(){
-  // AIS "Active Fishing Areas" was removed as a data source, so there is no
-  // longer any background vessel polling. Kept as a no-op stub so existing
-  // callers don't break.
-  if(livePollTimer){ clearInterval(livePollTimer); livePollTimer = null; }
-}
-
 // Weather conditions (water temp, wind, waves, pressure) are sourced ONLY from
 // real data via BW_OCEAN.fetchOcean (NDBC buoys + forecast model + ERDDAP).
 // The old synthetic calcWx() generator was removed; callers now read real values
@@ -15498,13 +15484,14 @@ function drawClosures(){
 
 // ════════════════════════════════════════════════════════════════════════════
 // PREDICTIVE HEAT MAP ENGINE
-// Combines SST, chlorophyll, bathymetry, reports, AIS dwell, and Gulf Stream
-// proximity to produce per-cell probability scores for the target species.
+// Combines SST, chlorophyll, bathymetry, ocean currents/altimetry, recent catch
+// reports, and Gulf Stream proximity to produce per-cell probability scores for
+// the target species.
 //
-// NOTE: This implementation runs entirely client-side with the SAME algorithm
-// the backend will use — it just substitutes synthetic data for the inputs we
-// don't have live yet. When the backend deploys with real NASA/NOAA/AIS feeds,
-// only the data-fetch layer changes; scoring math is identical.
+// The scoring runs client-side but reads ONLY real data — the ocean edge
+// function serves live NASA/NOAA/ERDDAP grids (MUR SST, VIIRS chlorophyll,
+// bathymetry, currents) which this engine scores. There is no synthetic data
+// fallback: cells with no real input are left unscored rather than invented.
 // ════════════════════════════════════════════════════════════════════════════
 
 // Species temperature & habitat preferences (research-derived)
@@ -15569,7 +15556,6 @@ function pbody(h){
 let wxAutoRefreshTimer = null;
 function fmtTime(d){return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}
 
-// Synthesize tide data (demo) — replaced by NOAA tides API when backend is live
 // Tide for the conditions panel comes ONLY from real NOAA CO-OPS data (via the
 // ocean backend). The old synthetic calcTides() (random next-event times,
 // hardcoded stations) was removed — renderWX reads the real tide state below.
@@ -18731,6 +18717,30 @@ const ENC_SPECIES = [
       "Best bite is often early morning and last 2 hours of daylight",
       "'Flags' (2-3+ lb fish) come from the upcurrent edge of patch reefs — closer to the structure",
       "Excellent table fare — flaky white meat, fries beautifully"],
+  },
+  {
+    id:"cayellowtail", name:"California Yellowtail", color:"#d9a520", cat:"nearshore",
+    snippet:"Southern California's premier inshore gamefish — the 'mossback.' A structure-oriented jack that pulls like a freight train straight for the rocks and kelp. Live bait and yo-yo iron are the game.",
+    facts:{ size:"8-25 lbs common; 30-40+ lb 'mossbacks' are trophies", record:"~80 lbs (Baja); CA rod-and-reel near 63 lbs", legal:"CA: 10/day, no minimum size (check current CDFW regs)", season:"Best late spring through fall; year-round at the islands in warm years" },
+    seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
+    where:"Coronado Islands, San Diego kelp beds, La Jolla, Catalina & San Clemente Islands, and offshore banks (Cortez, Tanner). Holds on hard structure, kelp edges, and high spots; also runs down drifting kelp paddies well offshore.",
+    tackle:[
+      "Jig stick / conventional: 7-8 ft rod with 40-65 lb braid or mono for turning fish off structure",
+      "30-50 lb fluorocarbon leader",
+      "Live-bait circle hooks 1/0-4/0; yo-yo iron for deeper structure fish",
+      "Surface iron (Tady 45, Salas 7X) on a jig stick for boiling fish"],
+    bait:[
+      "Live sardines and mackerel — the SoCal standard",
+      "Live squid when available (spring) — deadly fished near the bottom",
+      "Yo-yo iron (blue/white, scrambled egg) dropped to structure and cranked fast",
+      "Surface iron for breezing or boiling schools"],
+    tips:[
+      "They dive straight for the rocks or kelp — lock the drag and turn their head immediately",
+      "Scan for offshore kelp paddies; a single paddy can hold an entire school",
+      "When they won't come up for bait, yo-yo iron on hard-bottom high spots and banks",
+      "Fish current edges and structure high spots — they stack on relief",
+      "Grey light is prime; the bite often shuts off once the sun is high",
+      "Great eating fresh — bleed immediately and ice down hard"],
   }];
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -21489,7 +21499,7 @@ function tbClearFavs(){
       <div class="tut-step-num">2</div>
       <div class="tut-step-body">
         <div class="tut-step-title">Pick your target species</div>
-        <div class="tut-step-desc">Tap <b>TARGET SPECIES</b> and choose what you're after. 39 species are in the picker — each has its own habitat preferences (depth, temperature range, structure type, thermal-break tolerance). If you pick a species that doesn't live near your port, the app will tell you so directly.</div>
+        <div class="tut-step-desc">Tap <b>TARGET SPECIES</b> and choose what you're after. 50 species are in the picker — each has its own habitat preferences (depth, temperature range, structure type, thermal-break tolerance). If you pick a species that doesn't live near your port, the app will tell you so directly.</div>
       </div>
     </div>
 
@@ -21661,7 +21671,7 @@ function tbClearFavs(){
     <div class="tut-data">
       <div class="tut-data-icon">📍</div>
       <div class="tut-data-body">
-        <div class="tut-data-title">Recent reports &amp; vessel activity</div>
+        <div class="tut-data-title">Recent catch reports</div>
         <div class="tut-data-desc">Recent fishing reports for a species near a location bump up scores in that area. Reports decay with an ~8-hour half-life — a 2-hour-old report carries full weight, yesterday's much less. The known-areas table recognizes ~22 named offshore locations (canyons, banks, ledges from Maine to Southern California) for precise spatial matching; reports without a recognized area fall back to the port location.</div>
       </div>
     </div>
@@ -24929,7 +24939,7 @@ function wpRenderMine(){
     ${wpSourceFilterBar()}
     ${wpStatsBar(list, "of " + WP_state.userPoints.length + " saved waypoints")}
     <div class="wp-info-box">
-      <b>⭐ Your waypoint database</b> — Everything here is yours to manage: points you add by hand, ones you save from public POIs or import from GPX, and any purchased port packs. They are saved to your account and sync across your own devices, and stay private to you. Export them to GPX anytime. Add, show on the map, edit, or delete any of them.
+      <b>⭐ Your waypoint database</b> — Everything here is yours to manage: points you add by hand, and ones you save from public POIs or import from GPX. They are saved to your account and sync across your own devices, and stay private to you. Export them to GPX anytime. Add, show on the map, edit, or delete any of them.
     </div>
     ${wpPackManageBar()}
     <div class="wp-list">
@@ -24937,7 +24947,7 @@ function wpRenderMine(){
         <div class="wp-empty">
           <div class="wp-empty-icon">⭐</div>
           <div style="font-size:14px;color:#9ec5e8;margin-bottom:6px">No personal waypoints yet</div>
-          <div style="font-size:11px;line-height:1.6">Tap <b>+ Add Waypoint</b> to enter one manually, use the <b>Import</b> tab to load a GPX file, or load a <b>port pack</b> above.<br>You can also tap the Save button on any public POI to copy it here.</div>
+          <div style="font-size:11px;line-height:1.6">Tap <b>+ Add Waypoint</b> to enter one manually, or use the <b>Import</b> tab to load a GPX file.<br>You can also tap the Save button on any public POI to copy it here.</div>
         </div>
       ` : list.length === 0 ? `
         <div class="wp-empty">
