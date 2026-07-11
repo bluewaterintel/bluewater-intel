@@ -13,6 +13,7 @@
     "test:freshness": "node tests/freshness.test.mjs",
     "test:wind": "node tests/wind.test.mjs",
     "deploy:functions": "node scripts/deploy-m3-m4-functions.mjs",
+    "deploy:health": "node scripts/deploy-health.mjs",
     "deploy": "node scripts/generate-bw-config.mjs && netlify deploy --prod --dir=."
   },
   "dependencies": {
