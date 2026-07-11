@@ -4182,6 +4182,9 @@ try {
   }
 } catch(e){}
 let briefSp=[], aiCOA="", aiLoading=false, briefDayOffset=0;  // briefDayOffset: 0=today,1=tomorrow,...
+const BRIEF_HISTORY_KEY = "bwi_brief_history_v1";
+const BRIEF_HISTORY_TTL_MS = 48 * 3600 * 1000;  // recall window
+const BRIEF_HISTORY_MAX = 12;
 let layersPanelOpen=false;
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -8936,6 +8939,24 @@ function speciesAllowedAtLat(speciesId, lat, lng){
   return inBand(range);
 }
 
+// Species that realistically occur at the brief's spot (or departure port when
+// no pin yet). Keeps the brief species picker from listing 50+ extraneous fish
+// that don't apply to Oregon Inlet, Stuart, Venice LA, etc.
+function briefSpeciesForSpot(){
+  const portObj = (typeof activePort !== "undefined" && activePort && PORTS[activePort])
+    ? PORTS[activePort] : null;
+  const lat = pinLL ? pinLL.lat : (portObj ? portObj.lat : null);
+  const lng = pinLL ? pinLL.lng : (portObj ? portObj.lng : null);
+  if(lat == null || lng == null) return [];
+  const wt = (typeof classifyWaterType === "function") ? classifyWaterType(lat, lng) : "offshore";
+  return SPECIES.filter(s => {
+    if(s.id === "all") return false;
+    if(typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(s.id, lat, lng)) return false;
+    if(typeof speciesAllowedInWater === "function" && !speciesAllowedInWater(s.id, wt)) return false;
+    return true;
+  });
+}
+
 // Maximum reasonable run distance from home port to fishing grounds.
 // Offshore range caps — how far from port the Bite Map scores. These must
 // reach the CANYONS, since canyon/floater fishing is the whole point offshore:
@@ -8951,11 +8972,54 @@ function speciesAllowedAtLat(speciesId, lat, lng){
 //    bite map from recommending unreachable water 150-200 mi offshore.
 // A distance penalty still gently fades the score toward the cap so nearer water
 // is favored, but the canyons now stay in range instead of dropping off.
-const MAX_PORT_RANGE_NM_ATLANTIC = 140;
-const MAX_PORT_RANGE_NM_GULF = 160;
-const MAX_PORT_RANGE_NM_PACIFIC = 125;
 const PREDICT_HEAT_SCORE_MIN = 0.01;
 const PREDICT_HOTSPOT_SCORE_MIN = 0.30;
+
+// ── Port-tailored fishing radius (nm) ───────────────────────────────────────
+// Charter/day-boat reach varies enormously by geography — Oregon Inlet boats
+// rarely run 140 nm, while Venice LA floaters routinely do. This ONE function
+// drives the bite-map range cap, ocean/altimetry data fetch bbox, and SSH break
+// highlights so all three stay consistent for the active port.
+function portFishingRangeNm(portObj){
+  if(!portObj) return 120;
+  const { lat, lng } = portObj;
+  if(typeof isPacificContext === "function" && isPacificContext(lat, lng)) return 125;
+  if(typeof isGulfContext === "function" && isGulfContext(lat, lng)){
+    // Western Gulf (LA / TX) — rigs, floaters, canyon runs 100+ nm out
+    if(lng <= -88.5) return 160;
+    // Florida Gulf shelf — many day-boats; Middle Grounds is a long run but not
+    // every port fishes that far routinely
+    return 100;
+  }
+  // Atlantic — Northeast / Mid-Atlantic canyon fishery (Montauk → Delaware)
+  if(lat >= 38.0) return 140;
+  // Outer Banks & north NC (Oregon Inlet, Hatteras, Morehead) — charter fleet
+  // fishes the Stream edge 15–40 nm out; pushing past ~85 nm is unrealistic for
+  // most OBX day-boats even in tuna season.
+  if(lat >= 33.5 && lat < 37.5 && lng > -77.5) return 85;
+  // Southeast FL Atlantic (Stuart, Treasure Coast, JAX) — Gulf Stream hugs the
+  // coast; sailfish/kingfish grounds are close.
+  if(lat < 30.5 && lng > -82.0) return 70;
+  // General SE Atlantic (SC / GA / south NC outside OBX band)
+  if(lat < 33.5) return 105;
+  return 120;
+}
+
+function maxRangeForPort(portObj){
+  return portFishingRangeNm(portObj);
+}
+
+// Altimetry magenta break highlights use the same port radius so we don't flag
+// a Gulf Stream wall 150 nm from Oregon Inlet when no OBX charter runs there.
+function altimetryBreakRadiusNm(portObj){
+  return portFishingRangeNm(portObj);
+}
+
+function altiBreakRadiusForActivePort(){
+  const po = (typeof activePort !== "undefined" && activePort && PORTS[activePort])
+    ? PORTS[activePort] : null;
+  return po ? altimetryBreakRadiusNm(po) : 100;
+}
 
 function heatDisplayIntensity(score){
   // Visual-only contrast stretch: keeps ranking/click targets unchanged while
@@ -8963,15 +9027,6 @@ function heatDisplayIntensity(score){
   const s = Math.max(0, Math.min(1, Number(score) || 0));
   if(s <= 0) return 0;
   return Math.max(PREDICT_HEAT_SCORE_MIN, Math.pow(s, 0.60));
-}
-
-// Determines the fishing radius based on which coast the port is on.
-// Gulf-coast ports get the wider 160nm radius; Pacific (SoCal) ports get a
-// tighter 125nm cap matched to where the West-Coast grounds actually are.
-function maxRangeForPort(portObj){
-  if(!portObj) return MAX_PORT_RANGE_NM_ATLANTIC;
-  if(typeof isPacificContext === "function" && isPacificContext(portObj.lat, portObj.lng)) return MAX_PORT_RANGE_NM_PACIFIC;
-  return isGulfContext(portObj.lat, portObj.lng) ? MAX_PORT_RANGE_NM_GULF : MAX_PORT_RANGE_NM_ATLANTIC;
 }
 
 // Great-circle distance in nautical miles between two lat/lng points.
@@ -10597,9 +10652,8 @@ function _altiIsoSegs(A,B,C,D,L,latA,lngA,step){
 // "break" peaks (the steepest fronts). Grid-only, so it's cached alongside the
 // smooth canvas. A break must clear ~0.06 m/10nm (a real edge, not noise) and
 // sit ≥ ~1.1° from a stronger one so we surface separate fronts, not one blob.
-// Magenta highlights are limited to ALTI_BREAK_PORT_RADIUS_NM of the home port
-// so captains only see breaks they can actually run to.
-const ALTI_BREAK_PORT_RADIUS_NM = 150;
+// Magenta highlights are limited to the port's tailored fishing radius (see
+// portFishingRangeNm) so captains only see breaks they can actually run to.
 // Magenta contour trace stays local to each peak — not the full SSH isoline.
 const ALTI_BREAK_TRACE_NM = 32;
 // Realistic 1-day eddy motion — arrows only drawn inside this band so we never
@@ -10814,7 +10868,7 @@ function altimetryRequestBox(map){
 // Fixed bbox centered on the home port for magenta-break scoring. Independent
 // of map pan/zoom so the top-3 breaks stay anchored to the port.
 function altimetryPortBox(port){
-  const r = ALTI_BREAK_PORT_RADIUS_NM;
+  const r = altimetryBreakRadiusNm(port);
   let degLat = r / 60 + 0.05;
   let degLng = r / (60 * Math.cos(port.lat * Math.PI / 180) || 1e-6) + 0.05;
   degLat = Math.min(degLat, ALTI_MAX_LAT_SPAN / 2);
@@ -10904,8 +10958,8 @@ const AltimetryLayer = L.Layer.extend({
       if(seq!==_altiPortBreaksSeq||!layerVis.altimetry) return;
       ALTIMETRY_BREAKS_GRID=grid;
       ALTIMETRY_BREAKS_GHOST_GRID=ghost;
-      const brk=grid?_altiComputeBreaks(grid, po.lat, po.lng, ALTI_BREAK_PORT_RADIUS_NM):null;
-      const ghostBrk=ghost?_altiComputeBreaks(ghost, po.lat, po.lng, ALTI_BREAK_PORT_RADIUS_NM):null;
+      const brk=grid?_altiComputeBreaks(grid, po.lat, po.lng, altimetryBreakRadiusNm(po)):null;
+      const ghostBrk=ghost?_altiComputeBreaks(ghost, po.lat, po.lng, altimetryBreakRadiusNm(po)):null;
       ALTI_PORT_BREAKS={ port:portName, offset:altiDayOffset, brk, ghostBrk };
       this._portBreaksKey=key;
       this._draw();
@@ -11012,11 +11066,11 @@ const AltimetryLayer = L.Layer.extend({
           _altiDrawMagentaBreaks(ctx, this._map, gg, matchedGhost, {
             strokeStyle:"rgba(236,72,153,0.30)", lineWidth:2, shadowBlur:0,
             dotR:2.6, dotFill:"rgba(236,72,153,0.38)",
-          }, po.lat, po.lng, ALTI_BREAK_PORT_RADIUS_NM);
+          }, po.lat, po.lng, altimetryBreakRadiusNm(po));
         }
       }
       if(drifts.length) _altiDrawDriftArrows(ctx, this._map, drifts);
-      _altiDrawMagentaBreaks(ctx, this._map, bg, brk, {}, po.lat, po.lng, ALTI_BREAK_PORT_RADIUS_NM);
+      _altiDrawMagentaBreaks(ctx, this._map, bg, brk, {}, po.lat, po.lng, altimetryBreakRadiusNm(po));
     }
   },
 });
@@ -13499,9 +13553,10 @@ function updateOceanLegend(){
         ? `<div style="font-size:12px;color:#f8a5a5;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Altimetry unavailable</div>`
         : `<div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">NOAA altimetry · ${altiDate}</div>`);
     const altiPort = (typeof activePort!=="undefined"&&activePort&&PORTS[activePort]) ? activePort.split(",")[0] : null;
+    const altiRangeNm = altiBreakRadiusForActivePort();
     const altiRangeNote = altiPort
-      ? `within <b style="color:#e8f4ff">${ALTI_BREAK_PORT_RADIUS_NM} nm</b> of <b style="color:#e8f4ff">${altiPort}</b>`
-      : `within <b style="color:#e8f4ff">${ALTI_BREAK_PORT_RADIUS_NM} nm</b> of your home port <span style="color:#fbbf24">(select a port)</span>`;
+      ? `within <b style="color:#e8f4ff">${altiRangeNm} nm</b> of <b style="color:#e8f4ff">${altiPort}</b>`
+      : `within <b style="color:#e8f4ff">${altiRangeNm} nm</b> of your home port <span style="color:#fbbf24">(select a port)</span>`;
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em;margin-bottom:3px">SEA-SURFACE HEIGHT</div>
@@ -13513,7 +13568,7 @@ function updateOceanLegend(){
         ${detail(`
         <div style="font-size:13px;color:#7aa8c8;margin-top:6px;line-height:1.45"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">Altimetry Date</b> bar to step day-by-day and read eddy drift. Faint magenta = prior day; amber arrow = how far the break moved.</div>
         <div style="margin-top:7px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
-          <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${ALTI_BREAK_PORT_RADIUS_NM}-nm fishing range are highlighted.</span>
+          <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${altiRangeNm}-nm fishing range are highlighted.</span>
           <span style="justify-self:center;color:#f9a8d4;font-size:13px;line-height:1">▬</span><span><b style="color:#fbcfe8">Faint magenta</b> — same break on the <b>previous day</b> (only shown when tracked). Step ◀▶ or the slider to compare passes.</span>
           <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">↗</span><span><b style="color:#fde68a">Amber arrow</b> — 1-day drift for a <b>tracked</b> break (2–${ALTI_MAX_DRIFT_NM_PER_DAY} nm). No arrow = different feature or moved too far to link.</span>
           <span style="justify-self:center;color:#f87171;font-size:13px;line-height:1">●</span><span><b style="color:#f8b4b4">Red — warm bulge</b> (Gulf Stream, warm-core eddy). Bait &amp; pelagics stack on the edges — not the center.</span>
@@ -15361,11 +15416,69 @@ function briefDayLabel(off){
   return d.toLocaleDateString("en-US", { weekday: "short" });
 }
 function setBriefDay(off){ briefDayOffset = off; renderBrief(); }
+
+// ── Brief history (48-hour recall) ───────────────────────────────────────────
+function briefHistoryLoad(){
+  try {
+    const now = Date.now();
+    const raw = JSON.parse(localStorage.getItem(BRIEF_HISTORY_KEY) || "[]");
+    return raw.filter(b => b && b.expiresAt > now && b.brief)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  } catch { return []; }
+}
+function briefHistorySave(list){
+  try { localStorage.setItem(BRIEF_HISTORY_KEY, JSON.stringify(list.slice(0, BRIEF_HISTORY_MAX))); } catch(e){}
+}
+function briefHistoryAdd(entry){
+  const list = briefHistoryLoad();
+  list.unshift(entry);
+  briefHistorySave(list);
+}
+function briefHistoryAgeLabel(createdAt){
+  const h = Math.floor((Date.now() - createdAt) / 3600000);
+  if(h < 1) return "just now";
+  if(h === 1) return "1h ago";
+  if(h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? "1d ago" : `${d}d ago`;
+}
+function recallBrief(id){
+  const h = briefHistoryLoad().find(b => b.id === id);
+  if(!h || !h.brief) return;
+  aiCOA = h.brief;
+  pinLL = { lat: h.pinLat, lng: h.pinLng };
+  briefDayOffset = h.fishDayOffset || 0;
+  briefSp = Array.isArray(h.speciesIds) ? h.speciesIds.filter(x => x) : [];
+  renderBrief();
+  openBriefModal();
+}
+
 function renderBrief(){
-  const pills=SPECIES.filter(s=>s.id!=="all").map(sp=>{
-    const on=briefSp.includes(sp.id);
-    return`<button class="sp-pill" style="border-color:${on?sp.color:"#c8b060"};background:${on?sp.color+"18":"white"};color:${on?sp.color:"#7a6030"}" onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
+  const allowed = briefSpeciesForSpot();
+  // Drop any prior selections that don't apply to this spot/port anymore.
+  briefSp = briefSp.filter(id => allowed.some(s => s.id === id));
+  const pills = allowed.map(sp => {
+    const on = briefSp.includes(sp.id);
+    return `<button class="sp-pill" style="border-color:${on?sp.color:"#c8b060"};background:${on?sp.color+"18":"white"};color:${on?sp.color:"#7a6030"}" onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
   }).join("");
+  const recent = briefHistoryLoad();
+  const recentHtml = recent.length ? `
+    <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin:16px 0 6px;letter-spacing:.05em">RECENT BRIEFS (48 HOURS)</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+      ${recent.slice(0, 6).map(b => {
+        const spLabel = (b.speciesNames && b.speciesNames.length)
+          ? b.speciesNames.slice(0, 2).join(", ") + (b.speciesNames.length > 2 ? "…" : "")
+          : "General";
+        const run = b.runFromPortNm != null ? `${b.runFromPortNm} nm` : "";
+        const safeId = (b.id || "").replace(/'/g, "\\'");
+        return `<button type="button" onclick="recallBrief('${safeId}')" style="
+          text-align:left;background:rgba(255,255,255,.06);border:1px solid rgba(125,211,252,.25);
+          border-radius:10px;padding:10px 12px;cursor:pointer;font-family:inherit;color:#e8f4ff">
+          <div style="font-size:12.5px;font-weight:700">${briefDayLabel(b.fishDayOffset || 0)} · ${(b.port || "Custom pin").replace(/</g,"")}</div>
+          <div style="font-size:11px;color:#9ec5e8;margin-top:3px;line-height:1.35">${spLabel}${run ? " · " + run : ""} · ${briefHistoryAgeLabel(b.createdAt)}</div>
+        </button>`;
+      }).join("")}
+    </div>` : "";
   // Day selector — lets the captain scope the brief to the day they'll fish
   // (out to 6 days, the useful marine-forecast window).
   const dayBtns = [0,1,2,3,4,5,6].map(off=>{
@@ -15373,12 +15486,17 @@ function renderBrief(){
     return `<button class="brief-day" style="border:1px solid ${on?'#7dd3fc':'#c8b060'};background:${on?'rgba(125,211,252,.16)':'white'};color:${on?'#1c5a86':'#7a6030'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap" onclick="setBriefDay(${off})">${briefDayLabel(off)}</button>`;
   }).join("");
   const hasPin=!!pinLL;
+  const speciesNote = !allowed.length
+    ? `<p style="color:#9ec5e8;font-size:12px;margin-bottom:8px">Select a home port or drop a chart pin to see species for your area.</p>`
+    : (allowed.length < 12 ? "" : `<p style="color:#9ec5e8;font-size:11px;margin-bottom:6px;line-height:1.4">Showing ${allowed.length} species for this spot — extraneous coast-wide fish are hidden.</p>`);
   pbody(`
+    ${recentHtml}
     ${!hasPin?`<p style="color:#9ec5e8;font-size:12px;margin-bottom:12px;line-height:1.5">Tap the chart to drop a weather pin first.</p>`:""}
     <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">WHICH DAY ARE YOU FISHING?</div>
     <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px">${dayBtns}</div>
-    <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">OPTIONAL — SELECT TARGET SPECIES:</div>
-    <div class="sp-pills">${pills}</div>
+    <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">OPTIONAL — TARGET SPECIES FOR THIS SPOT:</div>
+    ${speciesNote}
+    <div class="sp-pills">${pills || `<span style="font-size:12px;color:#9ec5e8">No species for this location yet.</span>`}</div>
     <button id="brief-btn" ${!hasPin||aiLoading?"disabled":""} onclick="runBrief()">
       ${aiLoading?"GENERATING BRIEF...":"GENERATE AI CAPTAIN'S BRIEF"}</button>
     ${aiCOA?`<div id="brief-out" class="brief-rendered"><div class="bout-hdr">AI CAPTAIN'S BRIEF · DEPARTING ${(activePort||"Oregon Inlet, NC").toUpperCase()} · ${briefDayLabel(briefDayOffset).toUpperCase()}</div><div class="brief-md">${briefMarkdownToHtml(aiCOA)}</div><button type="button" class="brief-view-btn" onclick="openBriefModal()">View full brief ↗</button></div>`:""}
@@ -15727,6 +15845,21 @@ async function runBrief(){
     const { brief } = await window.BW_AUTH.callBrief(payload);
     aiCOA = brief || "Brief unavailable.";
     briefOk = !!brief;
+    if(briefOk && pinLL){
+      briefHistoryAdd({
+        id: "b-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+        createdAt: Date.now(),
+        expiresAt: Date.now() + BRIEF_HISTORY_TTL_MS,
+        port: port || "",
+        pinLat: pinLL.lat,
+        pinLng: pinLL.lng,
+        speciesIds: [...sp],
+        speciesNames,
+        fishDayOffset: briefDayOffset,
+        runFromPortNm: payload.runFromPortNm,
+        brief: aiCOA,
+      });
+    }
   } catch (e) {
     // Surface the REAL reason instead of a blanket "try again." callBrief()
     // throws with the server's own message (premium gate, daily limit, upstream
@@ -24029,11 +24162,7 @@ function wpFilteredList(list){
     // each, instead of only its nearest port.
     const port = (typeof PORTS !== "undefined") ? PORTS[WP_state.regionFilter] : null;
     if(port && Number.isFinite(port.lat)){
-      const isGulf = (typeof isGulfContext === "function")
-        ? isGulfContext(port.lat, port.lng) : (port.lng < -83 && port.lat < 31);
-      const rangeNm = isGulf
-        ? (typeof MAX_PORT_RANGE_NM_GULF !== "undefined" ? MAX_PORT_RANGE_NM_GULF : 120)
-        : (typeof MAX_PORT_RANGE_NM_ATLANTIC !== "undefined" ? MAX_PORT_RANGE_NM_ATLANTIC : 90);
+      const rangeNm = (typeof maxRangeForPort === "function") ? maxRangeForPort(port) : 120;
       out = out.filter(p => {
         // Keep user waypoints regardless (they have no meaningful port range).
         if(String(p.id || "").startsWith("u-")) return p.region === WP_state.regionFilter;
