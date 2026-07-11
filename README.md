@@ -1,7 +1,6 @@
 # Bluewater Intel
 
-A freemium fishing-intelligence PWA for the U.S. East Coast and Gulf of Mexico
-(Maine → Texas). The flagship is a species-specific predictive **Bite Map** plus a
+A freemium fishing-intelligence PWA for U.S. coastal waters from Maine to Southern California. The flagship is a species-specific predictive **Bite Map** plus a
 generative **AI Captain's Brief**, layered on real ocean, weather, and bathymetry
 data and ~12,000 charted fishing waypoints.
 

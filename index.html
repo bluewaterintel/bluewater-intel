@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
-<title>Bluewater Intel — East Coast Offshore Fishing</title>
+<title>Bluewater Intel — Maine to Southern California</title>
 <link rel="manifest" href="/manifest.json"/>
 <meta name="theme-color" content="#2979b5"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -1216,6 +1216,20 @@ body.nav-open #ruler-readout{
 .brief-headsup .bh-icon{font-size:18px;line-height:1;flex:0 0 auto}
 .brief-headsup b,.brief-headsup strong{color:#fde68a}
 .brief-empty{color:#9ec5e8;font-size:13px;padding:10px 0}
+.brief-history{margin-top:20px;padding-top:16px;border-top:1px solid rgba(125,211,252,.14)}
+.brief-history--modal{margin-top:22px}
+.brief-history--empty{border-top:none;padding-top:0;margin-top:12px}
+.brief-history-hdr{font-size:11px;color:#7dd3fc;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
+.brief-history-list{display:flex;flex-direction:column;gap:6px}
+.brief-history-btn{
+  text-align:left;background:rgba(255,255,255,.06);border:1px solid rgba(125,211,252,.25);
+  border-radius:10px;padding:10px 12px;cursor:pointer;font-family:inherit;color:#e8f4ff;
+  transition:background .15s,border-color .15s;
+}
+.brief-history-btn:hover{background:rgba(255,255,255,.1);border-color:rgba(125,211,252,.4)}
+.brief-history-btn--active{border-color:rgba(168,85,247,.55);background:rgba(168,85,247,.12)}
+.brief-history-btn-title{font-size:12.5px;font-weight:700}
+.brief-history-btn-meta{font-size:11px;color:#9ec5e8;margin-top:3px;line-height:1.35}
 /* Inline panel copy of the finished brief (dark, rendered — no typewriter serif) */
 #brief-out.brief-rendered{background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.2);border-radius:12px;padding:14px 16px}
 .brief-view-btn{
@@ -1568,7 +1582,7 @@ body.nav-open #ruler-readout{
     <div style="text-align:center;margin-bottom:22px">
       <div style="font-size:22px;font-weight:800;color:#f0f6ff;letter-spacing:.02em">Bluewater Intel</div>
       <div style="font-size:13px;color:#cfe5ff;margin-top:8px;font-weight:600;line-height:1.4">Know where the fish are before you leave the dock.</div>
-      <div style="font-size:11.5px;color:#9ec5e8;margin-top:8px;line-height:1.5">AI-powered bite forecasts, live ocean &amp; weather intel, canyon and structure waypoints, and your personal catch log — from Maine to Texas.</div>
+      <div style="font-size:11.5px;color:#9ec5e8;margin-top:8px;line-height:1.5">AI-powered bite forecasts, live ocean &amp; weather intel, canyon and structure waypoints, and your personal catch log — from Maine to Southern California.</div>
     </div>
     <div id="bw-auth-welcome" style="display:none;margin-bottom:14px;padding:12px 14px;border-radius:10px;
          background:rgba(34,197,94,.12);border:1px solid rgba(134,239,172,.45);text-align:center">
@@ -2387,6 +2401,14 @@ body.nav-open #ruler-readout{
 
       <div class="nav-section-label">My Tools</div>
       <div class="nav-group">
+        <button type="button" class="nav-row" onclick="navOpenFromMenu(openRecentBriefs)">
+          <span class="nav-ico">🤖</span>
+          <span class="nav-row-body">
+            <span class="nav-row-title">Recent Captain's Briefs</span>
+            <span class="nav-row-sub" id="nav-brief-recall-sub">Reopen briefs from the last 48 hours</span>
+          </span>
+          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+        </button>
         <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openDownloadTrip)">
           <span class="nav-ico">⬇</span>
           <span class="nav-row-body">
@@ -2451,7 +2473,7 @@ body.nav-open #ruler-readout{
           <span class="nav-ico">📖</span>
           <span class="nav-row-body">
             <span class="nav-row-title">Fish Encyclopedia</span>
-            <span class="nav-row-sub">Complete how-to guides for every East Coast species</span>
+            <span class="nav-row-sub">Complete how-to guides for coastal species</span>
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
@@ -2484,7 +2506,7 @@ body.nav-open #ruler-readout{
     </div>
 
     <div style="padding:10px 18px;border-top:1px solid rgba(107,191,234,.1);font-size:9px;color:rgba(107,191,234,.4);letter-spacing:.08em;text-align:center;font-family:'Segoe UI',Arial,sans-serif">
-      EAST COAST OFFSHORE INTELLIGENCE
+      MAINE TO SOUTHERN CALIFORNIA
     </div>
   </div>
 
@@ -3215,6 +3237,15 @@ body.nav-open #ruler-readout{
         <input type="checkbox" id="pref-keep-loran-on" onchange="prefSet('persistLoran', this.checked)">
         <span>Keep LORAN-C lines on by default</span>
       </label>
+
+      <hr class="layers-divider">
+      <div class="layers-section">AI CAPTAIN'S BRIEF</div>
+      <button type="button" id="settings-recent-briefs-btn" onclick="openRecentBriefs()" style="
+        width:100%;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);
+        color:#7dd3fc;padding:11px 12px;border-radius:8px;font-size:13px;font-weight:700;
+        cursor:pointer;font-family:inherit;margin-top:4px;text-align:left;
+      ">📋 Recent Captain's Briefs</button>
+      <div id="settings-recent-briefs-hint" class="pref-hint" style="margin-top:8px">Briefs you generate are saved on this device for 48 hours so you can reopen them without rerunning the bite map.</div>
 
       <hr class="layers-divider">
       <div class="layers-section">DATA</div>
@@ -4575,6 +4606,7 @@ async function initMap(){
   updateLegend();
   // Populate the account section so it's correct from first menu open.
   if(typeof renderAccountSection === "function") renderAccountSection();
+  if(typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
 
   // Initialize offline tile caching (Service Worker)
   initOfflineCache();
@@ -9642,7 +9674,7 @@ const HeatCanvasLayer = L.Layer.extend({
         // CUDEM/ETOPO store land as depth 0 and water as depth > 0. When the bathy
         // grid is loaded for this area (it is during a prediction render), this
         // is a precise, basemap-independent land cut for coastlines, bays,
-        // sounds and rivers everywhere from Maine to Texas — so the heat never
+        // sounds and rivers everywhere from Maine to Southern California — so the heat never
         // paints over land even when the satellite basemap pixel is ambiguous
         // (turbid bay water, shadows, vegetation reading as "water").
         if(typeof realDepthAt === "function"){
@@ -11456,6 +11488,7 @@ function renderExplainerMain(){
   const div = document.getElementById("predict-explainer");
   if(!div || !_explainerState) return;
   const {cell, species} = _explainerState;
+  const savedBriefCount = briefHistoryLoad().length;
 
   const factorBars = cell.factors.map(f => {
     const pct = Math.round((f.score / 0.30) * 100);
@@ -11560,6 +11593,11 @@ function renderExplainerMain(){
           <span style="flex:1;text-align:left">AI Captain's Brief</span>
           <span style="color:#c084fc;opacity:.6">→</span>
         </button>
+        ${savedBriefCount ? `<button onclick="openRecentBriefsModal()" class="ex-action-btn" style="background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.35);color:#7dd3fc">
+          <span style="font-size:16px">📋</span>
+          <span style="flex:1;text-align:left">Recall recent brief${savedBriefCount > 1 ? "s" : ""} (${savedBriefCount})</span>
+          <span style="color:#7dd3fc;opacity:.6">→</span>
+        </button>` : ""}
         <button onclick="openSubPanel('reports')" class="ex-action-btn" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);color:#34d399">
           <span style="font-size:16px">📋</span>
           <span style="flex:1;text-align:left">Reports near here</span>
@@ -13088,6 +13126,7 @@ function refreshSettingsModal(){
       const b = loranRow.querySelector(".pro-badge"); if(b) b.remove();
     }
   }
+  if(typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
 }
 
 // (offline cache is now permanently visible in the layers modal — no
@@ -15387,13 +15426,74 @@ function briefModalSubtitle(){
   }
   return parts.join("  ·  ");
 }
+let _lastBriefId = null;
+
+function briefHistoryPanelHtml(opts = {}){
+  const max = opts.max ?? 6;
+  const placement = opts.placement || "inline";
+  const recent = briefHistoryLoad();
+  if(!recent.length){
+    return opts.showEmpty ? `
+      <div class="brief-history brief-history--empty brief-history--${placement}">
+        <div class="brief-history-hdr">Recent briefs (48 hours)</div>
+        <p class="brief-empty">Briefs you generate are saved here for 48 hours so you can reopen them.</p>
+      </div>` : "";
+  }
+  const items = recent.slice(0, max).map(b => {
+    const spLabel = (b.speciesNames && b.speciesNames.length)
+      ? b.speciesNames.slice(0, 2).join(", ") + (b.speciesNames.length > 2 ? "…" : "")
+      : "General";
+    const run = b.runFromPortNm != null ? `${b.runFromPortNm} nm` : "";
+    const safeId = (b.id || "").replace(/'/g, "\\'");
+    const active = opts.highlightId && b.id === opts.highlightId;
+    return `<button type="button" class="brief-history-btn${active ? " brief-history-btn--active" : ""}" onclick="recallBrief('${safeId}')">
+      <div class="brief-history-btn-title">${briefDayLabel(b.fishDayOffset || 0)} · ${(b.port || "Custom pin").replace(/</g,"")}</div>
+      <div class="brief-history-btn-meta">${spLabel}${run ? " · " + run : ""} · ${briefHistoryAgeLabel(b.createdAt)}</div>
+    </button>`;
+  }).join("");
+  return `
+    <div class="brief-history brief-history--${placement}">
+      <div class="brief-history-hdr">Recent briefs (48 hours)</div>
+      <div class="brief-history-list">${items}</div>
+    </div>`;
+}
+
 function openBriefModal(){
   const modal = document.getElementById("brief-modal");
   const body = document.getElementById("brief-modal-body");
   const sub = document.getElementById("brief-modal-sub");
   if(!modal || !body) return;
-  body.innerHTML = `<div class="brief-md">${briefMarkdownToHtml(aiCOA)}</div>`;
-  if(sub) sub.textContent = briefModalSubtitle();
+  const hasBrief = !!(aiCOA && aiCOA.trim() && !/^(sign in|brief unavailable|couldn't reach)/i.test(aiCOA.trim()));
+  const historyHtml = briefHistoryPanelHtml({ placement: "modal", max: 6, highlightId: _lastBriefId });
+  body.innerHTML = (hasBrief ? `<div class="brief-md">${briefMarkdownToHtml(aiCOA)}</div>` : "")
+    + historyHtml
+    + (!hasBrief && !historyHtml ? `<p class="brief-empty">Generate a brief from the chart, or open one from your saved list above.</p>` : "");
+  if(sub) sub.textContent = hasBrief ? briefModalSubtitle() : (briefHistoryLoad().length ? "Tap a saved brief below to reopen it" : briefModalSubtitle());
+  modal.classList.add("open");
+  body.scrollTop = 0;
+}
+function openRecentBriefs(){
+  const settings = document.getElementById("settings-modal");
+  if(settings && settings.classList.contains("open") && typeof toggleSettingsPanel === "function"){
+    toggleSettingsPanel();
+  }
+  openRecentBriefsModal();
+}
+function openRecentBriefsModal(){
+  const modal = document.getElementById("brief-modal");
+  const body = document.getElementById("brief-modal-body");
+  const sub = document.getElementById("brief-modal-sub");
+  if(!modal || !body) return;
+  const recent = briefHistoryLoad();
+  if(!recent.length){
+    body.innerHTML = `
+      <p class="brief-empty">No saved briefs on this device yet. To create one, open the bite map, tap a cell, and choose <b>AI Captain's Brief</b>. Each brief you generate is saved here for 48 hours.</p>
+      <p class="brief-empty" style="margin-top:10px;font-size:12px">Reach this list anytime from <b>MENU → Recent Captain's Briefs</b> or <b>Settings → Recent Captain's Briefs</b>.</p>`;
+    if(sub) sub.textContent = "Saved on this device · 48-hour recall";
+  } else {
+    body.innerHTML = briefHistoryPanelHtml({ placement: "modal", max: 8, highlightId: _lastBriefId });
+    if(sub) sub.textContent = `${recent.length} saved · last 48 hours`;
+  }
   modal.classList.add("open");
   body.scrollTop = 0;
 }
@@ -15429,10 +15529,32 @@ function briefHistoryLoad(){
 function briefHistorySave(list){
   try { localStorage.setItem(BRIEF_HISTORY_KEY, JSON.stringify(list.slice(0, BRIEF_HISTORY_MAX))); } catch(e){}
 }
+function refreshBriefRecallUi(){
+  const count = briefHistoryLoad().length;
+  const navSub = document.getElementById("nav-brief-recall-sub");
+  if(navSub){
+    navSub.textContent = count
+      ? `${count} saved on this device · last 48 hours`
+      : "Reopen briefs from the last 48 hours";
+  }
+  const settingsBtn = document.getElementById("settings-recent-briefs-btn");
+  if(settingsBtn){
+    settingsBtn.textContent = count
+      ? `📋 Recent Captain's Briefs (${count})`
+      : "📋 Recent Captain's Briefs";
+  }
+  const settingsHint = document.getElementById("settings-recent-briefs-hint");
+  if(settingsHint){
+    settingsHint.textContent = count
+      ? `${count} brief${count === 1 ? "" : "s"} saved on this device. Tap to reopen without rerunning the bite map.`
+      : "Briefs you generate are saved on this device for 48 hours so you can reopen them without rerunning the bite map.";
+  }
+}
 function briefHistoryAdd(entry){
   const list = briefHistoryLoad();
   list.unshift(entry);
   briefHistorySave(list);
+  refreshBriefRecallUi();
 }
 function briefHistoryAgeLabel(createdAt){
   const h = Math.floor((Date.now() - createdAt) / 3600000);
@@ -15445,6 +15567,7 @@ function briefHistoryAgeLabel(createdAt){
 function recallBrief(id){
   const h = briefHistoryLoad().find(b => b.id === id);
   if(!h || !h.brief) return;
+  _lastBriefId = h.id;
   aiCOA = h.brief;
   pinLL = { lat: h.pinLat, lng: h.pinLng };
   briefDayOffset = h.fishDayOffset || 0;
@@ -15461,24 +15584,8 @@ function renderBrief(){
     const on = briefSp.includes(sp.id);
     return `<button class="sp-pill" style="border-color:${on?sp.color:"#c8b060"};background:${on?sp.color+"18":"white"};color:${on?sp.color:"#7a6030"}" onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
   }).join("");
-  const recent = briefHistoryLoad();
-  const recentHtml = recent.length ? `
-    <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin:16px 0 6px;letter-spacing:.05em">RECENT BRIEFS (48 HOURS)</div>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-      ${recent.slice(0, 6).map(b => {
-        const spLabel = (b.speciesNames && b.speciesNames.length)
-          ? b.speciesNames.slice(0, 2).join(", ") + (b.speciesNames.length > 2 ? "…" : "")
-          : "General";
-        const run = b.runFromPortNm != null ? `${b.runFromPortNm} nm` : "";
-        const safeId = (b.id || "").replace(/'/g, "\\'");
-        return `<button type="button" onclick="recallBrief('${safeId}')" style="
-          text-align:left;background:rgba(255,255,255,.06);border:1px solid rgba(125,211,252,.25);
-          border-radius:10px;padding:10px 12px;cursor:pointer;font-family:inherit;color:#e8f4ff">
-          <div style="font-size:12.5px;font-weight:700">${briefDayLabel(b.fishDayOffset || 0)} · ${(b.port || "Custom pin").replace(/</g,"")}</div>
-          <div style="font-size:11px;color:#9ec5e8;margin-top:3px;line-height:1.35">${spLabel}${run ? " · " + run : ""} · ${briefHistoryAgeLabel(b.createdAt)}</div>
-        </button>`;
-      }).join("")}
-    </div>` : "";
+  const recentHtml = briefHistoryPanelHtml({ showEmpty: true, highlightId: _lastBriefId })
+    + (briefHistoryLoad().length ? `<button type="button" class="brief-view-btn" style="margin-top:0;margin-bottom:12px;background:rgba(56,189,248,.15);color:#7dd3fc;border:1px solid rgba(56,189,248,.35);box-shadow:none" onclick="openRecentBriefsModal()">Open all recent briefs ↗</button>` : "");
   // Day selector — lets the captain scope the brief to the day they'll fish
   // (out to 6 days, the useful marine-forecast window).
   const dayBtns = [0,1,2,3,4,5,6].map(off=>{
@@ -15846,8 +15953,10 @@ async function runBrief(){
     aiCOA = brief || "Brief unavailable.";
     briefOk = !!brief;
     if(briefOk && pinLL){
+      const briefId = "b-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
+      _lastBriefId = briefId;
       briefHistoryAdd({
-        id: "b-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+        id: briefId,
         createdAt: Date.now(),
         expiresAt: Date.now() + BRIEF_HISTORY_TTL_MS,
         port: port || "",
@@ -16655,6 +16764,7 @@ function toggleNav(){
   // Refresh the account section every time the menu opens so it reflects
   // any state changes (sign-in/out) since last open.
   if(opening) renderAccountSection();
+  if(opening && typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
 }
 function closeNav(){
   document.getElementById('nav-menu').style.display='none';
@@ -16714,7 +16824,7 @@ window.addEventListener("load",initMap);
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📖 Fish Encyclopedia</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">East Coast · How-To Guides</div>
+      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Maine to Southern California · How-To Guides</div>
     </div>
   </div>
 
@@ -20752,7 +20862,7 @@ function tbRenderRecommend(){
 
     <!-- Disclaimer -->
     <div style="font-size:10px;color:#5d96c4;text-align:center;padding:12px;line-height:1.6">
-      Recommendations curated from veteran East Coast captains. Match-percent reflects how well each item fits your conditions.<br>Local knowledge always wins — these are suggestions, not guarantees.
+      Recommendations curated from veteran coastal captains. Match-percent reflects how well each item fits your conditions.<br>Local knowledge always wins — these are suggestions, not guarantees.
     </div>
   `;
 }
@@ -21119,7 +21229,7 @@ function tbClearFavs(){
       <div class="tut-data-icon">📍</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Recent reports &amp; vessel activity</div>
-        <div class="tut-data-desc">Recent fishing reports for a species near a location bump up scores in that area. Reports decay with an ~8-hour half-life — a 2-hour-old report carries full weight, yesterday's much less. The known-areas table recognizes ~22 named offshore locations (canyons, banks, ledges from New England to Texas) for precise spatial matching; reports without a recognized area fall back to the port location.</div>
+        <div class="tut-data-desc">Recent fishing reports for a species near a location bump up scores in that area. Reports decay with an ~8-hour half-life — a 2-hour-old report carries full weight, yesterday's much less. The known-areas table recognizes ~22 named offshore locations (canyons, banks, ledges from Maine to Southern California) for precise spatial matching; reports without a recognized area fall back to the port location.</div>
       </div>
     </div>
 
@@ -21797,8 +21907,12 @@ const LEGAL_TERMS_HTML = `
   <p style="${_LEGAL_P}">Bluewater Intel is an <b>educational and planning tool</b> intended to help you learn <b>how to fish, where to fish, and when to fish</b>. It aggregates and models oceanographic and environmental information to produce estimates and suggestions.</p>
   <p style="${_LEGAL_P}"><b>The Services are NOT a navigation system and must not be used for any navigation, positioning, mapping, tracking, routing, or GPS purpose.</b> Do not use the Services for marine navigation, route planning, collision avoidance, or to identify hazards, depths, or safe passage. Waypoints, charts, and positions shown may be inaccurate, incomplete, or out of date. Always rely on official nautical charts, properly maintained navigational equipment, and your own seamanship. Marine conditions are dangerous and change rapidly; you are solely responsible for the safety of yourself, your crew, and your vessel.</p>
 
+  <div style="${_LEGAL_H}">1a. Waypoint &amp; Structure Information</div>
+  <p style="${_LEGAL_P}">Fishing waypoints, structure markers, ramps, and similar locations shown in the Services are compiled from a variety of sources, including <b>state and federal government databases</b>, other <b>public records</b>, <b>open-source information</b>, information <b>submitted by users</b>, and information <b>provided by fishermen and other contributors</b>. The waypoint database is updated regularly, but <b>a coordinate or marker does not guarantee that fish, bait, or bottom structure is present at that location</b> at any given time. Ocean currents, storms, sediment movement, fishing pressure, and natural bottom changes can shift, cover, or alter structure over time.</p>
+  <p style="${_LEGAL_P}">Waypoints and structure markers are intended as a <b>planning guide and reference tool</b> to help fishermen explore and organize trips — not as a promise of catch, navigational certainty, or current seafloor conditions. <b>Bluewater Intel will not be held liable for any loss of time, fuel, bait, equipment, or other expenses</b> arising from your reliance on any waypoint, structure marker, or related location information in the Services, or from traveling to or fishing any such location.</p>
+
   <div style="${_LEGAL_H}">2. No Guarantee of Results</div>
-  <p style="${_LEGAL_P}">Fishing involves countless factors outside anyone's control. The Services' predictions, scores, waypoints, and "hot spots" are <b>estimates, not guarantees</b>. We do not promise that fish are present at any location, that you will catch fish, or that any prediction will prove accurate. Information is based in part on historical and modeled data. Past conditions and model outputs do not guarantee future results.</p>
+  <p style="${_LEGAL_P}">Fishing involves countless factors outside anyone's control. The Services' predictions, scores, waypoints, and "hot spots" are <b>estimates and guides, not guarantees</b>. We do not promise that fish are present at any location, that you will catch fish, or that any prediction will prove accurate. Information is based in part on historical and modeled data. Past conditions and model outputs do not guarantee future results.</p>
 
   <div style="${_LEGAL_H}">3. Eligibility &amp; Your Account</div>
   <p style="${_LEGAL_P}">You must be of legal age to form a binding contract to use the Services. If you create an account, you agree to provide accurate, current, and complete information and to keep it updated. You are responsible for safeguarding your login credentials and for all activity under your account, and agree not to share your account or use another person's account. Notify us promptly of any unauthorized use. We are not liable for any loss arising from unauthorized use of your account. We may suspend or terminate accounts, in our sole discretion, for any violation of these Terms or for conduct we deem harmful, abusive, or unlawful.</p>
@@ -21831,10 +21945,10 @@ const LEGAL_TERMS_HTML = `
   <p style="${_LEGAL_P}"><b>Chargebacks.</b> If you initiate a chargeback or payment dispute, we may suspend or terminate your access pending resolution. Please contact us first so we can try to resolve any billing concern.</p>
 
   <div style="${_LEGAL_H}">10. Disclaimer of Warranties</div>
-  <p style="${_LEGAL_P}">THE SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY, AND NON-INFRINGEMENT. We do not warrant that the Services will be accurate, reliable, uninterrupted, error-free, or secure, that defects will be corrected, or that any data (including weather, sea-surface temperature, chlorophyll, depth, waypoint, or location information) is accurate, complete, or current. Any reliance you place on the Services is strictly at your own risk. This does not affect any warranties that cannot be excluded or limited under applicable law.</p>
+  <p style="${_LEGAL_P}">THE SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY, AND NON-INFRINGEMENT. We do not warrant that the Services will be accurate, reliable, uninterrupted, error-free, or secure, that defects will be corrected, or that any data (including weather, sea-surface temperature, chlorophyll, depth, waypoint, structure, or location information) is accurate, complete, or current. Waypoint and structure coordinates are compiled from third-party, public, user-submitted, and contributor sources and may be outdated or imprecise. Any reliance you place on the Services is strictly at your own risk. This does not affect any warranties that cannot be excluded or limited under applicable law.</p>
 
   <div style="${_LEGAL_H}">11. Limitation of Liability</div>
-  <p style="${_LEGAL_P}">TO THE FULLEST EXTENT PERMITTED BY LAW, the Company and its owners, members, employees, licensors, suppliers, and partners will not be liable for any injury, death, property damage, or loss, or for any indirect, incidental, consequential, special, exemplary, or punitive damages, arising out of or relating to your access to or use of (or inability to use) the Services, including any reliance on any prediction, waypoint, data, or content, even if advised of the possibility of such damages. To the extent any liability cannot be excluded, our total aggregate liability will not exceed one hundred U.S. dollars ($100) or the amount you paid us, if any, for the Services in the twelve months before the claim, whichever is greater. Your sole and exclusive remedy for dissatisfaction with the Services is to stop using them.</p>
+  <p style="${_LEGAL_P}">TO THE FULLEST EXTENT PERMITTED BY LAW, the Company and its owners, members, employees, licensors, suppliers, and partners will not be liable for any injury, death, property damage, or loss, or for any indirect, incidental, consequential, special, exemplary, or punitive damages, arising out of or relating to your access to or use of (or inability to use) the Services, including any reliance on any prediction, waypoint, structure marker, data, or content — including any loss of <b>time, fuel, bait, equipment, or other trip expenses</b> from traveling to or fishing any waypoint or location shown in the Services — even if advised of the possibility of such damages. To the extent any liability cannot be excluded, our total aggregate liability will not exceed one hundred U.S. dollars ($100) or the amount you paid us, if any, for the Services in the twelve months before the claim, whichever is greater. Your sole and exclusive remedy for dissatisfaction with the Services is to stop using them.</p>
 
   <div style="${_LEGAL_H}">12. Assumption of Risk</div>
   <p style="${_LEGAL_P}">Boating and offshore fishing are inherently hazardous. By using the Services you acknowledge these risks and agree that you participate at your own risk and are solely responsible for your own decisions on the water.</p>

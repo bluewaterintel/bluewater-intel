@@ -1,7 +1,7 @@
 {
   "name": "BlueWater Intel",
   "short_name": "BW Intel",
-  "description": "East Coast offshore fishing intelligence — maps, waypoints, forecasts, and predictions.",
+  "description": "Coastal fishing intelligence from Maine to Southern California — maps, waypoints, forecasts, and predictions.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a1628",
