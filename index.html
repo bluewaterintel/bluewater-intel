@@ -14588,7 +14588,7 @@ function adminRenderDetail(){
       <div style="font-size:13px;font-weight:700;color:#f0f6ff;margin-bottom:4px;word-break:break-all">${escapeHtml(u.email || u.id)}</div>
       <div style="font-size:11px;color:#9ec5e8;margin-bottom:12px;line-height:1.45">
         Joined ${adminFmtDate(u.created_at)} · Last sign-in ${adminFmtDate(u.last_sign_in_at)}<br>
-        Briefs today: <b style="color:#7dd3fc">${u.briefs_today}</b> · Stripe: ${u.stripe_customer_id ? escapeHtml(u.stripe_customer_id) : "—"}
+        Briefs today: <b style="color:#7dd3fc">${u.is_owner ? `${u.briefs_today} (unlimited)` : `${u.briefs_today}/2`}</b> · Stripe: ${u.stripe_customer_id ? escapeHtml(u.stripe_customer_id) : "—"}
       </div>
       <div class="admin-actions" style="margin-top:0;margin-bottom:12px">
         <button type="button" class="admin-btn ok" onclick="adminPreset('grant_pro')">Grant Pro (1yr)</button>
@@ -14642,7 +14642,7 @@ function adminRenderList(){
           ${adminStatusPill(u.subscription_status, u.is_owner)}
           ${u.subscription_interval ? `<span>${u.subscription_interval}</span> · ` : ""}
           ${u.display_name ? escapeHtml(u.display_name) + " · " : ""}
-          briefs ${u.briefs_today}/2
+          ${u.is_owner ? `briefs ${u.briefs_today} (unlimited) · ` : `briefs ${u.briefs_today}/2 · `}
         </div>
       </div>
     </div>`).join("");
