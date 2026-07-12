@@ -10,6 +10,15 @@
   const cache = new Map();
   const TTL = 20 * 60 * 1000;
 
+  function fetchTimeout(ms) {
+    if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+      return AbortSignal.timeout(ms);
+    }
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), ms);
+    return ctrl.signal;
+  }
+
   function normalizeHours(v) {
     const h = Number(v);
     if (!isFinite(h) || h <= 0) return 0;
@@ -77,7 +86,7 @@
       if (opts.hours > 0) params.set("hours", String(opts.hours));
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: AbortSignal.timeout(12000),
+        signal: fetchTimeout(12000),
       });
       if (!res.ok) throw new Error(`ocean ${res.status}`);
       const payload = await res.json();
@@ -115,7 +124,7 @@
       });
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: AbortSignal.timeout(15000),
+        signal: fetchTimeout(15000),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -140,7 +149,7 @@
       });
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: AbortSignal.timeout(22000),
+        signal: fetchTimeout(22000),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -179,7 +188,7 @@
       if (hours > 0) params.set("hours", String(hours));
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: AbortSignal.timeout(50000),
+        signal: fetchTimeout(50000),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -206,7 +215,7 @@
       });
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: AbortSignal.timeout(20000),
+        signal: fetchTimeout(20000),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -233,7 +242,7 @@
       if (h > 0) params.set("hours", String(h));
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: AbortSignal.timeout(30000),
+        signal: fetchTimeout(30000),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -262,7 +271,7 @@
       else params.set("daysBack", String(back));
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: AbortSignal.timeout(20000),
+        signal: fetchTimeout(20000),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -290,7 +299,7 @@
       });
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: AbortSignal.timeout(30000),
+        signal: fetchTimeout(30000),
       });
       if (!res.ok) return null;
       const data = await res.json();

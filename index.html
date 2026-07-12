@@ -16,8 +16,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bw-auth.js"></script>
 <script src="bw-freshness.js"></script>
-<script src="bw-ocean.js?v=20260712a"></script>
-<script src="bw-wind.js?v=20260712a"></script>
+<script src="bw-ocean.js?v=20260712b"></script>
+<script src="bw-wind.js?v=20260712b"></script>
 <script src="bw-breaks.js?v=20260708"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Master fishing-waypoint dataset (~12.6k points), loaded as a companion file so the
@@ -6967,8 +6967,9 @@ function depthAtFromGrid(g, lat, lng){
   if(!g) return null;
   const fi = (lat - g.minLat) / g.step;
   const fj = (lng - g.minLng) / g.step;
-  if(fi < 0 || fj < 0 || fi > g.nLat - 1 || fj > g.nLng - 1) return null;
-  const i = Math.round(fi), j = Math.round(fj);
+  if(fi < -0.5 || fj < -0.5 || fi > g.nLat - 0.5 || fj > g.nLng - 0.5) return null;
+  const i = Math.max(0, Math.min(g.nLat - 1, Math.round(fi)));
+  const j = Math.max(0, Math.min(g.nLng - 1, Math.round(fj)));
   const v = g.depth[i * g.nLng + j];
   return (typeof v === "number" && isFinite(v)) ? v : null;
 }
@@ -7312,6 +7313,7 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
   }
   if(predictUsable(data)){
     applyPredictBathyData(data.bathy);
+    if(!BATHY_GRID && data.bathy) applyBathyData(data.bathy);
     applyChlorData(data.chlor);
     applySstData(data.sst);
     applyOceanField(data.field, data.fieldStepNm);
@@ -17712,6 +17714,20 @@ function selectPort(name){
   drawRamps();
   drawPlatforms();
   ensurePredictLayerOn();
+  // Preload real bathy for the port's fishing range so depth popups, currents
+  // coast mask, and the bite map never fall back to the coarse shelf model.
+  if(p && typeof buildBathyGrid === "function" && typeof maxRangeForPort === "function"){
+    const maxRange = maxRangeForPort(p);
+    const degLat = (maxRange / 60) + 0.15;
+    const degLng = (maxRange / (60 * Math.cos(p.lat * Math.PI / 180))) + 0.15;
+    const _pac = typeof isPacificContext === "function" && isPacificContext(p.lat, p.lng);
+    const LAT_MIN = _pac ? 29.0 : 24.0, LAT_MAX = _pac ? 42.5 : 43.5;
+    const LNG_MIN = _pac ? -126.0 : -97.5, LNG_MAX = _pac ? -116.0 : -68.5;
+    buildBathyGrid(
+      Math.max(LAT_MIN, p.lat - degLat), Math.min(LAT_MAX, p.lat + degLat),
+      Math.max(LNG_MIN, p.lng - degLng), Math.min(LNG_MAX, p.lng + degLng)
+    ).catch(() => {});
+  }
   drawPrediction();
   if(layerVis.altimetry&&altimetryLayer){
     altimetryLayer._requestPortBreaks(true);

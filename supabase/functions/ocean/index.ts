@@ -29,14 +29,24 @@ import { NetCDFReader } from "npm:netcdfjs";
 // and you may prefer a different SST product). Marked clearly.
 // ============================================================================
 
-const CORS = {
-  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGINS") ?? "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Vary": "Origin",
-};
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
+// ALLOWED_ORIGINS may list several comma-separated app URLs. Browsers require
+// Access-Control-Allow-Origin to echo ONE matching origin — not the whole list.
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+
+function corsHeaders(origin: string | null) {
+  const allow = origin && (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin))
+    ? origin
+    : (ALLOWED_ORIGINS[0] ?? "*");
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
+
+const json = (body: unknown, cors: Record<string, string>, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 // ── Config (VERIFY dataset IDs against live ERDDAP before production) ─────────
 // Per-dataset ERDDAP base URLs: NOAA hosts these products on different ERDDAP
@@ -1639,7 +1649,8 @@ async function pool<T, R>(items: T[], limit: number, fn: (it: T) => Promise<R>):
 }
 
 export const handler = async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  const cors = corsHeaders(req.headers.get("Origin"));
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const u = new URL(req.url);
   const mode = u.searchParams.get("mode") || "ocean";
 
@@ -1652,11 +1663,11 @@ export const handler = async (req: Request): Promise<Response> => {
     const lngMin = num(u.searchParams.get("lngMin"));
     const lngMax = num(u.searchParams.get("lngMax"));
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
-      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, cors, 400);
     }
     const out = await fetchBathyRows(latMin, latMax, lngMin, lngMax);
     return new Response(JSON.stringify(out), {
-      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=604800" },
+      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=604800" },
     });
   }
 
@@ -1667,13 +1678,13 @@ export const handler = async (req: Request): Promise<Response> => {
     const lngMin = num(u.searchParams.get("lngMin"));
     const lngMax = num(u.searchParams.get("lngMax"));
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
-      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, cors, 400);
     }
     const hoursAhead = num(u.searchParams.get("hours")) ?? 0;
     const out = await fetchCurrentGrid(latMin, latMax, lngMin, lngMax, hoursAhead);
-    if (!out) return json({ error: "Current data unavailable" }, 502);
+    if (!out) return json({ error: "Current data unavailable" }, cors, 502);
     return new Response(JSON.stringify(out), {
-      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=7200" },
+      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=7200" },
     });
   }
 
@@ -1686,12 +1697,12 @@ export const handler = async (req: Request): Promise<Response> => {
     const lngMin = num(u.searchParams.get("lngMin"));
     const lngMax = num(u.searchParams.get("lngMax"));
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
-      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, cors, 400);
     }
     const hoursAhead = num(u.searchParams.get("hours")) ?? 0;
     const out = await fetchWindGrid(latMin, latMax, lngMin, lngMax, hoursAhead);
     return new Response(JSON.stringify({ ...out, hour: Math.round(clamp(hoursAhead, 0, 96) / 3) * 3 }), {
-      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=900" },
+      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=900" },
     });
   }
 
@@ -1702,7 +1713,7 @@ export const handler = async (req: Request): Promise<Response> => {
     const lngMin = num(u.searchParams.get("lngMin"));
     const lngMax = num(u.searchParams.get("lngMax"));
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
-      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, cors, 400);
     }
     const hoursAhead = normalizeOceanForecastHour(num(u.searchParams.get("hours")) ?? 0);
     const out = hoursAhead > 0
@@ -1710,7 +1721,7 @@ export const handler = async (req: Request): Promise<Response> => {
       : await fetchAltimetryGrid(latMin, latMax, lngMin, lngMax,
         Math.max(0, Math.min(6, Math.round(num(u.searchParams.get("daysBack")) ?? 0))));
     return new Response(JSON.stringify(out), {
-      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" },
+      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" },
     });
   }
 
@@ -1721,13 +1732,13 @@ export const handler = async (req: Request): Promise<Response> => {
     const lngMin = num(u.searchParams.get("lngMin"));
     const lngMax = num(u.searchParams.get("lngMax"));
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
-      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, cors, 400);
     }
     const hoursAhead = normalizeOceanForecastHour(num(u.searchParams.get("hours")) ?? 12);
     const out = await fetchRtofsSstGrid(latMin, latMax, lngMin, lngMax, hoursAhead);
-    if (!out) return json({ error: "RTOFS SST forecast unavailable" }, 502);
+    if (!out) return json({ error: "RTOFS SST forecast unavailable" }, cors, 502);
     return new Response(JSON.stringify(out), {
-      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=7200" },
+      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=7200" },
     });
   }
 
@@ -1743,11 +1754,11 @@ export const handler = async (req: Request): Promise<Response> => {
     const lngMin = num(u.searchParams.get("lngMin"));
     const lngMax = num(u.searchParams.get("lngMax"));
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
-      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, cors, 400);
     }
     const out = await fetchChlorRows(latMin, latMax, lngMin, lngMax);
     return new Response(JSON.stringify(out), {
-      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
+      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
     });
   }
 
@@ -1763,7 +1774,7 @@ export const handler = async (req: Request): Promise<Response> => {
     const lngMin = num(u.searchParams.get("lngMin"));
     const lngMax = num(u.searchParams.get("lngMax"));
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
-      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, cors, 400);
     }
     const maxPoints = Math.max(20, Math.min(120, Math.round(num(u.searchParams.get("maxPoints")) ?? 90)));
     const forecastHour = normalizeOceanForecastHour(num(u.searchParams.get("hours")) ?? 0);
@@ -1832,14 +1843,14 @@ export const handler = async (req: Request): Promise<Response> => {
       bathy, chlor, sst, field, fieldStepNm, forecastHour, current: currentGrid, altimetry,
       oceanForecast: useOceanForecast,
     }), {
-      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
+      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
     });
   }
 
   // Point modes (ocean/wind) require coordinates.
   const lat = num(u.searchParams.get("lat"));
   const lng = num(u.searchParams.get("lng"));
-  if (lat == null || lng == null) return json({ error: "lat and lng required" }, 400);
+  if (lat == null || lng == null) return json({ error: "lat and lng required" }, cors, 400);
   const hoursAhead = num(u.searchParams.get("hours")) ?? 0;
 
   if (mode === "wind") {
@@ -1859,7 +1870,7 @@ export const handler = async (req: Request): Promise<Response> => {
       tide: { value: null, state: null, observedAtMs: null },
       sources: { wind: model.source },
     }), {
-      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=900" },
+      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=900" },
     });
   }
 
@@ -1867,7 +1878,7 @@ export const handler = async (req: Request): Promise<Response> => {
   const payload = await assembleOcean(lat, lng, hoursAhead);
   // Cache at the edge for 30 min (these feeds update hourly at most).
   return new Response(JSON.stringify(payload), {
-    headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
+    headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
   });
 };
 

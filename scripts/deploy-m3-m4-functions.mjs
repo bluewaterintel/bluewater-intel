@@ -10,7 +10,8 @@ import { fileURLToPath } from "url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PROJECT_REF = "mealpzwbjamkjdrsszqe";
-const SITE = "https://coruscating-bunny-42b64d.netlify.app";
+const SITE = "https://bluewaterintel.com";
+const NETLIFY_PREVIEW = "https://coruscating-bunny-42b64d.netlify.app";
 const SUPABASE = join(ROOT, "node_modules", ".bin", "supabase");
 
 function loadEnv() {
@@ -50,7 +51,7 @@ if (!cliEnv.SUPABASE_ACCESS_TOKEN) {
 
 run(SUPABASE, ["link", "--project-ref", PROJECT_REF], cliEnv);
 
-const secrets = [`ALLOWED_ORIGINS=${SITE}`];
+const secrets = [`ALLOWED_ORIGINS=${SITE},${NETLIFY_PREVIEW}`];
 if (envFile.ANTHROPIC_API_KEY) secrets.push(`ANTHROPIC_API_KEY=${envFile.ANTHROPIC_API_KEY}`);
 else console.warn("⚠ ANTHROPIC_API_KEY missing from .env — brief will return 503.");
 
