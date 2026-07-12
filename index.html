@@ -479,15 +479,15 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     border-radius:18px 18px 0 0 !important;
     margin:0 !important;
   }
-  /* ── Ocean/weather legend — full width under header; zoom hidden on phones ── */
+  /* ── Ocean/weather legend — centered chip; zoom hidden on phones ── */
   #ocean-legend{
     padding:5px 8px !important;
-    max-width:none !important;
+    max-width:min(400px, calc(100vw - 100px)) !important;
     min-width:0 !important;
     width:auto !important;
-    left:8px !important;
-    right:52px !important;
-    transform:none !important;
+    left:50% !important;
+    right:auto !important;
+    transform:translateX(-50%) !important;
     overflow:visible !important;
   }
   #ocean-legend .oc-legend-bar,
@@ -646,6 +646,13 @@ body.nav-open #ruler-readout{
   pointer-events:none;
   transition:opacity .15s ease-out;
 }
+/* Block map pan/zoom while the ocean-legend detail sheet is open */
+body.ocean-legend-sheet-open .leaflet-container,
+body.ocean-legend-sheet-open .leaflet-pane,
+body.ocean-legend-sheet-open #map > :not(#ocean-legend-sheet){
+  pointer-events:none !important;
+}
+body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
 .leaflet-control-zoom,
 #layers-ctrl,
 #map-scale-bar,
@@ -1137,12 +1144,13 @@ body.nav-open #ruler-readout{
     width:20px !important;height:20px !important;
   }
   #ocean-opacity-control{right:52px}
-  /* Ocean legend — slim chip; detail opens bottom sheet */
+  /* Ocean legend — centered slim chip; detail opens bottom sheet */
   #ocean-legend{
     pointer-events:auto !important;
-    left:8px !important;
-    right:52px !important;
-    max-width:none !important;
+    left:50% !important;
+    right:auto !important;
+    transform:translateX(-50%) !important;
+    max-width:min(400px, calc(100vw - 100px)) !important;
     min-width:0 !important;
     padding:5px 8px !important;
     max-height:none !important;
@@ -13978,11 +13986,26 @@ function openOceanLegendSheet(){
     '<div style="color:#9ec5e8;font-size:13px">No extra details for the active layers.</div>';
   sheet.classList.add("open");
   oceanLegendExpanded = true;
+  setMapInteractionLocked(true);
 }
 function closeOceanLegendSheet(){
   const sheet = document.getElementById("ocean-legend-sheet");
   if(sheet) sheet.classList.remove("open");
   oceanLegendExpanded = false;
+  setMapInteractionLocked(false);
+}
+// Freeze Leaflet pan/zoom while a modal sheet covers the map (legend detail, etc.).
+function setMapInteractionLocked(locked){
+  document.body.classList.toggle("ocean-legend-sheet-open", !!locked);
+  if(locked) document.body.style.overflow = "hidden";
+  else document.body.style.overflow = "";
+  if(typeof MAP === "undefined" || !MAP) return;
+  const toggles = ["dragging","touchZoom","doubleClickZoom","boxZoom","keyboard"];
+  for(const key of toggles){
+    if(MAP[key]){
+      try { locked ? MAP[key].disable() : MAP[key].enable(); } catch(e){}
+    }
+  }
 }
 function syncOceanLegendSheet(){
   const sheet = document.getElementById("ocean-legend-sheet");
@@ -17632,6 +17655,8 @@ function ensurePredictLayerOn(){
 // with a PRO badge; tapping opens the upgrade modal instead of the feature.
 const PRO_MENU_FNS = ["openReports", "openWaypoints", "openDownloadTrip"];
 const PAID_MENU_FNS = ["openRecentBriefs"];
+let _navBackGuard = false;
+
 function navOpenFromMenu(openFn){
   closeNav();
   // If this is a Pro feature and the user isn't entitled, show the upgrade
@@ -17649,21 +17674,17 @@ function navOpenFromMenu(openFn){
 }
 
 function navBack(closeFn){
-  // Close the current overlay, then reopen the nav menu where the user
-  // came from. They can pick another item or tap outside to dismiss.
-  closeFn();
-  // Defer the menu reopen by one tick. The button click that triggered
-  // this is still bubbling up to the document, where the outside-click
-  // handler would otherwise immediately close any menu we just opened.
-  // setTimeout(0) lets that handler finish first (seeing the menu still
-  // closed, no-op), then we open the menu cleanly on the next tick.
-  setTimeout(() => {
-    const m = document.getElementById('nav-menu');
-    if(m && m.style.display !== 'block'){
-      m.style.display = 'block';
-      document.body.classList.add('nav-open');
-    }
-  }, 0);
+  // Reopen the menu under the overlay, then dismiss the overlay — so the
+  // chart never flashes between the two states. A one-tick guard prevents the
+  // same click from bubbling to the document outside-click handler.
+  _navBackGuard = true;
+  document.body.classList.add("nav-open");
+  const m = document.getElementById("nav-menu");
+  if(m) m.style.display = "block";
+  if(typeof closeFn === "function") closeFn();
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => { _navBackGuard = false; });
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -17863,6 +17884,7 @@ function closeNav(){
 
 // Close nav on outside click
 document.addEventListener('click',e=>{
+  if(_navBackGuard) return;
   if(!e.target.closest('#nav-btn')&&!e.target.closest('#nav-menu')){
     closeNav();
   }
