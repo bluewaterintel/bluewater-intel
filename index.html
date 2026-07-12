@@ -6927,6 +6927,32 @@ const PREDICT_WEIGHTS = {
     weatherChange: 0.04,
     moonPhase:     0.02,   // Small credit — full/new moons lift the nearshore bite.
   },
+  // NEARSHORE REEF/BOTTOM (demersal): snapper, grouper, gag, amberjack, black
+  // sea bass, tautog, triggerfish, hogfish, mutton/lane/vermilion snapper, cod,
+  // haddock, pollock. These fish are GLUED to a wreck/ledge/reef — the bite is
+  // driven by STRUCTURE + CURRENT + pressure/solunar feeding windows, NOT by
+  // surface thermal fronts or chlorophyll color edges (which the roving
+  // nearshore pelagics DO chase). The generic nearshore table spent ~24% of its
+  // weight on thermalBreak + convergence + chlorophyll, all of which are
+  // irrelevant to a bottom fish and diluted the structure signal that actually
+  // matters. This profile redistributes that weight into structure, tide/current,
+  // pressure and solunar. Selected via predictWeightsFor() when the species is
+  // nearshore AND flagged demersal/bottom.
+  nearshoreReef: {
+    temperature:   0.16,   // Bottom-temp scored (see tempForScore); still gates cold shutdown.
+    depthStruct:   0.36,   // DECISIVE — reef/wreck/ledge fish live ON the structure.
+    chlorophyll:   0.00,   // Irrelevant to bottom fish; unreliable over structure anyway.
+    thermalBreak:  0.00,   // They don't hunt surface thermal fronts.
+    convergence:   0.00,   // Same — no relationship to surface convergence.
+    reports:       0.00,
+    season:        0.07,
+    pressure:      0.10,   // Bottom fish react strongly to a falling barometer.
+    solunar:       0.09,   // Feeding windows over the structure.
+    tide:          0.12,   // Current over the structure turns the bite on/off.
+    wind:          0.02,   // Mostly sea-state/access, not the bite itself.
+    weatherChange: 0.05,
+    moonPhase:     0.03,   // Full/new moons lift the reef bite via current strength.
+  },
   inshore: {
     temperature:   0.14,   // Raised — cold/wrong-temp water should actually suppress the bite
                            //   (works with the firmer inshore temp gate), not lean on season alone.
@@ -6953,6 +6979,14 @@ const PREDICT_WEIGHTS = {
 function predictWeightsFor(speciesId){
   const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
   const cat = sp ? sp.cat : "offshore";
+  // Nearshore splits into two archetypes with opposite drivers: roving pelagics
+  // (mackerel, albies, cobia) chase temp/bait/color edges, while reef/bottom
+  // demersals (snapper, grouper, tog, AJ, sea bass, etc.) key on structure +
+  // current. Route the demersal/bottom-flagged nearshore fish to the reef table.
+  if(cat === "nearshore"){
+    const prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
+    if(prefs && (prefs.demersal || prefs.bottom)) return PREDICT_WEIGHTS.nearshoreReef;
+  }
   return PREDICT_WEIGHTS[cat] || PREDICT_WEIGHTS.offshore;
 }
 
