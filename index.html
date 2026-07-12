@@ -1966,12 +1966,20 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
     return { email: em, password: passEl.value };
   }
 
-  document.getElementById("bw-auth-signin").addEventListener("click", async () => {
+  async function doSignIn(){
     msg.style.display="none";
     const c = validCreds(); if(!c) return;
     try {
       await window.BW_AUTH.signIn(c.email, c.password);
     } catch(e){ showErr(e.message || "Sign in failed"); }
+  }
+  document.getElementById("bw-auth-signin").addEventListener("click", doSignIn);
+  // Let the user submit with Enter from either the email or password field,
+  // instead of forcing a click on the Sign In button.
+  [emailEl, passEl].forEach((el) => {
+    el.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){ e.preventDefault(); doSignIn(); }
+    });
   });
   forgotEl.addEventListener("click", async (e) => {
     e.preventDefault();
@@ -25745,7 +25753,69 @@ var WP_state = {
   sourceFilter: "all",   // "all" | "manual" | a pack id — filters the My Waypoints list
   userPoints: [],
   editing: null,
+  // Charted database waypoints (the ~13k dataset) shown in the Waypoints panel
+  // for Pro users. Fetched per active port from pack_waypoints_within and cached.
+  charted: [],
+  chartedPort: null,
+  chartedStatus: "idle",  // "idle" | "loading" | "live" | "error" | "none"
 };
+
+// DB type_code (WP_TYPE_STYLE) → panel WP_TYPES key, so charted rows render with
+// the right icon/color/pill and respond to the panel's type filter.
+const WP_CODE_TO_PANEL_TYPE = {
+  wk:"wreck", rf:"reef", st:"ar", ld:"ledge", rk:"rock",
+  hl:"ledge", hp:"bump", cy:"canyon", tw:"tower", pf:"tower", rg:"tower",
+};
+const WP_CHARTED_MAX = 800;  // cap rendered charted cards (thousands are possible)
+
+// Fetch the charted-waypoint database for the active port and cache it on
+// WP_state so the panel's Waypoints tab can browse/search it. Pro-gated: the
+// RPC returns nothing for free accounts, so this is a no-op for them.
+async function wpFetchCharted(force){
+  const premium = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM;
+  const havePort = premium && typeof activePort !== "undefined" && activePort &&
+                   typeof PORTS !== "undefined" && PORTS[activePort];
+  if(!havePort){
+    WP_state.charted = []; WP_state.chartedPort = null;
+    WP_state.chartedStatus = premium ? "none" : "idle";
+    if(WP_state.tab === "public" && document.getElementById("wp-content")) wpRender();
+    return;
+  }
+  if(!force && WP_state.chartedPort === activePort && WP_state.chartedStatus === "live") return;
+  const port = activePort;
+  const p = PORTS[port];
+  WP_state.chartedStatus = "loading";
+  if(WP_state.tab === "public" && document.getElementById("wp-content")) wpRender();
+  try {
+    const sbc = window.BW_AUTH && window.BW_AUTH._sb;
+    if(!sbc) throw new Error("auth not ready");
+    const radius = (typeof maxRangeForPort === "function") ? maxRangeForPort(p) : 120;
+    const { data, error } = await sbc.rpc("pack_waypoints_within", {
+      p_port: port, p_lat: p.lat, p_lng: p.lng, p_radius_nm: radius, p_types: null,
+    });
+    if(error) throw error;
+    if(activePort !== port) return;  // user switched ports mid-flight — discard
+    WP_state.charted = (data || []).map((r, i) => {
+      const style = WP_TYPE_STYLE[r.type_code] || {};
+      const label = style.label || "Waypoint";
+      const nm = Number.isFinite(r.nm) ? r.nm : null;
+      return {
+        id: "db-" + port + "-" + i,
+        name: (r.name && r.name !== label) ? r.name : label,
+        type: WP_CODE_TO_PANEL_TYPE[r.type_code] || "private",
+        lat: r.lat, lng: r.lng,
+        region: port,
+        desc: nm != null ? `${nm.toFixed(1)} nm from ${port}` : "",
+        charted: true,
+      };
+    });
+    WP_state.chartedPort = port;
+    WP_state.chartedStatus = "live";
+  } catch(e){
+    WP_state.charted = []; WP_state.chartedStatus = "error";
+  }
+  if(WP_state.tab === "public" && document.getElementById("wp-content")) wpRender();
+}
 
 // ── LEGACY PORT PACKS ────────────────────────────────────────────────────────
 // A "port pack" was a bundle of waypoints for a specific port, merged into the
@@ -25794,6 +25864,9 @@ function openWaypoints(){
   document.getElementById("wp-overlay").style.display = "block";
   document.body.style.overflow = "hidden";
   wpRender();
+  // Pull the charted database for the active port so Pro users can browse the
+  // full ~13k dataset in the panel (not just the curated public spots).
+  if(typeof wpFetchCharted === "function") wpFetchCharted();
 }
 function closeWaypoints(){
   document.getElementById("wp-overlay").style.display = "none";
@@ -25804,6 +25877,7 @@ function wpSwitchTab(tab){
   WP_state.search = "";
   document.querySelectorAll(".wp-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
   wpRender();
+  if(tab === "public" && typeof wpFetchCharted === "function") wpFetchCharted();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -25964,22 +26038,45 @@ function wpCardHTML(p, isUser){
 
 // ── PUBLIC POIs TAB ───────────────────────────────────────────────────────
 function wpRenderPublic(){
-  const list = wpFilteredList(WP_PUBLIC);
+  const premium = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM;
+  const charted = (premium && Array.isArray(WP_state.charted)) ? WP_state.charted : [];
+  // Curated public spots first, then the charted database (already nearest-first).
+  const source = charted.length ? WP_PUBLIC.concat(charted) : WP_PUBLIC;
+  const list = wpFilteredList(source);
+  const shown = list.length > WP_CHARTED_MAX ? list.slice(0, WP_CHARTED_MAX) : list;
+
+  // Status/info banner explains what's in this tab and its loading state.
+  let banner;
+  if(!premium){
+    banner = `<div class="wp-info-box"><b>🌊 Curated public POIs</b> — well-known structure from Portsmouth NH to Charleston SC. Upgrade to Pro to unlock the full ~13,000-waypoint charted database (wrecks, reefs, ledges, rocks and structure) for your home port.</div>`;
+  } else if(WP_state.chartedStatus === "loading"){
+    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — loading the full waypoint set for <b>${activePort || "your port"}</b>…</div>`;
+  } else if(WP_state.chartedStatus === "none"){
+    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — pick a home port to load the full ~13,000-waypoint charted database (wrecks, reefs, ledges, rocks and structure) within range. Curated public spots are shown below in the meantime.</div>`;
+  } else if(WP_state.chartedStatus === "error"){
+    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — couldn't load the charted set right now. Showing curated public spots. <a href="#" onclick="event.preventDefault();wpFetchCharted(true)" style="color:#7dd3fc">Retry</a></div>`;
+  } else {
+    banner = `<div class="wp-info-box"><b>🌊 Waypoints</b> — curated public spots plus the full charted database within range of <b>${activePort || "your port"}</b> (${charted.length.toLocaleString()} charted). Tap a card to fly there, or ⭐ to save it to My Waypoints.</div>`;
+  }
+
+  const capNote = list.length > shown.length
+    ? `<div style="text-align:center;font-size:11px;color:#9ec5e8;padding:10px 8px">Showing the nearest ${shown.length.toLocaleString()} of ${list.length.toLocaleString()}. Refine with the search box, type or region filter to narrow the list.</div>`
+    : "";
+
   return `
     ${wpToolbar(false)}
-    ${wpStatsBar(list, "public waypoints")}
-    <div class="wp-info-box">
-      <b>🌊 Curated public POIs</b> — well-known structure from Portsmouth NH to Charleston SC. These are published landmarks (NOAA wrecks, state AR programs, named features), not private "honey holes." Tap ⭐ on any card to save it to your personal waypoints, or tap the card to fly the map to that location.
-    </div>
+    ${wpStatsBar(list, "waypoints")}
+    ${banner}
     <div class="wp-list">
-      ${list.length === 0 ? `
+      ${shown.length === 0 ? `
         <div class="wp-empty">
           <div class="wp-empty-icon">🔍</div>
           <div style="font-size:14px;color:#9ec5e8;margin-bottom:6px">No waypoints match your search</div>
           <div style="font-size:11px">Try clearing your filters or search term.</div>
         </div>
-      ` : list.map(p => wpCardHTML(p, false)).join("")}
+      ` : shown.map(p => wpCardHTML(p, false)).join("")}
     </div>
+    ${capNote}
   `;
 }
 
