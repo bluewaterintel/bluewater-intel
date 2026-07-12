@@ -3037,13 +3037,13 @@ body.nav-open #ruler-readout{
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="Federal OCS oil &amp; gas platforms in the Gulf of Mexico (BSEE data). Useful structure/FAD reference — informational only, not for navigation.">
+    <label class="layer-row" title="Federal OCS oil &amp; gas platforms in the Gulf of Mexico (BSEE data). Shows rigs within 150 nm of your home port. Informational only — not for navigation.">
       <input type="checkbox" id="chk-platforms" onchange="toggleLayer('platforms')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 20V8l6-4 6 4v12"/><path d="M9 20v-5h6v5"/><path d="M10 8h4"/><path d="M12 4v4"/></svg>
         </span>
-        <span>Gulf Platforms <span style="font-size:8px;color:#9ec5e8;opacity:.7">(oil &amp; gas rigs)</span></span>
+        <span>Gulf Platforms <span style="font-size:8px;color:#9ec5e8;opacity:.7">(150 nm)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -15677,14 +15677,18 @@ function drawClosures(){
 
 // ════════════════════════════════════════════════════════════════════════════
 // GULF OF MEXICO PLATFORMS (BSEE federal OCS oil & gas structures)
-// Gulf-wide static layer — no active port required. Viewport culling keeps ~7k
-// platforms from overwhelming the DOM at wide zoom.
+// Port-scoped like ramps/waypoints: rigs within PLAT_RADIUS_NM of the active
+// port, then viewport-culled for pan/zoom performance. The old Gulf-wide draw
+// hit a hard marker cap while iterating latitude-sorted data, which produced a
+// sharp north/south cutoff line on wide views.
 // ════════════════════════════════════════════════════════════════════════════
 let platformLayerGroup = null;
 let _platformRedrawBound = false;
 let _platformRenderedBounds = null;
-const PLAT_MAX_DRAW = 1200;
+const PLAT_RADIUS_NM = 150;
 const PLAT_VIEW_BUFFER = 0.35;
+let _platInRangeCache = null;
+let _platInRangePort = null;
 
 let _platIcon = null;
 function platformIcon(){
@@ -15705,14 +15709,37 @@ function platformIcon(){
   return _platIcon;
 }
 
+function buildPlatformInRangeCache(){
+  const p = PORTS[activePort];
+  const data = window.BW_GOM_PLATFORMS;
+  if(!p || !data || !data.length) return [];
+  const items = [];
+  for(const row of data){
+    const lat = row[1], lng = row[2];
+    const nm = nmBetween(p.lat, p.lng, lat, lng);
+    if(nm <= PLAT_RADIUS_NM){
+      items.push({ name: row[0] || "Platform", lat, lng, area: row[3] || "", nm });
+    }
+  }
+  items.sort((a, b) => a.nm - b.nm);
+  return items;
+}
+
 function drawPlatforms(){
   if(!platformLayerGroup){ platformLayerGroup = L.layerGroup().addTo(MAP); }
-  if(!layerVis.platforms || typeof window.BW_GOM_PLATFORMS === "undefined" || !window.BW_GOM_PLATFORMS.length){
+  if(!layerVis.platforms || !activePort || !PORTS[activePort] ||
+     typeof window.BW_GOM_PLATFORMS === "undefined" || !window.BW_GOM_PLATFORMS.length){
     platformLayerGroup.clearLayers();
     platformLayers = [];
     _platformRenderedBounds = null;
+    _platInRangeCache = null;
+    _platInRangePort = null;
     bindPlatformRedraw();
     return;
+  }
+  if(_platInRangePort !== activePort){
+    _platInRangeCache = buildPlatformInRangeCache();
+    _platInRangePort = activePort;
   }
   renderPlatformMarkers(true);
   bindPlatformRedraw();
@@ -15720,8 +15747,7 @@ function drawPlatforms(){
 
 function renderPlatformMarkers(force){
   if(!platformLayerGroup){ platformLayerGroup = L.layerGroup().addTo(MAP); }
-  const data = window.BW_GOM_PLATFORMS;
-  if(!layerVis.platforms || !data || !data.length){
+  if(!layerVis.platforms || !_platInRangeCache || !_platInRangeCache.length){
     platformLayerGroup.clearLayers();
     platformLayers = [];
     _platformRenderedBounds = null;
@@ -15736,24 +15762,20 @@ function renderPlatformMarkers(force){
   platformLayerGroup.clearLayers();
   platformLayers = [];
   _platformRenderedBounds = bounds;
-  let drawn = 0;
-  for(const p of data){
-    if(drawn >= PLAT_MAX_DRAW) break;
-    const lat = p[1], lng = p[2];
-    if(bounds && !bounds.contains([lat, lng])) continue;
-    const name = p[0] || "Platform";
-    const area = p[3] || "";
-    const latStr = Math.abs(lat).toFixed(5) + (lat>=0 ? "° N" : "° S");
-    const lngStr = Math.abs(lng).toFixed(5) + (lng>=0 ? "° E" : "° W");
-    const safeName = String(name).replace(/'/g, "\\'");
-    const m = L.marker([lat, lng], {icon: platformIcon()});
+  for(const p of _platInRangeCache){
+    if(bounds && !bounds.contains([p.lat, p.lng])) continue;
+    const latStr = Math.abs(p.lat).toFixed(5) + (p.lat>=0 ? "° N" : "° S");
+    const lngStr = Math.abs(p.lng).toFixed(5) + (p.lng>=0 ? "° E" : "° W");
+    const safeName = String(p.name).replace(/'/g, "\\'");
+    const m = L.marker([p.lat, p.lng], {icon: platformIcon()});
     m.bindPopup(
       `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:190px">
-        <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:14px;padding:0 12px">${name}</div>
-        ${area ? `<div style="font-size:11px;color:#fde68a;margin-bottom:4px">OCS Area ${area}</div>` : ""}
+        <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:14px;padding:0 12px">${p.name}</div>
+        ${p.area ? `<div style="font-size:11px;color:#fde68a;margin-bottom:4px">OCS Area ${p.area}</div>` : ""}
+        <div style="font-size:12px;color:#cfe5ff;margin-bottom:2px">${p.nm.toFixed(1)} nm from ${activePort.split(",")[0]}</div>
         <div style="font-size:10.5px;color:#8fb4d8;margin-bottom:8px">${latStr}, ${lngStr}</div>
         <div style="font-size:9.5px;color:#9ca3af;line-height:1.4;margin-bottom:8px;font-style:italic">BSEE federal OCS platform — informational only, not for navigation.</div>
-        <button onclick="showForecast(${lat},${lng},'${safeName}')" style="
+        <button onclick="showForecast(${p.lat},${p.lng},'${safeName}')" style="
           width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
           padding:10px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
           6-Day Forecast
@@ -15763,7 +15785,6 @@ function renderPlatformMarkers(force){
     );
     platformLayerGroup.addLayer(m);
     platformLayers.push(m);
-    drawn++;
   }
 }
 
@@ -15782,10 +15803,10 @@ function bindPlatformRedraw(){
   MAP.on("zoomstart", hideForZoom);
   MAP.on("zoomend", () => {
     hidden = false;
-    if(layerVis.platforms && window.BW_GOM_PLATFORMS) renderPlatformMarkers(true);
+    if(layerVis.platforms && _platInRangeCache) renderPlatformMarkers(true);
   });
   MAP.on("moveend", () => {
-    if(!hidden && layerVis.platforms && window.BW_GOM_PLATFORMS) renderPlatformMarkers(false);
+    if(!hidden && layerVis.platforms && _platInRangeCache) renderPlatformMarkers(false);
   });
 }
 
@@ -17079,6 +17100,7 @@ function selectPort(name){
   drawPortMarkers();
   drawWaypoints();
   drawRamps();
+  drawPlatforms();
   ensurePredictLayerOn();
   drawPrediction();
   if(layerVis.altimetry&&altimetryLayer){
