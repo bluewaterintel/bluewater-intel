@@ -19,6 +19,20 @@
     return ctrl.signal;
   }
 
+  async function fetchWithRetry(url, opts, retries = 2) {
+    let lastErr = null;
+    for (let i = 0; i <= retries; i++) {
+      try {
+        const res = await fetch(url, opts);
+        return res;
+      } catch (e) {
+        lastErr = e;
+        if (i < retries) await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+      }
+    }
+    throw lastErr;
+  }
+
   function normalizeHours(v) {
     const h = Number(v);
     if (!isFinite(h) || h <= 0) return 0;
@@ -84,7 +98,7 @@
       const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
       if (opts.mode) params.set("mode", opts.mode);
       if (opts.hours > 0) params.set("hours", String(opts.hours));
-      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: fetchTimeout(12000),
       });
@@ -122,7 +136,7 @@
         latMin: String(latMin), latMax: String(latMax),
         lngMin: String(lngMin), lngMax: String(lngMax),
       });
-      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: fetchTimeout(15000),
       });
@@ -147,7 +161,7 @@
         latMin: String(latMin), latMax: String(latMax),
         lngMin: String(lngMin), lngMax: String(lngMax),
       });
-      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: fetchTimeout(22000),
       });
@@ -186,13 +200,17 @@
         maxPoints: String(maxPoints || 90),
       });
       if (hours > 0) params.set("hours", String(hours));
-      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: fetchTimeout(50000),
       });
       if (!res.ok) return null;
       const data = await res.json();
-      if (!predictInputsUsable(data)) return null;
+      // Keep the payload when bathy/SST grids are present even if the wind field
+      // is thin — buildPredictInputs applies partial data instead of depth-only scoring.
+      const hasBathy = Array.isArray(data?.bathy?.rows) && data.bathy.rows.length > 0;
+      const hasSst = Array.isArray(data?.sst?.rows) && data.sst.rows.filter((r) => r && r[2] != null).length > 0;
+      if (!predictInputsUsable(data) && !hasBathy && !hasSst) return null;
       predictInputsCache.set(k, data);
       return data;
     } catch (e) {
@@ -213,7 +231,7 @@
         lngMin: String(lngMin), lngMax: String(lngMax),
         hours: String(h),
       });
-      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: fetchTimeout(20000),
       });
@@ -240,7 +258,7 @@
         lngMin: String(lngMin), lngMax: String(lngMax),
       });
       if (h > 0) params.set("hours", String(h));
-      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: fetchTimeout(30000),
       });
@@ -269,7 +287,7 @@
       });
       if (fh > 0) params.set("hours", String(fh));
       else params.set("daysBack", String(back));
-      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: fetchTimeout(20000),
       });
@@ -297,7 +315,7 @@
         lngMin: String(lngMin), lngMax: String(lngMax),
         hours: String(fh),
       });
-      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: fetchTimeout(30000),
       });

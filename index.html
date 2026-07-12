@@ -16,8 +16,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bw-auth.js"></script>
 <script src="bw-freshness.js"></script>
-<script src="bw-ocean.js?v=20260712b"></script>
-<script src="bw-wind.js?v=20260712b"></script>
+<script src="bw-ocean.js?v=20260712c"></script>
+<script src="bw-wind.js?v=20260712c"></script>
 <script src="bw-breaks.js?v=20260708"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Master fishing-waypoint dataset (~12.6k points), loaded as a companion file so the
@@ -4968,7 +4968,7 @@ async function initMap(){
     }
   }catch(e){}
 
-  if(activePort) updateHeaderConditions();
+  if(activePort) primeOceanDataForPort(PORTS[activePort]);
   else requestAnimationFrame(syncHeaderHeightVar);
 }
 
@@ -7164,10 +7164,16 @@ function realDepthAt(lat, lng){
 }
 
 // Depth used by the prediction engine: prefer bite-map bathy, then map-wide grid,
-// then the static shelf model only where neither grid has coverage.
+// then a conservative inshore default near the active port, then the shelf model.
 function predictDepth(lat, lng){
   const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
   if(real != null) return real;
+  const port = (typeof activePort !== "undefined" && activePort) ? PORTS[activePort] : null;
+  if(port){
+    const d = nmBetween(port.lat, port.lng, lat, lng);
+    const maxRange = (typeof maxRangeForPort === "function") ? maxRangeForPort(port) : 120;
+    if(d <= maxRange) return 15;  // ~50 ft — avoids 600 ft shelf-model spikes while bathy loads
+  }
   return seaDepth(lat, lng);
 }
 
@@ -7321,6 +7327,16 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
     PREDICT_CUR_GRID  = (data.current  && typeof buildCurGrid  === "function") ? buildCurGrid(data.current)   : null;
     LAST_PREDICT_INPUTS = { bbox: { latMin, latMax, lngMin, lngMax }, data, fcHour, atMs: Date.now() };
     return;
+  }
+  // Partial payload — still apply any grids we got (especially bathy for depth).
+  if(data){
+    if(data.bathy?.rows?.length){
+      applyPredictBathyData(data.bathy);
+      if(!BATHY_GRID) applyBathyData(data.bathy);
+    }
+    if(data.chlor?.rows?.length) applyChlorData(data.chlor);
+    if(data.sst?.rows?.length) applySstData(data.sst);
+    if(Array.isArray(data.field) && data.field.length) applyOceanField(data.field, data.fieldStepNm);
   }
   console.warn("buildPredictInputs: combined endpoint unavailable — falling back to per-point fetch");
   await Promise.all([
@@ -10408,6 +10424,12 @@ const WindParticleLayer = L.Layer.extend({
         WIND_FIELD.samples = [];
         updateOceanLegend();
         this._drawShade();
+        if(!this._retryT){
+          this._retryT = setTimeout(() => {
+            this._retryT = null;
+            if(layerVis.wind && this._map) this._requestData();
+          }, 2500);
+        }
       }
     });
   },
@@ -17714,20 +17736,7 @@ function selectPort(name){
   drawRamps();
   drawPlatforms();
   ensurePredictLayerOn();
-  // Preload real bathy for the port's fishing range so depth popups, currents
-  // coast mask, and the bite map never fall back to the coarse shelf model.
-  if(p && typeof buildBathyGrid === "function" && typeof maxRangeForPort === "function"){
-    const maxRange = maxRangeForPort(p);
-    const degLat = (maxRange / 60) + 0.15;
-    const degLng = (maxRange / (60 * Math.cos(p.lat * Math.PI / 180))) + 0.15;
-    const _pac = typeof isPacificContext === "function" && isPacificContext(p.lat, p.lng);
-    const LAT_MIN = _pac ? 29.0 : 24.0, LAT_MAX = _pac ? 42.5 : 43.5;
-    const LNG_MIN = _pac ? -126.0 : -97.5, LNG_MAX = _pac ? -116.0 : -68.5;
-    buildBathyGrid(
-      Math.max(LAT_MIN, p.lat - degLat), Math.min(LAT_MAX, p.lat + degLat),
-      Math.max(LNG_MIN, p.lng - degLng), Math.min(LNG_MAX, p.lng + degLng)
-    ).catch(() => {});
-  }
+  primeOceanDataForPort(p);
   drawPrediction();
   if(layerVis.altimetry&&altimetryLayer){
     altimetryLayer._requestPortBreaks(true);
@@ -17737,10 +17746,48 @@ function selectPort(name){
   updateHeaderConditions();
 }
 
-// Populate the header Water/Air/Seas/Wind cells from the active port's location.
+// Load real bathy + header conditions for a port's fishing range. Safe to call
+// from init, selectPort, and tab-focus recovery — idempotent and best-effort.
+function portOceanBbox(p){
+  if(!p) return null;
+  const maxRange = (typeof maxRangeForPort === "function") ? maxRangeForPort(p) : 100;
+  const degLat = (maxRange / 60) + 0.15;
+  const degLng = (maxRange / (60 * Math.cos(p.lat * Math.PI / 180))) + 0.15;
+  const _pac = typeof isPacificContext === "function" && isPacificContext(p.lat, p.lng);
+  const LAT_MIN = _pac ? 29.0 : 24.0, LAT_MAX = _pac ? 42.5 : 43.5;
+  const LNG_MIN = _pac ? -126.0 : -97.5, LNG_MAX = _pac ? -116.0 : -68.5;
+  return {
+    latMin: Math.max(LAT_MIN, p.lat - degLat), latMax: Math.min(LAT_MAX, p.lat + degLat),
+    lngMin: Math.max(LNG_MIN, p.lng - degLng), lngMax: Math.min(LNG_MAX, p.lng + degLng),
+  };
+}
+
+function primeOceanDataForPort(p){
+  if(!p) return;
+  updateHeaderConditions();
+  const bb = portOceanBbox(p);
+  if(bb && typeof buildBathyGrid === "function"){
+    buildBathyGrid(bb.latMin, bb.latMax, bb.lngMin, bb.lngMax).catch(() => {});
+  }
+}
+
+function refreshActiveOceanLayers(){
+  if(layerVis.wind && windLayer && typeof windLayer._requestData === "function"){
+    windLayer._requestData();
+  }
+  if(layerVis.currents && typeof buildCurrentFieldForMap === "function"){
+    buildCurrentFieldForMap().catch(() => {});
+  }
+  if(layerVis.altimetry && altimetryLayer){
+    altimetryLayer._requestDisplayData();
+    altimetryLayer._requestPortBreaks(true);
+  }
+  if(activePort) updateHeaderConditions();
+}
 // With no port selected there is no location to source conditions from, so the
 // cells stay blank ("—") rather than showing misleading placeholder numbers.
-async function updateHeaderConditions(){
+async function updateHeaderConditions(attempt){
+  const tryNum = attempt || 0;
   const water = document.getElementById("hdr-water");
   const air   = document.getElementById("hdr-air");
   const seas  = document.getElementById("hdr-seas");
@@ -17772,8 +17819,13 @@ async function updateHeaderConditions(){
     air.innerHTML    = (o?.airTemp?.value != null) ? `${Math.round(o.airTemp.value)}<span class="wx-deg">°</span>F` : "—";
     seas.textContent = (o?.waves?.value != null) ? `${Math.round(o.waves.value * 10) / 10}ft` : "—";
     wind.textContent = (o?.wind?.value != null) ? `${Math.round(o.wind.value)}kt` : "—";
+    const allDash = water.textContent === "—" && air.textContent === "—" && seas.textContent === "—" && wind.textContent === "—";
+    if(allDash && tryNum < 2){
+      setTimeout(() => updateHeaderConditions(tryNum + 1), 600 * (tryNum + 1));
+    }
   } catch(e){
     water.textContent = air.textContent = seas.textContent = wind.textContent = "—";
+    if(tryNum < 2) setTimeout(() => updateHeaderConditions(tryNum + 1), 800 * (tryNum + 1));
   }
   requestAnimationFrame(syncHeaderHeightVar);
 }
@@ -18197,6 +18249,10 @@ function tick(){
 tick();setInterval(tick,30000);
 
 window.addEventListener("load",initMap);
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState !== "visible") return;
+  if(typeof refreshActiveOceanLayers === "function") refreshActiveOceanLayers();
+});
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
