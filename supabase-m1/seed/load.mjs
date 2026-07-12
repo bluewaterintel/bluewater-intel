@@ -2,7 +2,7 @@
 /**
  * Bluewater Intel — Milestone 1 seed loader
  * ----------------------------------------------------------------------------
- * Loads waypoint_types, waypoints (12,593) and ramps (643) into Supabase Postgres.
+ * Loads waypoint_types, waypoints (12,593) and ramps (644) into Supabase Postgres.
  *
  * RUN THIS SERVER-SIDE ONLY. It uses the SERVICE ROLE key, which bypasses RLS.
  * The service role key must NEVER ship to the client or be committed to git.
@@ -39,7 +39,7 @@ const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const DB_URL = process.env.SUPABASE_DB_URL;
 const EXPECT_WP = 12593;
-const EXPECT_RP = 643;
+const EXPECT_RP = 644;
 
 if (!DB_URL && (!URL || !KEY)) {
   console.error('Missing SUPABASE_DB_URL or SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.');
