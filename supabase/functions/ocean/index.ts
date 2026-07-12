@@ -95,6 +95,10 @@ const ALTIMETRY_STEP = 0.25;
 // RTOFS (Real-Time Ocean Forecast System) — operational ESPC-D-V02 on HYCOM.
 const RTOFS_NCSS = Deno.env.get("RTOFS_NCSS")
   ?? "https://ncss.hycom.org/thredds/ncss/grid/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd";
+const RTOFS_SST_NCSS = Deno.env.get("RTOFS_SST_NCSS")
+  ?? "https://ncss.hycom.org/thredds/ncss/grid/FMRC_ESPC-D-V02_t3z/FMRC_ESPC-D-V02_t3z_best.ncd";
+const RTOFS_SSH_NCSS = Deno.env.get("RTOFS_SSH_NCSS")
+  ?? "https://ncss.hycom.org/thredds/ncss/grid/FMRC_ESPC-D-V02_ssh/FMRC_ESPC-D-V02_ssh_best.ncd";
 const RTOFS_DODS = Deno.env.get("RTOFS_DODS")
   ?? "https://tds.hycom.org/thredds/dodsC/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd";
 const RTOFS_NATIVE_STEP = 1 / 12; // ~0.0833° native grid
@@ -421,6 +425,9 @@ type AltimetryGrid = {
   stepDeg: number;
   observedAtMs: number | null;
   rows: number[][];  // [lat, lng, sla_m, ugos_ms, vgos_ms]
+  source?: string;
+  forecastHour?: number;
+  _forecast?: boolean;
 };
 const altimetryGridCache = new Map<string, { atMs: number; p: Promise<AltimetryGrid> }>();
 let altiLatestTimeCache: { atMs: number; iso: string } | null = null;
@@ -728,6 +735,187 @@ async function fetchCurrentPoint(lat: number, lng: number, hoursAhead = 0): Prom
   const pad = 0.25;
   const grid = await fetchCurrentGrid(lat - pad, lat + pad, lng - pad, lng + pad, hoursAhead);
   return sampleCurrentFromGrid(grid, lat, lng);
+}
+
+// Bite-map ocean forecast is capped at +24 h (12 h steps) — longer horizons hurt
+// credibility and mesoscale skill drops quickly.
+function normalizeOceanForecastHour(hoursAhead = 0): number {
+  const h = Math.max(0, Math.min(24, Math.round(hoursAhead)));
+  if (h <= 6) return 0;
+  if (h <= 18) return 12;
+  return 24;
+}
+
+function rtofsBBoxStep(latMin: number, latMax: number, lngMin: number, lngMax: number, cap = 2500) {
+  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+  const STEPS = [0.0833, 0.1, 0.15, 0.2, 0.25, 0.35, 0.5, 0.75, 1.0, 1.5, 2.0];
+  const count = (s: number) => (Math.floor((a1 - a0) / s) + 1) * (Math.floor((o1 - o0) / s) + 1);
+  let step = STEPS[STEPS.length - 1];
+  for (const s of STEPS) { if (count(s) <= cap) { step = s; break; } }
+  const horizStride = Math.max(1, Math.round(step / RTOFS_NATIVE_STEP));
+  return { a0, a1, o0, o1, step, horizStride };
+}
+
+function parseRtofsScalarSync(buf: ArrayBuffer, varName: string): {
+  lats: number[]; lons: number[]; vals: number[]; timeH: number;
+} | null {
+  try {
+    const reader = new NetCDFReader(new Uint8Array(buf));
+    const lats = reader.getDataVariable("lat") as number[];
+    const lons = reader.getDataVariable("lon") as number[];
+    const raw = reader.getDataVariable(varName) as number[];
+    const timeH = (reader.getDataVariable("time") as number[])[0];
+    if (!lats?.length || !lons?.length || !raw?.length || !isFinite(timeH)) return null;
+    const surf = lats.length * lons.length;
+    const vals: number[] = [];
+    for (let i = 0; i < surf; i++) {
+      const v = num(raw[i]);
+      vals.push(isCurrentVal(v) ? v! : NaN);
+    }
+    return { lats, lons, vals, timeH };
+  } catch {
+    return null;
+  }
+}
+
+async function parseRtofsScalarAsync(buf: ArrayBuffer, varName: string) {
+  const parsed = parseRtofsScalarSync(buf, varName);
+  if (!parsed) return null;
+  const axis = await getRtofsTimeAxis();
+  const observedAtMs = axis ? axis.epochMs + parsed.timeH * 3600000 : Date.now();
+  return { ...parsed, observedAtMs };
+}
+
+type RtofsSstGrid = {
+  stepDeg: number;
+  rows: number[][];
+  observedAtMs: number;
+  forecastHour: number;
+  source: string;
+  _forecast: true;
+};
+
+const rtofsSstGridCache = new Map<string, { atMs: number; p: Promise<RtofsSstGrid | null> }>();
+async function fetchRtofsSstGrid(
+  latMin: number, latMax: number, lngMin: number, lngMax: number, hoursAhead = 12,
+): Promise<RtofsSstGrid | null> {
+  const fh = normalizeOceanForecastHour(hoursAhead);
+  if (fh <= 0) return null;
+  const { a0, a1, o0, o1, step, horizStride } = rtofsBBoxStep(latMin, latMax, lngMin, lngMax);
+  const key = `sst,${a0.toFixed(2)},${a1.toFixed(2)},${o0.toFixed(2)},${o1.toFixed(2)},${horizStride},${fh}`;
+  const now = Date.now();
+  const hit = rtofsSstGridCache.get(key);
+  if (hit && now - hit.atMs < 2 * 3600 * 1000) return hit.p;
+
+  const p = (async (): Promise<RtofsSstGrid | null> => {
+    const valid = await resolveRtofsValidTimeIso(fh);
+    if (!valid) return null;
+    const url = `${RTOFS_SST_NCSS}?var=water_temp&north=${a1}&south=${a0}&west=${o0}&east=${o1}`
+      + `&horizStride=${horizStride}&vertCoord=0&time=${encodeURIComponent(valid.iso)}&accept=netcdf`;
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(25000), headers: ERDDAP_HEADERS });
+      if (!r.ok) return null;
+      const parsed = await parseRtofsScalarAsync(await r.arrayBuffer(), "water_temp");
+      if (!parsed) return null;
+      const rows: number[][] = [];
+      for (let i = 0; i < parsed.lats.length; i++) {
+        for (let j = 0; j < parsed.lons.length; j++) {
+          const idx = i * parsed.lons.length + j;
+          const c = parsed.vals[idx];
+          if (!isFinite(c)) continue;
+          const f = Math.round((c * 9 / 5 + 32) * 10) / 10;
+          rows.push([
+            Math.round(parsed.lats[i] * 1000) / 1000,
+            Math.round(lon360To180(parsed.lons[j]) * 1000) / 1000,
+            f,
+            valid.observedAtMs,
+          ]);
+        }
+      }
+      if (!rows.length) return null;
+      return {
+        stepDeg: step,
+        rows,
+        observedAtMs: valid.observedAtMs,
+        forecastHour: fh,
+        source: "RTOFS ESPC-D-V02",
+        _forecast: true,
+      };
+    } catch {
+      return null;
+    }
+  })();
+  rtofsSstGridCache.set(key, { atMs: now, p });
+  return p;
+}
+
+const rtofsAltiGridCache = new Map<string, { atMs: number; p: Promise<AltimetryGrid> }>();
+async function fetchRtofsModelAltimetryGrid(
+  latMin: number, latMax: number, lngMin: number, lngMax: number, hoursAhead = 12,
+): Promise<AltimetryGrid> {
+  const fh = normalizeOceanForecastHour(hoursAhead);
+  const none: AltimetryGrid = { stepDeg: ALTIMETRY_STEP, observedAtMs: null, rows: [] };
+  if (fh <= 0) return none;
+  const { a0, a1, o0, o1, horizStride } = rtofsBBoxStep(latMin, latMax, lngMin, lngMax);
+  const key = `alti,${a0.toFixed(2)},${a1.toFixed(2)},${o0.toFixed(2)},${o1.toFixed(2)},${horizStride},${fh}`;
+  const now = Date.now();
+  const hit = rtofsAltiGridCache.get(key);
+  if (hit && now - hit.atMs < 2 * 3600 * 1000) return hit.p;
+
+  const p = (async (): Promise<AltimetryGrid> => {
+    const valid = await resolveRtofsValidTimeIso(fh);
+    if (!valid) return none;
+    const sshUrl = `${RTOFS_SSH_NCSS}?var=surf_el&north=${a1}&south=${a0}&west=${o0}&east=${o1}`
+      + `&horizStride=${horizStride}&time=${encodeURIComponent(valid.iso)}&accept=netcdf`;
+    const curUrl = `${RTOFS_NCSS}?var=water_u&var=water_v&north=${a1}&south=${a0}&west=${o0}&east=${o1}`
+      + `&horizStride=${horizStride}&vertCoord=0&time=${encodeURIComponent(valid.iso)}&accept=netcdf`;
+    try {
+      const [sshR, curR] = await Promise.all([
+        fetch(sshUrl, { signal: AbortSignal.timeout(25000), headers: ERDDAP_HEADERS }),
+        fetch(curUrl, { signal: AbortSignal.timeout(25000), headers: ERDDAP_HEADERS }),
+      ]);
+      if (!sshR.ok) return none;
+      const ssh = await parseRtofsScalarAsync(await sshR.arrayBuffer(), "surf_el");
+      if (!ssh) return none;
+      let u: number[] = [], v: number[] = [];
+      if (curR.ok) {
+        const cur = await parseRtofsNcssAsync(await curR.arrayBuffer());
+        if (cur) { u = cur.u; v = cur.v; }
+      }
+      const finite = ssh.vals.filter((x) => isFinite(x));
+      const mean = finite.length ? finite.reduce((a, b) => a + b, 0) / finite.length : 0;
+      const rows: number[][] = [];
+      for (let i = 0; i < ssh.lats.length; i++) {
+        for (let j = 0; j < ssh.lons.length; j++) {
+          const idx = i * ssh.lons.length + j;
+          const el = ssh.vals[idx];
+          if (!isFinite(el)) continue;
+          const sla = Math.round((el - mean) * 1000) / 1000;
+          const ug = u[idx], vg = v[idx];
+          rows.push([
+            Math.round(ssh.lats[i] * 1000) / 1000,
+            Math.round(lon360To180(ssh.lons[j]) * 1000) / 1000,
+            sla,
+            isFinite(ug) ? Math.round(ug * 1000) / 1000 : 0,
+            isFinite(vg) ? Math.round(vg * 1000) / 1000 : 0,
+          ]);
+        }
+      }
+      return {
+        stepDeg: horizStride * RTOFS_NATIVE_STEP,
+        observedAtMs: valid.observedAtMs,
+        rows,
+        source: "RTOFS ESPC-D-V02",
+        forecastHour: fh,
+        _forecast: true,
+      } as AltimetryGrid & { source?: string; forecastHour?: number; _forecast?: boolean };
+    } catch {
+      return none;
+    }
+  })();
+  rtofsAltiGridCache.set(key, { atMs: now, p });
+  return p;
 }
 
 async function fetchBuoy(lat: number, lng: number) {
@@ -1516,10 +1704,30 @@ export const handler = async (req: Request): Promise<Response> => {
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
       return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
     }
-    const daysBack = Math.max(0, Math.min(6, Math.round(num(u.searchParams.get("daysBack")) ?? 0)));
-    const out = await fetchAltimetryGrid(latMin, latMax, lngMin, lngMax, daysBack);
+    const hoursAhead = normalizeOceanForecastHour(num(u.searchParams.get("hours")) ?? 0);
+    const out = hoursAhead > 0
+      ? await fetchRtofsModelAltimetryGrid(latMin, latMax, lngMin, lngMax, hoursAhead)
+      : await fetchAltimetryGrid(latMin, latMax, lngMin, lngMax,
+        Math.max(0, Math.min(6, Math.round(num(u.searchParams.get("daysBack")) ?? 0))));
     return new Response(JSON.stringify(out), {
       headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" },
+    });
+  }
+
+  // ── RTOFS SST forecast grid (12/24 h model, for map overlay + bite score) ───
+  if (mode === "sstgrid") {
+    const latMin = num(u.searchParams.get("latMin"));
+    const latMax = num(u.searchParams.get("latMax"));
+    const lngMin = num(u.searchParams.get("lngMin"));
+    const lngMax = num(u.searchParams.get("lngMax"));
+    if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
+    }
+    const hoursAhead = normalizeOceanForecastHour(num(u.searchParams.get("hours")) ?? 12);
+    const out = await fetchRtofsSstGrid(latMin, latMax, lngMin, lngMax, hoursAhead);
+    if (!out) return json({ error: "RTOFS SST forecast unavailable" }, 502);
+    return new Response(JSON.stringify(out), {
+      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=7200" },
     });
   }
 
@@ -1558,37 +1766,52 @@ export const handler = async (req: Request): Promise<Response> => {
       return json({ error: "latMin,latMax,lngMin,lngMax required" }, 400);
     }
     const maxPoints = Math.max(20, Math.min(120, Math.round(num(u.searchParams.get("maxPoints")) ?? 90)));
-    const hoursAhead = num(u.searchParams.get("hours")) ?? 0;
-    const forecastHour = Math.round(clamp(hoursAhead, 0, 96) / 3) * 3;
+    const forecastHour = normalizeOceanForecastHour(num(u.searchParams.get("hours")) ?? 0);
+    const useOceanForecast = forecastHour > 0;
     // Altimetry (SSH) feeds the scorer's front fusion but ERDDAP can be slow on a
     // cold cache; bound its wait so it never stalls the bite map. Empty on timeout
     // → the client's front factors stay SST-only that pass (cache warms for next).
-    const altiSoft: Promise<AltimetryGrid> = Promise.race([
-      fetchAltimetryGrid(latMin, latMax, lngMin, lngMax),
-      new Promise<AltimetryGrid>((res) =>
-        setTimeout(() => res({ stepDeg: ALTIMETRY_STEP, observedAtMs: null, rows: [] }), 6000)),
-    ]);
+    const altiSoft: Promise<AltimetryGrid> = useOceanForecast
+      ? fetchRtofsModelAltimetryGrid(latMin, latMax, lngMin, lngMax, forecastHour)
+      : Promise.race([
+        fetchAltimetryGrid(latMin, latMax, lngMin, lngMax),
+        new Promise<AltimetryGrid>((res) =>
+          setTimeout(() => res({ stepDeg: ALTIMETRY_STEP, observedAtMs: null, rows: [] }), 6000)),
+      ]);
     // Grids in parallel (each ONE upstream box request). Bathy also tells us which
     // field points are water so we don't fetch buoy/tide over land.
     const [bathy, chlor, sstGrid, buoyTemps, currentGrid, altimetry] = await Promise.all([
       fetchBathyRows(latMin, latMax, lngMin, lngMax),
       fetchChlorRows(latMin, latMax, lngMin, lngMax),
-      fetchSstRows(latMin, latMax, lngMin, lngMax),
-      buoyWtmpList(),
-      fetchCurrentGrid(latMin, latMax, lngMin, lngMax, hoursAhead),
+      useOceanForecast
+        ? fetchRtofsSstGrid(latMin, latMax, lngMin, lngMax, forecastHour)
+        : fetchSstRows(latMin, latMax, lngMin, lngMax),
+      useOceanForecast ? Promise.resolve([] as BuoyTemp[]) : buoyWtmpList(),
+      fetchCurrentGrid(latMin, latMax, lngMin, lngMax, forecastHour),
       altiSoft,
     ]);
     // Correct the high-res SST grid with the nearest live buoy per cell (distance/
     // freshness weighted). Buoys are prefetched once and shared, so this adds no
     // upstream requests. Row shape stays [lat,lng,°F,observedAtMs] for the client.
-    const sst = {
-      stepDeg: sstGrid.stepDeg,
-      rows: (sstGrid.rows as number[][]).map((row) => {
-        const b = nearestBuoySst(row[0], row[1], buoyTemps);
-        const out = blendSst({ value: row[2], observedAtMs: (row[3] as number) ?? null }, b);
-        return [row[0], row[1], out.value, out.observedAtMs];
-      }),
-    };
+    // Model-forecast SST skips buoy correction — buoys are current observations.
+    const sst = useOceanForecast
+      ? {
+        stepDeg: sstGrid?.stepDeg ?? 0.0833,
+        rows: sstGrid?.rows ?? [],
+        ...(sstGrid ? {
+          forecastHour: sstGrid.forecastHour,
+          source: sstGrid.source,
+          _forecast: true as const,
+        } : {}),
+      }
+      : {
+        stepDeg: sstGrid!.stepDeg,
+        rows: (sstGrid!.rows as number[][]).map((row) => {
+          const b = nearestBuoySst(row[0], row[1], buoyTemps);
+          const out = blendSst({ value: row[2], observedAtMs: (row[3] as number) ?? null }, b);
+          return [row[0], row[1], out.value, out.observedAtMs];
+        }),
+      };
     // Pick water field points (depth > 0) spread across the box, capped. These
     // only carry wind/tide (buoy + CO-OPS) — SST/chlor come from the grids.
     const water = (bathy.rows as number[][]).filter((r) => typeof r[2] === "number" && (r[2] as number) > 0);
@@ -1601,11 +1824,14 @@ export const handler = async (req: Request): Promise<Response> => {
       ? Math.max(4, (Math.max(latMax, latMin) - Math.min(latMax, latMin)) * 60 / Math.sqrt(fieldPts.length))
       : 12;
     const field = await pool(fieldPts, 16, async (pt) => {
-      const p = await assembleFieldPoint(pt[0], pt[1], hoursAhead);
+      const p = await assembleFieldPoint(pt[0], pt[1], forecastHour);
       const cur = sampleCurrentFromGrid(currentGrid, pt[0], pt[1]);
       return { la: pt[0], ln: pt[1], p: { ...p, current: cur } };
     });
-    return new Response(JSON.stringify({ bathy, chlor, sst, field, fieldStepNm, forecastHour, current: currentGrid, altimetry }), {
+    return new Response(JSON.stringify({
+      bathy, chlor, sst, field, fieldStepNm, forecastHour, current: currentGrid, altimetry,
+      oceanForecast: useOceanForecast,
+    }), {
       headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
     });
   }

@@ -16,6 +16,16 @@
     return Math.round(Math.min(96, h) / 3) * 3;
   }
 
+  // Ocean-model forecast (SST/SSH for bite map) — capped at +24 h in 12 h steps.
+  function normalizeOceanHours(v) {
+    const h = Number(v);
+    if (!isFinite(h) || h <= 0) return 0;
+    const r = Math.max(0, Math.min(24, Math.round(h)));
+    if (r <= 6) return 0;
+    if (r <= 18) return 12;
+    return 24;
+  }
+
   function parseFetchOpts(forecastHourOrOpts) {
     if (typeof forecastHourOrOpts === "object" && forecastHourOrOpts !== null) {
       return {
@@ -144,7 +154,7 @@
 
   const predictInputsCache = new Map();
   async function fetchPredictInputs(latMin, latMax, lngMin, lngMax, maxPoints, forecastHour = 0) {
-    const hours = normalizeHours(forecastHour);
+    const hours = normalizeOceanHours(forecastHour);
     const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)},${maxPoints || 90},${hours}`;
     const hit = predictInputsCache.get(k);
     if (hit) return hit;
@@ -198,8 +208,9 @@
   }
 
   const currentGridCache = new Map();
-  async function fetchCurrentGrid(latMin, latMax, lngMin, lngMax) {
-    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}`;
+  async function fetchCurrentGrid(latMin, latMax, lngMin, lngMax, hours = 0) {
+    const h = normalizeOceanHours(hours);
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)},${h}`;
     const hit = currentGridCache.get(k);
     if (hit && Date.now() - hit.atMs < 2 * 60 * 60 * 1000) return hit.data;
     try {
@@ -208,6 +219,7 @@
         latMin: String(latMin), latMax: String(latMax),
         lngMin: String(lngMin), lngMax: String(lngMax),
       });
+      if (h > 0) params.set("hours", String(h));
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: AbortSignal.timeout(30000),
@@ -223,9 +235,10 @@
   }
 
   const altimetryGridCache = new Map();
-  async function fetchAltimetryGrid(latMin, latMax, lngMin, lngMax, daysBack = 0) {
+  async function fetchAltimetryGrid(latMin, latMax, lngMin, lngMax, daysBack = 0, hours = 0) {
+    const fh = normalizeOceanHours(hours);
     const back = Math.max(0, Math.min(6, daysBack | 0));
-    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${back}`;
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${back}:${fh}`;
     const hit = altimetryGridCache.get(k);
     if (hit && Date.now() - hit.atMs < 6 * 60 * 60 * 1000) return hit.data;
     try {
@@ -233,8 +246,9 @@
         mode: "altimetrygrid",
         latMin: String(latMin), latMax: String(latMax),
         lngMin: String(lngMin), lngMax: String(lngMax),
-        daysBack: String(back),
       });
+      if (fh > 0) params.set("hours", String(fh));
+      else params.set("daysBack", String(back));
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: AbortSignal.timeout(20000),
@@ -249,5 +263,33 @@
     }
   }
 
-  root.BW_OCEAN = { fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs, fetchWindGrid, fetchCurrentGrid, fetchAltimetryGrid };
+  const sstGridCache = new Map();
+  async function fetchSstGrid(latMin, latMax, lngMin, lngMax, hours = 12) {
+    const fh = normalizeOceanHours(hours);
+    if (fh <= 0) return null;
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${fh}`;
+    const hit = sstGridCache.get(k);
+    if (hit && Date.now() - hit.atMs < 2 * 60 * 60 * 1000) return hit.data;
+    try {
+      const params = new URLSearchParams({
+        mode: "sstgrid",
+        latMin: String(latMin), latMax: String(latMax),
+        lngMin: String(lngMin), lngMax: String(lngMax),
+        hours: String(fh),
+      });
+      const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+        headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !Array.isArray(data.rows) || !data.rows.length) return null;
+      sstGridCache.set(k, { data, atMs: Date.now() });
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  root.BW_OCEAN = { fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs, fetchWindGrid, fetchCurrentGrid, fetchAltimetryGrid, fetchSstGrid };
 })(typeof globalThis !== "undefined" ? globalThis : this);
