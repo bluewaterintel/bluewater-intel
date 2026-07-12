@@ -36,8 +36,12 @@ import { esc, ownerEmailShell, sendOwnerEmail } from "../_shared/email.ts";
 
 // ── CORS (public GET) ────────────────────────────────────────────────────────
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+// Reflect the caller's Origin so CORS works from every hostname the app is
+// served from (apex, www., mobile webview). Strict matching returned the apex
+// domain for www./webview callers → the browser blocked it and the admin
+// System Health panel showed "Failed to fetch". Auth still enforced below.
 function cors(origin: string | null) {
-  const allow = origin && (ALLOWED.length === 0 || ALLOWED.includes(origin)) ? origin : (ALLOWED[0] ?? "*");
+  const allow = origin || (ALLOWED[0] ?? "*");
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",

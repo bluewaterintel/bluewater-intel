@@ -21,8 +21,14 @@ const ADMIN_EMAILS = new Set(
     .filter(Boolean),
 );
 
+// Reflect the caller's Origin (falling back to the configured list / "*"). Auth
+// is enforced by the JWT bearer token + admin gate below, NOT by CORS, and no
+// cookies are used — so echoing the origin is safe and, unlike strict matching,
+// works for every hostname the app is served from (apex, www., mobile webview).
+// Strict matching returned the apex domain for www./webview callers, which the
+// browser rejects → the User Admin page showed "Failed to fetch".
 function cors(origin: string | null) {
-  const allow = origin && (ALLOWED.length === 0 || ALLOWED.includes(origin)) ? origin : (ALLOWED[0] ?? "*");
+  const allow = origin || (ALLOWED[0] ?? "*");
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
