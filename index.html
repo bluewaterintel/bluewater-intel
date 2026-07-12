@@ -26,7 +26,7 @@
      Loaded via <script src> (not fetch) so it works from a local file:// path with no CORS.
      If this file is missing the app still runs; the Waypoints feature just stays empty. -->
 <script src="bw-waypoints.js"></script>
-<!-- Gulf of Mexico federal OCS oil & gas platforms (BSEE platloc). Rebuild: npm run build:platforms -->
+<!-- Gulf of Mexico federal OCS platforms (BSEE active surface structures). Rebuild: npm run build:platforms -->
 <script src="bw-platforms-gom.js"></script>
 <!-- Boat-ramp dataset companion. EMPTY by default so the app runs fine until a ramp CSV
      is wired in (same one-step swap as the waypoints). Format mirrors BW_WAYPOINTS:
@@ -386,6 +386,13 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   .hdr-wx .wx-cell-label{font-size:10px;letter-spacing:.08em}
   .hdr-wx .wx-cell-value{font-size:12px}
   #hdr-tide-cell .wx-cell-value{font-size:11px;white-space:nowrap}
+  #hdr-tide-cell.wx-cell{min-width:92px}
+  .hdr-wx-hint{
+    display:block;order:11;width:100%;flex:0 0 100%;
+    font-size:9px;color:#5d96c4;text-align:right;
+    padding:0 6px 3px;letter-spacing:.04em;font-weight:600;
+    pointer-events:none;
+  }
   #nav-btn{width:46px;height:46px;gap:4px;border-radius:13px}
   .nav-bar{width:20px;height:2.5px}
   .nav-label{display:none}
@@ -446,7 +453,6 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   }
   #ptabs{height:42px}
   .tbtn{padding:0 10px;font-size:11px}
-  #layers-toggle{width:42px;height:42px}
   /* Species + Port dropdowns — full-width bottom-sheet overlays */
   #sp-dd, #port-dd{
     position:fixed !important;
@@ -473,27 +479,21 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     border-radius:18px 18px 0 0 !important;
     margin:0 !important;
   }
-  /* ── Ocean/weather legend (SST/chlor/wind/RADAR scale). On phones the Leaflet
-        zoom +/- buttons sit top-left (~60px wide), so anchor the legend to the
-        RIGHT of them and shrink it. Desktop unaffected (inside max-width:680px). ── */
+  /* ── Ocean/weather legend — full width under header; zoom hidden on phones ── */
   #ocean-legend{
-    padding:6px 10px !important;
+    padding:5px 8px !important;
     max-width:none !important;
     min-width:0 !important;
     width:auto !important;
-    left:70px !important;        /* clear the zoom button column */
-    right:8px !important;
+    left:8px !important;
+    right:52px !important;
     transform:none !important;
-    overflow-y:auto !important;
-    -webkit-overflow-scrolling:touch;
+    overflow:visible !important;
   }
   #ocean-legend .oc-legend-bar,
-  #ocean-legend [style*="height:11px"]{ height:10px !important; }
-  /* Legend label + tick fonts — sized for readability (the phone readability
-     layer below keeps these consistent if anything overrides). */
-  #ocean-legend-content > div > div:first-child{ font-size:15px !important; margin-bottom:4px !important; }
-  #ocean-legend-content span{ font-size:14px !important; }
-  #ocean-legend .legend-detail{ font-size:14px !important; }
+  #ocean-legend [style*="height:11px"]{ height:8px !important; }
+  #ocean-legend-content > div > div:first-child{ font-size:11px !important; margin-bottom:2px !important; }
+  #ocean-legend-content span{ font-size:10px !important; }
   .map-time-pill{
     width:calc(100vw - 20px) !important;
     left:10px !important;right:10px !important;transform:none !important;
@@ -1021,8 +1021,15 @@ body.nav-open #ruler-readout{
   touch-action:none;
 }
 .map-time-pill-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
-.map-time-pill-title{font-size:13px;letter-spacing:.1em;font-weight:800;text-transform:uppercase}
-.map-time-pill-display{font-size:15px;font-weight:700;line-height:1.3;text-align:right}
+.map-time-pill-head-right{display:flex;align-items:center;gap:6px;min-width:0;flex-shrink:1}
+.map-time-pill-expand{
+  display:none;flex-shrink:0;width:28px;height:28px;padding:0;
+  border-radius:7px;border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.06);color:#bfe3f5;
+  font-size:14px;font-weight:800;line-height:1;cursor:pointer;font-family:inherit;
+}
+.map-time-pill-title{font-size:13px;letter-spacing:.1em;font-weight:800;text-transform:uppercase;flex-shrink:0}
+.map-time-pill-display{font-size:15px;font-weight:700;line-height:1.3;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .map-time-pill-row{display:flex;align-items:center;gap:10px}
 .map-time-pill-step{
   flex:0 0 auto;font-weight:800;font-size:16px;border-radius:8px;
@@ -1088,16 +1095,86 @@ body.nav-open #ruler-readout{
   overscroll-behavior:contain;
 }
 #ocean-legend .ocean-legend-toggle{pointer-events:auto}
+/* Ocean legend detail sheet — mobile bottom drawer for "How to read" content */
+#ocean-legend-sheet{
+  display:none;position:fixed;inset:0;z-index:100002;
+  background:rgba(0,0,0,.55);
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
+  align-items:flex-end;padding:0;
+}
+#ocean-legend-sheet.open{display:flex}
+.ocean-legend-sheet-card{
+  width:100%;max-height:72dvh;
+  background:#0f2444;border:1px solid rgba(107,191,234,.28);
+  border-radius:18px 18px 0 0;
+  box-shadow:0 -10px 40px rgba(0,0,0,.65);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.ocean-legend-sheet-hdr{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 16px 10px;border-bottom:1px solid rgba(107,191,234,.15);
+  font-size:15px;font-weight:800;color:#f0f6ff;flex-shrink:0;
+}
+.ocean-legend-sheet-hdr button{
+  width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.08);color:#cfe5ff;font-size:20px;line-height:1;
+  cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;
+}
+.ocean-legend-sheet-body{
+  padding:12px 16px 20px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;font-size:13px;line-height:1.45;color:#cfe5ff;
+}
+.hdr-wx-hint{display:none}
 @media (max-width:680px){
+  /* Pinch-zoom only — +/- removed to reclaim top-left map space */
+  .leaflet-control-zoom{display:none !important}
+  /* Compact right toolbar */
+  #layers-ctrl{right:6px;gap:6px}
+  #layers-toggle,#ruler-toggle,#wpdrop-toggle,#basemap-toggle,#settings-toggle,#catch-log-toggle{
+    width:40px !important;height:40px !important;border-radius:10px;
+  }
+  #layers-toggle svg,#ruler-toggle svg,#wpdrop-toggle svg,#basemap-toggle svg,#settings-toggle svg,#catch-log-toggle svg{
+    width:20px !important;height:20px !important;
+  }
+  #ocean-opacity-control{right:52px}
+  /* Ocean legend — slim chip; detail opens bottom sheet */
   #ocean-legend{
     pointer-events:auto !important;
-    max-height:38vh !important;
+    left:8px !important;
+    right:52px !important;
+    max-width:none !important;
+    min-width:0 !important;
+    padding:5px 8px !important;
+    max-height:none !important;
+    overflow:visible !important;
+    border-radius:9px;
   }
-  #ocean-legend .legend-detail{font-size:12px !important;line-height:1.4 !important}
+  #ocean-legend .legend-detail{display:none !important}
+  #ocean-legend-content > div > div:first-child{font-size:11px !important;margin-bottom:2px !important}
+  #ocean-legend-content span{font-size:10px !important}
+  #ocean-legend .oc-legend-bar,#ocean-legend [style*="height:11px"]{height:8px !important}
   #ocean-legend .ocean-legend-toggle{
-    position:sticky;bottom:0;z-index:2;
-    background:rgba(10,22,40,.98) !important;
-    box-shadow:0 -6px 12px rgba(0,0,0,.45);
+    margin-top:5px !important;padding:5px 8px !important;font-size:10px !important;
+    position:static !important;box-shadow:none !important;
+  }
+  /* Compact time pills — tap ▾ to reveal slider */
+  .map-time-pill{padding:7px 10px 5px !important;border-radius:10px !important}
+  .map-time-pill-head{margin-bottom:0 !important}
+  .map-time-pill-expand{display:flex !important;align-items:center;justify-content:center}
+  .map-time-pill:not(.map-time-pill--open) .map-time-pill-row,
+  .map-time-pill:not(.map-time-pill--open) .map-time-pill-footer{display:none !important}
+  .map-time-pill--open .map-time-pill-head{margin-bottom:6px !important}
+  .map-time-pill-title{font-size:10px !important;letter-spacing:.08em !important}
+  .map-time-pill-display{font-size:11px !important}
+  .map-time-pill-step{font-size:13px !important;padding:4px 9px !important}
+  .map-time-pill-slider{height:6px !important}
+  .map-time-pill-slider::-webkit-slider-thumb{width:18px !important;height:18px !important}
+  .map-time-pill-footer{font-size:10px !important;margin-top:4px !important}
+  .map-time-pill-hint{display:none !important}
+  .map-time-pill-play{font-size:11px !important;padding:5px 10px !important}
+  /* Smaller port/canyon map labels */
+  .leaflet-tooltip.port-label-home,.leaflet-tooltip.port-label-hover{
+    font-size:11px !important;padding:3px 7px !important;border-radius:8px !important;
   }
 }
 
@@ -2551,6 +2628,7 @@ body.nav-open #ruler-readout{
         </div>
       </div>
     </div>
+    <div class="hdr-wx-hint" aria-hidden="true">Swipe for seas, wind &amp; tide →</div>
 
   </div>
 
@@ -2796,6 +2874,17 @@ body.nav-open #ruler-readout{
     <div id="ocean-legend-content"></div>
   </div>
 
+  <!-- Mobile: full "How to read" legend detail in a bottom sheet (not over the map). -->
+  <div id="ocean-legend-sheet" onclick="if(event.target===this)closeOceanLegendSheet()">
+    <div class="ocean-legend-sheet-card" onclick="event.stopPropagation()">
+      <div class="ocean-legend-sheet-hdr">
+        <span>How to read this layer</span>
+        <button type="button" onclick="closeOceanLegendSheet()" aria-label="Close legend details">×</button>
+      </div>
+      <div id="ocean-legend-sheet-body" class="ocean-legend-sheet-body"></div>
+    </div>
+  </div>
+
   <!-- FORECAST TIME SLIDER — bottom-center of map.
        Visible only when the prediction layer is on AND a port+species are
        selected (those are the conditions under which forecast time makes
@@ -2850,7 +2939,10 @@ body.nav-open #ruler-readout{
   <div id="wind-forecast-slider" class="map-time-pill map-time-pill--cyan">
     <div class="map-time-pill-head">
       <div class="map-time-pill-title">Wind Forecast</div>
-      <div id="wind-forecast-display-pill" class="map-time-pill-display">Current</div>
+      <div class="map-time-pill-head-right">
+        <div id="wind-forecast-display-pill" class="map-time-pill-display">Current</div>
+        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show wind time controls">▾</button>
+      </div>
     </div>
     <div class="map-time-pill-row">
       <button id="wind-prev-btn" type="button" class="map-time-pill-step" onclick="stepWindForecast(-3)" title="3 hours earlier" aria-label="3 hours earlier">◀</button>
@@ -2869,7 +2961,10 @@ body.nav-open #ruler-readout{
   <div id="sat-date-control" class="map-time-pill map-time-pill--amber">
     <div class="map-time-pill-head">
       <div id="sat-date-title" class="map-time-pill-title">SST</div>
-      <div id="sat-date-display" class="map-time-pill-display">Latest imagery</div>
+      <div class="map-time-pill-head-right">
+        <div id="sat-date-display" class="map-time-pill-display">Latest imagery</div>
+        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show date controls">▾</button>
+      </div>
     </div>
     <div class="map-time-pill-row">
       <button id="sat-day-older" type="button" class="map-time-pill-step" onclick="stepSatDayOlder()" title="One day older">◀</button>
@@ -2887,7 +2982,10 @@ body.nav-open #ruler-readout{
   <div id="alti-date-control" class="map-time-pill map-time-pill--pink">
     <div class="map-time-pill-head">
       <div class="map-time-pill-title">Altimetry Date</div>
-      <div id="alti-date-display" class="map-time-pill-display">Latest pass</div>
+      <div class="map-time-pill-head-right">
+        <div id="alti-date-display" class="map-time-pill-display">Latest pass</div>
+        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show altimetry date controls">▾</button>
+      </div>
     </div>
     <div class="map-time-pill-row">
       <button id="alti-day-older" type="button" class="map-time-pill-step" onclick="stepAltiDayOlder()" title="One day older">◀</button>
@@ -2906,7 +3004,10 @@ body.nav-open #ruler-readout{
 <div id="radar-loop-control" class="map-time-pill map-time-pill--green">
   <div class="map-time-pill-head">
     <div class="map-time-pill-title">Weather Radar</div>
-    <div id="radar-loop-time" class="map-time-pill-display">Live</div>
+    <div class="map-time-pill-head-right">
+      <div id="radar-loop-time" class="map-time-pill-display">Live</div>
+      <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show radar time controls">▾</button>
+    </div>
   </div>
   <div class="map-time-pill-row">
     <button id="radar-frame-older" type="button" class="map-time-pill-step" onclick="stepRadarFrame(-1)" title="Earlier frame">◀</button>
@@ -3128,7 +3229,7 @@ body.nav-open #ruler-readout{
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="Federal OCS oil &amp; gas platforms in the Gulf of Mexico (BSEE data). Shows rigs within 150 nm of your home port. Informational only — not for navigation.">
+    <label class="layer-row" title="Active above-water federal OCS platforms in the Gulf (BSEE). Within 150 nm of your home port. Removed rigs and subsea manifolds are excluded. Informational only — not for navigation.">
       <input type="checkbox" id="chk-platforms" onchange="toggleLayer('platforms')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -13848,14 +13949,58 @@ function catchPhotoFromFile(file){
 // which layers are currently active.
 // ──────────────────────────────────────────────────────────────────────────
 let oceanLegendExpanded = false;
+let _oceanLegendDetailHtml = "";
+
+function toggleMapTimePill(btn){
+  const pill = btn && btn.closest ? btn.closest(".map-time-pill") : null;
+  if(!pill) return;
+  const opening = !pill.classList.contains("map-time-pill--open");
+  // One expanded pill at a time on phones — keeps the bottom stack short.
+  if(opening && typeof isPhoneView === "function" && isPhoneView()){
+    document.querySelectorAll(".map-time-pill--open").forEach(p => {
+      if(p !== pill){
+        p.classList.remove("map-time-pill--open");
+        const b = p.querySelector(".map-time-pill-expand");
+        if(b) b.textContent = "▾";
+      }
+    });
+  }
+  pill.classList.toggle("map-time-pill--open");
+  btn.textContent = pill.classList.contains("map-time-pill--open") ? "▴" : "▾";
+  if(typeof restackBottomControls === "function") restackBottomControls();
+}
+
+function openOceanLegendSheet(){
+  const sheet = document.getElementById("ocean-legend-sheet");
+  const body = document.getElementById("ocean-legend-sheet-body");
+  if(!sheet || !body) return;
+  body.innerHTML = _oceanLegendDetailHtml ||
+    '<div style="color:#9ec5e8;font-size:13px">No extra details for the active layers.</div>';
+  sheet.classList.add("open");
+  oceanLegendExpanded = true;
+}
+function closeOceanLegendSheet(){
+  const sheet = document.getElementById("ocean-legend-sheet");
+  if(sheet) sheet.classList.remove("open");
+  oceanLegendExpanded = false;
+}
+function syncOceanLegendSheet(){
+  const sheet = document.getElementById("ocean-legend-sheet");
+  const body = document.getElementById("ocean-legend-sheet-body");
+  if(!sheet || !body || !sheet.classList.contains("open")) return;
+  body.innerHTML = _oceanLegendDetailHtml ||
+    '<div style="color:#9ec5e8;font-size:13px">No extra details for the active layers.</div>';
+}
+
 function toggleOceanLegendDetail(){
+  if(typeof isPhoneView === "function" && isPhoneView()){
+    const sheet = document.getElementById("ocean-legend-sheet");
+    if(sheet && sheet.classList.contains("open")) closeOceanLegendSheet();
+    else openOceanLegendSheet();
+    return;
+  }
   oceanLegendExpanded = !oceanLegendExpanded;
   updateOceanLegend();
-  // Keep the collapse control reachable after expanding on phones.
-  if(oceanLegendExpanded && isPhoneView()){
-    const el = document.getElementById("ocean-legend");
-    if(el) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
-  }
 }
 function oceanLegendMaxHeightPx(){
   const mapH = (MAP && MAP.getSize) ? MAP.getSize().y : (window.innerHeight || 600);
@@ -13878,16 +14023,25 @@ function updateOceanLegend(){
   if(!el || !content) return;
   if(!layerVis.sst && !layerVis.chlor && !layerVis.wind && !layerVis.radar && !layerVis.currents && !layerVis.altimetry){
     el.style.display = "none";
+    if(typeof closeOceanLegendSheet === "function") closeOceanLegendSheet();
     updateBiteBanner();
     return;
   }
   const parts = [];
   const gap = () => parts.length ? 'margin-top:6px' : '';
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
+  _oceanLegendDetailHtml = "";
   // Verbose bullet explanations are collapsed by default so the panel doesn't
-  // run down the middle of the map. `detail()` wraps that content; a toggle at
-  // the bottom expands/collapses all of it at once.
+  // run down the middle of the map. On phones, detail opens in a bottom sheet.
   let _hasDetail = false;
-  const detail = (html) => { _hasDetail = true; return `<div class="legend-detail" style="display:${oceanLegendExpanded?'block':'none'}">${html}</div>`; };
+  const detail = (html) => {
+    _hasDetail = true;
+    if(phone){
+      _oceanLegendDetailHtml += html;
+      return "";
+    }
+    return `<div class="legend-detail" style="display:${oceanLegendExpanded?'block':'none'}">${html}</div>`;
+  };
   // NOTE: the bite-score legend is rendered as a slim banner across the top of
   // the map (see updateBiteBanner), not in this side panel — it was taking up
   // too much room here. This panel now only covers the gradient overlays.
@@ -13920,7 +14074,7 @@ function updateOceanLegend(){
           ${[0,5,10,15,20,25,30,35,40].map((v,i,arr)=>{const pct=v/40*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===40?'40+':v}</span>`;}).join('')}
         </div>
         <div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
-        <div style="font-size:12px;color:#7aa8c8;margin-top:4px;line-height:1.4"><b style="color:#bfe3f5">GFS/HRRR blend</b> · HRRR 3 km nearshore &lt;48 h · <b style="color:#bfe3f5">hover the map</b> for speed + gusts</div>
+        ${detail(`<div style="font-size:12px;color:#7aa8c8;margin-top:4px;line-height:1.4"><b style="color:#bfe3f5">GFS/HRRR blend</b> · HRRR 3 km nearshore &lt;48 h · <b style="color:#bfe3f5">tap the map</b> for speed + gusts</div>`)}
       </div>`);
   }
   if(layerVis.currents){
@@ -13993,13 +14147,16 @@ function updateOceanLegend(){
   // Single toggle controlling every collapsed detail block, so the panel stays
   // compact (scale + status only) until the user asks for the full key.
   if(_hasDetail){
+    const toggleLabel = phone
+      ? "How to read ▾"
+      : (oceanLegendExpanded ? "Hide details ▴" : "How to read ▾");
     parts.push(`
       <button type="button" class="ocean-legend-toggle" onclick="toggleOceanLegendDetail()" style="
         width:100%;margin-top:8px;padding:8px 10px;border-radius:6px;cursor:pointer;pointer-events:auto;
         background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
         color:#bfe3f5;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.06em;
         text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:5px">
-        ${oceanLegendExpanded ? "Hide details ▴" : "How to read ▾"}
+        ${toggleLabel}
       </button>`);
   }
   content.innerHTML = parts.join("");
@@ -14007,9 +14164,15 @@ function updateOceanLegend(){
   // If the bite-score banner is also showing at the top, push this panel down so
   // they don't overlap; otherwise sit at the normal top inset.
   el.style.top = (layerVis.predict ? 70 : 10) + "px";
-  // Cap height so the panel scrolls instead of covering bottom map controls.
-  el.style.maxHeight = oceanLegendMaxHeightPx() + "px";
-  el.style.overflowY = "auto";
+  if(phone){
+    el.style.maxHeight = "none";
+    el.style.overflowY = "visible";
+    syncOceanLegendSheet();
+  } else {
+    // Cap height so the panel scrolls instead of covering bottom map controls.
+    el.style.maxHeight = oceanLegendMaxHeightPx() + "px";
+    el.style.overflowY = "auto";
+  }
   updateBiteBanner();
 }
 
@@ -15736,7 +15899,19 @@ function toggleWpLegend(){
 }
 // Re-evaluate desktop-vs-phone legend behavior when the viewport crosses the
 // breakpoint (rotate/resize), so it doesn't get stuck in the wrong mode.
-window.addEventListener("resize", () => { syncHeaderHeightVar(); refreshWpLegendDisplay(); restackBottomControls(); });
+window.addEventListener("resize", () => {
+  syncHeaderHeightVar();
+  refreshWpLegendDisplay();
+  restackBottomControls();
+  if(typeof isPhoneView === "function" && !isPhoneView()){
+    if(typeof closeOceanLegendSheet === "function") closeOceanLegendSheet();
+    document.querySelectorAll(".map-time-pill--open").forEach(p => {
+      p.classList.remove("map-time-pill--open");
+      const b = p.querySelector(".map-time-pill-expand");
+      if(b) b.textContent = "▾";
+    });
+  }
+});
 
 // ════════════════════════════════════════════════════════════════════════════
 // MARINE CLOSURES
@@ -15800,37 +15975,55 @@ function drawClosures(){
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// GULF OF MEXICO PLATFORMS (BSEE federal OCS oil & gas structures)
-// Port-scoped like ramps/waypoints: rigs within PLAT_RADIUS_NM of the active
-// port, then viewport-culled for pan/zoom performance. The old Gulf-wide draw
-// hit a hard marker cap while iterating latitude-sorted data, which produced a
-// sharp north/south cutoff line on wide views.
+// GULF OF MEXICO PLATFORMS (BSEE federal OCS — active, above-water only)
+// Port-scoped: rigs within PLAT_RADIUS_NM of the active port, viewport-culled,
+// and zoom-capped for performance. Data excludes removed structures and subsea
+// manifolds/PLETs (rebuild: npm run build:platforms).
 // ════════════════════════════════════════════════════════════════════════════
 let platformLayerGroup = null;
 let _platformRedrawBound = false;
 let _platformRenderedBounds = null;
+let _platMoveTimer = null;
 const PLAT_RADIUS_NM = 150;
 const PLAT_VIEW_BUFFER = 0.35;
 let _platInRangeCache = null;
 let _platInRangePort = null;
 
-let _platIcon = null;
-function platformIcon(){
-  if(_platIcon) return _platIcon;
-  _platIcon = L.divIcon({
-    className: "platform-marker",
-    html: `<div style="
-      width:22px;height:22px;
-      background:#f59e0b;
-      border:2px solid rgba(255,255,255,.92);
-      border-radius:6px;
-      box-shadow:0 2px 5px rgba(0,0,0,.55);
-      display:flex;align-items:center;justify-content:center;
-      pointer-events:none;
-    "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 20V8l6-4 6 4v12"/><path d="M9 20v-5h6v5"/><path d="M10 8h4"/><path d="M12 4v4"/></svg></div>`,
-    iconSize: [22,22], iconAnchor: [11,11],
-  });
-  return _platIcon;
+function platMaxDraw(){
+  if(!MAP) return 400;
+  const z = MAP.getZoom();
+  if(z <= 6) return 120;
+  if(z <= 7) return 200;
+  if(z <= 8) return 320;
+  if(z <= 9) return 450;
+  if(z <= 10) return 600;
+  return 900;
+}
+
+function platformPopupHtml(p){
+  const latStr = Math.abs(p.lat).toFixed(5) + (p.lat>=0 ? "° N" : "° S");
+  const lngStr = Math.abs(p.lng).toFixed(5) + (p.lng>=0 ? "° E" : "° W");
+  const safeName = String(p.name).replace(/'/g, "\\'");
+  return `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:190px">
+    <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:14px;padding:0 12px">${p.name}</div>
+    ${p.complex ? `<div style="font-size:11px;color:#fde68a;margin-bottom:4px">Complex ${p.complex}</div>` : ""}
+    <div style="font-size:12px;color:#cfe5ff;margin-bottom:2px">${p.nm.toFixed(1)} nm from ${activePort.split(",")[0]}</div>
+    <div style="font-size:10.5px;color:#8fb4d8;margin-bottom:8px">${latStr}, ${lngStr}</div>
+    <div style="font-size:9.5px;color:#9ca3af;line-height:1.4;margin-bottom:8px;font-style:italic">BSEE active platform — informational only, not for navigation.</div>
+    <button onclick="showForecast(${p.lat},${p.lng},'${safeName}')" style="
+      width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
+      padding:10px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+      6-Day Forecast
+    </button>
+  </div>`;
+}
+
+function onPlatformMarkerClick(e){
+  const p = e.target && e.target._platData;
+  if(!p) return;
+  const m = e.target;
+  if(!m.getPopup()) m.bindPopup(platformPopupHtml(p), {offset:[0,-8], className:"wp-fc-popup"});
+  m.openPopup();
 }
 
 function buildPlatformInRangeCache(){
@@ -15842,7 +16035,7 @@ function buildPlatformInRangeCache(){
     const lat = row[1], lng = row[2];
     const nm = nmBetween(p.lat, p.lng, lat, lng);
     if(nm <= PLAT_RADIUS_NM){
-      items.push({ name: row[0] || "Platform", lat, lng, area: row[3] || "", nm });
+      items.push({ name: row[0] || "Platform", lat, lng, complex: row[3] || "", nm });
     }
   }
   items.sort((a, b) => a.nm - b.nm);
@@ -15886,29 +16079,24 @@ function renderPlatformMarkers(force){
   platformLayerGroup.clearLayers();
   platformLayers = [];
   _platformRenderedBounds = bounds;
+  const maxDraw = platMaxDraw();
+  let drawn = 0;
   for(const p of _platInRangeCache){
     if(bounds && !bounds.contains([p.lat, p.lng])) continue;
-    const latStr = Math.abs(p.lat).toFixed(5) + (p.lat>=0 ? "° N" : "° S");
-    const lngStr = Math.abs(p.lng).toFixed(5) + (p.lng>=0 ? "° E" : "° W");
-    const safeName = String(p.name).replace(/'/g, "\\'");
-    const m = L.marker([p.lat, p.lng], {icon: platformIcon()});
-    m.bindPopup(
-      `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:190px">
-        <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:14px;padding:0 12px">${p.name}</div>
-        ${p.area ? `<div style="font-size:11px;color:#fde68a;margin-bottom:4px">OCS Area ${p.area}</div>` : ""}
-        <div style="font-size:12px;color:#cfe5ff;margin-bottom:2px">${p.nm.toFixed(1)} nm from ${activePort.split(",")[0]}</div>
-        <div style="font-size:10.5px;color:#8fb4d8;margin-bottom:8px">${latStr}, ${lngStr}</div>
-        <div style="font-size:9.5px;color:#9ca3af;line-height:1.4;margin-bottom:8px;font-style:italic">BSEE federal OCS platform — informational only, not for navigation.</div>
-        <button onclick="showForecast(${p.lat},${p.lng},'${safeName}')" style="
-          width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
-          padding:10px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
-          6-Day Forecast
-        </button>
-      </div>`,
-      {offset:[0,-42], className:"wp-fc-popup"}
-    );
+    if(drawn >= maxDraw) break;
+    const m = L.circleMarker([p.lat, p.lng], {
+      radius: 5,
+      color: "rgba(255,255,255,.9)",
+      weight: 1.5,
+      fillColor: "#f59e0b",
+      fillOpacity: 0.92,
+      interactive: true,
+    });
+    m._platData = p;
+    m.on("click", onPlatformMarkerClick);
     platformLayerGroup.addLayer(m);
     platformLayers.push(m);
+    drawn++;
   }
 }
 
@@ -15930,7 +16118,10 @@ function bindPlatformRedraw(){
     if(layerVis.platforms && _platInRangeCache) renderPlatformMarkers(true);
   });
   MAP.on("moveend", () => {
-    if(!hidden && layerVis.platforms && _platInRangeCache) renderPlatformMarkers(false);
+    if(!hidden && layerVis.platforms && _platInRangeCache){
+      clearTimeout(_platMoveTimer);
+      _platMoveTimer = setTimeout(() => renderPlatformMarkers(false), 140);
+    }
   });
 }
 
