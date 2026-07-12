@@ -179,7 +179,12 @@ Open with a one-line spot header before the Heads up / Section 1: the depth (dep
 Keep the whole brief tight and scannable. No travel time. No go/no-go call. No preamble or sign-off.`;
 
   const fishLabel = str(body.fishDayLabel) || str(body.fishDate) || "the selected day";
-  const user = `Structured trip data (JSON) for the brief below. Write the brief exactly per your system instructions, scoped to ${fishLabel}. Use ONLY these values, omit any point whose field is null or missing, and never invent numbers.
+  const speciesMode = str(body.speciesMode) || "manual";
+  const autoPick = body.speciesAutoPick && typeof body.speciesAutoPick === "object" ? body.speciesAutoPick : null;
+  const autoNote = speciesMode === "auto" && autoPick
+    ? `\nSPECIES SELECTION: speciesMode is "auto" (Captain's Choice). The app ranked every viable local species using the bite-map engine — score, confidence, and seasonal fit for ${fishLabel} — and auto-selected the targets in species[] and biteScores[]. speciesAutoPick.primaryTarget is the #1 recommendation. Open "## 3. THE BITE" by naming that primary target first and explaining why it wins today using the real biteScores[] drivers and seasonality. Briefly note the runner-up species and when they make sense. In "## 4. BAITS & LURES" lead with the primary target, then cover the backups. Make it clear this is a data-driven recommendation for a captain who didn't pick a species — not a guess.\n`
+    : "";
+  const user = `Structured trip data (JSON) for the brief below. Write the brief exactly per your system instructions, scoped to ${fishLabel}. Use ONLY these values, omit any point whose field is null or missing, and never invent numbers.${autoNote}
 
 ${JSON.stringify(payloadForModel, null, 2)}`;
 

@@ -4608,7 +4608,7 @@ try {
     if(typeof saved.chlor === "number") oceanOpacity.chlor = Math.max(0, Math.min(1, saved.chlor));
   }
 } catch(e){}
-let briefSp=[], aiCOA="", aiLoading=false, briefDayOffset=0;  // briefDayOffset: 0=today,1=tomorrow,...
+let briefSp=[], briefAutoPick=false, aiCOA="", aiLoading=false, briefDayOffset=0;  // briefDayOffset: 0=today,1=tomorrow,...
 const BRIEF_HISTORY_KEY = "bwi_brief_history_v1";
 const BRIEF_HISTORY_TTL_MS = 48 * 3600 * 1000;  // recall window
 const BRIEF_HISTORY_MAX = 12;
@@ -9522,6 +9522,38 @@ function briefSpeciesForSpot(){
     if(typeof speciesAllowedInWater === "function" && !speciesAllowedInWater(s.id, wt)) return false;
     return true;
   });
+}
+
+// Rank local species at the pin using the same bite-map engine as the heat grid,
+// then pick the best targets for an "I just want to go fishing" Captain's Choice
+// brief. Favors in-season fish with strong scores and confidence.
+function briefPickSpeciesAuto(lat, lng, allowed, limit = 3){
+  const candidates = [];
+  if(typeof scoreCell !== "function" || !allowed || !allowed.length) return { picks: [], candidates: [] };
+  for(const sp of allowed){
+    const r = scoreCell(lat, lng, sp.id);
+    if(!r || r.outOfRange) continue;
+    const score = Number.isFinite(r.score) ? r.score : 0;
+    const conf = Number.isFinite(r.confidence) ? r.confidence : 0.5;
+    const inSeason = r.inSeason !== false;
+    const season = Number.isFinite(r.seasonStrength) ? r.seasonStrength : (inSeason ? 0.75 : 0.2);
+    const seasonWt = inSeason ? (0.35 + 0.65 * season) : 0.12;
+    const rank = score * (0.45 + 0.55 * conf) * seasonWt;
+    candidates.push({
+      id: sp.id,
+      name: sp.name,
+      rank,
+      scorePct: Math.round(score * 100),
+      confidencePct: Math.round(conf * 100),
+      inSeason,
+      seasonStrength: season,
+      topFactor: r.topFactor || null,
+    });
+  }
+  candidates.sort((a, b) => b.rank - a.rank);
+  let picks = candidates.filter(c => c.rank >= 0.08).slice(0, limit);
+  if(!picks.length && candidates.length) picks = [candidates[0]];
+  return { picks, candidates };
 }
 
 // Maximum reasonable run distance from home port to fishing grounds.
@@ -16901,7 +16933,7 @@ function briefHistoryPanelHtml(opts = {}){
   }
   const items = recent.slice(0, max).map(b => {
     const spLabel = (b.speciesNames && b.speciesNames.length)
-      ? b.speciesNames.slice(0, 2).join(", ") + (b.speciesNames.length > 2 ? "…" : "")
+      ? (b.speciesAutoPick ? "Captain's Choice · " : "") + b.speciesNames.slice(0, 2).join(", ") + (b.speciesNames.length > 2 ? "…" : "")
       : "General";
     const run = b.runFromPortNm != null ? `${b.runFromPortNm} nm` : "";
     const safeId = (b.id || "").replace(/'/g, "\\'");
@@ -17042,10 +17074,23 @@ function renderBrief(){
   const allowed = briefSpeciesForSpot();
   // Drop any prior selections that don't apply to this spot/port anymore.
   briefSp = briefSp.filter(id => allowed.some(s => s.id === id));
+  const autoPreview = (briefAutoPick && pinLL)
+    ? briefPickSpeciesAuto(pinLL.lat, pinLL.lng, allowed, 3)
+    : { picks: [], candidates: [] };
   const pills = allowed.map(sp => {
-    const on = briefSp.includes(sp.id);
-    return `<button class="sp-pill" style="border-color:${on?sp.color:"#c8b060"};background:${on?sp.color+"18":"white"};color:${on?sp.color:"#7a6030"}" onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
+    const on = !briefAutoPick && briefSp.includes(sp.id);
+    const disabled = briefAutoPick ? "disabled" : "";
+    const dim = briefAutoPick ? "opacity:.45;pointer-events:none" : "";
+    return `<button class="sp-pill" style="border-color:${on?sp.color:"#c8b060"};background:${on?sp.color+"18":"white"};color:${on?sp.color:"#7a6030"};${dim}" ${disabled} onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
   }).join("");
+  const autoOn = briefAutoPick;
+  const autoPickBtn = `<button type="button" class="brief-day" style="border:1px solid ${autoOn?'#a855f7':'#c8b060'};background:${autoOn?'rgba(168,85,247,.18)':'white'};color:${autoOn?'#e9d5ff':'#7a6030'};font-family:inherit;font-weight:800;font-size:12px;padding:9px 12px;border-radius:8px;cursor:pointer;width:100%;text-align:left;margin-bottom:8px" onclick="setBriefAutoPick(true)">🎯 Captain's Choice — let AI pick the best targets for ${briefDayLabel(briefDayOffset)}</button>`;
+  const manualBtn = `<button type="button" class="brief-day" style="border:1px solid ${!autoOn?'#7dd3fc':'#c8b060'};background:${!autoOn?'rgba(125,211,252,.12)':'white'};color:${!autoOn?'#7dd3fc':'#7a6030'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;margin-bottom:10px" onclick="setBriefAutoPick(false)">I'll choose my own targets</button>`;
+  const autoPreviewHtml = autoOn && autoPreview.picks.length
+    ? `<p style="color:#d8b4fe;font-size:12px;margin:0 0 10px;line-height:1.45"><b>AI will target:</b> ${autoPreview.picks.map(p => `${p.name} (${p.scorePct}/100${p.inSeason ? "" : ", off-season"})`).join(" · ")}</p>`
+    : (autoOn && pinLL
+      ? `<p style="color:#9ec5e8;font-size:12px;margin:0 0 10px">Analyzing species for this spot when you generate the brief.</p>`
+      : "");
   const recentHtml = briefHistoryPanelHtml({ showEmpty: true, highlightId: _lastBriefId })
     + (briefHistoryLoad().length ? `<button type="button" class="brief-view-btn" style="margin-top:0;margin-bottom:12px;background:rgba(56,189,248,.15);color:#7dd3fc;border:1px solid rgba(56,189,248,.35);box-shadow:none" onclick="openRecentBriefsModal()">Open all recent briefs ↗</button>` : "");
   // Day selector — lets the captain scope the brief to the day they'll fish
@@ -17063,7 +17108,10 @@ function renderBrief(){
     ${!hasPin?`<p style="color:#9ec5e8;font-size:12px;margin-bottom:12px;line-height:1.5">Tap the chart to drop a weather pin first.</p>`:""}
     <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">WHICH DAY ARE YOU FISHING?</div>
     <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px">${dayBtns}</div>
-    <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">OPTIONAL — TARGET SPECIES FOR THIS SPOT:</div>
+    <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">TARGET SPECIES</div>
+    ${autoPickBtn}
+    ${autoPreviewHtml}
+    ${manualBtn}
     ${speciesNote}
     <div class="sp-pills">${pills || `<span style="font-size:12px;color:#9ec5e8">No species for this location yet.</span>`}</div>
     <button id="brief-btn" ${!hasPin||aiLoading?"disabled":""} onclick="runBrief()">
@@ -17071,7 +17119,12 @@ function renderBrief(){
     ${aiCOA?`<div id="brief-out" class="brief-rendered"><div class="bout-hdr">AI CAPTAIN'S BRIEF · DEPARTING ${(activePort||"Oregon Inlet, NC").toUpperCase()} · ${briefDayLabel(briefDayOffset).toUpperCase()}</div><div class="brief-md">${briefMarkdownToHtml(aiCOA)}</div><button type="button" class="brief-view-btn" onclick="openBriefModal()">View full brief ↗</button></div>`:""}
   `);
 }
-function toggleBriefSp(id){briefSp=briefSp.includes(id)?briefSp.filter(x=>x!==id):[...briefSp,id];renderBrief();}
+function toggleBriefSp(id){briefAutoPick=false;briefSp=briefSp.includes(id)?briefSp.filter(x=>x!==id):[...briefSp,id];renderBrief();}
+function setBriefAutoPick(on){
+  briefAutoPick = !!on;
+  if(briefAutoPick) briefSp = [];
+  renderBrief();
+}
 function structureNear(lat, lng, maxNm = 40, limit = 4){
   if(typeof CANYONS === "undefined") return [];
   // Great-circle initial bearing (deg) from the pin toward a structure, so the
@@ -17150,9 +17203,40 @@ async function runBrief(){
   // AI Captain's Brief is a PAID feature (active subscription / owner)
   // — not included in the 7-day trial. The server also enforces this + 2/day.
   if(!requirePaid()) return;
+
+  const allowed = briefSpeciesForSpot();
+  let autoPickMeta = null;
+  let sp;
+  if(briefAutoPick){
+    const { picks } = briefPickSpeciesAuto(pinLL.lat, pinLL.lng, allowed, 3);
+    if(!picks.length){
+      showToast("Couldn't rank species for this spot. Pick targets manually or try another pin.", "info");
+      return;
+    }
+    sp = picks.map(p => p.id);
+    autoPickMeta = {
+      mode: "auto",
+      rationale: picks.map((p, i) => ({
+        rank: i + 1,
+        species: p.name,
+        score: p.scorePct,
+        confidence: p.confidencePct,
+        inSeason: p.inSeason,
+        seasonStrength: Math.round(p.seasonStrength * 100) / 100,
+        topFactor: p.topFactor,
+      })),
+      primaryTarget: picks[0].name,
+    };
+  } else {
+    sp = briefSp.length ? briefSp : (activeSpId==="all" ? [] : [activeSpId]);
+    if(!sp.length){
+      showToast("Pick target species below, or tap Captain's Choice for an AI recommendation.", "info");
+      return;
+    }
+  }
+
   aiLoading=true;aiCOA="";renderBrief();
 
-  const sp = briefSp.length ? briefSp : (activeSpId==="all" ? [] : [activeSpId]);
   const speciesNames = sp.map(id => SPECIES.find(s=>s.id===id)?.name).filter(Boolean);
   const port = activePort || null;
   const portObj = port && PORTS[port] ? PORTS[port] : null;
@@ -17379,6 +17463,8 @@ async function runBrief(){
     depthFt,
     nearbyStructure: structureNear(pinLL.lat, pinLL.lng),
     species: speciesNames,
+    speciesMode: autoPickMeta ? "auto" : "manual",
+    speciesAutoPick: autoPickMeta,
     // NEW: rich grounding data
     fishDayOffset: briefDayOffset,                       // 0=today, 1=tomorrow…
     fishDate: fishDate.toISOString().slice(0,10),         // YYYY-MM-DD
@@ -17426,6 +17512,7 @@ async function runBrief(){
         pinLng: pinLL.lng,
         speciesIds: [...sp],
         speciesNames,
+        speciesAutoPick: !!autoPickMeta,
         fishDayOffset: briefDayOffset,
         runFromPortNm: payload.runFromPortNm,
         brief: aiCOA,
@@ -25963,6 +26050,11 @@ function wpSaveUser(){
 
 function openWaypoints(){
   if(!WP_state.userPoints.length) WP_state.userPoints = wpLoadUser();
+  // Public tab always scopes to a port — default to the map's active home port.
+  if(WP_state.tab === "public" && WP_state.regionFilter === "all" &&
+     typeof activePort !== "undefined" && activePort){
+    WP_state.regionFilter = activePort;
+  }
   document.getElementById("wp-overlay").style.display = "block";
   document.body.style.overflow = "hidden";
   wpRender();
@@ -25977,6 +26069,10 @@ function closeWaypoints(){
 function wpSwitchTab(tab){
   WP_state.tab = tab;
   WP_state.search = "";
+  if(tab === "public" && WP_state.regionFilter === "all" &&
+     typeof activePort !== "undefined" && activePort){
+    WP_state.regionFilter = activePort;
+  }
   document.querySelectorAll(".wp-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
   wpRender();
   if(tab === "public" && typeof wpFetchCharted === "function") wpFetchCharted();
@@ -26023,6 +26119,14 @@ function mceInitControls(){
   if(defaultSource === "dataset") mceUpdate();
 }
 
+function wpWithinPortNm(p, portName){
+  const port = (typeof PORTS !== "undefined") ? PORTS[portName] : null;
+  if(!port || !Number.isFinite(port.lat) || !Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return false;
+  const rangeNm = (typeof maxRangeForPort === "function") ? maxRangeForPort(port) : 120;
+  const dNm = Math.hypot(port.lat - p.lat, (port.lng - p.lng) * Math.cos(port.lat * Math.PI / 180)) * 60;
+  return dNm <= rangeNm;
+}
+
 function wpFilteredList(list){
   let out = list;
   // Source filter — only meaningful on the My Waypoints tab. "manual" = points
@@ -26043,20 +26147,30 @@ function wpFilteredList(list){
     );
   }
   if(WP_state.typeFilter !== "all") out = out.filter(p => p.type === WP_state.typeFilter);
-  if(WP_state.regionFilter !== "all"){
+  // Public tab: always scope to the selected port (or map home port). Never show
+  // coast-wide curated spots mixed with one port's charted database.
+  if(WP_state.tab === "public"){
+    const displayPort = (typeof wpChartedPort === "function") ? wpChartedPort() : null;
+    if(displayPort && typeof PORTS !== "undefined" && PORTS[displayPort]){
+      out = out.filter(p => {
+        if(p.charted) return WP_state.chartedPort === displayPort;
+        return wpWithinPortNm(p, displayPort);
+      });
+    } else {
+      out = [];
+    }
+  } else if(WP_state.regionFilter !== "all"){
     // Distance-based port filter (matches the map's Fishing Spots behavior):
     // a "region" is a home port, and we show every spot within that port's
     // fishable range — not just spots whose single nearest-port label matches.
     const port = (typeof PORTS !== "undefined") ? PORTS[WP_state.regionFilter] : null;
     if(port && Number.isFinite(port.lat)){
-      const rangeNm = (typeof maxRangeForPort === "function") ? maxRangeForPort(port) : 120;
       out = out.filter(p => {
         // Charted rows are already scoped to the port we fetched for.
         if(p.charted) return WP_state.chartedPort === WP_state.regionFilter;
         // Keep user waypoints regardless (they have no meaningful port range).
         if(String(p.id || "").startsWith("u-")) return p.region === WP_state.regionFilter;
-        const dNm = Math.hypot(port.lat - p.lat, (port.lng - p.lng) * Math.cos(port.lat*Math.PI/180)) * 60;
-        return dNm <= rangeNm;
+        return wpWithinPortNm(p, WP_state.regionFilter);
       });
     } else {
       // Region isn't a known port (e.g. a custom user region) — exact match.
@@ -26068,6 +26182,7 @@ function wpFilteredList(list){
 
 function wpToolbar(includeAdd){
   const ports = (typeof PORTS !== "undefined") ? Object.keys(PORTS).sort() : [];
+  const publicTab = WP_state.tab === "public";
   return `
     <div class="wp-toolbar">
       <input class="wp-search" type="text" placeholder="Search by name, region, or description..."
@@ -26079,7 +26194,7 @@ function wpToolbar(includeAdd){
         ).join("")}
       </select>
       <select class="wp-filter" onchange="wpOnRegionChange(this.value)">
-        <option value="all">All Ports</option>
+        ${publicTab ? "" : `<option value="all">All Ports</option>`}
         ${ports.map(r => `<option value="${r}" ${WP_state.regionFilter===r?"selected":""}>${r}</option>`).join("")}
       </select>
       ${includeAdd ? `<button class="wp-btn primary" onclick="wpNewWaypoint()">+ Add Waypoint</button>` : ""}
@@ -26087,10 +26202,11 @@ function wpToolbar(includeAdd){
   `;
 }
 
-function wpStatsBar(list, label){
+function wpStatsBar(list, label, extra){
   return `
     <div class="wp-stats-bar">
       <span><b>${list.length}</b> ${label}</span>
+      ${extra || ""}
       ${WP_state.typeFilter !== "all" ? `<span>· Type: <b>${wpType(WP_state.typeFilter).name}</b></span>` : ""}
       ${WP_state.regionFilter !== "all" ? `<span>· Port: <b>${WP_state.regionFilter}</b></span>` : ""}
     </div>
@@ -26151,48 +26267,58 @@ function wpCardHTML(p, isUser){
 function wpRenderPublic(){
   const premium = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM;
   const charted = (premium && Array.isArray(WP_state.charted)) ? WP_state.charted : [];
-  const displayPort = WP_state.chartedPort || wpChartedPort() || activePort || "your port";
+  const displayPort = WP_state.chartedPort || wpChartedPort() || activePort || null;
   // Curated public spots first, then the charted database (already nearest-first).
   const source = charted.length ? WP_PUBLIC.concat(charted) : WP_PUBLIC;
   const list = wpFilteredList(source);
   const shown = list.length > WP_CHARTED_MAX ? list.slice(0, WP_CHARTED_MAX) : list;
+  const curatedN = list.filter(p => !p.charted).length;
+  const chartedN = list.filter(p => p.charted).length;
+  const chartedExportN = (displayPort && WP_state.chartedPort === displayPort) ? charted.length : 0;
+  const statsExtra = (premium && chartedN > 0)
+    ? `<span>· <b>${curatedN}</b> curated + <b>${chartedN}</b> charted</span>`
+    : (curatedN > 0 ? `<span>· <b>${curatedN}</b> curated</span>` : "");
 
   // Status/info banner explains what's in this tab and its loading state.
   let banner;
-  if(!premium){
-    banner = `<div class="wp-info-box"><b>🌊 Curated public POIs</b> — well-known structure from Portsmouth NH to Charleston SC. Upgrade to Pro to unlock the full ~13,000-waypoint charted database (wrecks, reefs, ledges, rocks and structure) for any home port.</div>`;
+  if(!displayPort){
+    banner = `<div class="wp-info-box"><b>🌊 Waypoints</b> — pick a home port on the map to browse waypoints within range.</div>`;
+  } else if(!premium){
+    banner = `<div class="wp-info-box"><b>🌊 Curated public POIs</b> — well-known structure within range of <b>${displayPort}</b>. Upgrade to Pro to unlock the full ~13,000-waypoint charted database (wrecks, reefs, ledges, rocks and structure) for any home port.</div>`;
   } else if(WP_state.chartedStatus === "loading"){
-    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — loading the full waypoint set for <b>${displayPort}</b>…</div>`;
+    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — loading waypoints within range of <b>${displayPort}</b>…</div>`;
   } else if(WP_state.chartedStatus === "none"){
-    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — pick a home port in the dropdown to load the full charted database (wrecks, reefs, ledges, rocks and structure) within range. Curated public spots are shown below in the meantime.</div>`;
+    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — pick a home port in the dropdown to load the full charted database within range. Curated public spots for <b>${displayPort}</b> are shown below in the meantime.</div>`;
   } else if(WP_state.chartedStatus === "error"){
-    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — couldn't load the charted set right now. Showing curated public spots. <a href="#" onclick="event.preventDefault();wpFetchCharted(true)" style="color:#7dd3fc">Retry</a></div>`;
+    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — couldn't load charted waypoints for <b>${displayPort}</b> right now. Showing curated spots within range. <a href="#" onclick="event.preventDefault();wpFetchCharted(true)" style="color:#7dd3fc">Retry</a></div>`;
+  } else if(chartedN > 0){
+    banner = `<div class="wp-info-box"><b>🌊 Waypoints near ${displayPort}</b> — <b>${curatedN}</b> curated public spots and <b>${chartedN}</b> charted database entries within range. Tap a card to fly there, or ⭐ to save it to My Waypoints.</div>`;
   } else {
-    banner = `<div class="wp-info-box"><b>🌊 Waypoints</b> — curated public spots plus the full charted database within range of <b>${displayPort}</b> (${charted.length.toLocaleString()} charted). Tap a card to fly there, or ⭐ to save it to My Waypoints.</div>`;
+    banner = `<div class="wp-info-box"><b>🌊 Waypoints near ${displayPort}</b> — <b>${curatedN}</b> curated public spots within range. No charted database entries match your current filters.</div>`;
   }
 
   const capNote = list.length > shown.length
-    ? `<div style="text-align:center;font-size:11px;color:#9ec5e8;padding:10px 8px">Showing the nearest ${shown.length.toLocaleString()} of ${list.length.toLocaleString()}. Refine with the search box, type or port filter to narrow the list.</div>`
+    ? `<div style="text-align:center;font-size:11px;color:#9ec5e8;padding:10px 8px">Showing the nearest ${shown.length.toLocaleString()} of ${list.length.toLocaleString()}. Refine with the search box or type filter to narrow the list.</div>`
     : "";
 
-  const exportBtn = (premium && WP_state.chartedStatus === "live" && charted.length > 0) ? `
+  const exportBtn = (premium && WP_state.chartedStatus === "live" && chartedExportN > 0) ? `
     <div style="margin-bottom:14px">
-      <button class="wp-btn primary" onclick="wpExportChartedGPX()" style="width:100%">⬇ Export ${charted.length.toLocaleString()} waypoints to GPX</button>
-      <div style="font-size:11px;color:#9ec5e8;margin-top:6px;text-align:center">Downloads the full charted database within range of <b>${displayPort}</b>. Adjust port/range in the Import / Export tab.</div>
+      <button class="wp-btn primary" onclick="wpExportChartedGPX()" style="width:100%">⬇ Export ${chartedExportN.toLocaleString()} charted waypoints to GPX</button>
+      <div style="font-size:11px;color:#9ec5e8;margin-top:6px;text-align:center">Exports charted database entries within range of <b>${displayPort}</b>. Adjust port/range in the Import / Export tab.</div>
     </div>
   ` : "";
 
   return `
     ${wpToolbar(false)}
-    ${wpStatsBar(list, "waypoints")}
+    ${wpStatsBar(list, "waypoints", statsExtra)}
     ${banner}
     ${exportBtn}
     <div class="wp-list">
       ${shown.length === 0 ? `
         <div class="wp-empty">
           <div class="wp-empty-icon">🔍</div>
-          <div style="font-size:14px;color:#9ec5e8;margin-bottom:6px">No waypoints match your search</div>
-          <div style="font-size:11px">Try clearing your filters or search term.</div>
+          <div style="font-size:14px;color:#9ec5e8;margin-bottom:6px">${displayPort ? "No waypoints within range of " + displayPort : "Select a home port on the map"}</div>
+          <div style="font-size:11px">${displayPort ? "Try clearing your filters or choosing another port." : ""}</div>
         </div>
       ` : shown.map(p => wpCardHTML(p, false)).join("")}
     </div>
