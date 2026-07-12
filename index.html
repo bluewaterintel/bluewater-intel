@@ -293,31 +293,122 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
    RESPONSIVE — Tablet, Phone Portrait, Phone Landscape
    ───────────────────────────────────────────────────────────────────────── */
 
-/* Tablet / smaller laptops */
+/* Tablet / smaller laptops — hide clock to save horizontal space */
 @media (max-width:1100px){
-  .hdr-wx .wx-cell:nth-child(3),
-  .hdr-wx .wx-cell:nth-child(4){display:none}
   .hdr-clock{display:none}
 }
-@media (max-width:900px){
-  .hdr-wx{display:none}
+
+/* Phone + tablet: two-row header — controls on top, scrollable conditions below */
+@media (max-width:1100px){
+  #hdr{
+    flex-wrap:wrap;
+    align-items:center;
+    height:auto;
+    min-height:58px;
+    padding:8px 8px 6px;
+    gap:6px 8px;
+  }
+  .hdr-brand{
+    order:1;
+    padding:0;
+    border-right:none;
+    height:44px;
+    width:44px;
+    flex-shrink:0;
+    overflow:hidden;
+  }
+  .hdr-brand-logo{
+    height:44px;
+    width:44px;
+    max-width:44px;
+    object-fit:cover;
+    object-position:right center;
+  }
+  .hdr-center{display:contents}
+  #port-wrap,#sp-wrap{
+    order:2;
+    flex:1 1 38%;
+    min-width:0;
+    height:42px;
+  }
+  .hdr-right{
+    order:3;
+    position:static;
+    padding:0;
+    border-left:none;
+    background:none;
+    flex-shrink:0;
+  }
+  .ctrl-card,#sp-btn,#port-btn{
+    height:42px;
+    flex-direction:row;
+    align-items:center;
+    border-radius:21px;
+    padding:0 12px;
+    min-width:0;
+  }
+  #sp-btn,#port-btn{min-width:0;width:100%}
+  .ctrl-card-label{display:none}
+  .ctrl-card-value{font-size:13px;gap:7px;width:100%}
+  .ctrl-card-value span:first-of-type,
+  .ctrl-card-value #port-name,
+  .ctrl-card-value #sp-name{
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
+  }
+  .hdr-wx{
+    display:flex !important;
+    order:10;
+    width:100%;
+    flex:0 0 100%;
+    height:auto;
+    min-height:36px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+    scroll-snap-type:x proximity;
+    scrollbar-width:none;
+    border-radius:8px;
+    margin-top:2px;
+    touch-action:pan-x;
+    /* Fade hints that more conditions are off-screen (swipe sideways). */
+    mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
+  }
+  .hdr-wx::-webkit-scrollbar{display:none}
+  .hdr-wx .wx-cell{
+    display:flex !important;
+    flex-shrink:0;
+    padding:4px 12px;
+    min-width:72px;
+    scroll-snap-align:start;
+  }
+  .hdr-wx .wx-cell-label{font-size:10px;letter-spacing:.08em}
+  .hdr-wx .wx-cell-value{font-size:12px}
+  #hdr-tide-cell .wx-cell-value{font-size:11px;white-space:nowrap}
+  #nav-btn{width:46px;height:46px;gap:4px;border-radius:13px}
+  .nav-bar{width:20px;height:2.5px}
+  .nav-label{display:none}
+  #nav-menu{
+    width:calc(100vw - 16px) !important;
+    right:8px !important;
+    left:8px !important;
+    max-height:calc(100dvh - var(--bw-hdr-h, 100px) - 12px) !important;
+    top:calc(env(safe-area-inset-top, 0px) + var(--bw-hdr-h, 100px) + 4px) !important;
+  }
 }
 
 /* ── PHONE PORTRAIT MODE ── */
-/* Single compact row: logo · port pill · species pill · menu.
-   Reclaims ~100px of map vs. the old 2-row stacked layout. */
+/* Logo · port · species · menu on row 1; conditions strip scrolls on row 2. */
 @media (max-width:680px){
   #hdr{
-    height:58px;
+    height:auto;
     flex-direction:row;
     align-items:center;
-    padding:0 8px 0 10px;
+    padding:0 8px 6px 10px;
     gap:7px;
   }
-  /* Compact brand — crop to show ONLY the marlin (right edge of the logo).
-     The PNG is 693×180 with the wordmark on the left and the marlin on the
-     far right. We use a narrow fixed-width window with object-position:right
-     so just the marlin shows — frees horizontal space for the pills. */
+  /* Compact brand — marlin-only crop (rules also at 900px; kept for very narrow) */
   .hdr-brand{
     padding:0;
     border-right:none;
@@ -333,20 +424,9 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     max-width:44px;
     object-fit:cover;
     object-position:right center;
-    /* width:44px + object-fit:cover crops the wide logo to a square showing
-       the rightmost portion (the marlin), hiding the wordmark. */
   }
-  /* Controls row — fills the middle, pills side by side */
-  .hdr-center{
-    padding:0;
-    gap:6px;
-    overflow-x:visible;
-    overflow-y:visible;
-    height:auto;
-    flex:1;
-    min-width:0;
-  }
-  /* Right zone — menu button inline, not absolute */
+  /* Port/species pills — hdr-center uses display:contents from 900px breakpoint */
+  #sp-wrap,#port-wrap{height:42px;flex:1;min-width:0}
   .hdr-right{
     position:static;
     padding:0;
@@ -356,38 +436,16 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     flex-shrink:0;
   }
   .hdr-clock{display:none}
-  /* Pill-shaped controls — icon + name, no stacked labels */
-  .ctrl-card,#sp-btn,#port-btn{
-    height:42px;flex-shrink:1;
-    flex-direction:row;align-items:center;
-    border-radius:21px;
-    padding:0 12px;
-    min-width:0;
-  }
-  #sp-wrap,#port-wrap{height:42px;flex:1;min-width:0}
-  #sp-btn,#port-btn{min-width:0;width:100%}
-  /* Hide the stacked mini-label on phones — context makes it obvious */
-  .ctrl-card-label{display:none}
-  .ctrl-card-value{font-size:13px;gap:7px;width:100%}
-  .ctrl-card-value span:first-of-type,
-  .ctrl-card-value #port-name,
-  .ctrl-card-value #sp-name{
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
-  }
-  /* Hide weather widget on phones (data lives in explainer) */
-  /* Compact menu button */
-  #nav-btn{width:46px;height:46px;gap:4px;border-radius:13px}
-  .nav-bar{width:20px;height:2.5px}
-  .nav-label{display:none}
   /* Map — fill remaining viewport */
   #map{flex:1;min-height:0}
   /* Bottom panel adjustments */
   #panel{
     max-height:60vh;
+    max-height:60dvh;
     border-radius:14px 14px 0 0;
   }
   #ptabs{height:42px}
-  .tbtn{padding:0 9px;font-size:8px}
+  .tbtn{padding:0 10px;font-size:11px}
   #layers-toggle{width:42px;height:42px}
   /* Species + Port dropdowns — full-width bottom-sheet overlays */
   #sp-dd, #port-dd{
@@ -403,11 +461,17 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     box-shadow:0 -8px 32px rgba(0,0,0,.7) !important;
     z-index:99999 !important;
   }
-  /* Nav menu adjustments */
-  #nav-menu{
-    width:calc(100vw - 20px)!important;
-    right:10px!important;
-    top:64px!important;
+  /* Centered modals → bottom sheets for thumb reach */
+  #layers-modal,#basemap-modal,#settings-modal{
+    align-items:flex-end !important;
+    padding:0 !important;
+  }
+  #layers-body,.modal-dialog{
+    max-width:100% !important;
+    width:100% !important;
+    max-height:88dvh !important;
+    border-radius:18px 18px 0 0 !important;
+    margin:0 !important;
   }
   /* ── Ocean/weather legend (SST/chlor/wind/RADAR scale). On phones the Leaflet
         zoom +/- buttons sit top-left (~60px wide), so anchor the legend to the
@@ -420,6 +484,8 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     left:70px !important;        /* clear the zoom button column */
     right:8px !important;
     transform:none !important;
+    overflow-y:auto !important;
+    -webkit-overflow-scrolling:touch;
   }
   #ocean-legend .oc-legend-bar,
   #ocean-legend [style*="height:11px"]{ height:10px !important; }
@@ -807,6 +873,13 @@ body.nav-open #ruler-readout{
   backdrop-filter:blur(2px);
 }
 #layers-modal.open, #basemap-modal.open, #settings-modal.open{display:flex}
+@media (max-width:680px){
+  #layers-modal,#basemap-modal,#settings-modal{
+    align-items:flex-end;
+    padding:0;
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+}
 #layers-body, .modal-dialog{
   background:rgba(10,22,40,.98);
   border:1px solid rgba(255,255,255,.2);
@@ -1008,6 +1081,25 @@ body.nav-open #ruler-readout{
 .map-time-pill--green .map-time-pill-footer{color:#9ec5e8}
 .map-time-pill--green .map-time-pill-play{color:#bbf7d0;border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.16)}
 #ocean-legend .legend-detail{font-size:13px;line-height:1.45}
+#ocean-legend{
+  pointer-events:none;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+}
+#ocean-legend .ocean-legend-toggle{pointer-events:auto}
+@media (max-width:680px){
+  #ocean-legend{
+    pointer-events:auto !important;
+    max-height:38vh !important;
+  }
+  #ocean-legend .legend-detail{font-size:12px !important;line-height:1.4 !important}
+  #ocean-legend .ocean-legend-toggle{
+    position:sticky;bottom:0;z-index:2;
+    background:rgba(10,22,40,.98) !important;
+    box-shadow:0 -6px 12px rgba(0,0,0,.45);
+  }
+}
 
 /* Legend rows (now living inside the merged panel) */
 .leg-row{display:flex;align-items:center;gap:9px;font-size:12px;color:#d8d0b8;margin-bottom:4px;padding:3px 0}
@@ -2427,7 +2519,7 @@ body.nav-open #ruler-readout{
     <!-- Weather widget — combined cells. Values are EMPTY until a home port is
          chosen: with no port there's no location to source conditions from, so
          showing numbers would be misleading. Populated by updateHeaderConditions(). -->
-    <div class="hdr-wx">
+    <div class="hdr-wx" role="region" aria-label="Port conditions" title="Swipe sideways for water, air, seas, wind, and tide">
       <div class="wx-cell">
         <div class="wx-cell-label">Water</div>
         <div class="wx-cell-value" style="color:#7dd3fc">
@@ -2698,7 +2790,6 @@ body.nav-open #ruler-readout{
     font-family:'Segoe UI',Arial,sans-serif;
     color:#e8f4ff;font-size:13px;
     box-shadow:0 4px 14px rgba(0,0,0,.55);
-    pointer-events:none;
     max-width:min(520px, 94vw);
     min-width:260px;
   ">
@@ -2805,7 +2896,7 @@ body.nav-open #ruler-readout{
     </div>
     <div class="map-time-pill-footer">
       <span>6 days ago</span>
-      <span class="map-time-pill-hint">Faint magenta = tracked prior day · arrow ≤28 nm drift</span>
+      <span class="map-time-pill-hint">Amber arrow shows break drift (≤28 nm)</span>
       <span>Latest →</span>
     </div>
   </div>
@@ -4777,6 +4868,9 @@ async function initMap(){
       setTimeout(() => { if(!navigator.onLine && typeof dtOpenTrip === "function"){ dtOpenTrip(); showToast("Offline — loaded your saved trip.", "info"); } }, 900);
     }
   }catch(e){}
+
+  if(activePort) updateHeaderConditions();
+  else requestAnimationFrame(syncHeaderHeightVar);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -11674,6 +11768,8 @@ function showPredictionExplainer(cell, species){
   // The two-sided anchoring (top + bottom) means the popup's height auto-fits the
   // available space and overflow-y:auto scrolls within it — so "Reports near here"
   // and the action buttons at the bottom are always reachable.
+  const panelTop = (typeof viewportPanelTopPx === "function") ? viewportPanelTopPx(8) : 128;
+  const panelBottom = 14;
   div.style.cssText = [
     "position:fixed",
     // Horizontal centering — escapes both the layers panel (bottom-left) and
@@ -11681,11 +11777,10 @@ function showPredictionExplainer(cell, species){
     // collided with the zoom buttons after they moved to top-right.
     "left:50%",
     "transform:translateX(-50%)",
-    // Top offset: clears the BITE SCORE banner at the top of the map (which
-    // sits at top:8px and is ~56px tall) plus breathing room, so the panel's
-    // top edge and rounded corners never overlap the banner.
-    "top:128px",
-    "bottom:14px",
+    // Top offset: clears the app header (taller on phones) plus the BITE SCORE
+    // banner when the prediction layer is on.
+    `top:${panelTop}px`,
+    `bottom:${panelBottom}px`,
     // z-index 1100 sits above Leaflet's default control z-index (1000) so
     // the zoom buttons don't punch through the popup. Still below the nav
     // menu (2000), tutorial overlay (5000), and centered modals (10000).
@@ -11701,9 +11796,9 @@ function showPredictionExplainer(cell, species){
     "width:360px",
     "max-width:calc(100vw - 28px)",
     // Fallback height cap for older browsers that don't support dvh:
-    "max-height:calc(100vh - 142px)",
+    `max-height:calc(100vh - ${panelTop + panelBottom}px)`,
     // Modern browsers — dynamic viewport correctly excludes mobile chrome:
-    "max-height:calc(100dvh - 142px)",
+    `max-height:calc(100dvh - ${panelTop + panelBottom}px)`,
     "overflow-y:auto",
     "overscroll-behavior:contain",
     "-webkit-overflow-scrolling:touch"].join(";");
@@ -12286,6 +12381,10 @@ function restackBottomControls(){
   if(scale){
     const scaleBottom = anyVisible ? (topOfStack + 6) : (phone ? 30 : 30);
     scale.style.bottom = scaleBottom + "px";
+  }
+  const legend = document.getElementById("ocean-legend");
+  if(legend && legend.style.display !== "none" && typeof oceanLegendMaxHeightPx === "function"){
+    legend.style.maxHeight = oceanLegendMaxHeightPx() + "px";
   }
 }
 
@@ -13752,6 +13851,26 @@ let oceanLegendExpanded = false;
 function toggleOceanLegendDetail(){
   oceanLegendExpanded = !oceanLegendExpanded;
   updateOceanLegend();
+  // Keep the collapse control reachable after expanding on phones.
+  if(oceanLegendExpanded && isPhoneView()){
+    const el = document.getElementById("ocean-legend");
+    if(el) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+  }
+}
+function oceanLegendMaxHeightPx(){
+  const mapH = (MAP && MAP.getSize) ? MAP.getSize().y : (window.innerHeight || 600);
+  const topInset = layerVis.predict ? 70 : 10;
+  const phone = isPhoneView();
+  let bottomReserve = phone ? 28 : 12;
+  const stackIds = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider", "forecast-slider"];
+  for(const id of stackIds){
+    const el = document.getElementById(id);
+    if(el && el.style.display && el.style.display !== "none"){
+      bottomReserve += (el.offsetHeight || 56) + 8;
+    }
+  }
+  if(phone) bottomReserve += 20;
+  return Math.max(100, mapH - topInset - bottomReserve);
 }
 function updateOceanLegend(){
   const el = document.getElementById("ocean-legend");
@@ -13849,10 +13968,9 @@ function updateOceanLegend(){
         </div>
         ${statusRow}
         ${detail(`
-        <div style="font-size:13px;color:#7aa8c8;margin-top:6px;line-height:1.45"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">Altimetry Date</b> bar to step day-by-day and read eddy drift. Faint magenta = prior day; amber arrow = how far the break moved.</div>
+        <div style="font-size:13px;color:#7aa8c8;margin-top:6px;line-height:1.45"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">Altimetry Date</b> bar to step day-by-day. Amber arrow = how far a tracked break moved.</div>
         <div style="margin-top:7px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
           <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${altiRangeNm}-nm fishing range are highlighted.</span>
-          <span style="justify-self:center;color:#f9a8d4;font-size:13px;line-height:1">▬</span><span><b style="color:#fbcfe8">Faint magenta</b> — same break on the <b>previous day</b> (only shown when tracked). Step ◀▶ or the slider to compare passes.</span>
           <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">↗</span><span><b style="color:#fde68a">Amber arrow</b> — 1-day drift for a <b>tracked</b> break (2–${ALTI_MAX_DRIFT_NM_PER_DAY} nm). No arrow = different feature or moved too far to link.</span>
           <span style="justify-self:center;color:#f87171;font-size:13px;line-height:1">●</span><span><b style="color:#f8b4b4">Red — warm bulge</b> (Gulf Stream, warm-core eddy). Bait &amp; pelagics stack on the edges — not the center.</span>
           <span style="justify-self:center;color:#60a5fa;font-size:13px;line-height:1">●</span><span><b style="color:#bcd6f8">Blue — cool depression</b> (cold-core eddy, upwelling). Nutrient-rich; good for bait and surface feeding.</span>
@@ -13876,7 +13994,7 @@ function updateOceanLegend(){
   // compact (scale + status only) until the user asks for the full key.
   if(_hasDetail){
     parts.push(`
-      <button type="button" onclick="toggleOceanLegendDetail()" style="
+      <button type="button" class="ocean-legend-toggle" onclick="toggleOceanLegendDetail()" style="
         width:100%;margin-top:8px;padding:8px 10px;border-radius:6px;cursor:pointer;pointer-events:auto;
         background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
         color:#bfe3f5;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.06em;
@@ -13889,9 +14007,8 @@ function updateOceanLegend(){
   // If the bite-score banner is also showing at the top, push this panel down so
   // they don't overlap; otherwise sit at the normal top inset.
   el.style.top = (layerVis.predict ? 70 : 10) + "px";
-  // Never let the panel run off the map — cap height and scroll the overflow.
-  const mapH = (MAP && MAP.getSize) ? MAP.getSize().y : window.innerHeight;
-  el.style.maxHeight = Math.max(140, mapH - (layerVis.predict ? 90 : 30)) + "px";
+  // Cap height so the panel scrolls instead of covering bottom map controls.
+  el.style.maxHeight = oceanLegendMaxHeightPx() + "px";
   el.style.overflowY = "auto";
   updateBiteBanner();
 }
@@ -13903,6 +14020,13 @@ function updateBiteBanner(){
   const b = document.getElementById("bite-banner");
   if(!b) return;
   b.style.display = layerVis.predict ? "block" : "none";
+  const expl = document.getElementById("predict-explainer");
+  if(expl && typeof viewportPanelTopPx === "function"){
+    const top = viewportPanelTopPx(8);
+    const bottom = 14;
+    expl.style.top = top + "px";
+    expl.style.maxHeight = `calc(100dvh - ${top + bottom}px)`;
+  }
 }
 
 function updateScaleBar(){
@@ -15612,7 +15736,7 @@ function toggleWpLegend(){
 }
 // Re-evaluate desktop-vs-phone legend behavior when the viewport crosses the
 // breakpoint (rotate/resize), so it doesn't get stuck in the wrong mode.
-window.addEventListener("resize", () => { refreshWpLegendDisplay(); restackBottomControls(); });
+window.addEventListener("resize", () => { syncHeaderHeightVar(); refreshWpLegendDisplay(); restackBottomControls(); });
 
 // ════════════════════════════════════════════════════════════════════════════
 // MARINE CLOSURES
@@ -17124,6 +17248,7 @@ async function updateHeaderConditions(){
   if(!p){
     water.textContent = air.textContent = seas.textContent = wind.textContent = "—";
     updateHeaderTide();
+    requestAnimationFrame(syncHeaderHeightVar);
     return;
   }
   updateHeaderTide();
@@ -17132,6 +17257,7 @@ async function updateHeaderConditions(){
   // Cells show "—" until/unless real data is available — never synthetic.
   if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchOcean){
     water.textContent = air.textContent = seas.textContent = wind.textContent = "—";
+    requestAnimationFrame(syncHeaderHeightVar);
     return;
   }
   const lat = p.lat + 0.05, lng = p.lng + 0.05;
@@ -17147,6 +17273,22 @@ async function updateHeaderConditions(){
   } catch(e){
     water.textContent = air.textContent = seas.textContent = wind.textContent = "—";
   }
+  requestAnimationFrame(syncHeaderHeightVar);
+}
+
+// Keep --bw-hdr-h in sync with the real header height so fixed panels (nav
+// menu, bite explainer) clear the two-row mobile header + safe area.
+function syncHeaderHeightVar(){
+  const hdr = document.getElementById("hdr");
+  const px = hdr ? Math.ceil(hdr.getBoundingClientRect().height) : 64;
+  document.documentElement.style.setProperty("--bw-hdr-h", px + "px");
+  return px;
+}
+// Viewport-fixed panel top: header + optional bite banner + gap.
+function viewportPanelTopPx(gap){
+  const hdr = syncHeaderHeightVar();
+  const banner = (typeof layerVis !== "undefined" && layerVis.predict) ? 56 : 0;
+  return hdr + banner + (gap != null ? gap : 8);
 }
 
 // Tide for the header: shows the current STATE (Rising / Falling / Slack) plus
@@ -17161,16 +17303,24 @@ async function updateHeaderTide(){
   const cell = document.getElementById("hdr-tide-cell");
   const el   = document.getElementById("hdr-tide");
   if(!cell || !el) return;
+  const setTideText = (text) => {
+    el.textContent = text;
+    const tip = (text && text !== "—" && text !== "…") ? text : "";
+    el.title = tip;
+    cell.title = tip;
+  };
   const p = activePort ? PORTS[activePort] : null;
   if(!p){ cell.style.display = "none"; return; }
   cell.style.display = "";
   if(_hdrTide.key === activePort && Date.now() - _hdrTide.atMs < 15 * 60 * 1000){
-    el.textContent = _hdrTide.text || "—"; return;
+    setTideText(_hdrTide.text || "—");
+    requestAnimationFrame(syncHeaderHeightVar);
+    return;
   }
-  el.textContent = "…";
+  setTideText("…");
   const portKey = activePort;
   try {
-    if(typeof BW_OCEAN === "undefined"){ el.textContent = "—"; return; }
+    if(typeof BW_OCEAN === "undefined"){ setTideText("—"); requestAnimationFrame(syncHeaderHeightVar); return; }
     const o = await BW_OCEAN.fetchOcean(p.lat + 0.05, p.lng + 0.05);
     if(activePort !== portKey) return;  // port changed while we were fetching
     const station = o && o.sources ? o.sources.tide : null;
@@ -17198,13 +17348,14 @@ async function updateHeaderTide(){
       const cachedTide = tripTideHeaderFor(portKey);
       if(cachedTide) text = cachedTide;
     }
-    el.textContent = text;
+    setTideText(text);
     _hdrTide = { key: portKey, text, atMs: Date.now() };
   } catch(e){
     const cachedTide = (typeof tripTideHeaderFor === "function") ? tripTideHeaderFor(portKey) : null;
-    el.textContent = cachedTide || "—";
+    setTideText(cachedTide || "—");
     if(cachedTide) _hdrTide = { key: portKey, text: cachedTide, atMs: Date.now() };
   }
+  requestAnimationFrame(syncHeaderHeightVar);
 }
 
 // Upcoming tide events for a CO-OPS station (hi/lo predictions), in
