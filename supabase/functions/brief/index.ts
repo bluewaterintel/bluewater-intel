@@ -42,8 +42,13 @@ const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((
 // Claude Sonnet 4.6 — balanced quality for tactical briefs. Override via BRIEF_MODEL secret.
 const MODEL = Deno.env.get("BRIEF_MODEL") ?? "claude-sonnet-4-6";
 
+// Reflect the caller's Origin (fallback to configured list / "*"). Strict
+// matching returned the apex domain for www./mobile-webview callers, which the
+// browser rejects — the AI Captain's Brief then failed with "Couldn't reach the
+// Captain's Brief service." Auth is enforced by the JWT bearer token, not CORS,
+// and no cookies are used, so echoing the origin is safe across every hostname.
 function corsHeaders(origin: string | null) {
-  const allow = origin && (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) ? origin : (ALLOWED_ORIGINS[0] ?? "*");
+  const allow = origin || (ALLOWED_ORIGINS[0] ?? "*");
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
