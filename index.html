@@ -4528,7 +4528,7 @@ async function loadReports(){
 // ════════════════════════════════════════════════════════════════════════════
 let MAP, activeSpId=null, activePort=null;
 let pinLL=null;
-let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[], platformLayers=[];
+let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
 let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
@@ -12234,8 +12234,7 @@ function toggleLayer(key){
   layerVis[key]=!layerVis[key];
   const chk=document.getElementById("chk-"+key);
   if(chk)chk.checked=layerVis[key];
-  if(key==="canyons")drawCanyons();
-  else if(key==="spots")drawCanyons();  // unified structure layer (canyons+wrecks+reefs+lumps)
+  if(key==="spots")drawCanyons();  // unified structure layer (canyons+wrecks+reefs+lumps)
   else if(key==="predict"){ _predictUserOff = !layerVis.predict; drawPrediction(); updateOceanLegend();}
   else if(key==="ports")drawPortMarkers();
   else if(key==="loran")drawLoranLines();
@@ -14671,20 +14670,17 @@ function drawCanyons(){
   const refPort = PORTS[refName];
 
   // Candidate structures: point features (exclude closure polygons) within
-  // the fishable radius of the reference port.
-  let structures = CANYONS
-    .filter(c => !c.polygon && c.type !== "closure")
-    .filter(c => nmBetween(refPort.lat, refPort.lng, c.lat, c.lng) <= HOME_PORT_RADIUS_NM);
+  // the fishable radius of the reference port — single distance pass.
+  const structures = [];
+  for(const c of CANYONS){
+    if(c.polygon || c.type === "closure") continue;
+    const d = nmBetween(refPort.lat, refPort.lng, c.lat, c.lng);
+    if(d <= HOME_PORT_RADIUS_NM) structures.push({c, d});
+  }
+  structures.sort((a, b) => a.d - b.d);
+  const nearest = structures.slice(0, 15).map(x => x.c);
 
-  // Keep the 15 closest to the reference port so the chart shows the most
-  // relevant starting areas without clutter.
-  structures = structures
-    .map(c => ({c, d: nmBetween(refPort.lat, refPort.lng, c.lat, c.lng)}))
-    .sort((a,b) => a.d - b.d)
-    .slice(0, 15)
-    .map(x => x.c);
-
-  structures.forEach(c=>{
+  nearest.forEach(c=>{
     const type = c.type || "canyon";
     const typeLabel = {canyon:"Canyon", wreck:"Wreck", reef:"Reef / Live Bottom",
                        lump:"Lump / Seamount", shoal:"Shoal", ledge:"Ledge / Drop",
@@ -14910,10 +14906,10 @@ function drawPortMarkers(){
 //   • Type column drives a distinct map icon per type (wreck/reef/rock/…).
 //   • GPX export produces a file (port-origin) loadable in any chartplotter.
 // ════════════════════════════════════════════════════════════════════════════
-let waypointLayers = [];                 // Leaflet markers currently on the map
 let wpLayerGroup = null;                 // single layer group holding waypoint markers (cheaper than N individual adds)
 let _wpInRangeCache = null;              // cached in-range list so we don't recompute haversine on every pan
 let _wpRedrawBound = false;              // ensure map move/zoom handlers attach once
+let _wpMoveTimer = null;
 let wpRadiusNm = 40;                     // selected radius band (default 40nm)
 let wpTypeFilter = null;                 // null = all types, else Set of type codes
 const WP_RADII = [20, 40, 60, 100, 120, 140];
@@ -15004,10 +15000,13 @@ function applyEntitlementGating(){
         if(k === "predict"){ _predictUserOff = true; if(typeof drawPrediction === "function") drawPrediction(); }
         else if(k === "wind" && typeof drawWind === "function") drawWind();
         else if(k === "currents" && typeof drawCurrents === "function") drawCurrents();
+        else if(k === "altimetry" && typeof drawAltimetry === "function") drawAltimetry();
         else if(k === "sst" && typeof MAP !== "undefined" && typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
         else if(k === "chlor" && typeof MAP !== "undefined" && typeof chlorLayer !== "undefined" && chlorLayer && MAP.hasLayer(chlorLayer)) MAP.removeLayer(chlorLayer);
-        else if(k === "radar" && typeof drawRadar === "function") drawRadar();
-        else if(k === "closures" && typeof drawClosures === "function") drawClosures();
+        else if(k === "radar"){
+          if(typeof MAP !== "undefined" && typeof radarLayer !== "undefined" && radarLayer && MAP.hasLayer(radarLayer)) MAP.removeLayer(radarLayer);
+          if(typeof stopRadarLoop === "function") stopRadarLoop();
+        }
         else if(k === "platforms" && typeof drawPlatforms === "function") drawPlatforms();
         else if(k === "loran" && typeof drawLoranLines === "function") drawLoranLines();
         else if(k === "ramps" && typeof drawRamps === "function") drawRamps();
@@ -15015,7 +15014,13 @@ function applyEntitlementGating(){
       } catch(e){}
     }
   }
-  if(changed && typeof updateOceanLegend === "function") updateOceanLegend();
+  if(changed){
+    if(typeof updateOceanLegend === "function") updateOceanLegend();
+    if(typeof updateSatDateControlVisibility === "function") updateSatDateControlVisibility();
+    if(typeof updateOpacityControl === "function") updateOpacityControl();
+    if(typeof updateRadarLoopControlVisibility === "function") updateRadarLoopControlVisibility();
+    if(typeof updateAltiDateControlVisibility === "function") updateAltiDateControlVisibility();
+  }
 }
 
 function applyAdminNavVisibility(){
@@ -15534,7 +15539,6 @@ function renderWaypointMarkers(force){
   if(!wpLayerGroup){ wpLayerGroup = L.layerGroup().addTo(MAP); }
   if(!_wpInRangeCache || !layerVis.waypoints || !activePort){
     wpLayerGroup.clearLayers();
-    waypointLayers = [];
     _wpRenderedBounds = null;
     return;
   }
@@ -15555,7 +15559,6 @@ function renderWaypointMarkers(force){
 
   const bounds = viewBounds ? viewBounds.pad(WP_VIEW_BUFFER) : null;
   wpLayerGroup.clearLayers();
-  waypointLayers = [];
   _wpRenderedBounds = bounds;
 
   let drawn = 0;
@@ -15586,7 +15589,6 @@ function renderWaypointMarkers(force){
       {offset:[0,-46], className:"wp-fc-popup"}
     );
     wpLayerGroup.addLayer(m);
-    waypointLayers.push(m);
     drawn++;
   }
 }
@@ -15604,7 +15606,6 @@ function bindWaypointRedraw(){
   const hideForZoom = () => {
     if(wpLayerGroup && !hidden && layerVis.waypoints){
       wpLayerGroup.clearLayers();
-      waypointLayers = [];
       _wpRenderedBounds = null;
       hidden = true;
     }
@@ -15619,7 +15620,10 @@ function bindWaypointRedraw(){
   // the rebuild entirely if the view is still inside what we already drew, so a
   // tap or small pan produces no blink.
   MAP.on("moveend", () => {
-    if(!hidden && layerVis.waypoints && _wpInRangeCache) renderWaypointMarkers(false);
+    if(!hidden && layerVis.waypoints && _wpInRangeCache){
+      clearTimeout(_wpMoveTimer);
+      _wpMoveTimer = setTimeout(() => renderWaypointMarkers(false), 140);
+    }
   });
 }
 
@@ -15628,7 +15632,6 @@ function bindWaypointRedraw(){
 // window.BW_RAMPS block (empty until a ramp CSV is wired in). Ramps within the
 // currently-selected radius band (wpRadiusNm) of the active port are shown with a
 // distinct teal launch-ramp badge so they read differently from fishing spots.
-let rampLayers = [];
 let rampLayerGroup = null;
 
 // Ramps within wpRadiusNm of the active port. Each item: {name, lat, lng, nm}. Nearest-first.
@@ -15660,7 +15663,6 @@ let _rampDrawSeq = 0;
 async function drawRamps(){
   if(!rampLayerGroup){ rampLayerGroup = L.layerGroup().addTo(MAP); }
   rampLayerGroup.clearLayers();
-  rampLayers = [];
   if(!layerVis.ramps || !activePort || !PORTS[activePort]) return;
   const seq = ++_rampDrawSeq;
   const p = PORTS[activePort];
@@ -15676,7 +15678,6 @@ async function drawRamps(){
         {direction:"top", offset:[0,-8]}
       );
     rampLayerGroup.addLayer(m);
-    rampLayers.push(m);
   }
 }
 
@@ -16106,7 +16107,6 @@ function drawPlatforms(){
   if(!BW_PREMIUM || !layerVis.platforms || !activePort || !PORTS[activePort] ||
      typeof window.BW_GOM_PLATFORMS === "undefined" || !window.BW_GOM_PLATFORMS.length){
     platformLayerGroup.clearLayers();
-    platformLayers = [];
     _platformRenderedBounds = null;
     _platInRangeCache = null;
     _platInRangePort = null;
@@ -16123,9 +16123,8 @@ function drawPlatforms(){
 
 function renderPlatformMarkers(force){
   if(!platformLayerGroup){ platformLayerGroup = L.layerGroup().addTo(MAP); }
-  if(!layerVis.platforms || !_platInRangeCache || !_platInRangeCache.length){
+  if(!BW_PREMIUM || !layerVis.platforms || !_platInRangeCache || !_platInRangeCache.length){
     platformLayerGroup.clearLayers();
-    platformLayers = [];
     _platformRenderedBounds = null;
     return;
   }
@@ -16136,7 +16135,6 @@ function renderPlatformMarkers(force){
   }
   const bounds = viewBounds ? viewBounds.pad(PLAT_VIEW_BUFFER) : null;
   platformLayerGroup.clearLayers();
-  platformLayers = [];
   _platformRenderedBounds = bounds;
   const maxDraw = platMaxDraw();
   const inView = [];
@@ -16157,7 +16155,6 @@ function renderPlatformMarkers(force){
     m._platData = p;
     m.on("click", onPlatformMarkerClick);
     platformLayerGroup.addLayer(m);
-    platformLayers.push(m);
   }
 }
 
@@ -16168,7 +16165,6 @@ function bindPlatformRedraw(){
   const hideForZoom = () => {
     if(platformLayerGroup && !hidden && layerVis.platforms){
       platformLayerGroup.clearLayers();
-      platformLayers = [];
       _platformRenderedBounds = null;
       hidden = true;
     }

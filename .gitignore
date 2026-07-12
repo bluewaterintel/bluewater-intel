@@ -8,3 +8,4 @@ node_modules/
 _incoming/
 bluewater-intel_9_4_1_4.html
 bw-config.js
+data/tmp-*/
