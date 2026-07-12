@@ -806,6 +806,13 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
   border-color:rgba(255,255,255,.4);
 }
 #ruler-toggle.active svg{stroke:#fff}
+/* Ruler mode — markers, tooltips, and popups must not steal clicks; only the
+   map click handler (ruler) receives taps so the user is purely measuring. */
+#map.ruler-mode .leaflet-marker-pane,
+#map.ruler-mode .leaflet-tooltip-pane,
+#map.ruler-mode .leaflet-popup-pane{
+  pointer-events:none !important;
+}
 /* Drop-waypoint tool ACTIVE state — teal to distinguish from the red ruler */
 #wpdrop-toggle.active{
   background:rgba(14,165,165,.9);
@@ -3398,13 +3405,6 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
       </span>
       <span class="lyr-toggle"></span>
     </label>
-
-    <hr class="layers-divider">
-    <div class="layers-section">BATHYMETRY</div>
-    <div style="font-size:11px;color:#cfe5ff;line-height:1.5;margin:2px 0 8px;padding:8px 10px;background:rgba(41,121,181,.10);border:1px solid rgba(41,121,181,.3);border-radius:7px">
-      <div style="font-weight:600;color:#7dd3fc;margin-bottom:4px">📐 For depth contours</div>
-      <div>Switch the basemap to <b>Ocean Bathymetric</b> — Esri World Ocean Base plus NOAA <b>BlueTopo</b> hillshade on US waters (~3 m CUDEM relief). Bite Map depth scoring uses the same CUDEM tiles offshore with ETOPO fallback.</div>
-    </div>
 
     <hr class="layers-divider">
     <div class="layers-section">OFFLINE</div>
@@ -11932,6 +11932,10 @@ function bindPredictInteractionHandlers(){
   // zooming. The hit-test itself is cheap (degree-filter then a few projections).
   let _mmScheduled = false, _lastLL = null;
   MAP.on('mousemove', (e) => {
+    if(typeof rulerActive !== "undefined" && rulerActive){
+      MAP.closeTooltip(_predictTooltip);
+      return;
+    }
     if(!layerVis.predict || !_predictGrid || _predictZooming){ return; }
     _lastLL = e.latlng;
     if(_mmScheduled) return;
@@ -14686,10 +14690,14 @@ function rulerActivate(){
   if(explainer) explainer.remove();
   document.getElementById("ruler-toggle").classList.add("active");
   document.getElementById("ruler-readout").classList.add("active");
-  document.getElementById("ruler-total").textContent = "Tap map to start";
+  document.getElementById("ruler-total").textContent = "Tap map to measure";
   // Change map cursor so users know they can click to add points
   if(MAP && MAP.getContainer){
     MAP.getContainer().style.cursor = "crosshair";
+    MAP.getContainer().classList.add("ruler-mode");
+  }
+  if(MAP && typeof _predictTooltip !== "undefined" && _predictTooltip){
+    MAP.closeTooltip(_predictTooltip);
   }
   // Attach click handler
   if(MAP){
@@ -14704,6 +14712,7 @@ function rulerDeactivate(){
   document.getElementById("ruler-readout").classList.remove("active");
   if(MAP && MAP.getContainer){
     MAP.getContainer().style.cursor = "";
+    MAP.getContainer().classList.remove("ruler-mode");
   }
   if(MAP && rulerClickHandler){
     MAP.off("click", rulerClickHandler);
@@ -14718,7 +14727,7 @@ function rulerClear(){
     MAP.removeLayer(rulerLayer);
     rulerLayer = null;
   }
-  document.getElementById("ruler-total").textContent = rulerActive ? "Tap map to start" : "0.0 nm";
+  document.getElementById("ruler-total").textContent = rulerActive ? "Tap map to measure" : "0.0 nm";
 }
 
 function rulerAddPoint(latlng){
