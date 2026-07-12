@@ -2065,12 +2065,16 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
 <div id="create-account-page" style="display:none;position:fixed;inset:0;z-index:100005;
      background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
      overflow-y:auto;overflow-x:hidden;padding:0;font-family:'Segoe UI',system-ui,sans-serif">
+  <!-- Same translucent marlin + bluefin watermarks as the sign-in gate. -->
   <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" style="
-    position:fixed;bottom:-4%;right:-6%;width:min(640px,88vw);max-width:none;
-    opacity:.09;pointer-events:none;user-select:none;z-index:0"/>
+    position:fixed;bottom:-4%;right:-6%;width:min(720px,92vw);max-width:none;
+    opacity:.10;pointer-events:none;user-select:none;filter:drop-shadow(0 8px 30px rgba(0,0,0,.4));z-index:0"/>
+  <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" style="
+    position:fixed;top:-8%;left:-10%;width:min(420px,60vw);max-width:none;
+    opacity:.06;pointer-events:none;user-select:none;transform:scaleX(-1);z-index:0"/>
   <img src="/icons/bluefin-watermark.png" alt="" aria-hidden="true" style="
-    position:fixed;bottom:-6%;left:-10%;width:min(500px,70vw);max-width:none;
-    opacity:.08;pointer-events:none;user-select:none;z-index:0"/>
+    position:fixed;bottom:-6%;left:-10%;width:min(560px,76vw);max-width:none;
+    opacity:.09;pointer-events:none;user-select:none;z-index:0"/>
   <div style="position:relative;z-index:1;max-width:480px;margin:0 auto;padding:32px 26px 40px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding-top:6px">
       <div style="font-size:24px;font-weight:800;color:#f0f6ff">Create your account</div>
@@ -2110,12 +2114,16 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
 <div id="verify-email-page" style="display:none;position:fixed;inset:0;z-index:100006;
      background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
      overflow-y:auto;overflow-x:hidden;padding:0;font-family:'Segoe UI',system-ui,sans-serif">
+  <!-- Same translucent marlin + bluefin watermarks as the sign-in gate. -->
   <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" style="
-    position:fixed;bottom:-4%;right:-6%;width:min(640px,88vw);max-width:none;
-    opacity:.09;pointer-events:none;user-select:none;z-index:0"/>
+    position:fixed;bottom:-4%;right:-6%;width:min(720px,92vw);max-width:none;
+    opacity:.10;pointer-events:none;user-select:none;filter:drop-shadow(0 8px 30px rgba(0,0,0,.4));z-index:0"/>
+  <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" style="
+    position:fixed;top:-8%;left:-10%;width:min(420px,60vw);max-width:none;
+    opacity:.06;pointer-events:none;user-select:none;transform:scaleX(-1);z-index:0"/>
   <img src="/icons/bluefin-watermark.png" alt="" aria-hidden="true" style="
-    position:fixed;bottom:-6%;left:-10%;width:min(500px,70vw);max-width:none;
-    opacity:.08;pointer-events:none;user-select:none;z-index:0"/>
+    position:fixed;bottom:-6%;left:-10%;width:min(560px,76vw);max-width:none;
+    opacity:.09;pointer-events:none;user-select:none;z-index:0"/>
   <div style="position:relative;z-index:1;max-width:480px;margin:0 auto;padding:48px 26px 40px;text-align:center">
     <div style="width:72px;height:72px;border-radius:50%;background:rgba(34,197,94,.14);border:1px solid rgba(134,239,172,.45);display:flex;align-items:center;justify-content:center;margin:0 auto 22px">
       <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="#86efac" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
@@ -25804,22 +25812,44 @@ const WP_CODE_TO_PANEL_TYPE = {
   hl:"ledge", hp:"bump", cy:"canyon", tw:"tower", pf:"tower", rg:"tower",
 };
 const WP_CHARTED_MAX = 800;  // cap rendered charted cards (thousands are possible)
+let _wpFetchSeq = 0;
 
-// Fetch the charted-waypoint database for the active port and cache it on
+// Which port's charted database should the panel load? Prefer the port the user
+// picked in the region dropdown; fall back to the map's active home port.
+function wpChartedPort(){
+  if(WP_state.regionFilter && WP_state.regionFilter !== "all" &&
+     typeof PORTS !== "undefined" && PORTS[WP_state.regionFilter]){
+    return WP_state.regionFilter;
+  }
+  if(typeof activePort !== "undefined" && activePort &&
+     typeof PORTS !== "undefined" && PORTS[activePort]) return activePort;
+  return null;
+}
+
+// User changed the port/region dropdown — refetch charted waypoints for that port.
+function wpOnRegionChange(val){
+  WP_state.regionFilter = val;
+  if(val !== WP_state.chartedPort){
+    WP_state.charted = [];
+    WP_state.chartedStatus = "idle";
+  }
+  wpFetchCharted(true);
+}
+
+// Fetch the charted-waypoint database for the selected port and cache it on
 // WP_state so the panel's Waypoints tab can browse/search it. Pro-gated: the
 // RPC returns nothing for free accounts, so this is a no-op for them.
 async function wpFetchCharted(force){
   const premium = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM;
-  const havePort = premium && typeof activePort !== "undefined" && activePort &&
-                   typeof PORTS !== "undefined" && PORTS[activePort];
-  if(!havePort){
+  const port = wpChartedPort();
+  if(!premium || !port){
     WP_state.charted = []; WP_state.chartedPort = null;
     WP_state.chartedStatus = premium ? "none" : "idle";
     if(WP_state.tab === "public" && document.getElementById("wp-content")) wpRender();
     return;
   }
-  if(!force && WP_state.chartedPort === activePort && WP_state.chartedStatus === "live") return;
-  const port = activePort;
+  if(!force && WP_state.chartedPort === port && WP_state.chartedStatus === "live") return;
+  const seq = ++_wpFetchSeq;
   const p = PORTS[port];
   WP_state.chartedStatus = "loading";
   if(WP_state.tab === "public" && document.getElementById("wp-content")) wpRender();
@@ -25831,7 +25861,7 @@ async function wpFetchCharted(force){
       p_port: port, p_lat: p.lat, p_lng: p.lng, p_radius_nm: radius, p_types: null,
     });
     if(error) throw error;
-    if(activePort !== port) return;  // user switched ports mid-flight — discard
+    if(seq !== _wpFetchSeq || wpChartedPort() !== port) return;
     WP_state.charted = (data || []).map((r, i) => {
       const style = WP_TYPE_STYLE[r.type_code] || {};
       const label = style.label || "Waypoint";
@@ -25849,6 +25879,7 @@ async function wpFetchCharted(force){
     WP_state.chartedPort = port;
     WP_state.chartedStatus = "live";
   } catch(e){
+    if(seq !== _wpFetchSeq) return;
     WP_state.charted = []; WP_state.chartedStatus = "error";
   }
   if(WP_state.tab === "public" && document.getElementById("wp-content")) wpRender();
@@ -25970,15 +26001,15 @@ function wpFilteredList(list){
   }
   if(WP_state.typeFilter !== "all") out = out.filter(p => p.type === WP_state.typeFilter);
   if(WP_state.regionFilter !== "all"){
-    // Distance-based region filter (matches the map's Fishing Spots behavior):
-    // a "region" is a port, and we show every spot within that port's fishable
-    // range — not just spots whose single nearest-port label happens to match.
-    // This is why The Point (off both Oregon Inlet AND Hatteras) shows under
-    // each, instead of only its nearest port.
+    // Distance-based port filter (matches the map's Fishing Spots behavior):
+    // a "region" is a home port, and we show every spot within that port's
+    // fishable range — not just spots whose single nearest-port label matches.
     const port = (typeof PORTS !== "undefined") ? PORTS[WP_state.regionFilter] : null;
     if(port && Number.isFinite(port.lat)){
       const rangeNm = (typeof maxRangeForPort === "function") ? maxRangeForPort(port) : 120;
       out = out.filter(p => {
+        // Charted rows are already scoped to the port we fetched for.
+        if(p.charted) return WP_state.chartedPort === WP_state.regionFilter;
         // Keep user waypoints regardless (they have no meaningful port range).
         if(String(p.id || "").startsWith("u-")) return p.region === WP_state.regionFilter;
         const dNm = Math.hypot(port.lat - p.lat, (port.lng - p.lng) * Math.cos(port.lat*Math.PI/180)) * 60;
@@ -25993,7 +26024,7 @@ function wpFilteredList(list){
 }
 
 function wpToolbar(includeAdd){
-  const regions = [...new Set(WP_PUBLIC.map(p => p.region).filter(Boolean))].sort();
+  const ports = (typeof PORTS !== "undefined") ? Object.keys(PORTS).sort() : [];
   return `
     <div class="wp-toolbar">
       <input class="wp-search" type="text" placeholder="Search by name, region, or description..."
@@ -26004,9 +26035,9 @@ function wpToolbar(includeAdd){
           `<option value="${k}" ${WP_state.typeFilter===k?"selected":""}>${v.icon} ${v.name}</option>`
         ).join("")}
       </select>
-      <select class="wp-filter" onchange="WP_state.regionFilter=this.value;wpRender()">
-        <option value="all">All Regions</option>
-        ${regions.map(r => `<option value="${r}" ${WP_state.regionFilter===r?"selected":""}>${r}</option>`).join("")}
+      <select class="wp-filter" onchange="wpOnRegionChange(this.value)">
+        <option value="all">All Ports</option>
+        ${ports.map(r => `<option value="${r}" ${WP_state.regionFilter===r?"selected":""}>${r}</option>`).join("")}
       </select>
       ${includeAdd ? `<button class="wp-btn primary" onclick="wpNewWaypoint()">+ Add Waypoint</button>` : ""}
     </div>
@@ -26018,7 +26049,7 @@ function wpStatsBar(list, label){
     <div class="wp-stats-bar">
       <span><b>${list.length}</b> ${label}</span>
       ${WP_state.typeFilter !== "all" ? `<span>· Type: <b>${wpType(WP_state.typeFilter).name}</b></span>` : ""}
-      ${WP_state.regionFilter !== "all" ? `<span>· Region: <b>${WP_state.regionFilter}</b></span>` : ""}
+      ${WP_state.regionFilter !== "all" ? `<span>· Port: <b>${WP_state.regionFilter}</b></span>` : ""}
     </div>
   `;
 }
@@ -26077,6 +26108,7 @@ function wpCardHTML(p, isUser){
 function wpRenderPublic(){
   const premium = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM;
   const charted = (premium && Array.isArray(WP_state.charted)) ? WP_state.charted : [];
+  const displayPort = WP_state.chartedPort || wpChartedPort() || activePort || "your port";
   // Curated public spots first, then the charted database (already nearest-first).
   const source = charted.length ? WP_PUBLIC.concat(charted) : WP_PUBLIC;
   const list = wpFilteredList(source);
@@ -26085,15 +26117,15 @@ function wpRenderPublic(){
   // Status/info banner explains what's in this tab and its loading state.
   let banner;
   if(!premium){
-    banner = `<div class="wp-info-box"><b>🌊 Curated public POIs</b> — well-known structure from Portsmouth NH to Charleston SC. Upgrade to Pro to unlock the full ~13,000-waypoint charted database (wrecks, reefs, ledges, rocks and structure) for your home port.</div>`;
+    banner = `<div class="wp-info-box"><b>🌊 Curated public POIs</b> — well-known structure from Portsmouth NH to Charleston SC. Upgrade to Pro to unlock the full ~13,000-waypoint charted database (wrecks, reefs, ledges, rocks and structure) for any home port.</div>`;
   } else if(WP_state.chartedStatus === "loading"){
-    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — loading the full waypoint set for <b>${activePort || "your port"}</b>…</div>`;
+    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — loading the full waypoint set for <b>${displayPort}</b>…</div>`;
   } else if(WP_state.chartedStatus === "none"){
-    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — pick a home port to load the full ~13,000-waypoint charted database (wrecks, reefs, ledges, rocks and structure) within range. Curated public spots are shown below in the meantime.</div>`;
+    banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — pick a home port in the dropdown to load the full charted database (wrecks, reefs, ledges, rocks and structure) within range. Curated public spots are shown below in the meantime.</div>`;
   } else if(WP_state.chartedStatus === "error"){
     banner = `<div class="wp-info-box"><b>🌊 Charted database</b> — couldn't load the charted set right now. Showing curated public spots. <a href="#" onclick="event.preventDefault();wpFetchCharted(true)" style="color:#7dd3fc">Retry</a></div>`;
   } else {
-    banner = `<div class="wp-info-box"><b>🌊 Waypoints</b> — curated public spots plus the full charted database within range of <b>${activePort || "your port"}</b> (${charted.length.toLocaleString()} charted). Tap a card to fly there, or ⭐ to save it to My Waypoints.</div>`;
+    banner = `<div class="wp-info-box"><b>🌊 Waypoints</b> — curated public spots plus the full charted database within range of <b>${displayPort}</b> (${charted.length.toLocaleString()} charted). Tap a card to fly there, or ⭐ to save it to My Waypoints.</div>`;
   }
 
   const capNote = list.length > shown.length
