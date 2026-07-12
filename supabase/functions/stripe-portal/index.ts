@@ -16,8 +16,12 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion:
 const APP_URL = (Deno.env.get("APP_URL") ?? "https://app.bluewaterintel.com").replace(/\/$/, "");
 
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+// Reflect the caller's Origin so CORS works from every hostname (apex, www.,
+// mobile webview). Strict matching returned the apex domain for www./webview
+// callers, which the browser rejects. Auth is enforced by the JWT bearer token,
+// not CORS, and no cookies are used, so echoing the origin is safe.
 function cors(origin: string | null) {
-  const allow = origin && (ALLOWED.length === 0 || ALLOWED.includes(origin)) ? origin : (ALLOWED[0] ?? "*");
+  const allow = origin || (ALLOWED[0] ?? "*");
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
