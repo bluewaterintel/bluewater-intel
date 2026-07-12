@@ -26,6 +26,8 @@
      Loaded via <script src> (not fetch) so it works from a local file:// path with no CORS.
      If this file is missing the app still runs; the Waypoints feature just stays empty. -->
 <script src="bw-waypoints.js"></script>
+<!-- Gulf of Mexico federal OCS oil & gas platforms (BSEE platloc). Rebuild: npm run build:platforms -->
+<script src="bw-platforms-gom.js"></script>
 <!-- Boat-ramp dataset companion. EMPTY by default so the app runs fine until a ramp CSV
      is wired in (same one-step swap as the waypoints). Format mirrors BW_WAYPOINTS:
      window.BW_RAMPS = {version, count, rp:[[name, lat, lng], ...]}. Distance-from-port
@@ -3035,6 +3037,16 @@ body.nav-open #ruler-readout{
       </span>
       <span class="lyr-toggle"></span>
     </label>
+    <label class="layer-row" title="Federal OCS oil &amp; gas platforms in the Gulf of Mexico (BSEE data). Useful structure/FAD reference — informational only, not for navigation.">
+      <input type="checkbox" id="chk-platforms" onchange="toggleLayer('platforms')">
+      <span class="lyr-label">
+        <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 20V8l6-4 6 4v12"/><path d="M9 20v-5h6v5"/><path d="M10 8h4"/><path d="M12 4v4"/></svg>
+        </span>
+        <span>Gulf Platforms <span style="font-size:8px;color:#9ec5e8;opacity:.7">(oil &amp; gas rigs)</span></span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
     <label class="layer-row" title="Your logged catches — shown as fish-icon pins colored by species">
       <input type="checkbox" id="chk-catches" onchange="toggleLayer('catches')">
       <span class="lyr-label">
@@ -4316,8 +4328,8 @@ async function loadReports(){
 // ════════════════════════════════════════════════════════════════════════════
 let MAP, activeSpId=null, activePort=null;
 let pinLL=null;
-let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
+let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[], platformLayers=[];
+let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -5732,6 +5744,100 @@ const MARINE_CLOSURES = [
     polygon: [
       [41.50, -67.30], [41.50, -66.50], [40.80, -66.50],
       [40.80, -67.30], [41.50, -67.30]
+    ],
+  },
+  // ── SOUTHERN CALIFORNIA ───────────────────────────────────────────────────
+  // Channel Islands NMS — simplified outer boundary (full CFR boundary has
+  // ~100+ vertices; this is a planning reference, not a navigation chart).
+  {
+    name: "Channel Islands NMS",
+    type: "sanctuary",
+    color: "#fbbf24",
+    desc: "National Marine Sanctuary around the northern Channel Islands and Santa Barbara Island (~1,110 sq nm). Fishing is permitted in much of the sanctuary but with strict gear, method, and zone restrictions. Numerous no-take marine reserves inside.",
+    rules: "Varies by zone — many areas prohibit bottom fishing or all take. Check NOAA sanctuary maps and California MPA regulations before fishing.",
+    link: "https://channelislands.noaa.gov/manage/regulations.html",
+    polygon: [
+      [33.94, -119.27], [34.18, -119.93], [34.17, -119.96], [34.14, -120.25],
+      [34.11, -120.43], [33.52, -120.66], [33.36, -119.91], [33.54, -119.92],
+      [33.94, -119.27]
+    ],
+  },
+  // Cowcod conservation area — simplified offshore envelope (actual boundary
+  // follows depth/latitude lines in federal regs; verify before bottom fishing).
+  {
+    name: "SoCal Cowcod Conservation Area",
+    type: "hapc",
+    color: "#a855f7",
+    desc: "Federal cowcod conservation area off Southern California. Bottom fishing for rockfish and other groundfish is heavily restricted in this broad offshore zone.",
+    rules: "Strict cowcod and rockfish conservation rules apply. Many bottom-fishing methods prohibited or limited. Verify 50 CFR 660 and PFMC regs.",
+    link: "https://www.fisheries.noaa.gov/west-coast/fisheries/groundfish/cowcod-conservation-areas",
+    polygon: [
+      [32.0, -121.5], [36.67, -121.5], [36.67, -117.2], [32.0, -117.2], [32.0, -121.5]
+    ],
+  },
+  // La Jolla State Marine Reserve (no-take)
+  {
+    name: "La Jolla SMR",
+    type: "noTake",
+    color: "#dc2626",
+    desc: "California State Marine Reserve off La Jolla — all fishing and take prohibited.",
+    rules: "NO FISHING. No take of any kind. Possession of fishing gear in deployed position prohibited.",
+    link: "https://wildlife.ca.gov/Conservation/Marine/MPAs/La-Jolla",
+    polygon: [
+      [32.892, -117.278], [32.892, -117.252], [32.868, -117.252], [32.868, -117.278], [32.892, -117.278]
+    ],
+  },
+  // Cabrillo State Marine Reserve (San Diego)
+  {
+    name: "Cabrillo SMR",
+    type: "noTake",
+    color: "#dc2626",
+    desc: "California State Marine Reserve at Cabrillo National Monument area — all fishing prohibited.",
+    rules: "NO FISHING. No take of any kind within the reserve boundary.",
+    link: "https://wildlife.ca.gov/Conservation/Marine/MPAs/Cabrillo",
+    polygon: [
+      [32.692, -117.252], [32.692, -117.228], [32.668, -117.228], [32.668, -117.252], [32.692, -117.252]
+    ],
+  },
+  // ── THE BAHAMAS ───────────────────────────────────────────────────────────
+  // Exuma Cays Land & Sea Park — world's first land-and-sea park (BNT, est. 1959).
+  // Official boundary corners per Bahamas National Trust (DMS converted to decimal).
+  {
+    name: "Exuma Cays Land & Sea Park",
+    type: "noTake",
+    color: "#dc2626",
+    desc: "Bahamas National Trust no-take reserve (~176 sq mi). Nothing living or dead may be removed — no fishing, conching, lobstering, or shelling.",
+    rules: "NO FISHING. No take of any marine or fisheries resource. Fines and vessel confiscation for violations.",
+    link: "https://bnt.bs/explore/exuma/exuma-cays-land-sea-park/",
+    polygon: [
+      [24.5103, -76.8769], [24.5917, -76.7639], [24.3103, -76.4797],
+      [24.2403, -76.6006], [24.5103, -76.8769]
+    ],
+  },
+  // Moriah Harbour Cay NP — simplified envelope (BNT map is reference-only;
+  // western boundary ~3.5 nm into Exuma Sound, eastern ~3 nm off Forbes Hill).
+  {
+    name: "Moriah Harbour Cay NP",
+    type: "noTake",
+    color: "#dc2626",
+    desc: "Bahamas National Trust national park between Great Exuma and Stocking Island. All extractive fishing prohibited — no hook-and-line, spearfishing, netting, or trapping.",
+    rules: "NO FISHING. No extractive fishing of any kind. Bonefishing on the fly may be permitted in designated zones — verify current BNT rules.",
+    link: "https://bnt.bs/explore/exuma/moriah-harbour-cay-national-park/",
+    polygon: [
+      [23.56, -75.84], [23.56, -75.56], [23.38, -75.56], [23.38, -75.84], [23.56, -75.84]
+    ],
+  },
+  // Walker's Cay National Park — zoned BNT marine park north of Walker's Cay.
+  // Simplified planning envelope; actual park uses management zones.
+  {
+    name: "Walker's Cay National Park",
+    type: "sanctuary",
+    color: "#fbbf24",
+    desc: "Bahamas National Trust marine park around the barrier reef north of Walker's Cay. Zoned management — spearfishing and gill nets prohibited; some zones restrict all take.",
+    rules: "Check BNT zoning maps. Spearfishing and destructive gear prohibited. Verify zone rules before fishing near the reef.",
+    link: "https://bnt.bs/explore/abaco/walkers-cay-national-park/",
+    polygon: [
+      [27.35, -78.55], [27.35, -78.25], [27.20, -78.25], [27.20, -78.55], [27.35, -78.55]
     ],
   },
 ];
@@ -11931,6 +12037,7 @@ function toggleLayer(key){
   else if(key==="loran")drawLoranLines();
   else if(key==="catches")drawCatchPins();
   else if(key==="closures")drawClosures();
+  else if(key==="platforms")drawPlatforms();
   else if(key==="wind")drawWind();
   else if(key==="currents")drawCurrents();
   else if(key==="altimetry")drawAltimetry();
@@ -14591,6 +14698,7 @@ function applyEntitlementGating(){
         else if(k === "chlor" && typeof MAP !== "undefined" && typeof chlorLayer !== "undefined" && chlorLayer && MAP.hasLayer(chlorLayer)) MAP.removeLayer(chlorLayer);
         else if(k === "radar" && typeof drawRadar === "function") drawRadar();
         else if(k === "closures" && typeof drawClosures === "function") drawClosures();
+        else if(k === "platforms" && typeof drawPlatforms === "function") drawPlatforms();
         else if(k === "loran" && typeof drawLoranLines === "function") drawLoranLines();
         else if(k === "ramps" && typeof drawRamps === "function") drawRamps();
         else if(k === "waypoints" && typeof drawWaypoints === "function") drawWaypoints();
@@ -15564,6 +15672,120 @@ function drawClosures(){
       </div>`;
     poly.bindPopup(popupHtml, {maxWidth: 300, closeButton: true});
     closureLayers.push(poly);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GULF OF MEXICO PLATFORMS (BSEE federal OCS oil & gas structures)
+// Gulf-wide static layer — no active port required. Viewport culling keeps ~7k
+// platforms from overwhelming the DOM at wide zoom.
+// ════════════════════════════════════════════════════════════════════════════
+let platformLayerGroup = null;
+let _platformRedrawBound = false;
+let _platformRenderedBounds = null;
+const PLAT_MAX_DRAW = 1200;
+const PLAT_VIEW_BUFFER = 0.35;
+
+let _platIcon = null;
+function platformIcon(){
+  if(_platIcon) return _platIcon;
+  _platIcon = L.divIcon({
+    className: "platform-marker",
+    html: `<div style="
+      width:22px;height:22px;
+      background:#f59e0b;
+      border:2px solid rgba(255,255,255,.92);
+      border-radius:6px;
+      box-shadow:0 2px 5px rgba(0,0,0,.55);
+      display:flex;align-items:center;justify-content:center;
+      pointer-events:none;
+    "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 20V8l6-4 6 4v12"/><path d="M9 20v-5h6v5"/><path d="M10 8h4"/><path d="M12 4v4"/></svg></div>`,
+    iconSize: [22,22], iconAnchor: [11,11],
+  });
+  return _platIcon;
+}
+
+function drawPlatforms(){
+  if(!platformLayerGroup){ platformLayerGroup = L.layerGroup().addTo(MAP); }
+  if(!layerVis.platforms || typeof window.BW_GOM_PLATFORMS === "undefined" || !window.BW_GOM_PLATFORMS.length){
+    platformLayerGroup.clearLayers();
+    platformLayers = [];
+    _platformRenderedBounds = null;
+    bindPlatformRedraw();
+    return;
+  }
+  renderPlatformMarkers(true);
+  bindPlatformRedraw();
+}
+
+function renderPlatformMarkers(force){
+  if(!platformLayerGroup){ platformLayerGroup = L.layerGroup().addTo(MAP); }
+  const data = window.BW_GOM_PLATFORMS;
+  if(!layerVis.platforms || !data || !data.length){
+    platformLayerGroup.clearLayers();
+    platformLayers = [];
+    _platformRenderedBounds = null;
+    return;
+  }
+  let viewBounds = null;
+  try { viewBounds = MAP.getBounds(); } catch(e){ viewBounds = null; }
+  if(!force && _platformRenderedBounds && viewBounds && _platformRenderedBounds.contains(viewBounds)){
+    return;
+  }
+  const bounds = viewBounds ? viewBounds.pad(PLAT_VIEW_BUFFER) : null;
+  platformLayerGroup.clearLayers();
+  platformLayers = [];
+  _platformRenderedBounds = bounds;
+  let drawn = 0;
+  for(const p of data){
+    if(drawn >= PLAT_MAX_DRAW) break;
+    const lat = p[1], lng = p[2];
+    if(bounds && !bounds.contains([lat, lng])) continue;
+    const name = p[0] || "Platform";
+    const area = p[3] || "";
+    const latStr = Math.abs(lat).toFixed(5) + (lat>=0 ? "° N" : "° S");
+    const lngStr = Math.abs(lng).toFixed(5) + (lng>=0 ? "° E" : "° W");
+    const safeName = String(name).replace(/'/g, "\\'");
+    const m = L.marker([lat, lng], {icon: platformIcon()});
+    m.bindPopup(
+      `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:190px">
+        <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:14px;padding:0 12px">${name}</div>
+        ${area ? `<div style="font-size:11px;color:#fde68a;margin-bottom:4px">OCS Area ${area}</div>` : ""}
+        <div style="font-size:10.5px;color:#8fb4d8;margin-bottom:8px">${latStr}, ${lngStr}</div>
+        <div style="font-size:9.5px;color:#9ca3af;line-height:1.4;margin-bottom:8px;font-style:italic">BSEE federal OCS platform — informational only, not for navigation.</div>
+        <button onclick="showForecast(${lat},${lng},'${safeName}')" style="
+          width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
+          padding:10px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+          6-Day Forecast
+        </button>
+      </div>`,
+      {offset:[0,-42], className:"wp-fc-popup"}
+    );
+    platformLayerGroup.addLayer(m);
+    platformLayers.push(m);
+    drawn++;
+  }
+}
+
+function bindPlatformRedraw(){
+  if(_platformRedrawBound || !MAP) return;
+  _platformRedrawBound = true;
+  let hidden = false;
+  const hideForZoom = () => {
+    if(platformLayerGroup && !hidden && layerVis.platforms){
+      platformLayerGroup.clearLayers();
+      platformLayers = [];
+      _platformRenderedBounds = null;
+      hidden = true;
+    }
+  };
+  MAP.on("zoomstart", hideForZoom);
+  MAP.on("zoomend", () => {
+    hidden = false;
+    if(layerVis.platforms && window.BW_GOM_PLATFORMS) renderPlatformMarkers(true);
+  });
+  MAP.on("moveend", () => {
+    if(!hidden && layerVis.platforms && window.BW_GOM_PLATFORMS) renderPlatformMarkers(false);
   });
 }
 
@@ -21654,7 +21876,7 @@ function tbClearFavs(){
       <div class="tut-feature-icon">⚖️</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Marine closures &amp; regulations</div>
-        <div class="tut-feature-desc">Toggle <b>Closures &amp; Sanctuaries</b> in the Layers panel to see permanent spatial closures on the chart — National Marine Sanctuaries (orange), no-take reserves (red solid), HAPCs (purple dashed), and groundfish closures (red dashed). Tap any closure for the rules and a link to the official regulation page. Menu → <b>Regulations</b> opens a full directory of federal sources (NMFS, MAFMC, SAFMC, Gulf SERO) and every state agency from ME to TX, with your home state's agency surfaced at the top.</div>
+        <div class="tut-feature-desc">Toggle <b>Closures &amp; Sanctuaries</b> in the Layers panel to see permanent spatial closures on the chart — National Marine Sanctuaries (orange), no-take reserves (red solid), HAPCs (purple dashed), and groundfish closures (red dashed). Tap any closure for the rules and a link to the official regulation page. Menu → <b>Regulations</b> opens a full directory of federal sources (NMFS, MAFMC, SAFMC, Gulf SERO, Pacific WCR) and every state agency from Maine to Southern California, with your home state's agency surfaced at the top.</div>
       </div>
     </div>
 
@@ -22423,6 +22645,14 @@ const REGS_BY_STATE = {
        notes: "Basic + saltwater license required. Strict speckled trout / redfish limits."},
   TX: {name: "Texas", agency: "TPWD", url: "https://tpwd.texas.gov/regulations/outdoor-annual/fishing/saltwater-fishing/",
        notes: "Saltwater license required. Red drum, spotted seatrout. Strict snook regs (slot, season)."},
+  CA: {name: "California", agency: "CDFW", url: "https://wildlife.ca.gov/Fishing/Ocean/Regulations",
+       notes: "Ocean Sport Fishing regulations + Marine Protected Area (MPA) network. Strict no-take zones along SoCal coast. Yellowtail, white seabass, lobster, rockfish — verify in-season dates and MPA boundaries."},
+};
+
+// Non-US territories and crossings (Bahamas ports, etc.)
+const REGS_BY_TERRITORY = {
+  BS: {name: "The Bahamas", agency: "Dept. of Marine Resources", url: "https://www.bahamas.gov.bs/service/sport-fishing-permit",
+       notes: "Sport fishing permit required at port of entry for foreign-owned vessels. Billfish must be released unless in an approved tournament. Lobster closed Apr 1–Jul 31. No take in BNT national parks. Sharks protected — release if hooked."},
 };
 
 const REGS_FEDERAL = [
@@ -22441,6 +22671,9 @@ const REGS_FEDERAL = [
   {region: "Gulf of Mexico Federal Waters", agency: "NOAA SERO Gulf",
    url: "https://www.fisheries.noaa.gov/southeast/recreational-fishing/gulf-mexico-recreational-fishing",
    desc: "Red snapper season (annual federal opening), grouper complex, amberjack. State-specific waters extend further in some Gulf states."},
+  {region: "Pacific Federal Waters (West Coast)", agency: "NOAA WCR + Pacific Fishery Management Council",
+   url: "https://www.fisheries.noaa.gov/region/west-coast",
+   desc: "Southern California groundfish, cowcod conservation areas, yellowtail, white seabass, tuna, and salmon. Essential for SoCal offshore trips."},
 ];
 
 // Open / close handlers
@@ -22625,12 +22858,32 @@ function activePortState(){
   const m = activePort.match(/,\s*([A-Z]{2})\s*$/);
   return m ? m[1] : null;
 }
+// Bahamas and other non-US port suffixes (e.g. "Bimini, Bahamas" → "BS")
+function activePortTerritory(){
+  if(!activePort) return null;
+  if(/,\s*Bahamas\s*$/i.test(activePort)) return "BS";
+  return null;
+}
 
 function renderRegulations(){
-  // Port-aware spotlight: show user's state at the top if a port is selected.
+  // Port-aware spotlight: show user's state or territory at the top if a port is selected.
   const spotlight = document.getElementById("regs-spotlight");
   const code = activePortState();
-  if(code && REGS_BY_STATE[code]){
+  const territory = activePortTerritory();
+  if(territory && REGS_BY_TERRITORY[territory]){
+    const r = REGS_BY_TERRITORY[territory];
+    spotlight.innerHTML = `
+      <div style="background:rgba(41,121,181,.15);border:1px solid rgba(41,121,181,.4);border-radius:10px;padding:14px 16px">
+        <div style="font-size:9px;font-weight:700;color:#7dd3fc;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px">📍 Your Home Waters</div>
+        <div style="font-size:16px;font-weight:700;color:#f0f6ff;margin-bottom:6px">${r.name} — ${r.agency}</div>
+        <div style="font-size:11px;color:#cfe5ff;line-height:1.5;margin-bottom:8px">${r.notes}</div>
+        <a href="${r.url}" target="_blank" rel="noopener" style="
+          display:inline-block;background:#2979b5;color:#fff;
+          padding:8px 14px;border-radius:7px;text-decoration:none;
+          font-size:12px;font-weight:700;
+        ">Open ${r.agency} →</a>
+      </div>`;
+  } else if(code && REGS_BY_STATE[code]){
     const r = REGS_BY_STATE[code];
     spotlight.innerHTML = `
       <div style="background:rgba(41,121,181,.15);border:1px solid rgba(41,121,181,.4);border-radius:10px;padding:14px 16px">
@@ -22660,7 +22913,22 @@ function renderRegulations(){
     </div>
   `).join("");
 
-  // 2. State agency directory — alphabetical by state name
+  // 2. Territory / international crossings
+  const territoryEntries = Object.entries(REGS_BY_TERRITORY).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  const territoryHtml = territoryEntries.map(([code, r]) => `
+    <div style="padding:11px 14px;background:rgba(15,36,68,.45);border:1px solid rgba(107,191,234,.12);border-radius:8px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px">
+        <div>
+          <span style="font-size:12px;font-weight:700;color:#f0f6ff">${r.name}</span>
+          <span style="font-size:10px;color:#9ec5e8;margin-left:6px">${r.agency}</span>
+        </div>
+        <a href="${r.url}" target="_blank" rel="noopener" style="font-size:10px;color:#7dd3fc;text-decoration:none;background:rgba(107,191,234,.1);border:1px solid rgba(107,191,234,.3);padding:4px 10px;border-radius:6px;flex-shrink:0">Open →</a>
+      </div>
+      <div style="font-size:10px;color:#cfe5ff;line-height:1.5">${r.notes}</div>
+    </div>
+  `).join("");
+
+  // 3. State agency directory — alphabetical by state name
   const stateEntries = Object.entries(REGS_BY_STATE).sort((a, b) => a[1].name.localeCompare(b[1].name));
   const stateHtml = stateEntries.map(([code, r]) => `
     <div style="padding:11px 14px;background:rgba(15,36,68,.45);border:1px solid rgba(107,191,234,.12);border-radius:8px;margin-bottom:6px">
@@ -22675,7 +22943,7 @@ function renderRegulations(){
     </div>
   `).join("");
 
-  // 3. Sanctuary list — pulled from MARINE_CLOSURES (same data the map layer uses)
+  // 4. Sanctuary list — pulled from MARINE_CLOSURES (same data the map layer uses)
   const sanctuariesHtml = MARINE_CLOSURES.map(c => {
     const typeLabel = c.type === "noTake" ? "NO FISHING"
                     : c.type === "hapc" ? "BOTTOM-GEAR HAPC"
@@ -22700,6 +22968,11 @@ function renderRegulations(){
     <div style="margin-bottom:18px">
       <div style="font-size:11px;font-weight:700;color:#6bbfea;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">Federal Sources</div>
       ${fedHtml}
+    </div>
+
+    <div style="margin-bottom:18px">
+      <div style="font-size:11px;font-weight:700;color:#6bbfea;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">Territories &amp; Crossings</div>
+      ${territoryHtml}
     </div>
 
     <div style="margin-bottom:18px">
