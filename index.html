@@ -2159,46 +2159,63 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
 <!-- ACCOUNT MANAGEMENT PAGE ---------------------------------------------------- -->
 <div id="account-page" style="display:none;position:fixed;inset:0;z-index:100004;
      background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
-     overflow-y:auto;padding:0;font-family:'Segoe UI',system-ui,sans-serif">
-  <div style="max-width:540px;margin:0 auto;padding:20px 18px 40px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-top:8px">
-      <div style="font-size:20px;font-weight:800;color:#f0f6ff">Account</div>
-      <button type="button" onclick="closeAccountPage()" aria-label="Close" style="background:rgba(255,255,255,.06);border:1px solid rgba(107,191,234,.25);color:#9ec5e8;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;line-height:1">×</button>
+     overflow-y:auto;padding:24px 18px 40px;font-family:'Segoe UI',system-ui,sans-serif">
+  <!-- Same translucent marlin + bluefin watermarks as the sign-in gate. -->
+  <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" style="
+    position:fixed;bottom:-4%;right:-6%;width:min(720px,92vw);max-width:none;
+    opacity:.10;pointer-events:none;user-select:none;filter:drop-shadow(0 8px 30px rgba(0,0,0,.4));z-index:0"/>
+  <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" style="
+    position:fixed;top:-8%;left:-10%;width:min(420px,60vw);max-width:none;
+    opacity:.06;pointer-events:none;user-select:none;transform:scaleX(-1);z-index:0"/>
+  <img src="/icons/bluefin-watermark.png" alt="" aria-hidden="true" style="
+    position:fixed;bottom:-6%;left:-10%;width:min(560px,76vw);max-width:none;
+    opacity:.09;pointer-events:none;user-select:none;z-index:0"/>
+  <div style="position:relative;z-index:1;max-width:440px;margin:0 auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;padding-top:4px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#6bbfea;letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px">Your account</div>
+        <div style="font-size:24px;font-weight:800;color:#f0f6ff;line-height:1.15">Account</div>
+      </div>
+      <button type="button" onclick="closeAccountPage()" aria-label="Close" style="background:rgba(255,255,255,.08);border:1px solid rgba(107,191,234,.28);color:#cfe5ff;width:38px;height:38px;border-radius:50%;font-size:20px;cursor:pointer;line-height:1;flex-shrink:0">×</button>
     </div>
 
     <!-- PROFILE -->
-    <div style="background:rgba(15,35,60,.7);border:1px solid rgba(107,191,234,.18);border-radius:14px;padding:18px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:14px">
-        <div id="acct-avatar" style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#2979b5,#6bbfea);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:22px;flex-shrink:0">?</div>
+    <div style="background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);border-radius:18px;padding:20px;margin-bottom:14px;box-shadow:0 16px 48px rgba(0,0,0,.35);backdrop-filter:blur(2px)">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div id="acct-avatar" style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#2979b5,#6bbfea);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:24px;flex-shrink:0;box-shadow:0 4px 16px rgba(41,121,181,.45)">?</div>
         <div style="min-width:0;flex:1">
-          <div id="acct-name" style="font-size:16px;font-weight:700;color:#f0f6ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Captain</div>
-          <div id="acct-email" style="font-size:12px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+          <div id="acct-name" style="font-size:18px;font-weight:800;color:#f0f6ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Captain</div>
+          <div id="acct-email" style="font-size:13px;color:#9ec5e8;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
         </div>
       </div>
     </div>
 
     <!-- PLAN / SUBSCRIPTION -->
-    <div style="background:rgba(15,35,60,.7);border:1px solid rgba(107,191,234,.18);border-radius:14px;padding:18px;margin-bottom:14px">
+    <div style="background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);border-radius:18px;padding:20px;margin-bottom:14px;box-shadow:0 16px 48px rgba(0,0,0,.35);backdrop-filter:blur(2px)">
       <div style="font-size:11px;font-weight:700;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px">Your plan</div>
-      <div id="acct-plan-label" style="font-size:17px;font-weight:800;color:#f0f6ff;margin-bottom:4px">Free</div>
-      <div id="acct-plan-detail" style="font-size:12px;color:#9ec5e8;line-height:1.5;margin-bottom:14px">Maps, ports, catches &amp; your own waypoints.</div>
+      <div id="acct-plan-label" style="font-size:20px;font-weight:800;color:#f0f6ff;margin-bottom:6px">Free</div>
+      <div id="acct-plan-detail" style="font-size:13px;color:#9ec5e8;line-height:1.55;margin-bottom:16px">Maps, ports, catches &amp; your own waypoints.</div>
       <div id="acct-plan-actions" style="display:flex;gap:10px;flex-wrap:wrap"></div>
     </div>
 
     <!-- HELP / LEGAL -->
-    <div style="background:rgba(15,35,60,.7);border:1px solid rgba(107,191,234,.18);border-radius:14px;padding:6px 6px;margin-bottom:14px">
-      <button type="button" onclick="closeAccountPage();if(typeof openLegal==='function')openLegal();" style="width:100%;text-align:left;background:transparent;border:none;color:#cfe5ff;font-family:inherit;font-size:13px;padding:12px 14px;cursor:pointer;border-radius:8px">Terms &amp; Privacy Policy</button>
-      <button type="button" onclick="closeAccountPage();if(typeof openHelp==='function')openHelp();" style="width:100%;text-align:left;background:transparent;border:none;color:#cfe5ff;font-family:inherit;font-size:13px;padding:12px 14px;cursor:pointer;border-radius:8px;border-top:1px solid rgba(255,255,255,.06)">Help &amp; Contact</button>
+    <div style="background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);border-radius:18px;padding:6px;margin-bottom:14px;box-shadow:0 16px 48px rgba(0,0,0,.35);backdrop-filter:blur(2px);overflow:hidden">
+      <button type="button" onclick="closeAccountPage();if(typeof openLegal==='function')openLegal();" style="width:100%;text-align:left;background:transparent;border:none;color:#e8f4ff;font-family:inherit;font-size:14px;font-weight:600;padding:14px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+        <span>Terms &amp; Privacy Policy</span><span style="color:#7dd3fc;font-size:16px">›</span>
+      </button>
+      <button type="button" onclick="closeAccountPage();if(typeof openHelp==='function')openHelp();" style="width:100%;text-align:left;background:transparent;border:none;color:#e8f4ff;font-family:inherit;font-size:14px;font-weight:600;padding:14px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(255,255,255,.06)">
+        <span>Help &amp; Contact</span><span style="color:#7dd3fc;font-size:16px">›</span>
+      </button>
     </div>
 
     <!-- SIGN OUT -->
-    <button type="button" onclick="closeAccountPage();signOut()" style="width:100%;background:transparent;border:1px solid rgba(107,191,234,.35);color:#6bbfea;font-family:inherit;font-weight:700;font-size:14px;padding:13px;border-radius:10px;cursor:pointer;margin-bottom:22px">Sign Out</button>
+    <button type="button" onclick="closeAccountPage();signOut()" style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(107,191,234,.35);color:#cfe5ff;font-family:inherit;font-weight:700;font-size:15px;padding:14px;border-radius:12px;cursor:pointer;margin-bottom:18px">Sign Out</button>
 
     <!-- DANGER ZONE -->
-    <div style="border:1px solid rgba(220,38,38,.3);border-radius:14px;padding:18px;background:rgba(220,38,38,.05)">
-      <div style="font-size:11px;font-weight:700;color:#f87171;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Danger zone</div>
-      <div style="font-size:12px;color:#cbd5e1;line-height:1.5;margin-bottom:12px">Deleting your account permanently removes your profile, saved waypoints, and catch log. If you have an active subscription, cancel it first from Manage Billing. This cannot be undone.</div>
-      <button type="button" onclick="deleteAccountFlow()" style="width:100%;background:transparent;border:1px solid rgba(220,38,38,.55);color:#f87171;font-family:inherit;font-weight:700;font-size:13px;padding:12px;border-radius:9px;cursor:pointer">Delete my account</button>
+    <div style="border:1px solid rgba(220,38,38,.35);border-radius:18px;padding:18px 18px 16px;background:rgba(127,29,29,.12);box-shadow:0 12px 36px rgba(0,0,0,.25)">
+      <div style="font-size:11px;font-weight:700;color:#fca5a5;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Danger zone</div>
+      <div style="font-size:13px;color:#e2e8f0;line-height:1.55;margin-bottom:14px">Deleting your account permanently removes your profile, saved waypoints, and catch log. If you have an active subscription, cancel it first from Manage Billing. This cannot be undone.</div>
+      <button type="button" onclick="deleteAccountFlow()" style="width:100%;background:rgba(220,38,38,.12);border:1px solid rgba(248,113,113,.55);color:#fca5a5;font-family:inherit;font-weight:700;font-size:14px;padding:13px;border-radius:10px;cursor:pointer">Delete my account</button>
       <div id="acct-delete-msg" style="display:none;font-size:12px;margin-top:10px;line-height:1.5"></div>
     </div>
   </div>
@@ -11948,6 +11965,7 @@ function bindPredictInteractionHandlers(){
   // drop-waypoint tool is armed so a tap marks a spot instead of opening the
   // hotspot explainer.
   MAP.on('click', (e) => {
+    if(typeof rulerActive !== "undefined" && rulerActive){ return; }
     if(typeof wpDropMode !== "undefined" && wpDropMode){ return; }
     if(!layerVis.predict || !_predictGrid){ return; }
     const cell = nearestPredictCell(e.latlng);
@@ -12148,7 +12166,10 @@ function renderPrediction(grid, species, final, heatGridOverride, gridStep, grid
       }),
       zIndexOffset: 500,
     });
-    badge.on('click', () => showPredictionExplainer(cell, species));
+    badge.on('click', () => {
+      if(typeof rulerActive !== "undefined" && rulerActive) return;
+      showPredictionExplainer(cell, species);
+    });
     badge.addTo(MAP);
     predictLayers.push(badge);
   });
@@ -12164,6 +12185,7 @@ function renderPrediction(grid, species, final, heatGridOverride, gridStep, grid
 let _explainerState = null;  // {cell, species} of currently shown hotspot
 
 function showPredictionExplainer(cell, species){
+  if(typeof rulerActive !== "undefined" && rulerActive) return;
   // Close existing
   const old = document.getElementById("predict-explainer");
   if(old) old.remove();
@@ -14634,10 +14656,34 @@ function toggleRuler(){
   }
 }
 
+// When the ruler is armed, map marker clicks add measurement points instead of
+// opening forecast popups, bite explainers, or other layer UI.
+function rulerHandleMarkerClick(e, lat, lng){
+  if(!rulerActive) return false;
+  if(e && typeof L !== "undefined" && L.DomEvent){
+    L.DomEvent.stop(e);
+  }
+  if(typeof MAP !== "undefined" && MAP && MAP.closePopup) MAP.closePopup();
+  const old = document.getElementById("predict-explainer");
+  if(old) old.remove();
+  rulerAddPoint({lat, lng});
+  return true;
+}
+
+function bindRulerMarkerClick(layer, lat, lng){
+  if(!layer || !layer.on) return;
+  layer.on("click", (e) => {
+    if(rulerHandleMarkerClick(e, lat, lng)) return;
+  });
+}
+
 function rulerActivate(){
   // Only one map-click tool at a time — disarm the drop-waypoint tool if on.
   if(typeof wpDropMode !== "undefined" && wpDropMode && typeof wpDropDeactivate === "function") wpDropDeactivate();
   rulerActive = true;
+  if(typeof MAP !== "undefined" && MAP && MAP.closePopup) MAP.closePopup();
+  const explainer = document.getElementById("predict-explainer");
+  if(explainer) explainer.remove();
   document.getElementById("ruler-toggle").classList.add("active");
   document.getElementById("ruler-readout").classList.add("active");
   document.getElementById("ruler-total").textContent = "Tap map to start";
@@ -14801,6 +14847,7 @@ function updateLegend(){
 // MAP CLICK — DROP PIN
 // ════════════════════════════════════════════════════════════════════════════
 function onMapClick(e){
+  if(typeof rulerActive !== "undefined" && rulerActive) return;
   // Per UX spec: nothing should happen when tapping open water on the map.
   // All useful detail is delivered via the hotspot popup, which is opened by
   // tapping a heat cell or top-3 badge (those have their own click handlers).
@@ -15089,6 +15136,7 @@ function drawCanyons(){
       }),
       zIndexOffset:100,
     }).bindPopup(combined, {offset:[0,-46], className:"wp-fc-popup", maxWidth:320}).addTo(MAP);
+    bindRulerMarkerClick(mk, c.lat, c.lng);
     canyonLayers.push(mk);
   });
 }
@@ -15136,6 +15184,7 @@ function drawCatchPins(){
       </div>`,
       {sticky:false, direction:"top", opacity:.97, className:"spot-tt"}
     ).addTo(MAP);
+    bindRulerMarkerClick(mk, c.lat, c.lng);
     catchLayers.push(mk);
   });
 }
@@ -15237,6 +15286,7 @@ function drawPortMarkers(){
       opacity: 1,
     });
 
+    bindRulerMarkerClick(mk, p.lat, p.lng);
     portMarkers.push(mk);
   });
 }
@@ -15935,6 +15985,7 @@ function renderWaypointMarkers(force){
       </div>`,
       {offset:[0,-46], className:"wp-fc-popup"}
     );
+    bindRulerMarkerClick(m, w.lat, w.lng);
     wpLayerGroup.addLayer(m);
     drawn++;
   }
@@ -16024,6 +16075,7 @@ async function drawRamps(){
         `<b>${r.name}</b><br>Public boat ramp · ${r.nm.toFixed(1)} nm<br><span style="font-size:10px;opacity:.85">${latStr}, ${lngStr}</span>`,
         {direction:"top", offset:[0,-8]}
       );
+    bindRulerMarkerClick(m, r.lat, r.lng);
     rampLayerGroup.addLayer(m);
   }
 }
@@ -16463,6 +16515,7 @@ function platformPopupHtml(p){
 function onPlatformMarkerClick(e){
   const p = e.target && e.target._platData;
   if(!p) return;
+  if(rulerHandleMarkerClick(e, p.lat, p.lng)) return;
   const m = e.target;
   if(!m.getPopup()) m.bindPopup(platformPopupHtml(p), {offset:[0,-8], className:"wp-fc-popup"});
   m.openPopup();
@@ -26587,6 +26640,7 @@ function drawUserWaypoints(){
       </div>`,
       {offset:[0,-46], className:"wp-fc-popup"}
     );
+    bindRulerMarkerClick(m, p.lat, p.lng);
     userWpLayerGroup.addLayer(m);
   }
 }
@@ -26650,7 +26704,10 @@ function wpFlyTo(lat, lng, name, type, sourceType){
       </div>`,
       {offset:[0,-52], closeButton:true, className:"wp-fc-popup"}
     );
-    marker.on("click", () => { marker.openPopup(); });
+    marker.on("click", () => {
+      if(rulerHandleMarkerClick({target: marker}, lat, lng)) return;
+      marker.openPopup();
+    });
     _wpActiveMarker = marker;
   }
 }
