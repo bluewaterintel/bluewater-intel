@@ -16,8 +16,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bw-auth.js"></script>
 <script src="bw-freshness.js"></script>
-<script src="bw-ocean.js?v=20260708a"></script>
-<script src="bw-wind.js"></script>
+<script src="bw-ocean.js?v=20260712a"></script>
+<script src="bw-wind.js?v=20260712a"></script>
 <script src="bw-breaks.js?v=20260708"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Master fishing-waypoint dataset (~12.6k points), loaded as a companion file so the
@@ -5390,7 +5390,7 @@ function dtOpenTrip(){
   if(t.predictInputs && t.predictInputs.data){
     const d = t.predictInputs.data;
     try{
-      if(d.bathy) applyBathyData(d.bathy);
+      if(d.bathy) applyPredictBathyData(d.bathy);
       if(d.chlor) applyChlorData(d.chlor);
       if(d.sst) applySstData(d.sst);
       if(Array.isArray(d.field)) applyOceanField(d.field, d.fieldStepNm);
@@ -6449,8 +6449,9 @@ const FORECAST_OPTIONS = [
 
 // Returns a human-readable date/time for the forecast moment
 // (e.g. "Today 5:30 PM" or "Tomorrow 8:00 AM" or "Thu 6:00 AM").
-function forecastTimeDisplay(){
-  const ms = forecastTimeMs();
+function forecastTimeDisplay(hoursOverride){
+  const lead = (typeof hoursOverride === "number") ? hoursOverride : FORECAST_HOUR_OFFSET;
+  const ms = Date.now() + lead * 3600 * 1000;
   const d = new Date(ms);
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
@@ -6940,20 +6941,10 @@ let OCEAN_FIELD = { samples: [], builtAtMs: 0 };
 // active prediction area. Built once per port render and sampled per cell so depth
 // reflects the ACTUAL shelf/break, not a static estimate.
 let BATHY_GRID = null;
+let PREDICT_BATHY_GRID = null;  // port-scoped bathy for bite scoring only — never clobbers map-wide depth
 
-async function buildBathyGrid(latMin, latMax, lngMin, lngMax){
-  BATHY_GRID = null;
-  if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchBathy) return;
-  let data = null;
-  try { data = await BW_OCEAN.fetchBathy(latMin, latMax, lngMin, lngMax); }
-  catch(e){ data = null; }
-  applyBathyData(data);
-}
-
-// Build BATHY_GRID from an already-fetched {stepDeg, rows} payload.
-function applyBathyData(data){
-  BATHY_GRID = null;
-  if(!data || !data.rows || !data.rows.length) return;
+function _buildBathyGridFromRows(data){
+  if(!data || !data.rows || !data.rows.length) return null;
   const step = data.stepDeg || 0.05;
   let mnLa = Infinity, mxLa = -Infinity, mnLn = Infinity, mxLn = -Infinity;
   for(const [la, ln] of data.rows){
@@ -6969,7 +6960,36 @@ function applyBathyData(data){
     const j = Math.round((ln - mnLn) / step);
     if(i >= 0 && i < nLat && j >= 0 && j < nLng) depth[i * nLng + j] = d;
   }
-  BATHY_GRID = { step, minLat: mnLa, minLng: mnLn, nLat, nLng, depth };
+  return { step, minLat: mnLa, minLng: mnLn, nLat, nLng, depth };
+}
+
+function depthAtFromGrid(g, lat, lng){
+  if(!g) return null;
+  const fi = (lat - g.minLat) / g.step;
+  const fj = (lng - g.minLng) / g.step;
+  if(fi < 0 || fj < 0 || fi > g.nLat - 1 || fj > g.nLng - 1) return null;
+  const i = Math.round(fi), j = Math.round(fj);
+  const v = g.depth[i * g.nLng + j];
+  return (typeof v === "number" && isFinite(v)) ? v : null;
+}
+
+async function buildBathyGrid(latMin, latMax, lngMin, lngMax){
+  BATHY_GRID = null;
+  if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchBathy) return;
+  let data = null;
+  try { data = await BW_OCEAN.fetchBathy(latMin, latMax, lngMin, lngMax); }
+  catch(e){ data = null; }
+  applyBathyData(data);
+}
+
+// Build BATHY_GRID from an already-fetched {stepDeg, rows} payload.
+function applyBathyData(data){
+  BATHY_GRID = _buildBathyGridFromRows(data);
+}
+
+// Bite-map-only bathy — keeps map-wide BATHY_GRID intact for currents, waypoints, depth popups.
+function applyPredictBathyData(data){
+  PREDICT_BATHY_GRID = _buildBathyGridFromRows(data);
 }
 
 // Gap-filled chlorophyll composite for the active prediction area. Built once per
@@ -7066,7 +7086,7 @@ function applySstData(data){
   const s = [...vals].sort((a,b)=>a-b); const m = s.length>>1;
   const median = s.length ? (s.length%2 ? s[m] : (s[m-1]+s[m])/2) : null;
   SST_GRID = {
-    step, minLat: mnLa, minLng: mnLn, nLat, nLng, val, median, freshestMs: freshest || null,
+    step, minLat: mnLa, minLng: mnLn, nLat, nLng, val, median, freshestMs: freshest || data.observedAtMs || null,
     _forecast: !!data._forecast,
     forecastHour: data.forecastHour || 0,
     source: data.source || null,
@@ -7082,7 +7102,9 @@ function sstGridAt(lat, lng){
   const i = Math.max(0, Math.min(g.nLat-1, Math.round(fi)));
   const j = Math.max(0, Math.min(g.nLng-1, Math.round(fj)));
   const v = g.val[i * g.nLng + j];
-  return (typeof v === "number" && isFinite(v)) ? { value: v, observedAtMs: g.freshestMs } : null;
+  return (typeof v === "number" && isFinite(v))
+    ? { value: v, observedAtMs: g.freshestMs, ...(g._forecast ? { _forecast: true, forecastHour: g.forecastHour } : {}) }
+    : null;
 }
 
 // Thermal break (°F per 10nm) from the dense SST grid around a point.
@@ -7135,22 +7157,15 @@ function chlorBreakGrid(lat, lng){
   return null;
 }
 
-// Real depth (meters) at a point from the CUDEM/ETOPO grid; null if unavailable.
+// Real depth (meters) at a point from the map-wide CUDEM/ETOPO grid; null if unavailable.
 function realDepthAt(lat, lng){
-  const g = BATHY_GRID;
-  if(!g) return null;
-  const fi = (lat - g.minLat) / g.step;
-  const fj = (lng - g.minLng) / g.step;
-  if(fi < 0 || fj < 0 || fi > g.nLat - 1 || fj > g.nLng - 1) return null;
-  const i = Math.round(fi), j = Math.round(fj);
-  const v = g.depth[i * g.nLng + j];
-  return (typeof v === "number" && isFinite(v)) ? v : null;
+  return depthAtFromGrid(BATHY_GRID, lat, lng);
 }
 
-// Depth used by the prediction engine: prefer REAL bathymetry, fall back to the
-// static shelf model only where the grid has no coverage.
+// Depth used by the prediction engine: prefer bite-map bathy, then map-wide grid,
+// then the static shelf model only where neither grid has coverage.
 function predictDepth(lat, lng){
-  const real = realDepthAt(lat, lng);
+  const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
   if(real != null) return real;
   return seaDepth(lat, lng);
 }
@@ -7273,35 +7288,39 @@ function applyOceanField(samples, spacingNm){
 // endpoint is unavailable, so behavior is preserved either way.
 async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
   let data = null;
-  // Forecast horizon (0/12/24/48/72h) so the backend returns forecast wind,
-  // pressure, and weather for the selected time — not just current conditions.
   const fcHour = (typeof FORECAST_HOUR_OFFSET !== "undefined") ? (FORECAST_HOUR_OFFSET || 0) : 0;
+  const predictUsable = (payload) => {
+    if(!payload || !Array.isArray(payload.field) || !payload.field.length) return false;
+    const sstRows = Array.isArray(payload.sst?.rows) ? payload.sst.rows.filter(r => r && r[2] != null).length : 0;
+    const windPts = payload.field.filter(f => f?.p?.wind?.value != null).length;
+    return sstRows > 0 && windPts > 0;
+  };
   if(typeof BW_OCEAN !== "undefined" && BW_OCEAN.fetchPredictInputs){
     try { data = await BW_OCEAN.fetchPredictInputs(latMin, latMax, lngMin, lngMax, 90, fcHour); }
     catch(e){ data = null; }
+    // One immediate retry — cold edge starts / mobile blips were caching hollow
+    // responses and leaving the bite map on depth-only scoring.
+    if(!predictUsable(data)){
+      if(typeof BW_OCEAN.clearPredictInputsCache === "function") BW_OCEAN.clearPredictInputsCache();
+      try { data = await BW_OCEAN.fetchPredictInputs(latMin, latMax, lngMin, lngMax, 90, fcHour); }
+      catch(e){ data = null; }
+    }
   }
-  // Offline / fetch-failure fallback: reuse a saved trip snapshot's inputs if it
-  // covers this bbox, so the bite map still builds with no connectivity.
-  if((!data || !Array.isArray(data.field)) && typeof tripPredictInputsCovering === "function"){
+  if(!predictUsable(data) && typeof tripPredictInputsCovering === "function"){
     const cached = tripPredictInputsCovering(latMin, latMax, lngMin, lngMax);
-    if(cached && Array.isArray(cached.field)) data = cached;
+    if(predictUsable(cached)) data = cached;
   }
-  if(data && Array.isArray(data.field)){
-    applyBathyData(data.bathy);
+  if(predictUsable(data)){
+    applyPredictBathyData(data.bathy);
     applyChlorData(data.chlor);
     applySstData(data.sst);
     applyOceanField(data.field, data.fieldStepNm);
-    // Satellite SSH + surface-current grids for the scorer's front fusion. Kept in
-    // PREDICT_* copies (not the display globals) so the bite map never repaints a
-    // toggled overlay. Absent on older payloads → front factors stay SST-only.
     PREDICT_ALTI_GRID = (data.altimetry && typeof buildAltiGrid === "function") ? buildAltiGrid(data.altimetry) : null;
     PREDICT_CUR_GRID  = (data.current  && typeof buildCurGrid  === "function") ? buildCurGrid(data.current)   : null;
-    // Remember the inputs so "Download my trip" can snapshot them for offline use.
     LAST_PREDICT_INPUTS = { bbox: { latMin, latMax, lngMin, lngMax }, data, fcHour, atMs: Date.now() };
     return;
   }
-  // Fallback: separate requests (older path; per-point SST in the field).
-  SST_GRID = null;
+  console.warn("buildPredictInputs: combined endpoint unavailable — falling back to per-point fetch");
   await Promise.all([
     buildBathyGrid(latMin, latMax, lngMin, lngMax),
     buildChlorGrid(latMin, latMax, lngMin, lngMax),
@@ -11338,6 +11357,12 @@ function _altiComputeBreaks(g, portLat, portLng, maxNm){
   return { gm, peaks };
 }
 function altiBBoxKey(bx){ return `${bx.s.toFixed(2)},${bx.n.toFixed(2)},${bx.w.toFixed(2)},${bx.e.toFixed(2)}`; }
+function altiForecastHourForDisplay(){
+  // Altimetry overlay follows the bite-map forecast slider only while the bite
+  // map is on; otherwise always show observed NOAA altimetry.
+  return (layerVis && layerVis.predict && FORECAST_HOUR_OFFSET > 0) ? FORECAST_HOUR_OFFSET : 0;
+}
+
 function altiCacheKey(bx, offset, hours){ return `${altiBBoxKey(bx)}:${offset|0}:${normalizeForecastHour(hours||0)}`; }
 async function fetchAltiGridCached(bx, offset, hoursAhead){
   const fh = normalizeForecastHour(hoursAhead || 0);
@@ -11556,7 +11581,7 @@ const AltimetryLayer = L.Layer.extend({
     const bx=altimetryRequestBox(this._map);
     const tol=g?g.step:0.25;
     const boxKey=altiBBoxKey(bx);
-    if(this._displayBox!==boxKey || this._displayOffset!==altiDayOffset || this._displayForecastHour!==FORECAST_HOUR_OFFSET ||
+    if(this._displayBox!==boxKey || this._displayOffset!==altiDayOffset || this._displayForecastHour!==altiForecastHourForDisplay() ||
        !g||bx.s<g.bounds.s-tol||bx.n>g.bounds.n+tol||
        bx.w<g.bounds.w-tol||bx.e>g.bounds.e+tol){
       this._requestDisplayData();
@@ -11569,12 +11594,13 @@ const AltimetryLayer = L.Layer.extend({
     const boxKey=altiBBoxKey(bx);
     ALTIMETRY_STATUS="loading";
     if(typeof updateOceanLegend==="function") updateOceanLegend();
-    fetchAltiGridCached(bx, altiDayOffset, FORECAST_HOUR_OFFSET).then(grid=>{
+    const fh = altiForecastHourForDisplay();
+    fetchAltiGridCached(bx, altiDayOffset, fh).then(grid=>{
       if(seq!==_altiFetchSeq||!layerVis.altimetry) return;
       ALTIMETRY_GRID=grid;
       this._displayBox=boxKey;
       this._displayOffset=altiDayOffset;
-      this._displayForecastHour=FORECAST_HOUR_OFFSET;
+      this._displayForecastHour=fh;
       ALTIMETRY_STATUS=grid?"ready":"unavailable";
       if(typeof updateAltiDateDisplay==="function") updateAltiDateDisplay();
       if(typeof updateOceanLegend==="function") updateOceanLegend();
@@ -11588,7 +11614,8 @@ const AltimetryLayer = L.Layer.extend({
   _requestPortBreaks: function(force){
     if(!layerVis.altimetry||typeof BW_OCEAN==="undefined"||!BW_OCEAN.fetchAltimetryGrid) return Promise.resolve();
     const portName=(typeof activePort!=="undefined"&&activePort)?activePort:"";
-    const key=portName+":"+altiDayOffset+":"+FORECAST_HOUR_OFFSET;
+    const fh = altiForecastHourForDisplay();
+    const key=portName+":"+altiDayOffset+":"+fh;
     if(!force && this._portBreaksKey===key && ALTI_PORT_BREAKS) return Promise.resolve();
     const po=portName&&PORTS[portName]?PORTS[portName]:null;
     if(!po){
@@ -11598,9 +11625,9 @@ const AltimetryLayer = L.Layer.extend({
     const seq=++_altiPortBreaksSeq;
     const bx=altimetryPortBox(po);
     const ghostOff=altiDayOffset+1;
-    const useGhost = FORECAST_HOUR_OFFSET <= 0 && altiDayOffset < ALTI_MAX_DAYS_BACK;
+    const useGhost = fh <= 0 && altiDayOffset < ALTI_MAX_DAYS_BACK;
     return Promise.all([
-      fetchAltiGridCached(bx, altiDayOffset, FORECAST_HOUR_OFFSET),
+      fetchAltiGridCached(bx, altiDayOffset, fh),
       useGhost ? fetchAltiGridCached(bx, ghostOff, 0) : Promise.resolve(null),
     ]).then(([grid, ghost])=>{
       if(seq!==_altiPortBreaksSeq||!layerVis.altimetry) return;
@@ -12238,6 +12265,9 @@ function setForecastHour(hours){
   const target = normalizeForecastHour(hours);
   if(FORECAST_HOUR_OFFSET === target) return;
   FORECAST_HOUR_OFFSET = target;
+  if(typeof BW_OCEAN !== "undefined" && typeof BW_OCEAN.clearPredictInputsCache === "function"){
+    BW_OCEAN.clearPredictInputsCache();
+  }
   const slider = document.getElementById("forecast-slider-input");
   if(slider && String(slider.value) !== String(target)) slider.value = target;
   updateForecastSliderDisplay();
@@ -12291,9 +12321,13 @@ function flashForecastSlider(){
 //   - onchange (fires on release/snap)  → expensive: regen predictions
 // ════════════════════════════════════════════════════════════════════════════
 function onForecastSliderInput(v){
+  // Preview label only — do NOT change FORECAST_HOUR_OFFSET until release.
+  // Mutating the offset during drag was re-scoring against stale ocean inputs.
   const hours = normalizeForecastHour(parseInt(v, 10) || 0);
-  FORECAST_HOUR_OFFSET = hours;
-  updateForecastSliderDisplay();
+  const label = document.getElementById("forecast-slider-display");
+  if(label){
+    label.textContent = hours === 0 ? "Now" : `+${hours}h · ${forecastTimeDisplay(hours)}`;
+  }
 }
 
 function onForecastSliderChange(v){

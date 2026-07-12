@@ -152,7 +152,18 @@
     }
   }
 
+  function predictInputsUsable(data) {
+    if (!data || !Array.isArray(data.field) || !data.field.length) return false;
+    const sstRows = Array.isArray(data.sst?.rows) ? data.sst.rows.filter((r) => r && r[2] != null).length : 0;
+    const windPts = data.field.filter((f) => f?.p?.wind?.value != null).length;
+    // Need both the SST grid and buoy/model wind field — without these the bite
+    // map reads 99% from depth/season alone (exactly the "all unavailable" bug).
+    return sstRows > 0 && windPts > 0;
+  }
+
   const predictInputsCache = new Map();
+  function clearPredictInputsCache() { predictInputsCache.clear(); }
+
   async function fetchPredictInputs(latMin, latMax, lngMin, lngMax, maxPoints, forecastHour = 0) {
     const hours = normalizeOceanHours(forecastHour);
     const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)},${maxPoints || 90},${hours}`;
@@ -168,11 +179,11 @@
       if (hours > 0) params.set("hours", String(hours));
       const res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: AbortSignal.timeout(35000),
+        signal: AbortSignal.timeout(50000),
       });
       if (!res.ok) return null;
       const data = await res.json();
-      if (!data || !Array.isArray(data.field)) return null;
+      if (!predictInputsUsable(data)) return null;
       predictInputsCache.set(k, data);
       return data;
     } catch (e) {
@@ -291,5 +302,8 @@
     }
   }
 
-  root.BW_OCEAN = { fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs, fetchWindGrid, fetchCurrentGrid, fetchAltimetryGrid, fetchSstGrid };
+  root.BW_OCEAN = {
+    fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs, clearPredictInputsCache,
+    fetchWindGrid, fetchCurrentGrid, fetchAltimetryGrid, fetchSstGrid,
+  };
 })(typeof globalThis !== "undefined" ? globalThis : this);
