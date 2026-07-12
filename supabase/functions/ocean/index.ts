@@ -29,19 +29,18 @@ import { NetCDFReader } from "npm:netcdfjs";
 // and you may prefer a different SST product). Marked clearly.
 // ============================================================================
 
-// ALLOWED_ORIGINS may list several comma-separated app URLs. Browsers require
-// Access-Control-Allow-Origin to echo ONE matching origin — not the whole list.
-const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-
-function corsHeaders(origin: string | null) {
-  const allow = origin && (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin))
-    ? origin
-    : (ALLOWED_ORIGINS[0] ?? "*");
+// This is a PUBLIC read-only data proxy: no cookies, no credentialed requests,
+// and only a publishable anon key. So we allow ALL origins ("*") rather than
+// matching against ALLOWED_ORIGINS. Origin-matching previously broke real users
+// on www./mobile-webview origins — the browser rejected the mismatched
+// Access-Control-Allow-Origin and every ocean fetch failed (blank header, no
+// wind/currents/altimetry, depth-only bite map). "*" is safe here and can't
+// regress across hostnames.
+function corsHeaders(_origin?: string | null) {
   return {
-    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Vary": "Origin",
   };
 }
 
