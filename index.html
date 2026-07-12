@@ -3243,7 +3243,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 20V8l6-4 6 4v12"/><path d="M9 20v-5h6v5"/><path d="M10 8h4"/><path d="M12 4v4"/></svg>
         </span>
-        <span>Gulf Platforms <span style="font-size:8px;color:#9ec5e8;opacity:.7">(150 nm)</span></span>
+        <span>Gulf Rigs <span style="font-size:8px;color:#9ec5e8;opacity:.7">(150 nm)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -14946,7 +14946,7 @@ let BW_PREMIUM = false;
 let BW_PAID = false;
 let BW_ADMIN = false;
 // Premium-gated map layers (everything outside the free baseline).
-const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "altimetry", "radar", "ramps", "loran", "waypoints"];
+const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "altimetry", "radar", "ramps", "loran", "waypoints", "platforms"];
 
 async function refreshEntitlement(){
   let premium = false, paid = false, admin = false;
@@ -16000,8 +16000,8 @@ function drawClosures(){
 // ════════════════════════════════════════════════════════════════════════════
 // GULF OF MEXICO PLATFORMS (BSEE federal OCS — active, above-water only)
 // Port-scoped: rigs within PLAT_RADIUS_NM of the active port, viewport-culled,
-// and zoom-capped for performance. Data excludes removed structures and subsea
-// manifolds/PLETs (rebuild: npm run build:platforms).
+// spatially subsampled when over the draw cap, and Pro-gated. Data excludes
+// removed structures and subsea manifolds/PLETs (rebuild: npm run build:platforms).
 // ════════════════════════════════════════════════════════════════════════════
 let platformLayerGroup = null;
 let _platformRedrawBound = false;
@@ -16013,14 +16013,51 @@ let _platInRangeCache = null;
 let _platInRangePort = null;
 
 function platMaxDraw(){
-  if(!MAP) return 400;
+  if(!MAP) return 550;
   const z = MAP.getZoom();
-  if(z <= 6) return 120;
-  if(z <= 7) return 200;
-  if(z <= 8) return 320;
-  if(z <= 9) return 450;
-  if(z <= 10) return 600;
-  return 900;
+  if(z <= 6) return 250;
+  if(z <= 7) return 400;
+  if(z <= 8) return 550;
+  if(z <= 9) return 700;
+  if(z <= 10) return 900;
+  return 1100;
+}
+
+// When the viewport holds more rigs than platMaxDraw(), pick a geographically
+// even subset (grid cell per rig) instead of nearest-first so offshore rigs
+// stay visible when zoomed out over the home port.
+function platPickSpatialSpread(candidates, bounds, maxDraw){
+  if(!candidates.length) return [];
+  if(candidates.length <= maxDraw) return candidates;
+  const south = bounds.getSouth(), north = bounds.getNorth();
+  const west = bounds.getWest(), east = bounds.getEast();
+  const latSpan = Math.max(north - south, 1e-6);
+  const lngSpan = Math.max(east - west, 1e-6);
+  const cols = Math.ceil(Math.sqrt(maxDraw));
+  const rows = Math.ceil(maxDraw / cols);
+  const cellBuckets = new Map();
+  for(const p of candidates){
+    const ci = Math.min(cols - 1, Math.floor(((p.lat - south) / latSpan) * cols));
+    const cj = Math.min(rows - 1, Math.floor(((p.lng - west) / lngSpan) * rows));
+    const key = ci + ":" + cj;
+    const bucket = cellBuckets.get(key);
+    if(!bucket) cellBuckets.set(key, [p]);
+    else bucket.push(p);
+  }
+  const picked = [];
+  for(const bucket of cellBuckets.values()){
+    picked.push(bucket[0]);
+    if(picked.length >= maxDraw) break;
+  }
+  if(picked.length < maxDraw){
+    const seen = new Set(picked.map(p => p.lat + "," + p.lng));
+    for(const p of candidates){
+      if(picked.length >= maxDraw) break;
+      const id = p.lat + "," + p.lng;
+      if(!seen.has(id)){ picked.push(p); seen.add(id); }
+    }
+  }
+  return picked.slice(0, maxDraw);
 }
 
 function platformPopupHtml(p){
@@ -16061,13 +16098,12 @@ function buildPlatformInRangeCache(){
       items.push({ name: row[0] || "Platform", lat, lng, complex: row[3] || "", nm });
     }
   }
-  items.sort((a, b) => a.nm - b.nm);
   return items;
 }
 
 function drawPlatforms(){
   if(!platformLayerGroup){ platformLayerGroup = L.layerGroup().addTo(MAP); }
-  if(!layerVis.platforms || !activePort || !PORTS[activePort] ||
+  if(!BW_PREMIUM || !layerVis.platforms || !activePort || !PORTS[activePort] ||
      typeof window.BW_GOM_PLATFORMS === "undefined" || !window.BW_GOM_PLATFORMS.length){
     platformLayerGroup.clearLayers();
     platformLayers = [];
@@ -16103,10 +16139,13 @@ function renderPlatformMarkers(force){
   platformLayers = [];
   _platformRenderedBounds = bounds;
   const maxDraw = platMaxDraw();
-  let drawn = 0;
+  const inView = [];
   for(const p of _platInRangeCache){
     if(bounds && !bounds.contains([p.lat, p.lng])) continue;
-    if(drawn >= maxDraw) break;
+    inView.push(p);
+  }
+  const toDraw = bounds ? platPickSpatialSpread(inView, bounds, maxDraw) : inView.slice(0, maxDraw);
+  for(const p of toDraw){
     const m = L.circleMarker([p.lat, p.lng], {
       radius: 5,
       color: "rgba(255,255,255,.9)",
@@ -16119,7 +16158,6 @@ function renderPlatformMarkers(force){
     m.on("click", onPlatformMarkerClick);
     platformLayerGroup.addLayer(m);
     platformLayers.push(m);
-    drawn++;
   }
 }
 
