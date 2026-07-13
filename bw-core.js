@@ -282,6 +282,7 @@ async function loadReports(){
   try {
     const rows = await window.BW_AUTH.fetchReports({ sinceDays: 21, limit: 400 });
     SOCIAL = (rows || []).map(mapReport);
+    invalidatePredictCache();
     const ov = document.getElementById("rp-overlay");
     if(typeof rpRender === "function" && ov && ov.style.display === "block") rpRender();
     if(typeof drawPrediction === "function" && typeof activeSpId !== "undefined" && activeSpId && activeSpId !== "all" && typeof activePort !== "undefined" && activePort){
@@ -309,6 +310,11 @@ let predictLayers=[], predictionData=null, predictionExplainer=null;
 // nearest-cell hit test on map click/mousemove. _predictHandlersBound ensures we
 // only attach the map-level handlers once.
 let _predictGrid = null, _predictSpecies = null, _predictTooltip = null, _predictHandlersBound = false, _predictZooming = false;
+// Cached bite-map result for the active port + species + forecast hour. Zoom/pan
+// must NOT recompute this — only repaint the heat mask. Recomputing on every tile
+// load (old behavior) produced different hotspot rankings as bathy/ocean data
+// arrived in different order, which is why the #1/#2/#3 badges jumped on zoom.
+let _predictResultCache = null; // { key, heatGrid, hotspots, badges, gridStep, gridOriginLat, gridOriginLng }
 let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null;
 // Satellite-imagery date control (SEPARATE from the prediction forecast slider).
 // Satellite layers (SST/chlor) are OBSERVED data — they only go backward. This
@@ -413,8 +419,10 @@ async function initMap(){
       BasemapSampler._repaintScheduled = true;
       requestAnimationFrame(() => {
         BasemapSampler._repaintScheduled = false;
-        if(typeof drawPrediction === "function" && activeSpId && activePort){
-          drawPrediction();
+        // Repaint the heat land-mask only — never re-score the grid on tile load.
+        // drawPrediction() here was the root cause of hotspot badges shifting on zoom.
+        if(_heatLayer && typeof _heatLayer._scheduleReset === "function"){
+          _heatLayer._scheduleReset();
         }
       });
     }
@@ -2445,7 +2453,10 @@ function isPredictWater(lat, lng){
   // Inland freshwater (Lake Okeechobee, etc.) is never a saltwater fishing
   // spot, regardless of what the bathymetry grid says — exclude it first.
   if(isInlandFreshwater(lat, lng)) return false;
-  const real = realDepthAt(lat, lng);
+  // Prefer the port-scoped bite-map bathy grid (stable for the whole fishing
+  // range). BATHY_GRID is often viewport-sized (currents layer), so using it
+  // here made the scored cells change as the user zoomed/panned.
+  const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
   if(real != null) return real > 0;
   return (typeof isFishableWater === "function") ? isFishableWater(lat, lng) : false;
 }
@@ -4486,7 +4497,7 @@ function briefSpeciesForSpot(){
 }
 
 // Rank local species at the pin using the same bite-map engine as the heat grid,
-// then pick the best targets for an "I just want to go fishing" Captain's Choice
+// then pick the best targets for an "I just want to go fishing" Bluewater Choice
 // brief. Favors in-season fish with strong scores and confidence.
 function briefPickSpeciesAuto(lat, lng, allowed, limit = 3){
   const candidates = [];
@@ -4511,9 +4522,19 @@ function briefPickSpeciesAuto(lat, lng, allowed, limit = 3){
       topFactor: r.topFactor || null,
     });
   }
-  candidates.sort((a, b) => b.rank - a.rank);
-  let picks = candidates.filter(c => c.rank >= 0.08).slice(0, limit);
-  if(!picks.length && candidates.length) picks = [candidates[0]];
+  // Deterministic ordering: rank desc, then score desc, then species id asc as a
+  // stable tie-break. Without the tie-break, near-equal ranks (common while the
+  // ocean grids are still streaming in) could reorder between renders, which is
+  // why "Bluewater Choice" appeared to pick different species on each click.
+  candidates.sort((a, b) =>
+    (b.rank - a.rank) || (b.scorePct - a.scorePct) ||
+    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // Only recommend genuinely worthwhile targets: a FAIR-or-better bite score
+  // (>=40/100). This stops junk picks like "Swordfish 6/100" when nothing is
+  // really biting. If nothing clears the bar we return NO picks and the UI says
+  // so honestly rather than surfacing a bad recommendation.
+  const MIN_SCORE_PCT = 40;
+  const picks = candidates.filter(c => c.scorePct >= MIN_SCORE_PCT).slice(0, limit);
   return { picks, candidates };
 }
 
@@ -4587,6 +4608,36 @@ function heatDisplayIntensity(score){
   const s = Math.max(0, Math.min(1, Number(score) || 0));
   if(s <= 0) return 0;
   return Math.max(PREDICT_HEAT_SCORE_MIN, Math.pow(s, 0.60));
+}
+
+// Cache key for the scored bite-map grid. Includes a lightweight reports
+// signature so a fresh SOCIAL feed invalidates stale hotspot rankings.
+function predictResultCacheKey(){
+  const reportSig = (typeof SOCIAL !== "undefined" && SOCIAL.length)
+    ? `${SOCIAL.length}:${SOCIAL[0]?.hoursAgo ?? ""}:${SOCIAL[0]?.id ?? ""}`
+    : "0";
+  return `${activePort || ""}:${activeSpId || ""}:${FORECAST_HOUR_OFFSET || 0}:${reportSig}`;
+}
+function invalidatePredictCache(){ _predictResultCache = null; }
+
+// Pick the top N hotspot badges with geographic separation so the pins represent
+// genuinely different areas. Shared by renderPrediction and topBriefHotspots so
+// the banner run plan and map badges always agree.
+function pickTopHotspotBadges(hotspots, limit){
+  limit = limit || 3;
+  if(!Array.isArray(hotspots) || !hotspots.length) return [];
+  const chosen = [];
+  const sepFor = (cell) => {
+    const d = (typeof cell.distNm === "number") ? cell.distNm : 20;
+    return Math.min(13, Math.max(5, d * 0.18));
+  };
+  for(const cell of hotspots){
+    if(chosen.length >= limit) break;
+    const minSep = sepFor(cell);
+    const farEnough = chosen.every(c => nmBetween(c.lat, c.lng, cell.lat, cell.lng) >= minSep);
+    if(farEnough) chosen.push(cell);
+  }
+  return chosen;
 }
 
 // Great-circle distance in nautical miles between two lat/lng points.
@@ -7027,9 +7078,9 @@ function drawPrediction(){
   // Bump the generation token so any in-flight async compute is abandoned and
   // won't paint stale results after we've torn down (prevents flicker/races).
   _predictGen++;
-  if(!layerVis.predict){ hidePredictLoading(); if(_heatLayer){ MAP.removeLayer(_heatLayer); _heatLayer=null; } _predictGrid = null; if(_predictTooltip) MAP.closeTooltip(_predictTooltip); updateForecastSliderVisibility(); return; }
+  if(!layerVis.predict){ hidePredictLoading(); invalidatePredictCache(); if(_heatLayer){ MAP.removeLayer(_heatLayer); _heatLayer=null; } _predictGrid = null; if(_predictTooltip) MAP.closeTooltip(_predictTooltip); updateForecastSliderVisibility(); return; }
   // No species selected → silently render nothing (empty-state overlay handles UX)
-  if(!activeSpId || activeSpId === "all"){ hidePredictLoading(); if(_heatLayer){ MAP.removeLayer(_heatLayer); _heatLayer=null; } _predictGrid = null; if(_predictTooltip) MAP.closeTooltip(_predictTooltip); updateForecastSliderVisibility(); return; }
+  if(!activeSpId || activeSpId === "all"){ hidePredictLoading(); invalidatePredictCache(); if(_heatLayer){ MAP.removeLayer(_heatLayer); _heatLayer=null; } _predictGrid = null; if(_predictTooltip) MAP.closeTooltip(_predictTooltip); updateForecastSliderVisibility(); return; }
 
   const species = SPECIES.find(s => s.id === activeSpId);
   _predictSpecies = species;
@@ -7039,6 +7090,21 @@ function drawPrediction(){
   }
   // Slider becomes visible: prediction is rendering
   updateForecastSliderVisibility();
+
+  // Reuse the cached grid when port/species/forecast/reports haven't changed.
+  // Zoom and pan only repaint the heat mask — they must never re-rank hotspots.
+  const cacheKey = predictResultCacheKey();
+  if(_predictResultCache && _predictResultCache.key === cacheKey){
+    hidePredictLoading();
+    renderPrediction(
+      _predictResultCache.hotspots, species, true,
+      _predictResultCache.heatGrid, _predictResultCache.gridStep,
+      { lat: _predictResultCache.gridOriginLat, lng: _predictResultCache.gridOriginLng },
+      _predictResultCache.badges,
+    );
+    return;
+  }
+
   showPredictLoading();
   const _runGen = _predictGen;
 
@@ -7066,8 +7132,14 @@ function drawPrediction(){
       const gridStep = (full && full.gridStep) || 0.25;
       const gridOrigin = full ? { lat: full.gridOriginLat, lng: full.gridOriginLng } : null;
       if(!heatGrid.length){ _predictGrid = null; updateForecastSliderVisibility(); return; }
+      const badges = pickTopHotspotBadges(hotspots, 3);
+      _predictResultCache = {
+        key: predictResultCacheKey(),
+        heatGrid, hotspots, badges,
+        gridStep, gridOriginLat: gridOrigin && gridOrigin.lat, gridOriginLng: gridOrigin && gridOrigin.lng,
+      };
       predictionData = hotspots;
-      renderPrediction(hotspots, species, true, heatGrid, gridStep, gridOrigin);
+      renderPrediction(hotspots, species, true, heatGrid, gridStep, gridOrigin, badges);
     }
   );
 }
@@ -7076,7 +7148,7 @@ function drawPrediction(){
 // layer instance across calls (via setPoints) so re-rendering doesn't churn
 // Leaflet panes. `final` controls whether the badges are drawn.
 let _heatLayer = null;
-function renderPrediction(grid, species, final, heatGridOverride, gridStep, gridOrigin){
+function renderPrediction(grid, species, final, heatGridOverride, gridStep, gridOrigin, badgesOverride){
   const hotspots = grid || [];
   const heatGrid = heatGridOverride || hotspots;
   const step = gridStep || 0.25;
@@ -7106,28 +7178,9 @@ function renderPrediction(grid, species, final, heatGridOverride, gridStep, grid
   if(!final) return;
 
   // ── Top 3 hotspot badges (final paint only) ──
-  // Pick the 3 strongest hotspots that are also SPACED OUT, so the badges
-  // represent three genuinely different areas an angler would choose between —
-  // not three pins stacked on the same hot zone (which wastes two slots). We go
-  // down the score-sorted list and accept a spot only if it's at least
-  // minSepNm from every spot already chosen. Separation scales with how far
-  // offshore the run is (a hotspot's distNm from port): inshore spots only need
-  // ~5 nm of separation to feel distinct, but offshore canyon spots that you'd
-  // run 10-15 nm between should be spread wider. If we can't find 3 adequately
-  // separated spots above threshold, we show however many we found (2, or even
-  // 1) rather than forcing a third pin onto redundant or mediocre water.
-  const chosen = [];
-  const sepFor = (cell) => {
-    const d = (typeof cell.distNm === "number") ? cell.distNm : 20;
-    // 5 nm inshore → up to ~13 nm well offshore.
-    return Math.min(13, Math.max(5, d * 0.18));
-  };
-  for(const cell of hotspots){
-    if(chosen.length >= 3) break;
-    const minSep = sepFor(cell);
-    const farEnough = chosen.every(c => nmBetween(c.lat, c.lng, cell.lat, cell.lng) >= minSep);
-    if(farEnough) chosen.push(cell);
-  }
+  // Use the precomputed badge list when provided (cached grid) so zoom/pan
+  // never re-ranks the pins. Otherwise pick once from the scored hotspots.
+  const chosen = Array.isArray(badgesOverride) ? badgesOverride : pickTopHotspotBadges(hotspots, 3);
   chosen.forEach((cell, i) => {
     const badge = L.marker([cell.lat, cell.lng], {
       icon: L.divIcon({
@@ -12068,7 +12121,7 @@ function briefHistoryPanelHtml(opts = {}){
   }
   const items = recent.slice(0, max).map(b => {
     const spLabel = (b.speciesNames && b.speciesNames.length)
-      ? (b.speciesAutoPick ? "Captain's Choice · " : "") + b.speciesNames.slice(0, 2).join(", ") + (b.speciesNames.length > 2 ? "…" : "")
+      ? (b.speciesAutoPick ? "Bluewater Choice · " : "") + b.speciesNames.slice(0, 2).join(", ") + (b.speciesNames.length > 2 ? "…" : "")
       : "General";
     const run = b.runFromPortNm != null ? `${b.runFromPortNm} nm` : "";
     const safeId = (b.id || "").replace(/'/g, "\\'");
@@ -12209,6 +12262,18 @@ function renderBrief(){
   const allowed = briefSpeciesForSpot();
   // Drop any prior selections that don't apply to this spot/port anymore.
   briefSp = briefSp.filter(id => allowed.some(s => s.id === id));
+  // Marine forecast + ocean data are only trustworthy a day or two out, so the
+  // brief is scoped to Today/Tomorrow. Clamp any stale offset (e.g. recalled
+  // from an older brief) back into that window.
+  if(briefDayOffset > 1) briefDayOffset = 1;
+  // Default to the captain's CURRENTLY selected target species (from the top
+  // banner) instead of silently auto-picking — that was the source of "why is
+  // it targeting King/Spadefish when I chose Triggerfish?" confusion. Only seed
+  // once, when nothing is selected yet and auto mode isn't on.
+  if(!briefAutoPick && !briefSp.length && typeof activeSpId !== "undefined" &&
+     activeSpId && activeSpId !== "all" && allowed.some(s => s.id === activeSpId)){
+    briefSp = [activeSpId];
+  }
   const autoPreview = (briefAutoPick && pinLL)
     ? briefPickSpeciesAuto(pinLL.lat, pinLL.lng, allowed, 3)
     : { picks: [], candidates: [] };
@@ -12219,20 +12284,21 @@ function renderBrief(){
     return `<button class="sp-pill" style="border-color:${on?sp.color:"rgba(255,255,255,.16)"};background:${on?sp.color+"22":"rgba(255,255,255,.04)"};color:${on?sp.color:"#cfe5ff"};${dim}" ${disabled} onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
   }).join("");
   const autoOn = briefAutoPick;
-  const autoPickBtn = `<button type="button" class="brief-day" style="border:1px solid ${autoOn?'#a855f7':'rgba(255,255,255,.12)'};background:${autoOn?'rgba(168,85,247,.2)':'rgba(255,255,255,.04)'};color:${autoOn?'#e9d5ff':'#cfe5ff'};font-family:inherit;font-weight:800;font-size:12px;padding:9px 12px;border-radius:8px;cursor:pointer;width:100%;text-align:left;margin-bottom:8px" onclick="setBriefAutoPick(true)">🎯 Captain's Choice — let AI pick the best targets for ${briefDayLabel(briefDayOffset)}</button>`;
+  const autoPickBtn = `<button type="button" class="brief-day" style="border:1px solid ${autoOn?'#a855f7':'rgba(255,255,255,.12)'};background:${autoOn?'rgba(168,85,247,.2)':'rgba(255,255,255,.04)'};color:${autoOn?'#e9d5ff':'#cfe5ff'};font-family:inherit;font-weight:800;font-size:12px;padding:9px 12px;border-radius:8px;cursor:pointer;width:100%;text-align:left;margin-bottom:8px" onclick="setBriefAutoPick(true)">🎯 Bluewater Choice — let us pick the best targets for ${briefDayLabel(briefDayOffset)}</button>`;
   const manualBtn = `<button type="button" class="brief-day" style="border:1px solid ${!autoOn?'#7dd3fc':'rgba(255,255,255,.12)'};background:${!autoOn?'rgba(125,211,252,.14)':'rgba(255,255,255,.04)'};color:${!autoOn?'#7dd3fc':'#cfe5ff'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;margin-bottom:10px" onclick="setBriefAutoPick(false)">I'll choose my own targets</button>`;
   const autoPreviewHtml = autoOn && autoPreview.picks.length
-    ? `<p style="color:#d8b4fe;font-size:12px;margin:0 0 10px;line-height:1.45"><b>AI will target:</b> ${autoPreview.picks.map(p => `${p.name} (${p.scorePct}/100${p.inSeason ? "" : ", off-season"})`).join(" · ")}</p>`
+    ? `<p style="color:#d8b4fe;font-size:12px;margin:0 0 10px;line-height:1.45"><b>Targeting:</b> ${autoPreview.picks.map(p => `${p.name} (${p.scorePct}/100${p.inSeason ? "" : ", off-season"})`).join(" · ")}</p>`
     : (autoOn && pinLL
-      ? `<p style="color:#9ec5e8;font-size:12px;margin:0 0 10px">Analyzing species for this spot when you generate the brief.</p>`
+      ? `<p style="color:#f0a868;font-size:12px;margin:0 0 10px;line-height:1.45">No strong bite for any species here on ${briefDayLabel(briefDayOffset)}. Pick a target manually to brief it anyway.</p>`
       : "");
   const recentHtml = briefHistoryPanelHtml({ showEmpty: true, highlightId: _lastBriefId })
     + (briefHistoryLoad().length ? `<button type="button" class="brief-view-btn" style="margin-top:0;margin-bottom:12px;background:rgba(56,189,248,.15);color:#7dd3fc;border:1px solid rgba(56,189,248,.35);box-shadow:none" onclick="openRecentBriefsModal()">Open all recent briefs ↗</button>` : "");
-  // Day selector — lets the captain scope the brief to the day they'll fish
-  // (out to 6 days, the useful marine-forecast window).
-  const dayBtns = [0,1,2,3,4,5,6].map(off=>{
+  // Day selector — Today / Tomorrow only. Marine forecast + ocean data (SST,
+  // currents, break) go stale fast, so a brief past tomorrow is guesswork; we
+  // cap the choice rather than imply a reliable multi-day outlook.
+  const dayBtns = [0,1].map(off=>{
     const on = briefDayOffset === off;
-    return `<button class="brief-day" style="border:1px solid ${on?'#7dd3fc':'rgba(255,255,255,.12)'};background:${on?'rgba(125,211,252,.16)':'rgba(255,255,255,.04)'};color:${on?'#7dd3fc':'#9ec5e8'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap" onclick="setBriefDay(${off})">${briefDayLabel(off)}</button>`;
+    return `<button class="brief-day" style="border:1px solid ${on?'#7dd3fc':'rgba(255,255,255,.12)'};background:${on?'rgba(125,211,252,.16)':'rgba(255,255,255,.04)'};color:${on?'#7dd3fc':'#9ec5e8'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap" onclick="setBriefDay(${off})">${briefDayLabel(off)}</button>`;
   }).join("");
   const hasPin=!!pinLL;
 
@@ -12263,10 +12329,11 @@ function renderBrief(){
         </div>
       </div>
       <div class="brief-depart-meta">
-        ${planCount > 1 ? `<span class="brief-depart-chip">Planning top ${planCount} spots</span>` : ""}
+        ${planCount > 1 ? `<span class="brief-depart-chip">Top ${planCount} Bite Map spots</span>` : ""}
         ${runMeta ? `<span>${runMeta}</span>` : ""}
         <span>🗓️ ${briefDayLabel(briefDayOffset)}</span>
       </div>
+      ${planCount > 1 ? `<div style="font-size:10.5px;color:#b79fd8;margin-top:7px;line-height:1.4">Ranked from the Bite Map's highest-scoring water for your species — not a fixed inshore/offshore choice.</div>` : ""}
     </div>`;
   const speciesNote = !allowed.length
     ? `<p style="color:#9ec5e8;font-size:12px;margin-bottom:8px">Select a home port or drop a chart pin to see species for your area.</p>`
@@ -12285,7 +12352,7 @@ function renderBrief(){
     <div class="sp-pills">${pills || `<span style="font-size:12px;color:#9ec5e8">No species for this location yet.</span>`}</div>
     <button id="brief-btn" ${!hasPin||aiLoading?"disabled":""} onclick="runBrief()">
       ${aiLoading?"GENERATING BRIEF...":"GENERATE AI CAPTAIN'S BRIEF"}</button>
-    ${aiCOA?`<div id="brief-out" class="brief-rendered"><div class="bout-hdr">AI CAPTAIN'S BRIEF · DEPARTING ${(activePort||"Oregon Inlet, NC").toUpperCase()} · ${briefDayLabel(briefDayOffset).toUpperCase()}</div><div class="brief-md">${briefMarkdownToHtml(aiCOA)}</div><button type="button" class="brief-view-btn" onclick="openBriefModal()">View full brief ↗</button></div>`:""}
+    ${(aiCOA && !aiLoading)?`<button type="button" class="brief-view-btn" style="margin-top:2px;background:rgba(168,85,247,.16);color:#e2c9ff;border:1px solid rgba(192,132,252,.4)" onclick="openBriefModal()">View your Captain's Brief ↗</button>`:""}
   `);
 }
 function toggleBriefSp(id){briefAutoPick=false;briefSp=briefSp.includes(id)?briefSp.filter(x=>x!==id):[...briefSp,id];renderBrief();}
@@ -12370,16 +12437,11 @@ async function ensureBriefOceanData(pinLL, portObj){
 // Top Bite-Map spots for a run plan, best-first, spread out so we don't
 // recommend three cells stacked on one piece of structure (~4 nm apart).
 function topBriefHotspots(limit){
-  limit = limit || 3;
-  if(!Array.isArray(_predictGrid) || !_predictGrid.length) return [];
-  const picked = [];
-  for(const c of _predictGrid){            // _predictGrid is already sorted best-first
-    if(c == null || c.lat == null || c.lng == null) continue;
-    if(picked.some(p => (typeof nmBetween === "function" ? nmBetween(p.lat, p.lng, c.lat, c.lng) : 99) < 4)) continue;
-    picked.push(c);
-    if(picked.length >= limit) break;
+  // Prefer the cached badge list so the banner run plan matches the map pins.
+  if(_predictResultCache && _predictResultCache.key === predictResultCacheKey() && _predictResultCache.badges){
+    return _predictResultCache.badges.slice(0, limit || 3);
   }
-  return picked;
+  return pickTopHotspotBadges(_predictGrid, limit || 3);
 }
 
 // Compact, network-free summary of one run-plan spot: coords, depth, run from
@@ -12444,7 +12506,7 @@ async function runBrief(){
   if(briefAutoPick){
     const { picks } = briefPickSpeciesAuto(pinLL.lat, pinLL.lng, allowed, 3);
     if(!picks.length){
-      showToast("Couldn't rank species for this spot. Pick targets manually or try another pin.", "info");
+      showToast("Nothing's biting strongly here for that day. Pick a target manually to brief it anyway.", "info");
       return;
     }
     sp = picks.map(p => p.id);
@@ -12464,7 +12526,7 @@ async function runBrief(){
   } else {
     sp = briefSp.length ? briefSp : (activeSpId==="all" ? [] : [activeSpId]);
     if(!sp.length){
-      showToast("Pick target species below, or tap Captain's Choice for an AI recommendation.", "info");
+      showToast("Pick target species below, or tap Bluewater Choice for a recommendation.", "info");
       return;
     }
   }
@@ -13236,7 +13298,14 @@ async function updateHeaderConditions(attempt){
     const waterF = (o?.waterTemp?.value != null) ? o.waterTemp.value : (o?.sst?.value != null ? o.sst.value : null);
     water.innerHTML  = waterF != null ? `${Math.round(waterF)}<span class="wx-deg">°</span>F` : "—";
     air.innerHTML    = (o?.airTemp?.value != null) ? `${Math.round(o.airTemp.value)}<span class="wx-deg">°</span>F` : "—";
-    wind.textContent = (o?.wind?.value != null) ? `${Math.round(o.wind.value)}kt` : "—";
+    // Wind cell shows direction it's blowing FROM + speed (e.g. "SW 10kt") —
+    // there's room in the banner and direction is what a captain actually needs.
+    if(o?.wind?.value != null){
+      const dir = (o.wind.dir != null && typeof bwiCompass16 === "function") ? bwiCompass16(o.wind.dir) : null;
+      wind.textContent = dir ? `${dir} ${Math.round(o.wind.value)}kt` : `${Math.round(o.wind.value)}kt`;
+    } else {
+      wind.textContent = "—";
+    }
     const allDash = water.textContent === "—" && air.textContent === "—" && wind.textContent === "—";
     if(allDash && tryNum < 2){
       setTimeout(() => updateHeaderConditions(tryNum + 1), 600 * (tryNum + 1));
