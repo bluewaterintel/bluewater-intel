@@ -2463,9 +2463,9 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
   <button id="mobile-controls-toggle" type="button" onclick="toggleMobileControls()" aria-label="Show or hide map controls">Controls ▾</button>
 
   <!-- FORECAST TIME SLIDER — bottom-center of map.
-       Visible only when the prediction layer is on AND a port+species are
-       selected. Ocean-model forecast is capped at +24 h (12 h steps) for
-       bite score, SST, and SSH credibility. -->
+       Visible when SST, altimetry, currents, or the bite map is on. Steps the
+       shared RTOFS ocean model to Now / +12h / +24h (not the satellite date
+       slider, which only steps backward through observed imagery). -->
   <div id="forecast-slider" style="
     display:none;position:absolute;
     bottom:60px;left:50%;transform:translateX(-50%);z-index:500;
@@ -2479,7 +2479,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
     width:min(520px, calc(100vw - 32px));
   ">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px">
-      <div style="font-size:9px;color:#6bbfea;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Forecast Time</div>
+      <div style="font-size:9px;color:#6bbfea;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Ocean Model Forecast</div>
       <div id="forecast-slider-display" style="font-size:11px;color:#cfe5ff;font-weight:700">Now</div>
     </div>
     <input id="forecast-slider-input" type="range" min="0" max="24" step="12" value="0" style="
@@ -2540,7 +2540,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
     </div>
     <div class="map-time-pill-footer">
       <span>2 weeks ago</span>
-      <span id="sat-date-hint" class="map-time-pill-hint">Step day-by-day</span>
+      <span id="sat-date-hint" class="map-time-pill-hint">Observed imagery only</span>
       <span>Latest →</span>
     </div>
   </div>
@@ -2561,7 +2561,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
     </div>
     <div class="map-time-pill-footer">
       <span>6 days ago</span>
-      <span class="map-time-pill-hint">Amber arrow shows break drift (≤28 nm)</span>
+      <span class="map-time-pill-hint">NOAA observed · use Ocean Model for +12/+24h</span>
       <span>Latest →</span>
     </div>
   </div>
@@ -4919,6 +4919,22 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 .fc-metric-cap{font-size:11px;color:#7d9bb8;text-transform:uppercase;letter-spacing:.05em;margin-top:3px;line-height:1.2}
 .fc-arrow{display:inline-block;color:#7dd3fc;font-weight:900;margin-right:3px;font-size:15px}
 .fc-foot{margin-top:14px;font-size:12px;color:#7d9bb8;line-height:1.5;border-top:1px solid rgba(255,255,255,.08);padding-top:10px}
+/* 3-hourly forecast blocks (6-day modal) */
+.fc-day-block{margin-bottom:12px}
+.fc-day-hdr{font-size:14px;font-weight:800;color:#f0f6ff;margin-bottom:7px;letter-spacing:.02em}
+.fc-hour-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+@media (max-width:480px){.fc-hour-grid{grid-template-columns:1fr}}
+.fc-hour-slot{
+  background:rgba(8,18,35,.55);border:1px solid rgba(107,191,234,.18);border-radius:10px;
+  padding:8px 9px;display:flex;flex-direction:column;gap:5px;
+}
+.fc-hour-slot[data-now="1"]{border-color:rgba(125,211,252,.45);background:rgba(56,189,248,.10)}
+.fc-hour-time{font-size:12px;font-weight:800;color:#7dd3fc;letter-spacing:.04em}
+.fc-hour-wx{display:flex;align-items:center;gap:7px;min-height:24px}
+.fc-hour-wx-icon{font-size:18px;line-height:1}
+.fc-hour-wx-label{font-size:12px;font-weight:600;color:#cfe5ff;line-height:1.2}
+.fc-hour-metrics{display:flex;gap:8px;flex-wrap:wrap;font-size:12px;color:#e8f4ff;font-weight:700}
+.fc-hour-metrics span{color:#9ec5e8;font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
 @media (max-width:480px){
   .fc-wx-label{font-size:15px}
   .fc-metric-val{font-size:17px}

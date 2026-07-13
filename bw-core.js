@@ -178,14 +178,14 @@ const BWI = {
   // Stores the last successful forecast per spot keyed to a rounded lat/lng, so
   // when the user is offline (common offshore) they still see the most recent
   // outlook with a clear "as of" timestamp instead of a blank error.
-  FORECAST_CACHE_KEY: "bwi.forecast.cache.v1",
+  FORECAST_CACHE_KEY: "bwi.forecast.cache.v2",
   MAX_FORECAST_CACHE: 40,
 
   _fcKey(lat, lng){ return `${lat.toFixed(2)},${lng.toFixed(2)}`; },
-  saveForecast(lat, lng, days){
+  saveForecast(lat, lng, slots){
     try {
       const all = JSON.parse(localStorage.getItem(this.FORECAST_CACHE_KEY) || "{}");
-      all[this._fcKey(lat,lng)] = { days, savedAt: Date.now() };
+      all[this._fcKey(lat,lng)] = { slots, savedAt: Date.now() };
       // Trim oldest if over cap
       const keys = Object.keys(all);
       if(keys.length > this.MAX_FORECAST_CACHE){
@@ -5736,7 +5736,7 @@ async function buildCurrentFieldForMap(){
         .then(() => { if(seq === _curFetchSeq && currentsLayer && typeof currentsLayer._drawShade === "function") currentsLayer._drawShade(); })
         .catch(() => {});
     }
-    const data = await BW_OCEAN.fetchCurrentGrid(latMin, latMax, lngMin, lngMax);
+    const data = await BW_OCEAN.fetchCurrentGrid(latMin, latMax, lngMin, lngMax, FORECAST_HOUR_OFFSET || 0);
     if(seq !== _curFetchSeq) return;
     setCurrentGridFromData(data);
     CURRENT_STATUS = CURRENT_GRID ? "ready" : "unavailable";
@@ -6176,7 +6176,12 @@ function refreshOceanForecastLayers(){
     altimetryLayer._requestPortBreaks(true);
     altimetryLayer._requestDisplayData();
   }
+  if(layerVis.currents){
+    CURRENT_GRID = null;
+    if(typeof buildCurrentFieldForMap === "function") buildCurrentFieldForMap();
+  }
   updateAltiDateControlVisibility();
+  updateSatDateControlVisibility();
   if(typeof updateOceanLegend === "function") updateOceanLegend();
 }
 
@@ -6422,9 +6427,14 @@ function _altiComputeBreaks(g, portLat, portLng, maxNm){
 }
 function altiBBoxKey(bx){ return `${bx.s.toFixed(2)},${bx.n.toFixed(2)},${bx.w.toFixed(2)},${bx.e.toFixed(2)}`; }
 function altiForecastHourForDisplay(){
-  // Altimetry overlay follows the bite-map forecast slider only while the bite
-  // map is on; otherwise always show observed NOAA altimetry.
-  return (layerVis && layerVis.predict && FORECAST_HOUR_OFFSET > 0) ? FORECAST_HOUR_OFFSET : 0;
+  // RTOFS model SSH at +12/+24 h when the altimetry layer is on and the ocean
+  // model forecast slider is advanced; otherwise NOAA observed daily passes.
+  return (layerVis && layerVis.altimetry && FORECAST_HOUR_OFFSET > 0) ? FORECAST_HOUR_OFFSET : 0;
+}
+
+// True when any layer that reads the shared ocean-model forecast time is visible.
+function oceanForecastLayersActive(){
+  return !!(layerVis && (layerVis.sst || layerVis.altimetry || layerVis.currents || layerVis.predict));
 }
 
 function altiCacheKey(bx, offset, hours){ return `${altiBBoxKey(bx)}:${offset|0}:${normalizeForecastHour(hours||0)}`; }
@@ -7427,9 +7437,9 @@ function updateForecastSliderDisplay(){
 function updateForecastSliderVisibility(){
   const el = document.getElementById("forecast-slider");
   if(!el) return;
-  // Show only when: prediction layer is on, port is selected, species is selected.
-  // Otherwise nothing time-dependent is on screen to scrub.
-  const shouldShow = !!(layerVis && layerVis.predict && activePort && activeSpId);
+  // Ocean model time (+12/+24 h) applies to SST, altimetry, currents, and the
+  // bite map — show whenever any of those overlays is active.
+  const shouldShow = oceanForecastLayersActive();
   el.style.display = shouldShow ? "block" : "none";
   if(shouldShow) updateForecastSliderDisplay();
   restackBottomControls();
@@ -7500,7 +7510,8 @@ function toggleLayer(key){
   if(chk)chk.checked=layerVis[key];
   if(key==="spots")drawCanyons();  // unified structure layer (canyons+wrecks+reefs+lumps)
   else if(key==="predict"){ _predictUserOff = !layerVis.predict; drawPrediction(); updateOceanLegend();
-    if(!layerVis.predict && FORECAST_HOUR_OFFSET > 0) setForecastHour(0);
+    if(!layerVis.predict && FORECAST_HOUR_OFFSET > 0 && !layerVis.sst && !layerVis.altimetry && !layerVis.currents) setForecastHour(0);
+    else updateForecastSliderVisibility();
   }
   else if(key==="ports")drawPortMarkers();
   else if(key==="loran")drawLoranLines();
@@ -7508,8 +7519,18 @@ function toggleLayer(key){
   else if(key==="closures")drawClosures();
   else if(key==="platforms")drawPlatforms();
   else if(key==="wind")drawWind();
-  else if(key==="currents")drawCurrents();
-  else if(key==="altimetry")drawAltimetry();
+  else if(key==="currents"){
+    drawCurrents();
+    updateForecastSliderVisibility();
+    if(!layerVis.currents && FORECAST_HOUR_OFFSET > 0 && !layerVis.sst && !layerVis.altimetry && !layerVis.predict) setForecastHour(0);
+    else if(layerVis.currents && FORECAST_HOUR_OFFSET > 0 && typeof refreshOceanForecastLayers === "function") refreshOceanForecastLayers();
+  }
+  else if(key==="altimetry"){
+    drawAltimetry();
+    updateForecastSliderVisibility();
+    if(!layerVis.altimetry && FORECAST_HOUR_OFFSET > 0 && !layerVis.sst && !layerVis.currents && !layerVis.predict) setForecastHour(0);
+    else if(layerVis.altimetry && FORECAST_HOUR_OFFSET > 0 && typeof refreshOceanForecastLayers === "function") refreshOceanForecastLayers();
+  }
   else if(key==="sst"){
     if(layerVis.sst){
       if(typeof syncSstOverlayMode === "function") syncSstOverlayMode();
@@ -7521,6 +7542,9 @@ function toggleLayer(key){
     updateOceanLegend();
     updateSatDateControlVisibility();
     updateOpacityControl();
+    updateForecastSliderVisibility();
+    if(!layerVis.sst && FORECAST_HOUR_OFFSET > 0 && !layerVis.altimetry && !layerVis.currents && !layerVis.predict) setForecastHour(0);
+    else if(layerVis.sst && FORECAST_HOUR_OFFSET > 0 && typeof refreshOceanForecastLayers === "function") refreshOceanForecastLayers();
   }
   else if(key==="chlor"){
     if(layerVis.chlor){ chlorLayer.setOpacity(oceanOpacity.chlor); chlorLayer.addTo(MAP); }
@@ -7669,8 +7693,8 @@ function updateSatDateControlVisibility(){
     const label = chlorOnly ? "Chlorophyll" : "SST";
     if(titleEl) titleEl.textContent = label;
     if(hintEl) hintEl.textContent = (FORECAST_HOUR_OFFSET > 0 && layerVis.sst)
-      ? "RTOFS model · tied to forecast slider"
-      : "Step day-by-day";
+      ? "RTOFS model · use Ocean Model Forecast slider"
+      : "Observed imagery only";
     const row = box.querySelector(".map-time-pill-row");
     const footer = box.querySelector(".map-time-pill-footer");
     const forecastLocked = FORECAST_HOUR_OFFSET > 0 && layerVis.sst;
@@ -7699,8 +7723,14 @@ function altiDateLabel(){
 function updateAltiDateDisplay(){
   const el = document.getElementById("alti-date-display");
   if(el){
-    if(FORECAST_HOUR_OFFSET > 0){
-      el.textContent = `Model +${FORECAST_HOUR_OFFSET}h · ${forecastTimeDisplay()}`;
+    if(FORECAST_HOUR_OFFSET > 0 && layerVis.altimetry){
+      el.textContent = `RTOFS model +${FORECAST_HOUR_OFFSET}h · ${forecastTimeDisplay()}`;
+    } else if(ALTIMETRY_GRID && ALTIMETRY_GRID.observedAtMs){
+      const obs = new Date(ALTIMETRY_GRID.observedAtMs);
+      const ageDays = Math.max(0, Math.round((Date.now() - ALTIMETRY_GRID.observedAtMs) / 86400000));
+      const ageTxt = ageDays <= 0 ? "today" : ageDays === 1 ? "1 day old" : `${ageDays} days old`;
+      const passTxt = altiDayOffset <= 0 ? "latest NOAA pass" : altiDayOffset === 1 ? "1 day earlier" : `${altiDayOffset} days earlier`;
+      el.textContent = `${obs.toLocaleDateString(undefined, { month:"short", day:"numeric" })} · ${ageTxt} · ${passTxt}`;
     } else {
       const age = altiDayOffset <= 0 ? "latest pass" : altiDayOffset === 1 ? "1 day earlier" : `${altiDayOffset} days earlier`;
       el.textContent = `${altiDateLabel()} · ${age}`;
@@ -7713,7 +7743,7 @@ function updateAltiDateDisplay(){
   }
   const older = document.getElementById("alti-day-older");
   const newer = document.getElementById("alti-day-newer");
-  const forecastLocked = FORECAST_HOUR_OFFSET > 0;
+  const forecastLocked = FORECAST_HOUR_OFFSET > 0 && layerVis.altimetry;
   if(older) older.disabled = forecastLocked || altiDayOffset >= ALTI_MAX_DAYS_BACK;
   if(newer) newer.disabled = forecastLocked || altiDayOffset <= 0;
   const altiBox = document.getElementById("alti-date-control");

@@ -1518,19 +1518,20 @@ function showForecast(lat, lng, name){
   if(typeof BWI !== "undefined") BWI.track("forecast_open");
 
   const reqId = ++_forecastReqId;
-  fetchForecast(lat, lng).then(days=>{
+  fetchForecast(lat, lng).then(slots=>{
     if(reqId !== _forecastReqId) return;   // a newer request superseded this one
     // Cache this successful result for offline use later.
-    if(typeof BWI !== "undefined") BWI.saveForecast(lat, lng, days);
-    renderForecast(body, days, latStr, lngStr, Date.now(), true);
+    if(typeof BWI !== "undefined") BWI.saveForecast(lat, lng, slots);
+    renderForecast(body, slots, latStr, lngStr, Date.now(), true);
   }).catch(err=>{
     if(reqId !== _forecastReqId) return;
     if(typeof BWI !== "undefined") BWI.logError("forecast", err && err.message, latStr+","+lngStr);
     // Offline fallback: if we have a cached forecast for this spot, show it with
     // a clear "offline / last updated" banner instead of a dead error.
     const cached = (typeof BWI !== "undefined") ? BWI.loadForecast(lat, lng) : null;
-    if(cached && cached.days){
-      renderForecast(body, cached.days, latStr, lngStr, cached.savedAt, false);
+    const slots = cached && (cached.slots || cached.days) ? (cached.slots || cached.days) : null;
+    if(slots && slots.length){
+      renderForecast(body, slots, latStr, lngStr, cached.savedAt, false);
       return;
     }
     body.innerHTML = `
@@ -1554,17 +1555,15 @@ function closeForecast(){
   if(modal) modal.classList.remove("open");
 }
 
-// Fetch + merge the two Open-Meteo endpoints into a tidy 6-day array.
+// Fetch + merge Open-Meteo hourly endpoints into 3-hour forecast slots (6 days).
 async function fetchForecast(lat, lng){
   const base = `latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&forecast_days=6&timezone=auto`;
   const marineUrl  = `https://marine-api.open-meteo.com/v1/marine?${base}` +
-    `&daily=wave_height_max,wave_period_max,wave_direction_dominant,sea_surface_temperature_max`;
+    `&hourly=wave_height,wave_period,wave_direction,sea_surface_temperature`;
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?${base}` +
-    `&daily=weather_code,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,temperature_2m_max,temperature_2m_min,precipitation_probability_max`;
+    `&hourly=weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,temperature_2m,precipitation_probability` +
+    `&wind_speed_unit=kn&temperature_unit=fahrenheit`;
 
-  // Run both in parallel. Marine coverage is open-ocean; very nearshore points
-  // can occasionally lack wave data, so we tolerate a missing marine response
-  // and still show wind.
   const [wRes, mRes] = await Promise.all([
     fetch(weatherUrl),
     fetch(marineUrl).catch(()=>null),
@@ -1574,30 +1573,28 @@ async function fetchForecast(lat, lng){
   let m = null;
   try { if(mRes && mRes.ok) m = await mRes.json(); } catch(e){ m = null; }
 
-  const wd = w.daily || {};
-  const md = (m && m.daily) || {};
-  const dates = wd.time || [];
+  const wh = w.hourly || {};
+  const mh = (m && m.hourly) || {};
+  const times = wh.time || [];
   const out = [];
-  for(let i=0; i<dates.length && i<6; i++){
-    const windKt = wd.wind_speed_10m_max ? bwiKmhToKt(wd.wind_speed_10m_max[i]) : null;
-    const gustKt = wd.wind_gusts_10m_max ? bwiKmhToKt(wd.wind_gusts_10m_max[i]) : null;
-    const windDir = wd.wind_direction_10m_dominant ? wd.wind_direction_10m_dominant[i] : null;
-    const airHiF = wd.temperature_2m_max ? (wd.temperature_2m_max[i] * 9/5 + 32) : null;
-    const airLoF = (wd.temperature_2m_min && wd.temperature_2m_min[i]!=null) ? (wd.temperature_2m_min[i] * 9/5 + 32) : null;
-    const waveFt = (md.wave_height_max && md.wave_height_max[i]!=null) ? bwiMToFt(md.wave_height_max[i]) : null;
-    const wavePer = (md.wave_period_max && md.wave_period_max[i]!=null) ? md.wave_period_max[i] : null;
-    const sstC = (md.sea_surface_temperature_max && md.sea_surface_temperature_max[i]!=null) ? md.sea_surface_temperature_max[i] : null;
+  for(let i = 0; i < times.length && out.length < 48; i += 3){
+    const time = times[i];
+    const windKt = wh.wind_speed_10m ? wh.wind_speed_10m[i] : null;
+    const gustKt = wh.wind_gusts_10m ? wh.wind_gusts_10m[i] : null;
+    const windDir = wh.wind_direction_10m ? wh.wind_direction_10m[i] : null;
+    const airF = wh.temperature_2m ? wh.temperature_2m[i] : null;
+    const waveFt = (mh.wave_height && mh.wave_height[i]!=null) ? bwiMToFt(mh.wave_height[i]) : null;
+    const wavePer = (mh.wave_period && mh.wave_period[i]!=null) ? mh.wave_period[i] : null;
+    const sstC = (mh.sea_surface_temperature && mh.sea_surface_temperature[i]!=null) ? mh.sea_surface_temperature[i] : null;
     const sstF = sstC!=null ? (sstC * 9/5 + 32) : null;
-    const wxCode = (wd.weather_code && wd.weather_code[i]!=null) ? wd.weather_code[i] : null;
-    const precip = (wd.precipitation_probability_max && wd.precipitation_probability_max[i]!=null) ? wd.precipitation_probability_max[i] : null;
+    const wxCode = (wh.weather_code && wh.weather_code[i]!=null) ? wh.weather_code[i] : null;
+    const precip = (wh.precipitation_probability && wh.precipitation_probability[i]!=null) ? wh.precipitation_probability[i] : null;
     out.push({
-      date: dates[i],
+      time,
       windKt: windKt!=null ? Math.round(windKt) : null,
       gustKt: gustKt!=null ? Math.round(gustKt) : null,
       windDir,
-      airF: airHiF!=null ? Math.round(airHiF) : null,
-      airHiF: airHiF!=null ? Math.round(airHiF) : null,
-      airLoF: airLoF!=null ? Math.round(airLoF) : null,
+      airF: airF!=null ? Math.round(airF) : null,
       waveFt: waveFt!=null ? Math.round(waveFt*10)/10 : null,
       wavePer: wavePer!=null ? Math.round(wavePer) : null,
       sstF: sstF!=null ? Math.round(sstF*10)/10 : null,
@@ -1609,7 +1606,18 @@ async function fetchForecast(lat, lng){
   return out;
 }
 
-function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
+function _fcSlotTimeLabel(iso){
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+}
+function _fcSlotDayKey(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { weekday:"short", month:"numeric", day:"numeric" });
+}
+function _fcIsLegacyDaily(data){
+  return !!(data && data.length && data[0].date && !data[0].time);
+}
+function _fcRenderLegacyDaily(body, days, latStr, lngStr, fetchedAt, isLive){
   const fmtDay = (iso)=>{
     const d = new Date(iso + "T12:00:00");
     const wk = d.toLocaleDateString(undefined,{weekday:"short"});
@@ -1629,8 +1637,6 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
     const waveTxt = d.waveFt!=null
       ? `${d.waveFt}<span class="fc-unit">ft</span>${d.wavePer? ` <span class="fc-per">@${d.wavePer}s</span>`:""}`
       : `<span style="color:#7d9bb8">n/a</span>`;
-    // Air temperature: show daily HIGH / LOW when both are available (older cached
-    // forecasts may only have a single value — fall back to it gracefully).
     const airHi = (d.airHiF!=null) ? d.airHiF : d.airF;
     const airTxt = (airHi!=null && d.airLoF!=null)
       ? `${airHi}<span class="fc-unit">°</span>/${d.airLoF}<span class="fc-unit">°</span>`
@@ -1664,15 +1670,72 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
         </div>
       </div>`;
   }).join("");
+  const agoStr = (typeof BWI !== "undefined") ? BWI.ago(fetchedAt) : "";
+  const freshBanner = isLive
+    ? `<div class="fc-fresh live"><span class="fc-fresh-dot"></span><span>Live · updated ${agoStr}</span><span class="fc-fresh-src">Open-Meteo · daily (cached)</span></div>`
+    : `<div class="fc-fresh stale"><span class="fc-fresh-dot"></span><span>Offline · last updated ${agoStr}</span><span class="fc-fresh-src">cached copy</span></div>`;
+  body.innerHTML = `
+    <div class="fc-sub">${latStr}, ${lngStr}</div>
+    ${freshBanner}
+    <div class="fc-table">${rows}</div>
+    <div class="fc-foot">Older cached daily summary. Reconnect for the new 3-hour forecast.</div>`;
+}
 
-  // Data-freshness / trust banner: shows the source and how old the data is, and
-  // flags clearly when the user is viewing a cached (offline) copy.
+function renderForecast(body, slots, latStr, lngStr, fetchedAt, isLive){
+  if(_fcIsLegacyDaily(slots)){
+    _fcRenderLegacyDaily(body, slots, latStr, lngStr, fetchedAt, isLive);
+    return;
+  }
+  const nowMs = Date.now();
+  const byDay = new Map();
+  for(const s of slots){
+    const key = _fcSlotDayKey(s.time);
+    if(!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(s);
+  }
+  const dayBlocks = [...byDay.entries()].map(([dayLabel, daySlots], dayIdx)=>{
+    const hourCards = daySlots.map(s=>{
+      const wx = bwiWeatherIcon(s.wxCode, s.precip);
+      const arrow = s.windDir!=null
+        ? `<span class="fc-arrow" style="transform:rotate(${(s.windDir+180)%360}deg)" title="Wind from ${bwiCompass16(s.windDir)}">↑</span>`
+        : "";
+      const windTxt = s.windKt!=null
+        ? `${arrow}${s.windKt}<span class="fc-unit">kt</span>${s.gustKt? ` <span class="fc-gust">g${s.gustKt}</span>`:""}`
+        : "—";
+      const waveTxt = s.waveFt!=null
+        ? `${s.waveFt}<span class="fc-unit">ft</span>${s.wavePer? ` <span class="fc-per">@${s.wavePer}s</span>`:""}`
+        : "n/a";
+      const airTxt = s.airF!=null ? `${s.airF}<span class="fc-unit">°</span>` : "—";
+      const slotMs = Date.parse(s.time);
+      const isNow = isFinite(slotMs) && Math.abs(slotMs - nowMs) < 2 * 3600 * 1000;
+      const precipTxt = (s.precip!=null && s.precip >= 20) ? ` · ${s.precip}%` : "";
+      return `
+        <div class="fc-hour-slot" ${isNow?'data-now="1"':''}>
+          <div class="fc-hour-time">${_fcSlotTimeLabel(s.time)}</div>
+          <div class="fc-hour-wx">
+            <div class="fc-hour-wx-icon">${wx.icon}</div>
+            <div class="fc-hour-wx-label">${wx.label}${precipTxt}</div>
+          </div>
+          <div class="fc-hour-metrics">
+            <div><span>wind</span> ${windTxt}</div>
+            <div><span>seas</span> ${waveTxt}</div>
+            <div><span>air</span> ${airTxt}</div>
+          </div>
+        </div>`;
+    }).join("");
+    return `
+      <div class="fc-day-block">
+        <div class="fc-day-hdr">${dayIdx===0 ? "Today" : dayLabel}</div>
+        <div class="fc-hour-grid">${hourCards}</div>
+      </div>`;
+  }).join("");
+
   const agoStr = (typeof BWI !== "undefined") ? BWI.ago(fetchedAt) : "";
   const freshBanner = isLive
     ? `<div class="fc-fresh live">
          <span class="fc-fresh-dot"></span>
          <span>Live · updated ${agoStr}</span>
-         <span class="fc-fresh-src">Open-Meteo marine model</span>
+         <span class="fc-fresh-src">Open-Meteo · 3-hour steps</span>
        </div>`
     : `<div class="fc-fresh stale">
          <span class="fc-fresh-dot"></span>
@@ -1683,11 +1746,10 @@ function renderForecast(body, days, latStr, lngStr, fetchedAt, isLive){
   body.innerHTML = `
     <div class="fc-sub">${latStr}, ${lngStr}</div>
     ${freshBanner}
-    <div class="fc-table">${rows}</div>
+    <div class="fc-table">${dayBlocks}</div>
     <div class="fc-foot">
-      Wind &amp; wave figures are model forecasts, not measurements, and grow less
-      certain further out. This is advisory only — always confirm with the NWS
-      coastal-waters forecast and a current buoy report before heading out, and
-      never rely on it for safety-of-life decisions.
+      Wind, seas, and air are model snapshots every 3 hours — not daily averages.
+      Figures grow less certain further out. Always confirm with the NWS coastal-waters
+      forecast and a current buoy report before heading out.
     </div>`;
 }
