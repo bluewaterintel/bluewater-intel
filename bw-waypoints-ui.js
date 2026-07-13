@@ -1585,6 +1585,7 @@ async function fetchForecast(lat, lng){
     const airF = wh.temperature_2m ? wh.temperature_2m[i] : null;
     const waveFt = (mh.wave_height && mh.wave_height[i]!=null) ? bwiMToFt(mh.wave_height[i]) : null;
     const wavePer = (mh.wave_period && mh.wave_period[i]!=null) ? mh.wave_period[i] : null;
+    const waveDir = (mh.wave_direction && mh.wave_direction[i]!=null) ? mh.wave_direction[i] : null;
     const sstC = (mh.sea_surface_temperature && mh.sea_surface_temperature[i]!=null) ? mh.sea_surface_temperature[i] : null;
     const sstF = sstC!=null ? (sstC * 9/5 + 32) : null;
     const wxCode = (wh.weather_code && wh.weather_code[i]!=null) ? wh.weather_code[i] : null;
@@ -1597,6 +1598,7 @@ async function fetchForecast(lat, lng){
       airF: airF!=null ? Math.round(airF) : null,
       waveFt: waveFt!=null ? Math.round(waveFt*10)/10 : null,
       wavePer: wavePer!=null ? Math.round(wavePer) : null,
+      waveDir,
       sstF: sstF!=null ? Math.round(sstF*10)/10 : null,
       wxCode,
       precip,
@@ -1607,12 +1609,23 @@ async function fetchForecast(lat, lng){
 }
 
 function _fcSlotTimeLabel(iso){
+  // Windfinder-style compact hour: "01AM", "04AM", "01PM" (no minutes, no space).
   const d = new Date(iso);
-  return d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+  let h = d.getHours();
+  const ap = h < 12 ? "AM" : "PM";
+  h = h % 12; if(h === 0) h = 12;
+  return `${String(h).padStart(2,"0")}${ap}`;
 }
 function _fcSlotDayKey(iso){
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { weekday:"short", month:"numeric", day:"numeric" });
+}
+// Full day banner header like Windfinder: "MONDAY, 07/13".
+function _fcDayHeader(iso, isToday){
+  const d = new Date(iso);
+  const wk = d.toLocaleDateString(undefined, { weekday:"long" }).toUpperCase();
+  const md = d.toLocaleDateString(undefined, { month:"2-digit", day:"2-digit" });
+  return `${isToday ? "TODAY · " : ""}${wk}, ${md}`;
 }
 function _fcIsLegacyDaily(data){
   return !!(data && data.length && data[0].date && !data[0].time);
@@ -1693,41 +1706,61 @@ function renderForecast(body, slots, latStr, lngStr, fetchedAt, isLive){
     if(!byDay.has(key)) byDay.set(key, []);
     byDay.get(key).push(s);
   }
+  // Wind-loaded color scale for the left accent bar (calm→gale), Windfinder-like.
+  const windColor = (kt)=>{
+    if(kt==null) return "#3a556f";
+    if(kt < 6) return "#2fae6b";      // green — light
+    if(kt < 12) return "#37b98a";
+    if(kt < 17) return "#3fc0c0";     // teal
+    if(kt < 22) return "#42a7d8";     // blue
+    if(kt < 28) return "#c9a13b";     // amber — fresh
+    if(kt < 34) return "#d97534";     // orange — strong
+    return "#c83b2e";                 // red — gale
+  };
+
   const dayBlocks = [...byDay.entries()].map(([dayLabel, daySlots], dayIdx)=>{
-    const hourCards = daySlots.map(s=>{
+    const rows = daySlots.map(s=>{
       const wx = bwiWeatherIcon(s.wxCode, s.precip);
-      const arrow = s.windDir!=null
-        ? `<span class="fc-arrow" style="transform:rotate(${(s.windDir+180)%360}deg)" title="Wind from ${bwiCompass16(s.windDir)}">↑</span>`
+      const windArrow = s.windDir!=null
+        ? `<span class="fcw-arrow" style="transform:rotate(${(s.windDir+180)%360}deg)" title="Wind from ${bwiCompass16(s.windDir)}">↑</span>`
         : "";
-      const windTxt = s.windKt!=null
-        ? `${arrow}${s.windKt}<span class="fc-unit">kt</span>${s.gustKt? ` <span class="fc-gust">g${s.gustKt}</span>`:""}`
-        : "—";
-      const waveTxt = s.waveFt!=null
-        ? `${s.waveFt}<span class="fc-unit">ft</span>${s.wavePer? ` <span class="fc-per">@${s.wavePer}s</span>`:""}`
-        : "n/a";
-      const airTxt = s.airF!=null ? `${s.airF}<span class="fc-unit">°</span>` : "—";
+      const waveArrow = s.waveDir!=null
+        ? `<span class="fcw-arrow fcw-arrow--sea" style="transform:rotate(${(s.waveDir+180)%360}deg)" title="Swell from ${bwiCompass16(s.waveDir)}">↑</span>`
+        : "";
+      const gustTxt = (s.gustKt!=null && s.gustKt >= (s.windKt||0)) ? `max ${s.gustKt}` : "";
+      const precipTxt = (s.precip!=null && s.precip >= 20) ? `<div class="fcw-wx-precip">${s.precip}%</div>` : "";
       const slotMs = Date.parse(s.time);
-      const isNow = isFinite(slotMs) && Math.abs(slotMs - nowMs) < 2 * 3600 * 1000;
-      const precipTxt = (s.precip!=null && s.precip >= 20) ? ` · ${s.precip}%` : "";
+      const isNow = isFinite(slotMs) && Math.abs(slotMs - nowMs) < 90 * 60 * 1000;
       return `
-        <div class="fc-hour-slot" ${isNow?'data-now="1"':''}>
-          <div class="fc-hour-time">${_fcSlotTimeLabel(s.time)}</div>
-          <div class="fc-hour-wx">
-            <div class="fc-hour-wx-icon">${wx.icon}</div>
-            <div class="fc-hour-wx-label">${wx.label}${precipTxt}</div>
+        <div class="fcw-row" ${isNow?'data-now="1"':''} style="--wind-accent:${windColor(s.windKt)}">
+          <div class="fcw-c fcw-c-time">${_fcSlotTimeLabel(s.time)}</div>
+          <div class="fcw-c fcw-c-wind">
+            ${windArrow}
+            <div class="fcw-wind-txt">
+              <div class="fcw-big">${s.windKt!=null ? s.windKt : "—"}<i>kts</i></div>
+              ${gustTxt ? `<div class="fcw-sub">${gustTxt}</div>` : ""}
+            </div>
           </div>
-          <div class="fc-hour-metrics">
-            <div><span>wind</span> ${windTxt}</div>
-            <div><span>seas</span> ${waveTxt}</div>
-            <div><span>air</span> ${airTxt}</div>
+          <div class="fcw-c fcw-c-wx">
+            <div class="fcw-wx-icon" title="${wx.label}">${wx.icon}</div>
+            ${precipTxt}
+          </div>
+          <div class="fcw-c fcw-c-air">
+            <div class="fcw-air-chip">${s.airF!=null ? `${s.airF}°` : "—"}</div>
+            ${s.sstF!=null ? `<div class="fcw-water">${s.sstF}° water</div>` : ""}
+          </div>
+          <div class="fcw-c fcw-c-sea">
+            ${waveArrow}
+            <div class="fcw-sea-txt">
+              <div class="fcw-big">${s.waveFt!=null ? s.waveFt : "n/a"}${s.waveFt!=null?"<i>ft</i>":""}</div>
+              ${s.wavePer? `<div class="fcw-sub">${s.wavePer}s</div>` : ""}
+            </div>
           </div>
         </div>`;
     }).join("");
     return `
-      <div class="fc-day-block">
-        <div class="fc-day-hdr">${dayIdx===0 ? "Today" : dayLabel}</div>
-        <div class="fc-hour-grid">${hourCards}</div>
-      </div>`;
+      <div class="fcw-day">${_fcDayHeader(daySlots[0].time, dayIdx===0)}</div>
+      <div class="fcw-rows">${rows}</div>`;
   }).join("");
 
   const agoStr = (typeof BWI !== "undefined") ? BWI.ago(fetchedAt) : "";
@@ -1746,10 +1779,19 @@ function renderForecast(body, slots, latStr, lngStr, fetchedAt, isLive){
   body.innerHTML = `
     <div class="fc-sub">${latStr}, ${lngStr}</div>
     ${freshBanner}
-    <div class="fc-table">${dayBlocks}</div>
+    <div class="fcw-table">
+      <div class="fcw-head">
+        <div class="fcw-c fcw-c-time">Time</div>
+        <div class="fcw-c fcw-c-wind">Wind</div>
+        <div class="fcw-c fcw-c-wx">Sky</div>
+        <div class="fcw-c fcw-c-air">Air / Water</div>
+        <div class="fcw-c fcw-c-sea">Waves</div>
+      </div>
+      ${dayBlocks}
+    </div>
     <div class="fc-foot">
-      Wind, seas, and air are model snapshots every 3 hours — not daily averages.
-      Figures grow less certain further out. Always confirm with the NWS coastal-waters
-      forecast and a current buoy report before heading out.
+      Every row is a 3-hour model snapshot — not a daily average. Arrows show the
+      direction wind and swell are moving toward. Figures grow less certain further out;
+      confirm with the NWS coastal-waters forecast and a live buoy before heading out.
     </div>`;
 }
