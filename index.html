@@ -239,32 +239,9 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   background:linear-gradient(270deg,rgba(107,191,234,.04),transparent);
 }
 
-/* Clock card */
-.hdr-clock{
-  display:flex;flex-direction:row;align-items:center;justify-content:flex-end;
-  gap:14px;
-  height:46px;padding:0 4px;text-align:right;
-  font-family:'Segoe UI',Arial,sans-serif;
-}
-.clock-zone{
-  display:flex;flex-direction:column;justify-content:center;
-  text-align:right;
-}
-.clock-zone + .clock-zone{
-  border-left:1px solid rgba(107,191,234,.25);
-  padding-left:14px;
-}
-.clock-label{
-  font-size:9px;color:#5d96c4;letter-spacing:.1em;
-  font-weight:600;text-transform:uppercase;
-}
-.clock-time{
-  font-size:14px;font-weight:700;color:#f0f6ff;
-  margin-top:2px;line-height:1;
-  letter-spacing:.02em;
-  white-space:nowrap;
-  font-variant-numeric:tabular-nums;
-}
+/* Trailing spacer in the conditions strip — keeps the mobile right-edge fade
+   mask off the last real value (tide time). Empty, non-interactive. */
+.wx-spacer{min-width:18px;border-right:none !important;padding:0 !important}
 
 /* Modern menu button */
 #nav-btn{
@@ -291,6 +268,32 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   margin-top:3px;font-weight:700;
 }
 
+/* AI Captain's Brief button — purple pill in the header right zone. */
+#hdr-brief-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;
+  width:56px;height:56px;
+  background:linear-gradient(180deg,rgba(168,85,247,.22),rgba(168,85,247,.12));
+  border:1px solid rgba(192,132,252,.42);
+  border-radius:14px;
+  cursor:pointer;flex-shrink:0;
+  transition:all .18s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 1px 0 rgba(255,255,255,.06) inset;
+  font-family:'Segoe UI',Arial,sans-serif;
+}
+#hdr-brief-btn:hover{
+  background:linear-gradient(180deg,rgba(168,85,247,.34),rgba(168,85,247,.18));
+  border-color:rgba(192,132,252,.7);
+  transform:translateY(-1px);
+  box-shadow:0 4px 14px rgba(168,85,247,.25),0 1px 0 rgba(255,255,255,.08) inset;
+}
+#hdr-brief-btn:active{transform:translateY(0) scale(.97)}
+.hdr-brief-ico{font-size:20px;line-height:1}
+.hdr-brief-label{
+  font-size:10px;color:#e2c9ff;letter-spacing:.1em;
+  font-weight:800;text-transform:uppercase;
+}
+
 /* Old layout helpers — kept for compatibility */
 .vd{display:none}
 .hl{display:none}
@@ -299,11 +302,6 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
 /* ─────────────────────────────────────────────────────────────────────────
    RESPONSIVE — Tablet, Phone Portrait, Phone Landscape
    ───────────────────────────────────────────────────────────────────────── */
-
-/* Tablet / smaller laptops — hide clock to save horizontal space */
-@media (max-width:1100px){
-  .hdr-clock{display:none}
-}
 
 /* Phone + tablet: two-row header — controls on top, scrollable conditions below */
 @media (max-width:1100px){
@@ -401,6 +399,9 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     pointer-events:none;
   }
   #nav-btn{width:46px;height:46px;gap:4px;border-radius:13px}
+  #hdr-brief-btn{width:46px;height:46px;gap:2px;border-radius:13px}
+  .hdr-brief-ico{font-size:18px}
+  .hdr-brief-label{display:none}
   .nav-bar{width:20px;height:2.5px}
   .nav-label{display:none}
   #nav-menu{
@@ -449,7 +450,6 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     gap:6px;
     flex-shrink:0;
   }
-  .hdr-clock{display:none}
   /* Map — fill remaining viewport */
   #map{flex:1;min-height:0}
   /* Bottom panel adjustments */
@@ -531,13 +531,6 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     right:10px !important;
     transform:none !important;
   }
-  /* forecast slider — match the others' phone width/anchor; JS sets bottom. */
-  #forecast-slider{
-    width:calc(100vw - 20px) !important;
-    left:10px !important;
-    right:10px !important;
-    transform:none !important;
-  }
   #wind-forecast-slider{
     width:calc(100vw - 20px) !important;
     left:10px !important;
@@ -614,6 +607,7 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   .ctrl-card,#sp-btn,#port-btn{padding:0 10px}
   .ctrl-card-value{font-size:12px;gap:6px}
   #nav-btn{width:44px;height:44px}
+  #hdr-brief-btn{width:44px;height:44px}
 }
 
 /* Zoom buttons — larger, easier to tap on a phone */
@@ -1284,34 +1278,6 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
 #map{flex:1;min-height:0;position:relative}
 .leaflet-container{background:#3a4a5a}
 
-/* Forecast time slider */
-#forecast-slider{
-  touch-action:none;
-}
-#forecast-slider-input{
-  touch-action:none;
-}
-#forecast-slider-input::-webkit-slider-thumb{
-  -webkit-appearance:none;
-  appearance:none;
-  width:22px;height:22px;
-  border-radius:50%;
-  background:#7dd3fc;
-  border:2px solid #f0f6ff;
-  box-shadow:0 2px 6px rgba(0,0,0,.5);
-  cursor:grab;
-}
-#forecast-slider-input::-webkit-slider-thumb:active{cursor:grabbing;background:#fbbf24}
-#forecast-slider-input::-moz-range-thumb{
-  width:22px;height:22px;
-  border-radius:50%;
-  background:#7dd3fc;
-  border:2px solid #f0f6ff;
-  box-shadow:0 2px 6px rgba(0,0,0,.5);
-  cursor:grab;
-}
-#forecast-slider-input:focus{outline:none}
-#forecast-slider-input:focus::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(125,211,252,.35),0 2px 6px rgba(0,0,0,.5)}
 #wind-forecast-slider{touch-action:none}
 .wind-step-btn{
   background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);
@@ -2168,7 +2134,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
     <!-- Weather widget — combined cells. Values are EMPTY until a home port is
          chosen: with no port there's no location to source conditions from, so
          showing numbers would be misleading. Populated by updateHeaderConditions(). -->
-    <div class="hdr-wx" role="region" aria-label="Port conditions" title="Swipe sideways for water, air, seas, wind, and tide">
+    <div class="hdr-wx" role="region" aria-label="Port conditions" title="Swipe sideways for water, air, wind, and tide">
       <div class="wx-cell">
         <div class="wx-cell-label">Water</div>
         <div class="wx-cell-value" style="color:#7dd3fc">
@@ -2179,12 +2145,6 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
         <div class="wx-cell-label">Air</div>
         <div class="wx-cell-value" style="color:#fcd34d">
           <span class="wx-icon">☀</span><span id="hdr-air">—</span>
-        </div>
-      </div>
-      <div class="wx-cell">
-        <div class="wx-cell-label">Seas</div>
-        <div class="wx-cell-value" style="color:#c4b5fd">
-          <span class="wx-icon">〰</span><span id="hdr-seas">—</span>
         </div>
       </div>
       <div class="wx-cell">
@@ -2199,24 +2159,20 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
           <span id="hdr-tide">—</span>
         </div>
       </div>
+      <!-- Trailing spacer so the mobile right-edge fade never clips the last
+           tide time (e.g. "→ High 8:05"). -->
+      <div class="wx-cell wx-spacer" aria-hidden="true"></div>
     </div>
-    <div class="hdr-wx-hint" aria-hidden="true">Swipe for seas, wind &amp; tide →</div>
+    <div class="hdr-wx-hint" aria-hidden="true">Swipe for wind &amp; tide →</div>
 
   </div>
 
-  <!-- ── RIGHT ZONE: Clock + Nav ── -->
+  <!-- ── RIGHT ZONE: Captain's Brief + Nav ── -->
   <div class="hdr-right">
 
-    <div class="hdr-clock">
-      <div class="clock-zone">
-        <div class="clock-label">Eastern</div>
-        <div class="clock-time" id="clock-et">—:—</div>
-      </div>
-      <div class="clock-zone">
-        <div class="clock-label">Central</div>
-        <div class="clock-time" id="clock-ct">—:—</div>
-      </div>
-    </div>
+    <button id="hdr-brief-btn" onclick="openCaptainsBrief()" title="AI Captain's Brief — plan your top spots">
+      <span class="hdr-brief-ico" aria-hidden="true">🤖</span><span class="hdr-brief-label">Brief</span>
+    </button>
 
     <button id="nav-btn" onclick="toggleNav()" title="Open menu">
       <div class="nav-bar"></div>
@@ -2461,46 +2417,6 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
        a single tap target so an active ocean overlay owns the screen. Shown only
        on phones when there's a stack to collapse; positioned by restackBottomControls(). -->
   <button id="mobile-controls-toggle" type="button" onclick="toggleMobileControls()" aria-label="Show or hide map controls">Controls ▾</button>
-
-  <!-- FORECAST TIME SLIDER — bottom-center of map.
-       Visible when SST, altimetry, currents, or the bite map is on. Steps the
-       shared RTOFS ocean model to Now / +12h / +24h (not the satellite date
-       slider, which only steps backward through observed imagery). -->
-  <div id="forecast-slider" style="
-    display:none;position:absolute;
-    bottom:60px;left:50%;transform:translateX(-50%);z-index:500;
-    background:rgba(10,22,40,.94);
-    border:1px solid rgba(107,191,234,.3);
-    border-radius:14px;
-    padding:10px 16px 8px;
-    font-family:'Segoe UI',Arial,sans-serif;
-    color:#e8f4ff;
-    box-shadow:0 4px 14px rgba(0,0,0,.55);
-    width:min(520px, calc(100vw - 32px));
-  ">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px">
-      <div style="font-size:9px;color:#6bbfea;letter-spacing:.1em;font-weight:700;text-transform:uppercase">Ocean Model Forecast</div>
-      <div id="forecast-slider-display" style="font-size:11px;color:#cfe5ff;font-weight:700">Now</div>
-    </div>
-    <input id="forecast-slider-input" type="range" min="0" max="24" step="12" value="0" style="
-      width:100%;
-      -webkit-appearance:none;
-      appearance:none;
-      height:6px;
-      border-radius:3px;
-      background:linear-gradient(90deg,#1c3a5e 0%,#7dd3fc 100%);
-      outline:none;
-      margin:4px 0 2px;
-    "
-      oninput="onForecastSliderInput(this.value)"
-      onchange="onForecastSliderChange(this.value)">
-    <!-- Reference marks beneath the slider — clickable shortcuts to key horizons. -->
-    <div style="position:relative;height:20px;margin-top:2px">
-      <button onclick="setForecastHour(0)"  type="button" class="fc-mark" style="position:absolute;left:0%;transform:translateX(0)">Now</button>
-      <button onclick="setForecastHour(12)" type="button" class="fc-mark" style="position:absolute;left:50%;transform:translateX(-50%)">+12h</button>
-      <button onclick="setForecastHour(24)" type="button" class="fc-mark" style="position:absolute;right:0%;left:auto;transform:translateX(0)">+24h</button>
-    </div>
-  </div>
 
   <!-- WIND FORECAST — same pill style as altimetry; 3-hour manual steps -->
   <div id="wind-forecast-slider" class="map-time-pill map-time-pill--cyan">
@@ -3703,7 +3619,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
       <div class="tut-step-body">
         <div class="tut-step-title">Read the Bite Map</div>
         <div class="tut-step-desc">Colored areas show where your target species is most likely to be biting <em>right now</em>. The scale goes from green (decent) → yellow → orange → red (best). Tap any colored area for a breakdown of why that spot scored well — and tap the 🔊 button in that breakdown to have it read aloud.</div>
-        <div class="tut-step-desc" style="margin-top:10px">Use the <b>Forecast Time slider</b> at the bottom of the map to scrub the prediction forward — Now through +72h in 12-hour steps. The Bite Map, conditions, and any open breakdown all update to that future moment, so you can plan which day and tide to run.</div>
+        <div class="tut-step-desc" style="margin-top:10px">Planning a specific day? Tap any waypoint and open the <b>6-Day Forecast</b> tab for a 3-hour breakdown of wind, seas, air, water, and the tides — so you can pick which day and tide to run.</div>
         <div class="tut-step-desc" style="margin-top:10px;background:rgba(107,191,234,.05);border:1px solid rgba(107,191,234,.15);border-radius:7px;padding:10px 12px">
           <b style="color:#f0f6ff">Two numbers, two meanings:</b><br>
           <span style="color:#dc2626;font-weight:700">Bite Score</span> = how favorable conditions are at that spot (the big colored number).<br>
@@ -4920,14 +4836,15 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 .fc-arrow{display:inline-block;color:#7dd3fc;font-weight:900;margin-right:3px;font-size:15px}
 .fc-foot{margin-top:14px;font-size:12px;color:#7d9bb8;line-height:1.5;border-top:1px solid rgba(255,255,255,.08);padding-top:10px}
 /* ── Windfinder-style 3-hourly forecast table (6-day modal) ───────────────── */
-.fcw-table{border:1px solid rgba(107,191,234,.14);border-radius:12px;overflow:hidden;background:rgba(6,14,28,.5)}
+.fcw-table{border:1px solid rgba(107,191,234,.14);border-radius:12px;overflow-x:auto;background:rgba(6,14,28,.5)}
 .fcw-head,.fcw-row{
   display:grid;
-  grid-template-columns:46px minmax(66px,1.35fr) minmax(48px,.85fr) minmax(64px,1fr) minmax(58px,1.05fr);
+  grid-template-columns:40px minmax(58px,1.15fr) minmax(38px,.6fr) minmax(60px,.95fr) minmax(52px,.9fr) minmax(56px,.9fr);
   align-items:center;
+  min-width:352px;
 }
 .fcw-head{
-  padding:8px 4px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  padding:8px 4px;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
   color:#8fb2d4;background:rgba(10,22,42,.85);border-bottom:1px solid rgba(107,191,234,.16);
   position:sticky;top:0;z-index:1;
 }
@@ -4952,7 +4869,7 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 .fcw-big{font-size:16px;font-weight:800;color:#f0f6ff;white-space:nowrap}
 .fcw-big i{font-size:10px;font-style:normal;font-weight:700;color:#9ec5e8;margin-left:1px}
 .fcw-sub{font-size:10.5px;font-weight:600;color:#89a6c4;white-space:nowrap}
-.fcw-c-wx{flex-direction:column;gap:2px;justify-content:center}
+.fcw-c-wx{flex-direction:column;align-items:flex-start;gap:2px;justify-content:center}
 .fcw-wx-icon{font-size:20px;line-height:1}
 .fcw-wx-precip{font-size:10px;font-weight:700;color:#7dd3fc}
 .fcw-c-air{flex-direction:column;align-items:flex-start;gap:3px}
@@ -4961,8 +4878,15 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
   padding:2px 8px;border-radius:6px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.3)
 }
 .fcw-water{font-size:10.5px;font-weight:700;color:#7fd0e6;white-space:nowrap}
+/* Tide column — only the row nearest each high/low shows a marker. */
+.fcw-c-tide{gap:4px}
+.fcw-tide-ar{font-size:13px;line-height:1;flex:0 0 auto}
+.fcw-tide-ar.up{color:#6ee7b7}
+.fcw-tide-ar.down{color:#f0a868}
+.fcw-tide-txt{display:flex;flex-direction:column;line-height:1.05;min-width:0}
+.fcw-tide-lbl{font-size:11px;font-weight:800;color:#e8f4ff;letter-spacing:.02em}
+.fcw-tide-empty{color:#3a556f;font-size:14px;font-weight:800}
 @media (max-width:420px){
-  .fcw-head,.fcw-row{grid-template-columns:42px minmax(58px,1.35fr) minmax(40px,.8fr) minmax(58px,1fr) minmax(52px,1fr)}
   .fcw-big{font-size:15px}
   .fcw-air-chip{font-size:13px;padding:2px 6px}
 }

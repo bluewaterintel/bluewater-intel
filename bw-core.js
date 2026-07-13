@@ -296,6 +296,10 @@ async function loadReports(){
 // ════════════════════════════════════════════════════════════════════════════
 let MAP, activeSpId=null, activePort=null;
 let pinLL=null;
+// When the Captain's Brief is launched from the banner button it can cover the
+// top 2-3 Bite-Map spots as a ranked "run plan" in a SINGLE model call. Holds
+// the chosen hotspot cells; null for the normal single-spot brief (tap a spot).
+let _briefRunPlanSpots=null;
 let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
 let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
@@ -1709,13 +1713,15 @@ function reportsBoost(lat, lng, speciesId){
 // the same offset selects the forecast hour. When a real value isn't available
 // it is withheld and labeled — never synthesized.
 // ════════════════════════════════════════════════════════════════════════════
-let FORECAST_HOUR_OFFSET = 0;  // 0 | 12 | 24 — ocean-model forecast cap
+let FORECAST_HOUR_OFFSET = 0;  // pinned to 0 (now) — the +12/+24h ocean-model
+                               // forecast overlay was removed: RTOFS SST/SSH at
+                               // lead time was not trustworthy enough to show.
 
 function normalizeForecastHour(hours){
-  const h = Math.max(0, Math.min(24, Math.round(Number(hours)||0)));
-  if(h <= 6) return 0;
-  if(h <= 18) return 12;
-  return 24;
+  // Ocean-model forecast is disabled — everything reads the current ("now")
+  // observed/analysis fields. Kept as a function so existing call sites and
+  // cache keys stay valid without branching.
+  return 0;
 }
 
 function forecastTimeMs(){
@@ -7147,6 +7153,10 @@ function showPredictionExplainer(cell, species){
   const old = document.getElementById("predict-explainer");
   if(old) old.remove();
 
+  // Default to a single-spot brief; the banner run-plan opener re-arms this
+  // AFTER calling here (a normal map tap must never inherit a stale run plan).
+  _briefRunPlanSpots = null;
+
   _explainerState = {cell, species};
 
   const div = document.createElement("div");
@@ -7792,7 +7802,7 @@ function updateAltiDateControlVisibility(){
 // nearest the thumb-friendly bottom edge. Called by every visibility updater.
 // The distance scale bar is then lifted to sit just above the top of the stack
 // so it never overlaps the bars or the Leaflet attribution line.
-const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider", "forecast-slider"];
+const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider"];
 const BOTTOM_STACK_GAP  = 8;    // px gap between stacked bars
 // Phase 2 mobile: when collapsed, the bottom control bars fold behind a single
 // "Controls ▴" chip so an active overlay owns the screen. Only meaningful on
@@ -9413,7 +9423,7 @@ function oceanLegendMaxHeightPx(){
   const topInset = layerVis.predict ? 70 : 10;
   const phone = isPhoneView();
   let bottomReserve = phone ? 28 : 12;
-  const stackIds = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider", "forecast-slider"];
+  const stackIds = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider"];
   for(const id of stackIds){
     const el = document.getElementById(id);
     if(el && el.style.display && el.style.display !== "none"){
@@ -12308,6 +12318,71 @@ async function ensureBriefOceanData(pinLL, portObj){
     await buildPredictInputs(latMin, latMax, lngMin, lngMax);
   } catch(e){ /* best-effort — brief still builds from whatever loaded */ }
 }
+// Top Bite-Map spots for a run plan, best-first, spread out so we don't
+// recommend three cells stacked on one piece of structure (~4 nm apart).
+function topBriefHotspots(limit){
+  limit = limit || 3;
+  if(!Array.isArray(_predictGrid) || !_predictGrid.length) return [];
+  const picked = [];
+  for(const c of _predictGrid){            // _predictGrid is already sorted best-first
+    if(c == null || c.lat == null || c.lng == null) continue;
+    if(picked.some(p => (typeof nmBetween === "function" ? nmBetween(p.lat, p.lng, c.lat, c.lng) : 99) < 4)) continue;
+    picked.push(c);
+    if(picked.length >= limit) break;
+  }
+  return picked;
+}
+
+// Compact, network-free summary of one run-plan spot: coords, depth, run from
+// the port, nearby structure, and the per-species bite score AT that spot (same
+// engine as the Bite Map). Deliberately lean — the run plan adds spots to ONE
+// model call, so we send only what distinguishes each spot, not a duplicate
+// conditions block (nearby spots share the same area weather).
+function briefSpotSummary(spotLL, spIds, portObj, rank){
+  let depthFt = null;
+  try { if(typeof realDepthAt === "function"){ const m = realDepthAt(spotLL.lat, spotLL.lng); if(m != null) depthFt = Math.round(m * 3.281); } } catch(e){}
+  const bite = [];
+  try {
+    if(typeof scoreCell === "function"){
+      for(const id of spIds){
+        const r = scoreCell(spotLL.lat, spotLL.lng, id);
+        if(r) bite.push({
+          species: (typeof SPECIES !== "undefined" && SPECIES.find(s=>s.id===id)?.name) || id,
+          score: r.score != null ? Math.round(r.score*100) : null,
+          confidence: r.confidence != null ? Math.round(r.confidence*100) : null,
+          topFactor: r.topFactor || null,
+          inSeason: r.inSeason !== false,
+          sstF: r.sst != null ? Math.round(r.sst*10)/10 : null,
+          thermalBreakFper10nm: (r.tBreak != null && r.tBreak > 0) ? Math.round(r.tBreak*10)/10 : null,
+        });
+      }
+    }
+  } catch(e){}
+  return {
+    rank,
+    lat: spotLL.lat, lng: spotLL.lng,
+    depthFt,
+    runFromPortNm: (portObj && typeof nmBetween === "function") ? Math.round(nmBetween(portObj.lat, portObj.lng, spotLL.lat, spotLL.lng)) : null,
+    nearbyStructure: (typeof structureNear === "function") ? structureNear(spotLL.lat, spotLL.lng, 30, 2) : [],
+    biteScores: bite,
+  };
+}
+
+// Banner "Captain's Brief" entry point. Needs a home port + an active Bite Map
+// so there are ranked spots to plan; opens the standard brief panel focused on
+// the #1 spot and arms a run plan covering the top few in one model call.
+function openCaptainsBrief(){
+  if(!activePort){ if(typeof showToast === "function") showToast("Pick a home port first, then tap Captain's Brief.", "info"); return; }
+  const spots = topBriefHotspots(3);
+  if(!spots.length){
+    if(typeof showToast === "function") showToast("Turn on the Bite Map and pick a target species — then Captain's Brief will plan your top spots.", "info");
+    return;
+  }
+  showPredictionExplainer(spots[0], _predictSpecies);
+  _briefRunPlanSpots = spots;   // re-arm AFTER showPredictionExplainer (which clears it)
+  if(typeof openSubPanel === "function") openSubPanel("brief");
+}
+
 async function runBrief(){
   if(!pinLL||aiLoading)return;
   // AI Captain's Brief is a PAID feature (active subscription / owner)
@@ -12556,6 +12631,14 @@ async function runBrief(){
   // string, so the prompt can scope the forecast and reports to that day.
   const fishDate = new Date(); fishDate.setDate(fishDate.getDate() + briefDayOffset);
 
+  // Optional RUN PLAN: when launched from the banner button over an active Bite
+  // Map, cover the top 2-3 spots ranked in a SINGLE model call. Compact per-spot
+  // summaries keep the payload (and cost) modest — one call, not three.
+  let runPlan = null;
+  if(_briefRunPlanSpots && _briefRunPlanSpots.length >= 2){
+    runPlan = _briefRunPlanSpots.map((s, i) => briefSpotSummary({ lat: s.lat, lng: s.lng }, sp, portObj, i + 1));
+  }
+
   const payload = {
     lat: pinLL.lat,
     lng: pinLL.lng,
@@ -12582,6 +12665,9 @@ async function runBrief(){
     conditions: cond,
     tide,
     biteScores: scored,
+    // Ranked candidate spots for a multi-spot run plan (null for single-spot).
+    // The top-level spot/conditions describe rank 1's area.
+    runPlan,
   };
 
   // A quick manifest of which REAL signals we actually have for this trip. Lets
@@ -12603,6 +12689,7 @@ async function runBrief(){
     biteScores:   scored.length > 0,
     structure:    Array.isArray(payload.nearbyStructure) && payload.nearbyStructure.length > 0,
     sky:          !!(cond && cond.sky),
+    runPlan:      !!(runPlan && runPlan.length >= 2),
   };
 
   let briefOk = false;
@@ -13074,12 +13161,11 @@ async function updateHeaderConditions(attempt){
   const tryNum = attempt || 0;
   const water = document.getElementById("hdr-water");
   const air   = document.getElementById("hdr-air");
-  const seas  = document.getElementById("hdr-seas");
   const wind  = document.getElementById("hdr-wind");
-  if(!water || !air || !seas || !wind) return;
+  if(!water || !air || !wind) return;
   const p = activePort ? PORTS[activePort] : null;
   if(!p){
-    water.textContent = air.textContent = seas.textContent = wind.textContent = "—";
+    water.textContent = air.textContent = wind.textContent = "—";
     updateHeaderTide();
     requestAnimationFrame(syncHeaderHeightVar);
     return;
@@ -13089,7 +13175,7 @@ async function updateHeaderConditions(attempt){
   // backend), sampled a short distance offshore from the port (where you'd fish).
   // Cells show "—" until/unless real data is available — never synthetic.
   if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchOcean){
-    water.textContent = air.textContent = seas.textContent = wind.textContent = "—";
+    water.textContent = air.textContent = wind.textContent = "—";
     requestAnimationFrame(syncHeaderHeightVar);
     return;
   }
@@ -13101,14 +13187,13 @@ async function updateHeaderConditions(attempt){
     const waterF = (o?.waterTemp?.value != null) ? o.waterTemp.value : (o?.sst?.value != null ? o.sst.value : null);
     water.innerHTML  = waterF != null ? `${Math.round(waterF)}<span class="wx-deg">°</span>F` : "—";
     air.innerHTML    = (o?.airTemp?.value != null) ? `${Math.round(o.airTemp.value)}<span class="wx-deg">°</span>F` : "—";
-    seas.textContent = (o?.waves?.value != null) ? `${Math.round(o.waves.value * 10) / 10}ft` : "—";
     wind.textContent = (o?.wind?.value != null) ? `${Math.round(o.wind.value)}kt` : "—";
-    const allDash = water.textContent === "—" && air.textContent === "—" && seas.textContent === "—" && wind.textContent === "—";
+    const allDash = water.textContent === "—" && air.textContent === "—" && wind.textContent === "—";
     if(allDash && tryNum < 2){
       setTimeout(() => updateHeaderConditions(tryNum + 1), 600 * (tryNum + 1));
     }
   } catch(e){
-    water.textContent = air.textContent = seas.textContent = wind.textContent = "—";
+    water.textContent = air.textContent = wind.textContent = "—";
     if(tryNum < 2) setTimeout(() => updateHeaderConditions(tryNum + 1), 800 * (tryNum + 1));
   }
   requestAnimationFrame(syncHeaderHeightVar);
@@ -13517,20 +13602,6 @@ document.addEventListener('click',e=>{
     document.getElementById("sp-arr").textContent="▼";
   }
 });
-
-// Clock — show both Eastern and Central (DST handled automatically via IANA zones),
-// since the app spans the East Coast (ET) and the Gulf (CT).
-function tick(){
-  const now = new Date();
-  const opts = {hour:"numeric", minute:"2-digit", hour12:true};
-  const et = now.toLocaleTimeString("en-US", {...opts, timeZone:"America/New_York"});
-  const ct = now.toLocaleTimeString("en-US", {...opts, timeZone:"America/Chicago"});
-  const elEt = document.getElementById("clock-et");
-  const elCt = document.getElementById("clock-ct");
-  if(elEt) elEt.textContent = et;
-  if(elCt) elCt.textContent = ct;
-}
-tick();setInterval(tick,30000);
 
 window.addEventListener("load",initMap);
 document.addEventListener("visibilitychange", () => {

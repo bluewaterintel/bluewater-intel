@@ -139,9 +139,23 @@ Deno.serve(async (req) => {
   let bd: { distNm: number; bearingDeg: number; compass: string } | null = null;
   if (portLat !== null && portLng !== null) bd = bearingDistance(portLat, portLng, spotLat, spotLng);
 
+  // RUN PLAN (optional): the client may send runPlan[] — the top 2-3 Bite-Map
+  // spots ranked best-first, to be covered in this ONE call. Compute each spot's
+  // real bearing/distance from port here (same rule as the primary spot) so the
+  // model never has to guess a distance.
+  let runPlan = Array.isArray(body.runPlan) ? (body.runPlan as Array<Record<string, unknown>>) : null;
+  if (runPlan && portLat !== null && portLng !== null) {
+    runPlan = runPlan.map((s) => {
+      const la = num(s.lat), ln = num(s.lng);
+      const cbd = (la !== null && ln !== null) ? bearingDistance(portLat, portLng, la, ln) : null;
+      return { ...s, computedPortToSpot: cbd };
+    });
+  }
+  const isRunPlan = !!(runPlan && runPlan.length >= 2);
+
   // Full payload, passed to the model as structured JSON (no fields dropped),
   // augmented with the server-computed port→spot distance/heading for grounding.
-  const payloadForModel = { ...body, computedPortToSpot: bd };
+  const payloadForModel = { ...body, computedPortToSpot: bd, runPlan };
 
   const system = `You are a veteran offshore and inshore charter captain writing a sharp, practical pre-trip brief for another captain who is PAYING for this. You receive structured JSON for a specific spot, departure port, the day they plan to fish, and target species. Write the brief grounded ONLY in the data provided, but USE EVERY REAL DATUM YOU ARE GIVEN. Scope everything to fishDayLabel/fishDate.
 
@@ -184,7 +198,14 @@ Keep the whole brief tight and scannable. No travel time. No go/no-go call. No p
   const autoNote = speciesMode === "auto" && autoPick
     ? `\nSPECIES SELECTION: speciesMode is "auto" (Captain's Choice). The app ranked every viable local species using the bite-map engine — score, confidence, and seasonal fit for ${fishLabel} — and auto-selected the targets in species[] and biteScores[]. speciesAutoPick.primaryTarget is the #1 recommendation. Open "## 3. THE BITE" by naming that primary target first and explaining why it wins today using the real biteScores[] drivers and seasonality. Briefly note the runner-up species and when they make sense. In "## 4. BAITS & LURES" lead with the primary target, then cover the backups. Make it clear this is a data-driven recommendation for a captain who didn't pick a species — not a guess.\n`
     : "";
-  const user = `Structured trip data (JSON) for the brief below. Write the brief exactly per your system instructions, scoped to ${fishLabel}. Use ONLY these values, omit any point whose field is null or missing, and never invent numbers.${autoNote}
+  const runNote = isRunPlan
+    ? `\nRUN PLAN MODE: runPlan[] holds ${runPlan!.length} candidate spots ranked best-first (rank 1 = top pick; the top-level spot/conditions/tide describe rank 1's area, and because the spots are close together those conditions apply to all of them). Write a MULTI-SPOT plan, not a single-spot brief:
+- Open with a one-line header naming the port, the day (${fishLabel}), and how many spots you're planning.
+- Then a "## RUN PLAN" section listing each spot IN ORDER as "**Run N — <distance> nm <compass> of port, <depthFt> ft**" using ONLY that spot's runFromPortNm or computedPortToSpot.distNm/compass (never any other distance). For each: its bite score(s) + confidence + top factor, nearby structure, and one concrete reason to fish it and how it differs from the others (closer, deeper, better break, etc.). Rank them honestly by the data.
+- Then the normal "## CONDITIONS", "## WATER", "## BAITS & LURES", and "## CAPTAIN'S TIPS" sections for the AREA (rank 1's readings apply), calling out any spot-specific structure/depth tactics where they matter.
+Keep it tight and scannable — a captain reads this at the dock.\n`
+    : "";
+  const user = `Structured trip data (JSON) for the brief below. Write the brief exactly per your system instructions, scoped to ${fishLabel}. Use ONLY these values, omit any point whose field is null or missing, and never invent numbers.${autoNote}${runNote}
 
 ${JSON.stringify(payloadForModel, null, 2)}`;
 

@@ -1605,6 +1605,68 @@ async function fetchForecast(lat, lng){
     });
   }
   if(!out.length) throw new Error("no forecast data");
+
+  // Attach the nearest high/low tide to the row it falls closest to (best-effort;
+  // the forecast still renders if tide data is unavailable). Each tide event is
+  // pinned to exactly one 3-hour row — the one within ~90 min — so "High 11:30"
+  // lands on the noon line, and most rows simply have no tide marker.
+  try {
+    const firstMs = Date.parse(out[0].time);
+    const lastMs  = Date.parse(out[out.length - 1].time);
+    if(isFinite(firstMs) && isFinite(lastMs)){
+      const events = await _fcFetchTideEvents(lat, lng, firstMs - 3 * 3600000, lastMs + 3 * 3600000);
+      if(events && events.length){
+        const slotMs = out.map(s => Date.parse(s.time));
+        for(const ev of events){
+          let best = -1, bestDt = Infinity;
+          for(let k = 0; k < slotMs.length; k++){
+            const dt = Math.abs(slotMs[k] - ev.atMs);
+            if(dt < bestDt){ bestDt = dt; best = k; }
+          }
+          if(best >= 0 && bestDt <= 90 * 60 * 1000){
+            const cur = out[best].tide;
+            const curDt = cur ? Math.abs(slotMs[best] - cur.atMs) : Infinity;
+            if(bestDt < curDt){
+              out[best].tide = {
+                type: ev.type,
+                atMs: ev.atMs,
+                timeTxt: new Date(ev.atMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+              };
+            }
+          }
+        }
+      }
+    }
+  } catch(e){ /* tides optional — forecast renders without them */ }
+
+  return out;
+}
+
+// Nearest NOAA CO-OPS station's high/low tide predictions across a time window,
+// as [{ type:"H"|"L", atMs }]. Reuses the same station-resolution path the
+// header tide uses (BW_OCEAN.fetchOcean → sources.tide). Returns [] on any gap.
+async function _fcFetchTideEvents(lat, lng, startMs, endMs){
+  if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchOcean) return [];
+  let station = null;
+  try {
+    const o = await BW_OCEAN.fetchOcean(lat, lng);
+    station = o && o.sources ? o.sources.tide : null;
+  } catch(e){ return []; }
+  if(!station) return [];
+  const pad = (n) => String(n).padStart(2, "0");
+  const fmt = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  const url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+    + "?product=predictions&interval=hilo&datum=MLLW&units=english&time_zone=gmt&format=json&application=bluewaterintel"
+    + `&station=${encodeURIComponent(station)}&begin_date=${encodeURIComponent(fmt(new Date(startMs)))}&end_date=${encodeURIComponent(fmt(new Date(endMs)))}`;
+  const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if(!r.ok) return [];
+  const d = await r.json();
+  const preds = (d && d.predictions) ? d.predictions : [];
+  const out = [];
+  for(const pr of preds){
+    const atMs = Date.parse(pr.t.replace(" ", "T") + "Z");  // CO-OPS gmt
+    if(isFinite(atMs)) out.push({ type: pr.type, atMs });
+  }
   return out;
 }
 
@@ -1756,6 +1818,15 @@ function renderForecast(body, slots, latStr, lngStr, fetchedAt, isLive){
               ${s.wavePer? `<div class="fcw-sub">${s.wavePer}s</div>` : ""}
             </div>
           </div>
+          <div class="fcw-c fcw-c-tide">
+            ${s.tide
+              ? `<span class="fcw-tide-ar ${s.tide.type==='H'?'up':'down'}">${s.tide.type==='H'?'▲':'▼'}</span>
+                 <div class="fcw-tide-txt">
+                   <div class="fcw-tide-lbl">${s.tide.type==='H'?'High':'Low'}</div>
+                   <div class="fcw-sub">${s.tide.timeTxt}</div>
+                 </div>`
+              : `<span class="fcw-tide-empty">·</span>`}
+          </div>
         </div>`;
     }).join("");
     return `
@@ -1786,6 +1857,7 @@ function renderForecast(body, slots, latStr, lngStr, fetchedAt, isLive){
         <div class="fcw-c fcw-c-wx">Sky</div>
         <div class="fcw-c fcw-c-air">Air / Water</div>
         <div class="fcw-c fcw-c-sea">Waves</div>
+        <div class="fcw-c fcw-c-tide">Tide</div>
       </div>
       ${dayBlocks}
     </div>
