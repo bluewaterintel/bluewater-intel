@@ -5781,9 +5781,24 @@ function _currentFlowColor(kts){
   return `rgba(203,241,245,${a.toFixed(3)})`;                 // pale aqua
 }
 
+// Compact "valid time" stamp for the RTOFS current field. RTOFS is a model, so
+// the grid carries the model's valid (observed/nowcast) time in observedAtMs.
+// Rendered in the boat's local zone as "Jul 13, 2 PM".
+function currentsTimeLabel(){
+  const ms = CURRENT_GRID && CURRENT_GRID.observedAtMs;
+  if(!ms || !isFinite(ms)) return "";
+  try {
+    return new Date(ms).toLocaleString("en-US", {
+      month: "short", day: "numeric", hour: "numeric", hour12: true,
+    });
+  } catch(e){ return ""; }
+}
 function currentStatusLabel(){
   if(CURRENT_STATUS === "loading") return "Loading RTOFS…";
-  if(CURRENT_STATUS === "ready") return "NOAA RTOFS · surface drift";
+  if(CURRENT_STATUS === "ready"){
+    const t = currentsTimeLabel();
+    return t ? `NOAA RTOFS · ${t}` : "NOAA RTOFS · surface drift";
+  }
   if(CURRENT_STATUS === "unavailable") return "Currents unavailable";
   return "";
 }
@@ -7331,7 +7346,7 @@ function renderExplainerMain(){
           <span style="color:#7dd3fc;opacity:.6">→</span>
         </button>
         <button onclick="openSubPanel('brief')" class="ex-action-btn" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.4);color:#c084fc">
-          <span style="font-size:16px">🤖</span>
+          <span style="font-size:16px">✦</span>
           <span style="flex:1;text-align:left">AI Captain's Brief</span>
           <span style="color:#c084fc;opacity:.6">→</span>
         </button>
@@ -7476,7 +7491,7 @@ function openSubPanel(kind){
 
   const titles = {
     wx:      {label:"Weather",            emoji:"🌊", color:"#7dd3fc"},
-    brief:   {label:"AI Captain's Brief", emoji:"🤖", color:"#c084fc"},
+    brief:   {label:"AI Captain's Brief", emoji:"✦", color:"#c084fc"},
     reports: {label:"Reports nearby",     emoji:"📋", color:"#34d399"},
   };
   const t = titles[kind];
@@ -12201,11 +12216,11 @@ function renderBrief(){
     const on = !briefAutoPick && briefSp.includes(sp.id);
     const disabled = briefAutoPick ? "disabled" : "";
     const dim = briefAutoPick ? "opacity:.45;pointer-events:none" : "";
-    return `<button class="sp-pill" style="border-color:${on?sp.color:"#c8b060"};background:${on?sp.color+"18":"white"};color:${on?sp.color:"#7a6030"};${dim}" ${disabled} onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
+    return `<button class="sp-pill" style="border-color:${on?sp.color:"rgba(255,255,255,.16)"};background:${on?sp.color+"22":"rgba(255,255,255,.04)"};color:${on?sp.color:"#cfe5ff"};${dim}" ${disabled} onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
   }).join("");
   const autoOn = briefAutoPick;
-  const autoPickBtn = `<button type="button" class="brief-day" style="border:1px solid ${autoOn?'#a855f7':'#c8b060'};background:${autoOn?'rgba(168,85,247,.18)':'white'};color:${autoOn?'#e9d5ff':'#7a6030'};font-family:inherit;font-weight:800;font-size:12px;padding:9px 12px;border-radius:8px;cursor:pointer;width:100%;text-align:left;margin-bottom:8px" onclick="setBriefAutoPick(true)">🎯 Captain's Choice — let AI pick the best targets for ${briefDayLabel(briefDayOffset)}</button>`;
-  const manualBtn = `<button type="button" class="brief-day" style="border:1px solid ${!autoOn?'#7dd3fc':'#c8b060'};background:${!autoOn?'rgba(125,211,252,.12)':'white'};color:${!autoOn?'#7dd3fc':'#7a6030'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;margin-bottom:10px" onclick="setBriefAutoPick(false)">I'll choose my own targets</button>`;
+  const autoPickBtn = `<button type="button" class="brief-day" style="border:1px solid ${autoOn?'#a855f7':'rgba(255,255,255,.12)'};background:${autoOn?'rgba(168,85,247,.2)':'rgba(255,255,255,.04)'};color:${autoOn?'#e9d5ff':'#cfe5ff'};font-family:inherit;font-weight:800;font-size:12px;padding:9px 12px;border-radius:8px;cursor:pointer;width:100%;text-align:left;margin-bottom:8px" onclick="setBriefAutoPick(true)">🎯 Captain's Choice — let AI pick the best targets for ${briefDayLabel(briefDayOffset)}</button>`;
+  const manualBtn = `<button type="button" class="brief-day" style="border:1px solid ${!autoOn?'#7dd3fc':'rgba(255,255,255,.12)'};background:${!autoOn?'rgba(125,211,252,.14)':'rgba(255,255,255,.04)'};color:${!autoOn?'#7dd3fc':'#cfe5ff'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;margin-bottom:10px" onclick="setBriefAutoPick(false)">I'll choose my own targets</button>`;
   const autoPreviewHtml = autoOn && autoPreview.picks.length
     ? `<p style="color:#d8b4fe;font-size:12px;margin:0 0 10px;line-height:1.45"><b>AI will target:</b> ${autoPreview.picks.map(p => `${p.name} (${p.scorePct}/100${p.inSeason ? "" : ", off-season"})`).join(" · ")}</p>`
     : (autoOn && pinLL
@@ -12217,13 +12232,47 @@ function renderBrief(){
   // (out to 6 days, the useful marine-forecast window).
   const dayBtns = [0,1,2,3,4,5,6].map(off=>{
     const on = briefDayOffset === off;
-    return `<button class="brief-day" style="border:1px solid ${on?'#7dd3fc':'#c8b060'};background:${on?'rgba(125,211,252,.16)':'white'};color:${on?'#1c5a86':'#7a6030'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap" onclick="setBriefDay(${off})">${briefDayLabel(off)}</button>`;
+    return `<button class="brief-day" style="border:1px solid ${on?'#7dd3fc':'rgba(255,255,255,.12)'};background:${on?'rgba(125,211,252,.16)':'rgba(255,255,255,.04)'};color:${on?'#7dd3fc':'#9ec5e8'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap" onclick="setBriefDay(${off})">${briefDayLabel(off)}</button>`;
   }).join("");
   const hasPin=!!pinLL;
+
+  // ── Departure-port card — always show WHICH port the run is planned from ──
+  // Users were confused about the origin; make it unmistakable at the top.
+  const portObj = (activePort && typeof PORTS !== "undefined") ? PORTS[activePort] : null;
+  let runMeta = "";
+  if(portObj && pinLL && typeof nmBetween === "function"){
+    const nm = Math.round(nmBetween(portObj.lat, portObj.lng, pinLL.lat, pinLL.lng));
+    let brg = "";
+    if(typeof bwiCompass16 === "function"){
+      const toRad = d => d * Math.PI / 180;
+      const y = Math.sin(toRad(pinLL.lng - portObj.lng)) * Math.cos(toRad(pinLL.lat));
+      const x = Math.cos(toRad(portObj.lat)) * Math.sin(toRad(pinLL.lat)) -
+                Math.sin(toRad(portObj.lat)) * Math.cos(toRad(pinLL.lat)) * Math.cos(toRad(pinLL.lng - portObj.lng));
+      brg = bwiCompass16((Math.atan2(y, x) * 180 / Math.PI + 360) % 360);
+    }
+    runMeta = `⛵ ${nm} nm${brg ? " " + brg : ""} out`;
+  }
+  const planCount = Array.isArray(_briefRunPlanSpots) ? _briefRunPlanSpots.length : 0;
+  const departCard = `
+    <div class="brief-depart">
+      <div class="brief-depart-main">
+        <span class="brief-depart-ico" aria-hidden="true">⚓</span>
+        <div style="min-width:0">
+          <div class="brief-depart-lbl">Departing from</div>
+          <div class="brief-depart-port${activePort ? "" : " none"}">${activePort || "No home port selected — pick one to set your run"}</div>
+        </div>
+      </div>
+      <div class="brief-depart-meta">
+        ${planCount > 1 ? `<span class="brief-depart-chip">Planning top ${planCount} spots</span>` : ""}
+        ${runMeta ? `<span>${runMeta}</span>` : ""}
+        <span>🗓️ ${briefDayLabel(briefDayOffset)}</span>
+      </div>
+    </div>`;
   const speciesNote = !allowed.length
     ? `<p style="color:#9ec5e8;font-size:12px;margin-bottom:8px">Select a home port or drop a chart pin to see species for your area.</p>`
     : (allowed.length < 12 ? "" : `<p style="color:#9ec5e8;font-size:11px;margin-bottom:6px;line-height:1.4">Showing ${allowed.length} species for this spot — extraneous coast-wide fish are hidden.</p>`);
   pbody(`
+    ${departCard}
     ${recentHtml}
     ${!hasPin?`<p style="color:#9ec5e8;font-size:12px;margin-bottom:12px;line-height:1.5">Tap the chart to drop a weather pin first.</p>`:""}
     <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">WHICH DAY ARE YOU FISHING?</div>
@@ -13606,5 +13655,9 @@ document.addEventListener('click',e=>{
 window.addEventListener("load",initMap);
 document.addEventListener("visibilitychange", () => {
   if(document.visibilityState !== "visible") return;
+  // Re-probe the freshest published satellite date first (cached ~30min, so this
+  // is cheap) so a session left open across a NOAA/NASA publish picks up the new
+  // day's SST/chlor imagery, then refresh the live ocean layers.
+  if(typeof ensureFreshestSatDates === "function") ensureFreshestSatDates();
   if(typeof refreshActiveOceanLayers === "function") refreshActiveOceanLayers();
 });

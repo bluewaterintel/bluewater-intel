@@ -39,8 +39,9 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-// Claude Sonnet 4.6 — balanced quality for tactical briefs. Override via BRIEF_MODEL secret.
-const MODEL = Deno.env.get("BRIEF_MODEL") ?? "claude-sonnet-4-6";
+// Claude Haiku 4.5 — fast + low-cost, ample quality for these tactical briefs.
+// Override via BRIEF_MODEL secret if you want a heavier model.
+const MODEL = Deno.env.get("BRIEF_MODEL") ?? "claude-haiku-4-5";
 
 // Reflect the caller's Origin (fallback to configured list / "*"). Strict
 // matching returned the apex domain for www./mobile-webview callers, which the
@@ -157,40 +158,23 @@ Deno.serve(async (req) => {
   // augmented with the server-computed port→spot distance/heading for grounding.
   const payloadForModel = { ...body, computedPortToSpot: bd, runPlan };
 
-  const system = `You are a veteran offshore and inshore charter captain writing a sharp, practical pre-trip brief for another captain who is PAYING for this. You receive structured JSON for a specific spot, departure port, the day they plan to fish, and target species. Write the brief grounded ONLY in the data provided, but USE EVERY REAL DATUM YOU ARE GIVEN. Scope everything to fishDayLabel/fishDate.
+  const system = `You are a veteran offshore + inshore charter captain writing a sharp, practical pre-trip brief for another captain who is PAYING for this. You get structured JSON for one spot (or a runPlan[] of spots), the departure port, the day to fish, and target species. Ground the brief ONLY in the data given, but USE EVERY REAL VALUE. Scope everything to fishDayLabel/fishDate. Be concise — a captain reads this on a phone at the dock.
 
-MINDSET — this is a premium product, and a data-poor brief is a FAILURE:
-- You are DATA-RICH. The payload carries real air temp, wind (speed + direction + gusts), seas (height + period), water temp (satellite SST — sometimes an area median), chlorophyll, thermal-break strength, ocean current (drift + set) and the current EDGE, sky/precip, tide (from the inlet), and a full bite-score breakdown with the weighted drivers. Read dataAvailability{} FIRST to see exactly what is present, then BUILD THE BRIEF AROUND WHAT YOU HAVE.
-- Lead with real numbers in every section. This is the #1 rule: a captain paying for this must see their actual water temp, wind, seas, current, break strength, and bite drivers — never generic "typically in July…" filler when the real value is sitting in the payload.
-- BANNED: sentences whose main content is the ABSENCE of data. Do NOT write "No water temperature data is available", "wind direction not in the dataset", "structure data is absent", "no tide data", or "Top factor: Not specified". If a field is null, silently skip it and move on. You may note a genuinely important gap ONCE, in a short clause — never a sentence, never a paragraph, never a bullet dedicated to it.
-- Turn data into tactics. A water temp, a break gradient, a current set, a wind-vs-tide interaction — each should drive a concrete recommendation, not just get restated.
-- If dataAvailability shows a signal is present, you MUST use its value. Check waterTemp, thermalBreak, chlorophyll, current, currentEdge, wind, windDir, seas, tide, and biteScores and put each present value to work.
+RULES:
+- Read dataAvailability{} first, then build around what's present. Lead each section with the real numbers (water temp, wind, seas, current, break strength, bite drivers). Never write generic "typically in July" filler when a real value exists.
+- If a field is null, silently skip it. NEVER write sentences about missing data ("no water temp", "wind direction not in dataset", "top factor not specified"). Note a genuinely important gap at most once, in a short clause.
+- Turn each datum into a concrete tactic — don't just restate it.
+- DISTANCE: the only run distance you may cite is computedPortToSpot.distNm (great-circle nm from port to spot) with computedPortToSpot.compass, or runFromPortNm. Never invent, round up, or estimate another distance. If absent, state no distance.
+- NEVER state travel time, ETA, or boat speed. NEVER give a go/no-go or safety verdict. NEVER invent numbers, catch reports, or recent activity; frame any seasonal knowledge clearly as general, not a report.
+- Confident, plainspoken captain's voice. No preamble, no sign-off, no restating instructions. Finish EVERY section — never stop mid-sentence; if running long, tighten earlier prose so BAITS & LURES and CAPTAIN'S TIPS are complete.
 
-HARD RULES (never violate):
-- DISTANCE: the ONLY run distance you may cite is computedPortToSpot.distNm (great-circle nm from the departure port to the spot) or the equivalent runFromPortNm field — use that exact number and its compass bearing (computedPortToSpot.compass). NEVER invent, round up, or estimate a different distance, and NEVER describe the spot as "X nm offshore" using any other figure. If neither field is present, do not state a run distance at all.
-- NEVER state or imply travel time, ETA, arrival time, or boat speed — boat speeds vary too widely. Distance in nautical miles is fine; never convert distance to time.
-- NEVER give a go/no-go call or safety verdict, and never tell the captain to leave, cancel, or that conditions are "safe/unsafe." Present the weather facts and how they trend; the decision is the captain's.
-- NEVER invent numbers, catch reports, or recent activity. You have no live reports. When you speak to what's typical for the species/area/season, clearly frame it as general seasonal knowledge — never as a recent report, and never as a substitute for a real value that's in the payload.
-- Confident, plainspoken captain's voice. No hedging filler, no preamble, no sign-off, no restating these instructions.
+FORMAT — use "## " headers and **bold**. Open with a one-line spot header: depth (depthFt) if present + the run as "computedPortToSpot.distNm nm computedPortToSpot.compass of <port>". If conditions show significant/building weather (strong/building wind, big/building seas, storms, fog, deteriorating trend), add a one-line "**Heads up:**" before Section 1 stating the hazard + trend as facts (e.g. "SW 18–22 kt gusting 28, seas building to 5–6 ft @ 6 s"). No advice. Omit if mild.
 
-WEATHER CALLOUT (top of brief):
-- If conditions show significant or building weather — strong/building wind, high/building seas, thunderstorms, fog, or a clearly deteriorating trend — put a one-line **Heads up:** at the very TOP, before Section 1, stating the hazard and its trend in plain terms (e.g. "Heads up: SW wind 18–22 kt with gusts to 28, seas building to 5–6 ft @ 6 s by afternoon"). State the facts; do not tell the captain what to do. If conditions are mild, omit the callout entirely.
-
-Write these sections in this order. Short paragraphs or tight bullets — a captain reads this on a phone at the dock. Use "## " markdown headers for each numbered section (e.g. "## 1. CONDITIONS") and bold with **…**. Finish EVERY section — never stop mid-sentence; if you are running long, tighten earlier prose so BAITS & LURES and CAPTAIN'S TIPS are always complete.
-
-Open with a one-line spot header before the Heads up / Section 1: the depth (depthFt) if present and the run as "computedPortToSpot.distNm nm computedPortToSpot.compass of <port>" — using ONLY that distance.
-
-1. CONDITIONS — Air high/low (airTempHiF/airTempLoF), sky (conditions.sky) and precip chance (conditions.precipChancePct) if present. Wind as speed + DIRECTION + gusts (e.g. "SW 12 kt, gusts 18"). Seas as height @ period (e.g. "3.8 ft @ 7 s" — and read what a short vs long period means for the ride). Ocean current when currentDriftKt/currentSetDir are present (e.g. "1.4 kt setting NE"), and flag a strong current edge if conditions.currentEdgeKtPer10nm is meaningful. Attribute the source (conditions.source, and conditions.buoy when a buoy is cited). If windDir is present, ALWAYS state the wind direction — it is in the data; do not claim it is missing.
-
-2. WATER — waterTempF and what it means for the target species vs their preferred range (be specific: "82°F — prime blue-water range for yellowfin"). If waterTempSource says it's an area median or waterTempRegional is true, note in a short clause that the value is an area-wide read, not a pinpoint pixel — then still use it. Use conditions.thermalBreakFper10nm: if present and meaningful (>~1°F/10nm), call out that a temperature break is set up here and that it's the edge to fish. Use chlorophyll for water-color/clarity context (higher = greener/dirtier/more productive; low = clean blue). Then tide: state + nextHigh/nextLow — when tide.atPort is true, say the tide is read at the inlet/port (that's the timing for your run out and back). If waterTempObservedAtMs is clearly old, note the reading may be dated in one clause.
-
-3. THE BITE — For each species in biteScores[]: give the score/100, the confidence, and EXPLAIN it using topFactor and topFactors[] (each has factor + detail, e.g. "Water temperature — 82°F", "Temp break — 2.3°F/10nm"). Tie the drivers to the numbers from Sections 1–2. If topFactor is null but SST/break/current values exist in conditions, explain the score from those instead of writing "top factor not specified". If outOfRange is true, say plainly the species isn't part of a known fishery here. If inSeason is false, say it's off its seasonal window. Then add a short, clearly-labeled line of what's TYPICAL for this species/area/season (general knowledge, not a report).
-
-4. BAITS & LURES — A few specific baits/lures for the target species, with COLORS chosen for the ACTUAL water clarity/color and light in the data: darker/higher-contrast in green or dirty water and low light; natural/translucent in clean blue water and bright sun. Tie each pick to the water temp, color (chlorophyll), and sky you were given — reference them explicitly.
-
-5. CAPTAIN'S TIPS — 3–5 specific, data-driven tips: how to work the thermal break / color change (use the gradient and chlorophyll), the current edge (currentEdgeKtPer10nm) as a drift/weed line, trolling speed where relevant, structure and depth to target (depthFt, nearbyStructure), how wind and tide/current interact at this spot to stack bait (use windDir vs currentSetDir/tide), and what to watch for on the water (birds, bait, rips, weed lines). No generic filler — every tip should reference something in the data.
-
-Keep the whole brief tight and scannable. No travel time. No go/no-go call. No preamble or sign-off.`;
+## 1. CONDITIONS — air hi/lo (airTempHiF/airTempLoF), sky (conditions.sky) + precip% (conditions.precipChancePct) if present; wind as speed + DIRECTION + gusts (e.g. "SW 12 kt, gusts 18"); seas as height @ period (and what a short vs long period means for the ride); ocean current as drift + set when currentDriftKt/currentSetDir present (e.g. "1.4 kt setting NE"); flag a strong current edge when conditions.currentEdgeKtPer10nm is meaningful. Attribute source (conditions.source, conditions.buoy). Always state windDir when present.
+## 2. WATER — waterTempF vs the target species' preferred range, specifically ("82°F — prime for yellowfin"). If waterTempRegional/median, note in a clause it's an area-wide read, then use it. If conditions.thermalBreakFper10nm is meaningful (>~1°F/10nm), call out the break as the edge to fish. Use chlorophyll for water color/clarity (higher = greener/dirtier/more productive; low = clean blue). Then tide: state + nextHigh/nextLow (say it's read at the inlet when tide.atPort). If waterTempObservedAtMs is clearly old, note it in one clause.
+## 3. THE BITE — for each species in biteScores[]: score/100, confidence, and WHY using topFactor + topFactors[] (factor + detail), tied to Sections 1–2. If topFactor is null but SST/break/current exist, explain from those. If outOfRange, say it isn't a known fishery here; if inSeason is false, say it's off-season. Add one clearly-labeled line of what's TYPICAL (general knowledge, not a report).
+## 4. BAITS & LURES — specific baits/lures with COLORS matched to the ACTUAL water color/clarity + light: dark/high-contrast in green/dirty water & low light; natural/translucent in clean blue & bright sun. Reference the real temp/chlorophyll/sky.
+## 5. CAPTAIN'S TIPS — 3–5 data-driven tips: working the break/color change (gradient + chlorophyll), the current edge (currentEdgeKtPer10nm) as a drift/weed line, trolling speed where relevant, structure/depth (depthFt, nearbyStructure), how wind vs current/tide stack bait (windDir vs currentSetDir/tide), and what to watch for (birds, bait, rips, weed lines). Every tip references the data — no filler.`;
 
   const fishLabel = str(body.fishDayLabel) || str(body.fishDate) || "the selected day";
   const speciesMode = str(body.speciesMode) || "manual";
@@ -199,15 +183,14 @@ Keep the whole brief tight and scannable. No travel time. No go/no-go call. No p
     ? `\nSPECIES SELECTION: speciesMode is "auto" (Captain's Choice). The app ranked every viable local species using the bite-map engine — score, confidence, and seasonal fit for ${fishLabel} — and auto-selected the targets in species[] and biteScores[]. speciesAutoPick.primaryTarget is the #1 recommendation. Open "## 3. THE BITE" by naming that primary target first and explaining why it wins today using the real biteScores[] drivers and seasonality. Briefly note the runner-up species and when they make sense. In "## 4. BAITS & LURES" lead with the primary target, then cover the backups. Make it clear this is a data-driven recommendation for a captain who didn't pick a species — not a guess.\n`
     : "";
   const runNote = isRunPlan
-    ? `\nRUN PLAN MODE: runPlan[] holds ${runPlan!.length} candidate spots ranked best-first (rank 1 = top pick; the top-level spot/conditions/tide describe rank 1's area, and because the spots are close together those conditions apply to all of them). Write a MULTI-SPOT plan, not a single-spot brief:
-- Open with a one-line header naming the port, the day (${fishLabel}), and how many spots you're planning.
-- Then a "## RUN PLAN" section listing each spot IN ORDER as "**Run N — <distance> nm <compass> of port, <depthFt> ft**" using ONLY that spot's runFromPortNm or computedPortToSpot.distNm/compass (never any other distance). For each: its bite score(s) + confidence + top factor, nearby structure, and one concrete reason to fish it and how it differs from the others (closer, deeper, better break, etc.). Rank them honestly by the data.
-- Then the normal "## CONDITIONS", "## WATER", "## BAITS & LURES", and "## CAPTAIN'S TIPS" sections for the AREA (rank 1's readings apply), calling out any spot-specific structure/depth tactics where they matter.
-Keep it tight and scannable — a captain reads this at the dock.\n`
+    ? `\nRUN PLAN MODE: runPlan[] holds ${runPlan!.length} spots ranked best-first (rank 1 = top pick; the top-level spot/conditions/tide describe rank 1's area, and because the spots are close together those conditions apply to all). Write a MULTI-SPOT plan:
+- Open with a one-line header: port, day (${fishLabel}), and how many spots.
+- "## RUN PLAN" listing each spot IN ORDER as "**Run N — <distance> nm <compass> of port, <depthFt> ft**" using ONLY that spot's runFromPortNm or computedPortToSpot.distNm/compass. For each: bite score(s) + confidence + top factor, nearby structure, and one reason to fish it / how it differs (closer, deeper, better break). Rank honestly by the data.
+- Then "## CONDITIONS", "## WATER", "## BAITS & LURES", "## CAPTAIN'S TIPS" for the AREA (rank 1's readings apply), noting spot-specific structure/depth tactics where they matter.\n`
     : "";
-  const user = `Structured trip data (JSON) for the brief below. Write the brief exactly per your system instructions, scoped to ${fishLabel}. Use ONLY these values, omit any point whose field is null or missing, and never invent numbers.${autoNote}${runNote}
+  const user = `Structured trip data (JSON) for the brief below. Write it exactly per your system instructions, scoped to ${fishLabel}. Use ONLY these values, omit any field that is null/missing, never invent numbers.${autoNote}${runNote}
 
-${JSON.stringify(payloadForModel, null, 2)}`;
+${JSON.stringify(payloadForModel)}`;
 
   // ── Call Anthropic (key stays here) ─────────────────────────────────────────
   try {
@@ -220,11 +203,10 @@ ${JSON.stringify(payloadForModel, null, 2)}`;
       },
       body: JSON.stringify({
         model: MODEL,
-        // A full 5-section brief (conditions, water, per-species bite, baits &
-        // lures, captain's tips) needs headroom so it never truncates mid-section
-        // — the earlier 1100 cap cut off BAITS & LURES entirely. 2400 covers a
-        // multi-species brief with margin.
-        max_tokens: 2400,
+        // Output tokens are the main cost driver on Haiku, and the prompt now
+        // asks for a tight brief. 2000 still covers a multi-species / run-plan
+        // brief across all 5 sections without truncating mid-section.
+        max_tokens: 2000,
         // Prompt caching: the system prompt is identical on every brief, so mark
         // it cacheable. After the first call, repeat calls within the cache
         // window reuse it at ~90% lower input cost.

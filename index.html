@@ -242,6 +242,10 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
 /* Trailing spacer in the conditions strip — keeps the mobile right-edge fade
    mask off the last real value (tide time). Empty, non-interactive. */
 .wx-spacer{min-width:18px;border-right:none !important;padding:0 !important}
+/* The real last content cell (tide) sits just before the spacer, so it isn't
+   :last-child and would otherwise draw its divider — a faint vertical line
+   trailing the tide time. Drop the divider on whichever cell precedes the spacer. */
+.wx-cell:has(+ .wx-spacer){border-right:none}
 
 /* Modern menu button */
 #nav-btn{
@@ -268,30 +272,29 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   margin-top:3px;font-weight:700;
 }
 
-/* AI Captain's Brief button — purple pill in the header right zone. */
+/* AI Captain's Brief button — bold purple pill in the header right zone. */
 #hdr-brief-btn{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;
-  width:56px;height:56px;
-  background:linear-gradient(180deg,rgba(168,85,247,.22),rgba(168,85,247,.12));
-  border:1px solid rgba(192,132,252,.42);
+  display:flex;align-items:center;justify-content:center;
+  height:56px;padding:0 20px;
+  background:linear-gradient(180deg,rgba(168,85,247,.30),rgba(147,51,234,.18));
+  border:1px solid rgba(192,132,252,.5);
   border-radius:14px;
   cursor:pointer;flex-shrink:0;
   transition:all .18s cubic-bezier(.4,0,.2,1);
-  box-shadow:0 1px 0 rgba(255,255,255,.06) inset;
+  box-shadow:0 2px 10px rgba(147,51,234,.18),0 1px 0 rgba(255,255,255,.08) inset;
   font-family:'Segoe UI',Arial,sans-serif;
 }
 #hdr-brief-btn:hover{
-  background:linear-gradient(180deg,rgba(168,85,247,.34),rgba(168,85,247,.18));
-  border-color:rgba(192,132,252,.7);
+  background:linear-gradient(180deg,rgba(168,85,247,.42),rgba(147,51,234,.26));
+  border-color:rgba(216,180,254,.8);
   transform:translateY(-1px);
-  box-shadow:0 4px 14px rgba(168,85,247,.25),0 1px 0 rgba(255,255,255,.08) inset;
+  box-shadow:0 6px 18px rgba(147,51,234,.32),0 1px 0 rgba(255,255,255,.1) inset;
 }
-#hdr-brief-btn:active{transform:translateY(0) scale(.97)}
-.hdr-brief-ico{font-size:20px;line-height:1}
+#hdr-brief-btn:active{transform:translateY(0) scale(.98)}
 .hdr-brief-label{
-  font-size:10px;color:#e2c9ff;letter-spacing:.1em;
-  font-weight:800;text-transform:uppercase;
+  font-size:13px;color:#f3e8ff;letter-spacing:.04em;line-height:1.1;
+  font-weight:800;text-transform:uppercase;text-align:center;
+  text-shadow:0 1px 2px rgba(76,29,149,.5);
 }
 
 /* Old layout helpers — kept for compatibility */
@@ -399,9 +402,8 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     pointer-events:none;
   }
   #nav-btn{width:46px;height:46px;gap:4px;border-radius:13px}
-  #hdr-brief-btn{width:46px;height:46px;gap:2px;border-radius:13px}
-  .hdr-brief-ico{font-size:18px}
-  .hdr-brief-label{display:none}
+  #hdr-brief-btn{height:46px;padding:0 12px;border-radius:13px}
+  .hdr-brief-label{display:block;font-size:11px;letter-spacing:.02em}
   .nav-bar{width:20px;height:2.5px}
   .nav-label{display:none}
   #nav-menu{
@@ -607,7 +609,8 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   .ctrl-card,#sp-btn,#port-btn{padding:0 10px}
   .ctrl-card-value{font-size:12px;gap:6px}
   #nav-btn{width:44px;height:44px}
-  #hdr-brief-btn{width:44px;height:44px}
+  #hdr-brief-btn{height:44px;padding:0 9px}
+  .hdr-brief-label{font-size:10px}
 }
 
 /* Zoom buttons — larger, easier to tap on a phone */
@@ -1327,15 +1330,51 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
 .ztag{padding:2px 7px;border-radius:8px;font-size:9px;font-weight:600}
 .rcard{padding:11px 13px;background:white;border:1px solid #d0b860;border-radius:6px;margin-bottom:8px}
 .sp-pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-.sp-pill{padding:5px 11px;border-radius:12px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid}
-#brief-btn{
-  padding:11px 22px;border:none;border-radius:6px;font-size:12px;font-weight:700;
-  cursor:pointer;letter-spacing:.07em;margin-bottom:12px;transition:all .2s;
+.sp-pill{padding:5px 11px;border-radius:12px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid;transition:all .15s}
+
+/* Departure-port card — pinned to the top of the AI brief panel so the captain
+   always sees which port the run is being planned FROM. */
+.brief-depart{
+  background:linear-gradient(180deg,rgba(168,85,247,.16),rgba(147,51,234,.08));
+  border:1px solid rgba(192,132,252,.34);border-radius:12px;
+  padding:11px 13px;margin-bottom:14px;
 }
-#brief-btn:not([disabled]){background:#1c3a5e;color:#f0e8d0;box-shadow:0 2px 8px rgba(28,58,94,.4)}
-#brief-btn[disabled]{background:#c8b060;color:#8a7030;cursor:not-allowed}
-#brief-out{padding:14px 16px;background:#f0fdf4;border:1.5px solid #16a34a;border-radius:10px;font-size:13px;line-height:1.6}
-.bout-hdr{font-size:10px;color:#166534;letter-spacing:.09em;margin-bottom:8px;font-weight:700}
+.brief-depart-main{display:flex;align-items:center;gap:11px}
+.brief-depart-ico{
+  font-size:20px;line-height:1;flex:0 0 auto;
+  width:38px;height:38px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(168,85,247,.18);border:1px solid rgba(192,132,252,.3);
+}
+.brief-depart-lbl{font-size:9.5px;color:#c8a6ee;letter-spacing:.12em;font-weight:800;text-transform:uppercase}
+.brief-depart-port{font-size:16px;font-weight:800;color:#f6f0ff;line-height:1.15;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brief-depart-port.none{color:#f0abfc;font-size:13.5px}
+.brief-depart-meta{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;
+  margin-top:9px;padding-top:9px;border-top:1px solid rgba(192,132,252,.18);
+  font-size:11.5px;color:#d8c4f0;font-weight:600;
+}
+.brief-depart-chip{
+  background:rgba(168,85,247,.2);border:1px solid rgba(192,132,252,.4);
+  color:#eaddff;border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:800;
+  letter-spacing:.03em;
+}
+#brief-btn{
+  width:100%;padding:13px 22px;border:1px solid rgba(192,132,252,.5);border-radius:11px;
+  font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  cursor:pointer;margin-bottom:12px;transition:all .18s;font-family:inherit;
+}
+#brief-btn:not([disabled]){
+  background:linear-gradient(180deg,rgba(168,85,247,.4),rgba(147,51,234,.26));
+  color:#f6f0ff;box-shadow:0 4px 16px rgba(147,51,234,.28),0 1px 0 rgba(255,255,255,.08) inset;
+}
+#brief-btn:not([disabled]):hover{
+  background:linear-gradient(180deg,rgba(168,85,247,.52),rgba(147,51,234,.34));
+  border-color:rgba(216,180,254,.8);transform:translateY(-1px);
+}
+#brief-btn[disabled]{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12);color:#6b8bab;cursor:not-allowed}
+#brief-out{padding:14px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.2);border-radius:12px;font-size:13px;line-height:1.6}
+.bout-hdr{font-size:10px;color:#c084fc;letter-spacing:.09em;margin-bottom:8px;font-weight:700}
 
 /* ── AI CAPTAIN'S BRIEF — modern modal + rendered markdown ──────────────────── */
 #brief-modal{
@@ -2171,7 +2210,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
   <div class="hdr-right">
 
     <button id="hdr-brief-btn" onclick="openCaptainsBrief()" title="AI Captain's Brief — plan your top spots">
-      <span class="hdr-brief-ico" aria-hidden="true">🤖</span><span class="hdr-brief-label">Brief</span>
+      <span class="hdr-brief-label">AI Captain's<br>Brief</span>
     </button>
 
     <button id="nav-btn" onclick="toggleNav()" title="Open menu">
@@ -2267,7 +2306,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
         <button type="button" class="nav-row" data-paid="1" onclick="navOpenFromMenu(openRecentBriefs)">
-          <span class="nav-ico">🤖</span>
+          <span class="nav-ico">✦</span>
           <span class="nav-row-body">
             <span class="nav-row-title">Recent Captain's Briefs</span>
             <span class="nav-row-sub" id="nav-brief-recall-sub">Reopen briefs from the last 48 hours</span>
@@ -4900,7 +4939,7 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
   <div class="brief-card">
     <div class="brief-card-head">
       <div style="min-width:0">
-        <div class="bc-eyebrow">🤖 AI Captain's Brief</div>
+        <div class="bc-eyebrow">AI Captain's Brief</div>
         <div id="brief-modal-title" class="bc-title">Pre-Trip Brief</div>
         <div id="brief-modal-sub" class="bc-sub"></div>
       </div>
