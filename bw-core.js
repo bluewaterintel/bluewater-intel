@@ -9617,6 +9617,8 @@ let rulerActive = false;
 let rulerPoints = [];         // array of {lat, lng}
 let rulerLayer = null;        // Leaflet feature group holding polyline + markers
 let rulerClickHandler = null; // bound click handler so we can remove it
+let _rulerPopupBlocker = null;// popupopen handler active only while measuring
+let _rulerLastPt = null;      // {lat,lng,t} — for one-tap-one-point dedup
 
 // Great-circle distance between two lat/lng points in nautical miles.
 // Object-based signature (takes {lat, lng} points). Distinct from the
@@ -9686,6 +9688,19 @@ function rulerActivate(){
   if(MAP){
     rulerClickHandler = e => rulerAddPoint(e.latlng);
     MAP.on("click", rulerClickHandler);
+    // Taps on spot markers (waypoints, canyons, ports) normally open a popup,
+    // which auto-pans the map and hides the point that was just dropped — so on
+    // phones it looked like the tap "did nothing." While measuring, swallow the
+    // popup and snap a measurement point to the marker's exact coordinates,
+    // which also makes spot-to-spot distances precise. Dedup in rulerAddPoint
+    // keeps a single tap from counting twice when the marker's own click
+    // handler already added the point.
+    _rulerPopupBlocker = (ev) => {
+      const ll = (ev.popup && ev.popup.getLatLng) ? ev.popup.getLatLng() : null;
+      MAP.closePopup();
+      if(ll) rulerAddPoint(ll);
+    };
+    MAP.on("popupopen", _rulerPopupBlocker);
   }
 }
 
@@ -9701,6 +9716,11 @@ function rulerDeactivate(){
     MAP.off("click", rulerClickHandler);
     rulerClickHandler = null;
   }
+  if(MAP && _rulerPopupBlocker){
+    MAP.off("popupopen", _rulerPopupBlocker);
+    _rulerPopupBlocker = null;
+  }
+  _rulerLastPt = null;
   rulerClear();
 }
 
@@ -9715,7 +9735,19 @@ function rulerClear(){
 
 function rulerAddPoint(latlng){
   if(!rulerActive || !MAP) return;
-  rulerPoints.push({lat: latlng.lat, lng: latlng.lng});
+  const lat = latlng.lat, lng = latlng.lng;
+  // One tap = one point. A tap on a popup marker can arrive twice (the marker's
+  // own click handler AND the popup-suppression handler) with identical coords;
+  // drop the duplicate if it lands within a short window.
+  const now = Date.now();
+  if(_rulerLastPt &&
+     Math.abs(_rulerLastPt.lat - lat) < 1e-7 &&
+     Math.abs(_rulerLastPt.lng - lng) < 1e-7 &&
+     (now - _rulerLastPt.t) < 900){
+    return;
+  }
+  _rulerLastPt = {lat, lng, t: now};
+  rulerPoints.push({lat, lng});
   rulerRedraw();
 }
 
