@@ -72,9 +72,15 @@ const PREDICT_SPECIES_PREFS = {
   // and the new bottom-structure factor (not a hard depth cap) now handles
   // "featureless deep vs real canyon feature," so the cap no longer needs to.
   whitemarlin:  {tempIdeal:[72,80], tempWorking:[68,82], chlorPref:"low",     depthBands:[[100,2000]], breakPref:"edge"  },
-  spearfish:    {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"low",     depthBands:[[300,2000]], breakPref:"edge"  },
+  // Spearfish band starts at 150 m (≈80 fathoms): longbills are a true blue-water
+  // fish but are routinely raised in Mid-Atlantic white-marlin spreads right on
+  // the 100-fathom line — starting at 300 m scored those grounds ~0%.
+  spearfish:    {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"low",     depthBands:[[150,2000]], breakPref:"edge"  },
   sailfish:     {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"low",     depthBands:[[50,500]],   breakPref:"edge"  },
-  swordfish:    {tempIdeal:[64,72], tempWorking:[58,76], chlorPref:"any",     depthBands:[[300,2000]], breakPref:"any"  },
+  // Swordfish night fishery works the canyon lip at ~1,000 ft (≈300 m); daytime
+  // drops go deeper. Lower bound 250 m (was 300) so the classic canyon-edge bite
+  // isn't scored as out-of-band.
+  swordfish:    {tempIdeal:[64,72], tempWorking:[58,76], chlorPref:"any",     depthBands:[[250,2000]], breakPref:"any"  },
   // Yellowfin — deep-water. Lower bound 150 m is the key guard: the old [40,300]
   // band let shallow shelf cells near VA Beach (108 ft / 33m) score "ideal,"
   // which was wrong (real yellowfin are 80+ fathom fish, ≥150 m). Upper bound
@@ -170,25 +176,23 @@ const MIGRATION_PHASE = {
   yellowfin:    {refLat: 36, latPhase: 0.50},
   bigeye:       {refLat: 36, latPhase: 0.50},
   blackfin:     {refLat: 32, latPhase: 0.45},
-  skipjack:     {refLat: 34, latPhase: 0.50},
   bluemarlin:   {refLat: 33, latPhase: 0.50},
   whitemarlin:  {refLat: 35, latPhase: 0.40},
-  spearfish:    {refLat: 33, latPhase: 0.45},
   sailfish:     {refLat: 30, latPhase: 0.40},
   mahi:         {refLat: 33, latPhase: 0.50},
   wahoo:        {refLat: 30, latPhase: 0.40},
   // ── COASTAL MIGRATORS (spring north / fall south) ────────────────────
-  // NOTE: striper, bluefish, cobia, tarpon, king/Spanish mackerel, bonito and
-  // false albacore now use explicit REGIONAL_SEASONS tables (below), which
-  // bypass this latitude-shift entirely. Entries kept here only for species
-  // WITHOUT a regional table are what actually take effect.
+  // NOTE: striper, bluefish, cobia, tarpon, king/Spanish mackerel, bonito,
+  // false albacore, snook, redfish, speckledtrout, bonefish, permit,
+  // cayellowtail, spearfish, swordfish, and skipjack now use explicit
+  // REGIONAL_SEASONS tables (below), which bypass this latitude-shift entirely.
+  // Entries kept here only for species WITHOUT a regional table take effect.
   striper:      {refLat: 38, latPhase: 0.30},
   bluefish:     {refLat: 36, latPhase: 0.30},
   cobia:        {refLat: 32, latPhase: 0.30},
   tarpon:       {refLat: 27, latPhase: 0.30},
   // ── SEMI-RESIDENT (small lat shift) ──────────────────────────────────
   blackseabass: {refLat: 38, latPhase: 0.15},
-  swordfish:    {refLat: 36, latPhase: 0.20},
   // ── NORTHERN RESIDENTS (minimal migration; small but nonzero shift) ──
   cod:          {refLat: 42, latPhase: 0.10},
   haddock:      {refLat: 42, latPhase: 0.10},
@@ -632,6 +636,163 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:1,Feb:1,Mar:1,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
      seasons:{Jan:1,Feb:1,Mar:1,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:1}},
+  ],
+
+  // ── SNOOK ────────────────────────────────────────────────────────────────
+  // A subtropical inshore predator — essentially a Florida/Gulf fishery. Freeze
+  // events keep resident fish south of ~Cape Canaveral; north of that is seasonal
+  // push only. Without a regional map the generic year-round curve lit up snook
+  // off New Jersey and Maine.
+  snook: [
+    {centerLat: 25.7, centerLng: -80.1, radiusNm: 200, label: "SE FL / Miami / Keys",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 27.2, centerLng: -80.2, radiusNm: 160, label: "Central FL Atlantic (Stuart–Canaveral)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 29.0, centerLng: -80.9, radiusNm: 150, label: "NE FL (Daytona–Jax)",
+     // Seasonal visitors only — warm months; gone after hard freezes.
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 26.5, centerLng: -82.0, radiusNm: 170, label: "SW FL (Fort Myers–Naples)",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 120, label: "South TX (rare)",
+     // Occasional Gulf snook strays — low abundance, warm months only.
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
+  ],
+
+  // ── REDFISH (RED DRUM) ───────────────────────────────────────────────────
+  // Atlantic and Gulf inshore icon from NC sounds through Texas. Peak fall
+  // bull-drum run (Sep–Nov); year-round in the warmest Gulf/FL zones.
+  redfish: [
+    {centerLat: 35.0, centerLng: -76.2, radiusNm: 160, label: "Pamlico / OBX sounds",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 36.8, centerLng: -76.0, radiusNm: 120, label: "VA Beach / Chesapeake mouth",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 32.7, centerLng: -79.9, radiusNm: 180, label: "SC / GA (Charleston)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 30.0, centerLng: -81.2, radiusNm: 160, label: "NE FL Atlantic",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf (LA/MS/AL)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+  ],
+
+  // ── SPECKLED TROUT (SPOTTED SEATROUT) ────────────────────────────────────
+  // Premier inshore fish from Chesapeake south through the Gulf. Spring and fall
+  // peaks; summer doldrums in the hottest shallows.
+  speckledtrout: [
+    {centerLat: 36.9, centerLng: -76.0, radiusNm: 130, label: "VA Beach / Lynnhaven",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:0}},
+    {centerLat: 35.2, centerLng: -75.8, radiusNm: 150, label: "NC sounds / OBX",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 32.7, centerLng: -79.9, radiusNm: 180, label: "SC / GA",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 29.0, centerLng: -80.9, radiusNm: 170, label: "NE FL (Mosquito Lagoon)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
+  ],
+
+  // ── BONEFISH ───────────────────────────────────────────────────────────────
+  // Keys/Bahamas tropical flats species — extremely limited range. Intentionally
+  // NO Atlantic coast north of Miami and NO Gulf coverage.
+  bonefish: [
+    {centerLat: 25.0, centerLng: -80.5, radiusNm: 120, label: "Florida Keys flats",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+    {centerLat: 25.7, centerLng: -80.2, radiusNm: 80, label: "Biscayne / Key Largo",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+    {centerLat: 26.0, centerLng: -78.0, radiusNm: 170, label: "Bahamas",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+  ],
+
+  // ── PERMIT ───────────────────────────────────────────────────────────────
+  // Keys/Bahamas flats holy grail; nearshore wrecks in South FL. Peak spring.
+  permit: [
+    {centerLat: 24.6, centerLng: -81.4, radiusNm: 140, label: "Florida Keys",
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:1}},
+    {centerLat: 25.7, centerLng: -80.1, radiusNm: 120, label: "SE FL nearshore",
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 26.0, centerLng: -78.0, radiusNm: 170, label: "Bahamas",
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:1}},
+  ],
+
+  // ── CALIFORNIA YELLOWTAIL ────────────────────────────────────────────────
+  // Seriola lalandi — a SoCal-only fishery. Without this region the generic curve
+  // scored yellowtail off Oregon Inlet and the Gulf. ~2,000 nm from Atlantic
+  // regions so no cross-coast bleed.
+  cayellowtail: [
+    {centerLat: 32.8, centerLng: -118.5, radiusNm: 340, label: "Southern California",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+  ],
+
+  // ── LONGBILL SPEARFISH ───────────────────────────────────────────────────
+  // Rare Atlantic billfish raised in white-marlin spreads. Same broad geography
+  // but much lower abundance — peaks scaled down vs white marlin.
+  spearfish: [
+    {centerLat: 38.3, centerLng: -73.3, radiusNm: 200, label: "Mid-Atlantic canyons",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:1,Jul:2,Aug:2,Sep:2,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 35.5, centerLng: -74.8, radiusNm: 170, label: "NC / OBX Gulf Stream",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:1,Jul:2,Aug:2,Sep:2,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 32.8, centerLng: -77.8, radiusNm: 190, label: "Carolinas Gulf Stream",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:1,Jun:1,Jul:2,Aug:2,Sep:1,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 26.0, centerLng: -78.5, radiusNm: 200, label: "SE FL / Bahamas",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:1,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 28.0, centerLng: -86.5, radiusNm: 260, label: "Eastern Gulf",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:1,Jun:2,Jul:2,Aug:2,Sep:1,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 27.5, centerLng: -93.5, radiusNm: 280, label: "Western Gulf",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:1,Jun:2,Jul:2,Aug:2,Sep:1,Oct:1,Nov:0,Dec:0}},
+  ],
+
+  // ── SWORDFISH ────────────────────────────────────────────────────────────
+  // Opposite peaks by region: SE FL/Keys/Bahamas WINTER (Dec–Mar); Mid-Atlantic
+  // and NC canyon summer–fall (Jul–Oct); Hatteras Hole also fishes winter daytime
+  // drops; Gulf late spring–summer.
+  swordfish: [
+    {centerLat: 40.5, centerLng: -70.0, radiusNm: 240, label: "New England canyons",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 38.3, centerLng: -73.3, radiusNm: 210, label: "Mid-Atlantic canyons",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
+    {centerLat: 35.3, centerLng: -75.0, radiusNm: 160, label: "NC / Hatteras Hole",
+     // Famous winter daytime drops AND summer canyon fish.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:1,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:2}},
+    {centerLat: 32.8, centerLng: -77.8, radiusNm: 190, label: "Carolinas Gulf Stream",
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 25.7, centerLng: -80.1, radiusNm: 190, label: "SE FL / Miami",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:2,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:3}},
+    {centerLat: 24.6, centerLng: -81.4, radiusNm: 150, label: "Florida Keys",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:2,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:3}},
+    {centerLat: 26.0, centerLng: -78.0, radiusNm: 170, label: "Bahamas",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:2,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:3}},
+    {centerLat: 28.0, centerLng: -86.5, radiusNm: 260, label: "Eastern Gulf",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 27.5, centerLng: -93.5, radiusNm: 280, label: "Western Gulf",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
+  ],
+
+  // ── SKIPJACK TUNA ────────────────────────────────────────────────────────
+  // Aggressive warm-water tuna — abundant in the Gulf Stream south, summer
+  // strays to the Mid-Atlantic. Essentially absent north of NJ and from cold
+  // inshore shelf water.
+  skipjack: [
+    {centerLat: 38.3, centerLng: -73.3, radiusNm: 180, label: "Mid-Atlantic (summer)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:1,Jul:2,Aug:2,Sep:2,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 35.0, centerLng: -75.0, radiusNm: 150, label: "NC / OBX Gulf Stream",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 32.8, centerLng: -77.8, radiusNm: 190, label: "Carolinas Gulf Stream",
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:1}},
+    {centerLat: 30.5, centerLng: -80.0, radiusNm: 180, label: "GA / NE Florida",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+    {centerLat: 26.5, centerLng: -79.8, radiusNm: 170, label: "SE FL / Keys",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Gulf of Mexico",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
   ],
 };
 

@@ -92,7 +92,7 @@ const ENC_SPECIES = [
         {species:"White Marlin", tell:"This is the classic mix-up. White marlin has ROUNDED fin tips and a deeper, fuller body; spearfish has a more angular dorsal and a much thinner, snakier body. The definitive check is the vent (anus) position — far forward of the anal fin on a spearfish, but right next to it on a white marlin. Spearfish also has a noticeably shorter, slimmer bill."},
         {species:"Sailfish", tell:"Sailfish has the huge full-length sail dorsal; spearfish's dorsal is low and even, never a sail. Both are slim, but the dorsal fin settles it instantly."}]
     },
-    facts:{ size:"15-50 lbs", record:"127 lbs 13 oz (Atlantic)", legal:"Federal HMS — Atlantic billfish; release required for most permit holders", season:"Summer - fall (warmest blue water)" },
+    facts:{ size:"15-50 lbs", record:"127 lbs 13 oz (Atlantic)", legal:"Federal HMS — Atlantic billfish; release required for most permit holders", season:"Regional — Mid-Atlantic/NC canyon spreads peak summer (Jul–Sep); Gulf Stream Carolinas; Gulf Jun–Aug. Rare incidental." },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:2,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0},
     where:"Deep offshore blue water along the Gulf Stream and canyon edges — Mid-Atlantic canyons, the Gulf Stream off the Carolinas, and the Gulf of Mexico. Pelagic and oceanic; rarely close to the shelf. Often an incidental raise in a white marlin spread.",
     tackle:[
@@ -356,9 +356,9 @@ const ENC_SPECIES = [
   {
     id:"redfish", name:"Redfish (Red Drum)", color:"#b91414", cat:"inshore",
     snippet:"The Carolina/Georgia inshore icon. From slot fish in marshes to giant 50+ pounders on the surf and inlets in fall.",
-    facts:{ size:"3-50+ lbs", record:"94 lbs (NC)", legal:"18-27\" slot (NC); 1 fish/day; max 1 over slot per year", season:"Year-round (peak: September-November)" },
+    facts:{ size:"3-50+ lbs", record:"94 lbs (NC)", legal:"18-27\" slot (NC); 1 fish/day; max 1 over slot per year", season:"Regional — Atlantic & Gulf inshore; peak fall bull-drum run (Sep–Nov). NC/SC/GA sounds and Gulf TX–FL year-round." },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2},
-    where:"Pamlico Sound, Cape Lookout, Charleston Harbor flats, Georgetown SC. Marsh edges, oyster bars, inlets, and surf.",
+    where:"Pamlico Sound, Cape Lookout, Charleston Harbor flats, Georgetown SC, and Gulf bays from FL through Texas. Marsh edges, oyster bars, inlets, and surf — not a New England or California fishery.",
     tackle:[
       "Medium spinning gear, 7-7'6\" rods, 3000-5000 reels",
       "20-30 lb braid with 20-30 lb fluorocarbon leader",
@@ -744,7 +744,7 @@ const ENC_SPECIES = [
         {species:"Blackfin Tuna", tell:"Blackfin has NO belly stripes and dusky finlets; skipjack's lower-side stripes are unmistakable. Same offshore range, so check the belly."},
         {species:"False Albacore", tell:"Albie has wavy scribbles on the upper back and spots under the pectoral, but no belly stripes. Skipjack's stripes run along the belly."}]
     },
-    facts:{ size:"4-15 lbs", record:"45 lbs (Baja)", legal:"No federal size or bag limit (HMS permit for the vessel)", season:"Summer - fall (warmest water)" },
+    facts:{ size:"4-15 lbs", record:"45 lbs (Baja)", legal:"No federal size or bag limit (HMS permit for the vessel)", season:"Regional — Gulf Stream & Gulf year-round south; Mid-Atlantic/NC summer (Jun–Sep). Warm-water tuna — absent north of NJ." },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0},
     where:"Gulf Stream edges, offshore lumps and temperature breaks, weedlines, and around floating debris from the Mid-Atlantic through Florida and across the Gulf. Often the first tuna on a trolling spread.",
     tackle:[
@@ -831,7 +831,7 @@ const ENC_SPECIES = [
   {
     id:"speckledtrout", name:"Speckled Trout", color:"#7a9a4a", cat:"inshore",
     snippet:"The premier inshore gamefish from Virginia south. Spots like a brown trout, mouth like a tarpon, fight like a redfish. Year-round with peak action in fall and spring.",
-    facts:{ size:"1-4 lbs (gators 6+)", record:"17 lbs 7 oz (FL)", legal:"14-18 inch minimum varies by state, slot in NC/VA", season:"Year-round (peak: October-November, April-May)" },
+    facts:{ size:"1-4 lbs (gators 6+)", record:"17 lbs 7 oz (FL)", legal:"14-18 inch minimum varies by state, slot in NC/VA", season:"Regional — VA through Gulf; peak fall (Oct–Nov) and spring (Apr–May). Summer doldrums in the hottest shallows." },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2},
     where:"Grass flats, oyster bars, creek mouths, marsh drains, bridges and docks at night. Pamlico Sound, Pungo River, Lynnhaven Inlet, Mosquito Lagoon, Charleston Harbor creeks.",
     tackle:[
@@ -1036,9 +1036,9 @@ const ENC_SPECIES = [
   {
     id:"snook", name:"Snook", color:"#9a8a4a", cat:"inshore",
     snippet:"Linesider. Florida's signature inshore predator. Ambushes from structure and current — bridge pilings, mangrove edges, and inlet jetties.",
-    facts:{ size:"5-25 lbs", record:"53 lbs 10 oz (Costa Rica)", legal:"FL: 28-33\" slot, 1/day; closed seasons vary by region", season:"Year-round south FL; April-November north" },
+    facts:{ size:"5-25 lbs", record:"53 lbs 10 oz (Costa Rica)", legal:"FL: 28-33\" slot, 1/day; closed seasons vary by region", season:"Regional — SE FL/Keys year-round; Central FL Apr–Nov; NE FL warm months only. Essentially a Florida/Gulf fishery." },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:1},
-    where:"Mangrove shorelines, inlet jetties, bridge pilings, beach passes during summer spawn. Stuart, Sebastian Inlet, Jupiter, the Everglades.",
+    where:"SE Florida, the Keys, and Gulf coast inlets — mangrove shorelines, bridge pilings, and beach passes. Not a Mid-Atlantic or New England species.",
     tackle:[
       "7-foot medium-heavy spinning rod with 20-30 lb braid",
       "30-40 lb fluorocarbon leader (snook are line-shy in clear water — drop to lighter pound test if spooky)",
@@ -1059,9 +1059,9 @@ const ENC_SPECIES = [
   {
     id:"bonefish", name:"Bonefish", color:"#88a8c4", cat:"inshore",
     snippet:"The Gray Ghost. Famous for blistering 100-yard runs on light tackle. Sight-fished on shallow tropical flats — the ultimate flats challenge.",
-    facts:{ size:"3-12 lbs", record:"19 lbs (Zululand)", legal:"Catch-and-release only in FL", season:"Year-round south FL; peak Apr-Oct" },
+    facts:{ size:"3-12 lbs", record:"19 lbs (Zululand)", legal:"Catch-and-release only in FL", season:"Regional — Florida Keys & Bahamas flats; peak Apr–Oct. Not found north of Miami or on the Gulf coast." },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"Florida Keys flats (Key Largo to Marquesas), Biscayne Bay, Indian River. Tailing fish on a falling tide are gold.",
+    where:"Florida Keys flats (Key Largo to Marquesas), Biscayne Bay, and the Bahamas. Tailing fish on a falling tide — a Keys/Bahamas specialty only.",
     tackle:[
       "7-8 weight fly rod with floating line — the classic bonefish setup",
       "Spinning: 7-foot light rod with 10 lb braid, 20 lb fluoro leader",
@@ -1082,9 +1082,9 @@ const ENC_SPECIES = [
   {
     id:"permit", name:"Permit", color:"#b8b890", cat:"inshore",
     snippet:"Holy grail of flats fishing. Hyper-spooky, ultra-selective, and brutally strong. Catching one on fly is a lifetime trophy.",
-    facts:{ size:"10-40 lbs", record:"60 lbs (Mauritius)", legal:"FL: 1 per day, 11-22\" slot OR over 22\"; tournament permit area regs apply", season:"Year-round south FL; peak Mar-Jun" },
+    facts:{ size:"10-40 lbs", record:"60 lbs (Mauritius)", legal:"FL: 1 per day, 11-22\" slot OR over 22\"; tournament permit area regs apply", season:"Regional — Florida Keys & Bahamas flats; peak Mar–Jun. South FL nearshore wrecks." },
     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:1},
-    where:"Marquesas Keys, Content Keys, Key West backcountry, Boca Grande wrecks. Also nearshore wrecks 8-15nm offshore.",
+    where:"Marquesas Keys, Content Keys, Key West backcountry, and the Bahamas — plus nearshore South FL wrecks. Not a north-coast or Gulf mainstream fishery.",
     tackle:[
       "9-10 weight fly rod with intermediate or floating line",
       "Spinning: 7-foot medium rod, 20 lb braid, 25 lb fluoro leader",
@@ -1351,9 +1351,9 @@ const ENC_SPECIES = [
   {
     id:"cayellowtail", name:"California Yellowtail", color:"#d9a520", cat:"nearshore",
     snippet:"Southern California's premier inshore gamefish — the 'mossback.' A structure-oriented jack that pulls like a freight train straight for the rocks and kelp. Live bait and yo-yo iron are the game.",
-    facts:{ size:"8-25 lbs common; 30-40+ lb 'mossbacks' are trophies", record:"~80 lbs (Baja); CA rod-and-reel near 63 lbs", legal:"CA: 10/day, no minimum size (check current CDFW regs)", season:"Best late spring through fall; year-round at the islands in warm years" },
+    facts:{ size:"8-25 lbs common; 30-40+ lb 'mossbacks' are trophies", record:"~80 lbs (Baja); CA rod-and-reel near 63 lbs", legal:"CA: 10/day, no minimum size (check current CDFW regs)", season:"Southern California only — best late spring through fall; year-round at the islands in warm years." },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"Coronado Islands, San Diego kelp beds, La Jolla, Catalina & San Clemente Islands, and offshore banks (Cortez, Tanner). Holds on hard structure, kelp edges, and high spots; also runs down drifting kelp paddies well offshore.",
+    where:"Coronado Islands, San Diego kelp beds, La Jolla, Catalina & San Clemente Islands, and offshore banks (Cortez, Tanner). A SoCal-only fishery — not present on the Atlantic or Gulf coasts.",
     tackle:[
       "Jig stick / conventional: 7-8 ft rod with 40-65 lb braid or mono for turning fish off structure",
       "30-50 lb fluorocarbon leader",
