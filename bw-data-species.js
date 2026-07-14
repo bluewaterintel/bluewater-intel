@@ -67,14 +67,21 @@ const PREDICT_SPECIES_PREFS = {
   // not only over 200 m+ deep water. Starting at 200 m made the exact edge these
   // are trolled on read "poor." The blue-water gate still requires real depth.
   bluemarlin:   {tempIdeal:[76,84], tempWorking:[72,86], chlorPref:"low",     depthBands:[[150,1500]], breakPref:"edge"  },
-  whitemarlin:  {tempIdeal:[72,80], tempWorking:[68,82], chlorPref:"low",     depthBands:[[100,800]],  breakPref:"edge"  },
+  // White marlin — shelf-edge (100 m) out over deep canyon/abyssal water. Upper
+  // bound extended 800→2000 m: white marlin roam deep blue water on the break,
+  // and the new bottom-structure factor (not a hard depth cap) now handles
+  // "featureless deep vs real canyon feature," so the cap no longer needs to.
+  whitemarlin:  {tempIdeal:[72,80], tempWorking:[68,82], chlorPref:"low",     depthBands:[[100,2000]], breakPref:"edge"  },
   spearfish:    {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"low",     depthBands:[[300,2000]], breakPref:"edge"  },
   sailfish:     {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"low",     depthBands:[[50,500]],   breakPref:"edge"  },
   swordfish:    {tempIdeal:[64,72], tempWorking:[58,76], chlorPref:"any",     depthBands:[[300,2000]], breakPref:"any"  },
-  // Yellowfin — strictly deep-water. The old [40,300] band let shallow
-  // shelf cells near VA Beach (108 ft / 33m) score as "ideal", which was
-  // wrong. Real yellowfin are caught in 80+ fathom water (≥150m).
-  yellowfin:    {tempIdeal:[70,78], tempWorking:[66,82], chlorPref:"edge",    depthBands:[[150,800]],  breakPref:"edge"  },
+  // Yellowfin — deep-water. Lower bound 150 m is the key guard: the old [40,300]
+  // band let shallow shelf cells near VA Beach (108 ft / 33m) score "ideal,"
+  // which was wrong (real yellowfin are 80+ fathom fish, ≥150 m). Upper bound
+  // extended 800→2000 m: canyon yellowfin routinely hold over 1,000 m+ water on
+  // the break, and the bottom-structure factor now separates a real canyon
+  // feature from flat abyssal plain — so the cap no longer has to.
+  yellowfin:    {tempIdeal:[70,78], tempWorking:[66,82], chlorPref:"edge",    depthBands:[[150,2000]], breakPref:"edge"  },
   // Bluefin — multimodal. NC fall blitz happens in 18-35m (60-115 ft)
   // close to the beach; Mid-Atlantic schoolies hunt the 60-180m shelf
   // break in summer; canyon giants come up over 200-600m water.
@@ -84,7 +91,11 @@ const PREDICT_SPECIES_PREFS = {
   blackfin:     {tempIdeal:[72,80], tempWorking:[68,82], chlorPref:"edge",    depthBands:[[60,400]],   breakPref:"edge" },
   falsealbacore:{tempIdeal:[69,74], tempWorking:[66,78], chlorPref:"edge",    depthBands:[[10,120]],   breakPref:"any"  },
   skipjack:     {tempIdeal:[76,82], tempWorking:[72,86], chlorPref:"edge",    depthBands:[[50,600]],   breakPref:"edge" },
-  wahoo:        {tempIdeal:[72,82], tempWorking:[68,84], chlorPref:"low",     depthBands:[[60,500]],   breakPref:"edge"  },
+  // Wahoo — shelf edge (60 m) and deep drop-offs. Upper bound extended
+  // 500→1500 m: wahoo are high-speed trolled along the break AND over deep water
+  // near banks/canyons (e.g. Bahamas walls, canyon lips), so 500 m was clipping
+  // legitimate deep grounds. Structure factor handles concentration.
+  wahoo:        {tempIdeal:[72,82], tempWorking:[68,84], chlorPref:"low",     depthBands:[[60,1500]],  breakPref:"edge"  },
   // Mahi — happy chasing weed lines from canyon water inshore to the
   // shelf edge. Two bands: ride-along on Gulf Stream (deep) + shelf
   // weed-line patches (shallower).
