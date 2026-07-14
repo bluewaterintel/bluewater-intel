@@ -332,9 +332,9 @@ const ENC_SPECIES = [
   {
     id:"cobia", name:"Cobia", color:"#8b5e1a", cat:"nearshore",
     snippet:"The brown bomber. Shallow-water bruisers cruising buoys, rays, and structure. Sight-casting is the most thrilling way to catch them.",
-    facts:{ size:"20-80 lbs", record:"135 lbs 9 oz (Australia)", legal:"36\" fork length (federal); state limits vary 1-2/day", season:"April - October" },
+    facts:{ size:"20-80 lbs", record:"135 lbs 9 oz (Australia)", legal:"36\" fork length (federal); state limits vary 1-2/day", season:"Regional — Mid-Atlantic/NC spring-summer (peak May-Jul as fish move north); SE & Gulf spring; South FL/Keys and Texas 'ling' run in spring" },
     seasons:{Jan:0,Feb:0,Mar:1,Apr:3,May:3,Jun:3,Jul:3,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0},
-    where:"Chesapeake Bay Bridge Tunnel, OBX inshore wrecks, Cape Lookout, Hatteras Inlet. Cruising rays and turtles in 10-50 ft.",
+    where:"Chesapeake Bay Bridge Tunnel, OBX inshore wrecks, Cape Lookout, Hatteras Inlet (spring-summer). South FL/Keys and the Texas 'ling' run in spring; Gulf beaches and buoys. Cruising rays and turtles in 10-50 ft.",
     tackle:[
       "30-50 lb spinning gear with 50-80 lb braid",
       "Heavy 8000-14000 class sealed spinning reels",
@@ -429,9 +429,9 @@ const ENC_SPECIES = [
   {
     id:"flounder", name:"Summer Flounder (Fluke)", color:"#4d8a0a", cat:"inshore",
     snippet:"The classic Northeast inshore flatfish. Drift fishing with bucktail/Gulp combos in 20-100 ft over sand and structure.",
-    facts:{ size:"1-15 lbs", record:"22 lbs 7 oz (NJ)", legal:"17-20\" depending on state; 3-5 fish bag", season:"May - October" },
+    facts:{ size:"1-15 lbs", record:"22 lbs 7 oz (NJ)", legal:"17-20\" depending on state; 3-5 fish bag", season:"Regional — NE/Mid-Atlantic fluke summer (May-Oct); SE & Gulf (southern/gulf flounder) peak in the fall run (Sep-Nov)" },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0},
-    where:"NJ/NY/Long Island bays and ocean wrecks, OC MD inlets, Chesapeake Bay mouth, OBX nearshore reefs.",
+    where:"NJ/NY/Long Island bays and ocean wrecks, OC MD inlets, Chesapeake Bay mouth, OBX nearshore reefs (summer). SE and Gulf inlets/passes on the fall flounder run.",
     tackle:[
       "7-8 ft medium-light spinning rods",
       "3000-5000 spinning reels with 20-30 lb braid",
@@ -894,9 +894,9 @@ const ENC_SPECIES = [
         {species:"King Mackerel", tell:"King grows far larger, loses its spots as an adult, has NO black dorsal patch, and its lateral line dips sharply under the second dorsal. A small king ('snake') can show spots — look at the dorsal patch (Spanish has it, king doesn't) and the lateral line."},
         {species:"Cero Mackerel", tell:"Cero has spots PLUS a distinct yellow-bronze horizontal stripe down the midbody; Spanish has spots but no stripe. Cero is mostly a S. Florida fish."}]
     },
-    facts:{ size:"2-6 lbs (citation 8+)", record:"13 lbs (NC)", legal:"12 inch fork length federal", season:"May-October (peak: July-September)" },
+    facts:{ size:"2-6 lbs (citation 8+)", record:"13 lbs (NC)", legal:"12 inch fork length federal", season:"Regional — Mid-Atlantic/NC summer (Jun-Sep); SE Atlantic & Gulf spring-fall; a winter fishery in South FL" },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0},
-    where:"Nearshore beaches and inlets, 1-10 nautical miles off. Cape Lookout, Beaufort, OBX, Va Beach, Sandbridge, NJ inlets, Bogue Pier, Avon Pier. Following bait pods.",
+    where:"Nearshore beaches and inlets, 1-10 nautical miles off. Cape Lookout, Beaufort, OBX, Va Beach, Sandbridge, NJ inlets in summer; SE Atlantic and Gulf spring-fall; South FL in winter. Following bait pods.",
     tackle:[
       "Medium-light 7 ft fast-action spinning rods",
       "3000-5000 spinning reels with 15-20 lb braid",
@@ -931,9 +931,9 @@ const ENC_SPECIES = [
         {species:"Spanish Mackerel", tell:"Spanish is much smaller and has a prominent BLACK front patch on the first dorsal fin, plus its lateral line slopes gently (no sharp dip). Spanish also keeps bright yellow-gold oval spots into adulthood; adult kings lose their spots."},
         {species:"Cero Mackerel", tell:"Cero has both yellow spots AND a yellow-bronze stripe along the midbody, with a gently sloping lateral line. King has the abrupt lateral-line dip and no stripe."}]
     },
-    facts:{ size:"5-25 lbs (smokers 40+)", record:"93 lbs (PR)", legal:"24 inch fork length federal", season:"April-November (peak: May-June, September-October)" },
+    facts:{ size:"5-25 lbs (smokers 40+)", record:"93 lbs (PR)", legal:"24 inch fork length federal", season:"Regional — NC/Mid-Atlantic summer-fall (Jun-Oct); they WINTER in South FL/Keys (Nov-Mar); Gulf runs spring & fall" },
     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"Frying Pan Tower, Cape Lookout shoals, Big Rock area, AR-410 reef, OBX nearshore, Va Beach 4A buoy area, all the NC artificial reefs, 5-30 nm offshore.",
+    where:"NC summer-fall: Frying Pan Tower, Cape Lookout shoals, Big Rock, AR-410 and the NC artificial reefs, Va Beach 4A buoy, 5-30 nm off. South FL/Keys in winter; Gulf reefs/wrecks spring & fall.",
     tackle:[
       "Medium-heavy 7 ft conventional or stout spinning rods",
       "Conventional 15-25 size or 6000-8000 spinning with 30-50 lb braid",

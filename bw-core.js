@@ -2989,6 +2989,39 @@ function scoreCell(lat, lng, speciesId){
     }
   }
 
+  // ── WARM-CORE GULF STREAM INFLUENCE (warm-water offshore pelagics) ──────────
+  // The Gulf Stream and its warm-core rings/filaments transport tropical blue
+  // water — and the pelagics that ride it — well beyond a species' calendar
+  // "normal." When a tongue of warm water is actively FLOWING into an area
+  // (strong RTOFS current + genuinely warm SST), tuna/marlin/dolphin/wahoo push
+  // in with it, even early/late in the run. We detect that intrusion from REAL
+  // data: warm SST × strong current drift. It requires BOTH — a warm but slack
+  // patch (no flow) or cold fast water (winter shelf) won't trigger it, so the
+  // warm-SST term self-limits this to physically realistic Stream water.
+  //
+  // Gated to warm-water offshore pelagics (marlin, sail, spearfish, yellowfin,
+  // blackfin, skipjack, wahoo, mahi — working edge ≥80°F). Bottom fish and cool
+  // canyon species (swordfish, bigeye) are excluded.
+  let _streamInf01 = 0;
+  const _warmPelagic = speciesCat === "offshore" && !_isBottom &&
+                       prefs.tempWorking && prefs.tempWorking[1] >= 80;
+  if(_warmPelagic && sst != null && typeof sampleCurrentGrid === "function" &&
+     typeof PREDICT_CUR_GRID !== "undefined" && PREDICT_CUR_GRID){
+    const cur = sampleCurrentGrid(PREDICT_CUR_GRID, lat, lng);
+    const driftKt = cur && cur.driftKts != null ? cur.driftKts : 0;
+    // Warmth ramp: 0 at 72°F → 1 at 80°F (tropical Stream water).
+    const warmth01 = Math.max(0, Math.min(1, (sst - 72) / (80 - 72)));
+    // Flow ramp: 0 at 0.6 kt → 1 at 2.0 kt (core Stream / strong filament).
+    const flow01 = Math.max(0, Math.min(1, (driftKt - 0.6) / (2.0 - 0.6)));
+    _streamInf01 = warmth01 * flow01;
+    // A real warm-water intrusion is also a front-adjacent signal — let it lift
+    // the convergence/front factor (never lower it).
+    if(_streamInf01 > 0){
+      convergence = Math.max(convergence, 0.5 * _streamInf01);
+      if(_curEdge01 <= 0) _curEdge01 = 0.4 * _streamInf01;   // reflect flow in the factor label
+    }
+  }
+
   // ── Factor 5: Recent fishing reports ──
   const reportScore = reportsBoost(lat, lng, speciesId);
 
@@ -3229,16 +3262,26 @@ function scoreCell(lat, lng, speciesId){
   // Floor is a small non-zero so a freak straggler still shows a faint trace
   // rather than a hard zero, but it can never read "good"/"excellent".
   if(_seasonGateActive){
+    // WARM-CORE RANGE EXTENSION: an active warm-water Stream intrusion (real warm
+    // SST + strong current) pulls pelagics in early/late, so treat the LOCAL
+    // season as somewhat stronger for the gate only — the displayed Season factor
+    // is unchanged. Bounded at +0.30 and capped at 0.85 so a Stream filament can
+    // make a shoulder-season area fish well, but can never manufacture a "prime"
+    // reading out of a dead month. (Deep winter self-excludes: no warm SST → no
+    // _streamInf01, so this term is 0 there.)
+    const effSeason = _streamInf01 > 0
+      ? Math.min(0.85, seasonScore + 0.30 * _streamInf01)
+      : seasonScore;
     const _seasonGateFloor = 0.06;
-    const seasonGate = _seasonGateFloor + (1 - _seasonGateFloor) * Math.pow(seasonScore, 0.55);
+    const seasonGate = _seasonGateFloor + (1 - _seasonGateFloor) * Math.pow(effSeason, 0.55);
     finalScore = finalScore * seasonGate;
     // Out-of-season is also a HIGH-confidence call (the fish simply aren't here),
     // which is handled in the confidence-adjustment block below. Here we cap the
     // score so an off-season fish can't read good/excellent no matter how good
     // the water looks.
-    if(seasonScore < 0.2){
+    if(effSeason < 0.2){
       finalScore = Math.min(finalScore, 0.22);   // hard ceiling = "poor"
-    } else if(seasonScore < 0.4){
+    } else if(effSeason < 0.4){
       finalScore = Math.min(finalScore, 0.45);   // ceiling = low "fair"
     }
   }
