@@ -230,6 +230,26 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:2,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
   ],
 
+  // ── YELLOWFIN TUNA ─────────────────────────────────────────────────
+  // Highly migratory — fisheries shift north with warming water. Hatteras/NC
+  // peaks late spring–early summer; mid-summer (Jul–Aug) the better bite is
+  // often off MD/DE/NJ canyons as fish push north and shelf water off Hatteras
+  // warms. A secondary fall run sometimes revisits VA/NC (Sep–Oct).
+  yellowfin: [
+    {centerLat: 35.0, centerLng: -75.0, radiusNm: 120, label: "Hatteras/OBX Gulf Stream edge",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:3,May:3,Jun:3,Jul:1,Aug:1,Sep:2,Oct:3,Nov:2,Dec:0}},
+    {centerLat: 38.5, centerLng: -73.5, radiusNm: 180, label: "Mid-Atlantic canyons (MD/DE/NJ)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 41.5, centerLng: -69.5, radiusNm: 220, label: "New England canyon grounds",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 33.0, centerLng: -77.5, radiusNm: 160, label: "Carolinas shelf/Stream",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 26.5, centerLng: -79.5, radiusNm: 170, label: "SE FL / Keys",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Gulf of Mexico",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+  ],
+
   // ── BLACKFIN TUNA ────────────────────────────────────────────────────
   // A WARM-WATER, Gulf-Stream species. Genuinely abundant only along the
   // SE US (Cape Hatteras south) and through FL/Gulf, where the Stream runs

@@ -9593,8 +9593,8 @@ function updateOceanLegend(){
       <div style="${gap()}">
         <div style="font-size:14px;font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:3px">WIND (kt)</div>
         <div style="height:11px;border-radius:3px;background:${(window.BW_WIND && window.BW_WIND.legendGradient) ? window.BW_WIND.legendGradient(40) : 'linear-gradient(90deg,#2870d2,#82e178,#ebe650,#e46e19,#be1a26,#f05ab4)'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="position:relative;height:11px;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600">
-          ${[0,5,10,15,20,25,30,35,40].map((v,i,arr)=>{const pct=v/40*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===40?'40+':v}</span>`;}).join('')}
+        <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:2px">
+          ${[0,5,10,15,20,25,30,35,"40+"].map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}</span>`).join("")}
         </div>
         <div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
         ${detail(`<div style="font-size:12px;color:#7aa8c8;margin-top:4px;line-height:1.4"><b style="color:#bfe3f5">GFS/HRRR blend</b> · HRRR 3 km nearshore &lt;48 h · <b style="color:#bfe3f5">tap the map</b> for speed + gusts</div>`)}
@@ -12522,9 +12522,9 @@ function briefSpotSummary(spotLL, spIds, portObj, rank){
   };
 }
 
-// Banner "Captain's Brief" entry point. Needs a home port + an active Bite Map
-// so there are ranked spots to plan; opens the standard brief panel focused on
-// the #1 spot and arms a run plan covering the top few in one model call.
+// Banner entry point removed — Captain's Brief is opened from the Bite Map
+// explainer (tap a hotspot → AI Captain's Brief). Kept as a thin wrapper in
+// case other UI paths need the multi-spot run plan later.
 function openCaptainsBrief(){
   if(!activePort){ if(typeof showToast === "function") showToast("Pick a home port first, then tap Captain's Brief.", "info"); return; }
   const spots = topBriefHotspots(3);

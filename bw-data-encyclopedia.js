@@ -188,9 +188,9 @@ const ENC_SPECIES = [
         {species:"Bigeye Tuna", tell:"Bigeye has a noticeably LARGER eye, shorter pectoral and dorsal/anal fins (never the long sickles of a big yellowfin), and finlets are yellow with a darker edge. Bigeye body is deeper/heavier-bodied; yellowfin is sleeker. On the dock, the liver tells it for certain — bigeye liver has striations (lines), yellowfin's is smooth."},
         {species:"Blackfin Tuna", tell:"Blackfin is much smaller (rarely over 40 lbs), has DARK/dusky finlets (not bright yellow), and a shorter, stubbier body. Yellowfin's fins and finlets are vividly yellow."}]
     },
-    facts:{ size:"30-200 lbs", record:"427 lbs (Mexico)", legal:"27\" curved fork length", season:"May - November" },
-    seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"Oregon Inlet 30-50nm offshore, the 100-fathom line off Hatteras, Hudson Canyon, Mid-Atlantic canyons. Often with porpoise pods or weed lines.",
+    facts:{ size:"30-200 lbs", record:"427 lbs (Mexico)", legal:"27\" curved fork length", season:"April–October (regional — Hatteras peaks spring; Mid-Atlantic peaks mid-summer)" },
+    seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1},
+    where:"Hatteras/Oregon Inlet Gulf Stream edge (spring peak), Mid-Atlantic canyons off MD/DE/NJ (mid-summer peak as fish push north), Hudson Canyon and New England canyons (late summer). Often with porpoise pods or weed lines.",
     tackle:[
       "30-50 lb class trolling outfits",
       "30-50 class lever-drag reels with 50-80 lb mono or 80-130 lb braid",
