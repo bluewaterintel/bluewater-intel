@@ -186,7 +186,7 @@ const MIGRATION_PHASE = {
   // false albacore, snook, redfish, speckledtrout, bonefish, permit,
   // cayellowtail, spearfish, swordfish, skipjack, snapper, gaggrouper, vermilion,
   // amberjack, blackseabass, spadefish, triggerfish, sheepshead, grouper, hogfish,
-  // muttonsnap, lanesnap, yellowtail, pompano, tripletail, and ceromack now use
+  // muttonsnap, lanesnap, yellowtail, pompano, tripletail, ceromack, and tautog now use
   // explicit REGIONAL_SEASONS tables (below), which bypass this latitude-shift
   // entirely. Entries kept here only for species WITHOUT a regional table take
   // effect.
@@ -198,11 +198,10 @@ const MIGRATION_PHASE = {
   cod:          {refLat: 42, latPhase: 0.10},
   haddock:      {refLat: 42, latPhase: 0.10},
   pollock:      {refLat: 42, latPhase: 0.10},
-  tautog:       {refLat: 40, latPhase: 0.05},
   // ── RESIDENTS (no significant latitudinal migration) ─────────────────
   // Anything not listed here defaults to latPhase: 0 — including all the
   // inshore tropical residents (snook, redfish, flounder, snapper, grouper,
-  // bonefish, permit, cod, haddock, pollock, tautog, tilefish, bluelinetile,
+  // bonefish, permit, cod, haddock, pollock, tilefish, bluelinetile,
   // croaker, etc.).
 };
 
@@ -1069,6 +1068,21 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
     {centerLat: 26.0, centerLng: -78.0, radiusNm: 170, label: "Bahamas",
      seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
+  ],
+
+  // ── TAUTOG (BLACKFISH) ───────────────────────────────────────────────────
+  // Northeast/Mid-Atlantic wreck-and-rock specialist — spring and fall peaks,
+  // summer doldrums. The flat national curve scored tog off the Gulf and
+  // South Atlantic where they are not a real fishery.
+  tautog: [
+    {centerLat: 41.5, centerLng: -70.5, radiusNm: 220, label: "New England",
+     seasons:{Jan:1,Feb:0,Mar:0,Apr:3,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 39.2, centerLng: -73.8, radiusNm: 200, label: "Mid-Atlantic (NY/NJ)",
+     seasons:{Jan:1,Feb:0,Mar:0,Apr:3,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 37.0, centerLng: -76.0, radiusNm: 130, label: "VA / CBBT",
+     seasons:{Jan:1,Feb:0,Mar:0,Apr:3,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 35.0, centerLng: -75.5, radiusNm: 120, label: "NC / OBX (southern edge)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:2,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:2,Nov:2,Dec:1}},
   ],
 };
 

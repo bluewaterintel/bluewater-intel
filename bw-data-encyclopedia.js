@@ -547,9 +547,9 @@ const ENC_SPECIES = [
   {
     id:"tautog", name:"Tautog (Blackfish)", color:"#0a5c8a", cat:"nearshore",
     snippet:"Northeast structure fish, a fall and winter favorite. Wreck and rock fish that pull hard and bite finicky.",
-    facts:{ size:"2-12 lbs", record:"28 lbs 13 oz (NJ)", legal:"15-16\" depending on state; 1-5 fish bag", season:"April-May; October-December" },
+    facts:{ size:"2-12 lbs", record:"28 lbs 13 oz (NJ)", legal:"15-16\" depending on state; 1-5 fish bag", season:"Regional — NE/Mid-Atlantic spring (Apr–May) and fall (Oct–Dec) peaks; summer doldrums. Not a Gulf or Pacific fishery." },
     seasons:{Jan:1,Feb:0,Mar:0,Apr:3,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:3,Nov:3,Dec:3},
-    where:"Rocky structure, jetties, wrecks from Cape Cod to Virginia. Montauk wrecks, NJ ocean wrecks, the CBBT.",
+    where:"Rocky structure, jetties, and wrecks from Cape Cod to Virginia — Montauk wrecks, NJ ocean wrecks, and the CBBT. Not present on the Gulf or South Atlantic coast.",
     tackle:[
       "Medium-heavy conventional, 6-7 ft, fast tip",
       "Medium-heavy 15-25 class conventionals with 30-40 lb braid",
