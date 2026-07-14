@@ -185,15 +185,14 @@ const MIGRATION_PHASE = {
   // NOTE: striper, bluefish, cobia, tarpon, king/Spanish mackerel, bonito,
   // false albacore, snook, redfish, speckledtrout, bonefish, permit,
   // cayellowtail, spearfish, swordfish, skipjack, snapper, gaggrouper, vermilion,
-  // and amberjack now use explicit REGIONAL_SEASONS tables (below), which bypass
-  // this latitude-shift entirely. Entries kept here only for species WITHOUT a
-  // regional table take effect.
+  // amberjack, blackseabass, spadefish, triggerfish, and sheepshead now use
+  // explicit REGIONAL_SEASONS tables (below), which bypass this latitude-shift
+  // entirely. Entries kept here only for species WITHOUT a regional table take
+  // effect.
   striper:      {refLat: 38, latPhase: 0.30},
   bluefish:     {refLat: 36, latPhase: 0.30},
   cobia:        {refLat: 32, latPhase: 0.30},
   tarpon:       {refLat: 27, latPhase: 0.30},
-  // ── SEMI-RESIDENT (small lat shift) ──────────────────────────────────
-  blackseabass: {refLat: 38, latPhase: 0.15},
   // ── NORTHERN RESIDENTS (minimal migration; small but nonzero shift) ──
   cod:          {refLat: 42, latPhase: 0.10},
   haddock:      {refLat: 42, latPhase: 0.10},
@@ -201,8 +200,8 @@ const MIGRATION_PHASE = {
   tautog:       {refLat: 40, latPhase: 0.05},
   // ── RESIDENTS (no significant latitudinal migration) ─────────────────
   // Anything not listed here defaults to latPhase: 0 — including all the
-  // inshore tropical residents (snook, redfish, flounder, sheepshead,
-  // snapper, grouper, bonefish, permit, hogfish, muttonsnap, lanesnap, etc.).
+  // inshore tropical residents (snook, redfish, flounder, snapper, grouper,
+  // bonefish, permit, hogfish, muttonsnap, lanesnap, etc.).
 };
 
 const REGIONAL_SEASONS = {
@@ -867,6 +866,79 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 290, label: "Western Gulf (TX)",
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
+  ],
+
+  // ── BLACK SEA BASS ───────────────────────────────────────────────────────
+  // Wreck/reef staple from New England through Cape Hatteras. Summer peak
+  // shifts slightly later in the north; the old lat-shift curve still scored
+  // sea bass off the Gulf and Pacific.
+  blackseabass: [
+    {centerLat: 41.5, centerLng: -70.5, radiusNm: 220, label: "New England",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 39.2, centerLng: -73.8, radiusNm: 200, label: "Mid-Atlantic (NY/NJ/DE)",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
+    {centerLat: 37.0, centerLng: -75.8, radiusNm: 150, label: "VA / Chesapeake",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 35.0, centerLng: -75.5, radiusNm: 160, label: "NC / OBX",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+  ],
+
+  // ── ATLANTIC SPADEFISH ───────────────────────────────────────────────────
+  // Classic Mid-Atlantic/NC summer wreck fish — Chesapeake Light Tower, Va Beach
+  // Triangle Wrecks, OBX towers, Cape Lookout. The flat national curve lit up
+  // spadefish off Maine and the Gulf where they are not a real fishery.
+  spadefish: [
+    {centerLat: 36.8, centerLng: -75.6, radiusNm: 180, label: "Mid-Atlantic (VA/DE)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 35.0, centerLng: -75.5, radiusNm: 180, label: "NC / OBX towers",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
+    {centerLat: 32.0, centerLng: -79.5, radiusNm: 160, label: "SC / GA nearshore",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:2,Aug:2,Sep:2,Oct:1,Nov:0,Dec:0}},
+  ],
+
+  // ── GRAY TRIGGERFISH ─────────────────────────────────────────────────────
+  // Artificial-reef specialist from VA south through the Gulf. Federal harvest
+  // closures aside, the old flat curve scored triggers off New England and
+  // SoCal where they are essentially absent.
+  triggerfish: [
+    {centerLat: 36.9, centerLng: -75.7, radiusNm: 140, label: "VA Beach wrecks",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:0}},
+    {centerLat: 34.5, centerLng: -76.5, radiusNm: 180, label: "NC artificial reefs",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 32.5, centerLng: -79.5, radiusNm: 180, label: "SC / GA reefs",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 28.5, centerLng: -80.5, radiusNm: 160, label: "FL Atlantic",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 280, label: "N. Gulf",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 290, label: "Western Gulf (TX)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+  ],
+
+  // ── SHEEPSHEAD ───────────────────────────────────────────────────────────
+  // Structure feeder on bridges, jetties, and pilings — winter peak in South
+  // FL/Gulf, spring–fall peak in the Mid-Atlantic/NC. The old static curve had
+  // no geographic guard and no winter FL peak.
+  sheepshead: [
+    {centerLat: 37.0, centerLng: -76.0, radiusNm: 130, label: "VA / CBBT",
+     seasons:{Jan:0,Feb:0,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:2,Dec:0}},
+    {centerLat: 35.2, centerLng: -75.8, radiusNm: 150, label: "NC / OBX",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 32.7, centerLng: -79.9, radiusNm: 180, label: "SC / GA",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 30.0, centerLng: -81.2, radiusNm: 160, label: "NE FL",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 25.7, centerLng: -80.1, radiusNm: 200, label: "SE FL / Keys",
+     // Winter convict-fish run on jetties and bridges.
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 280, label: "N. Gulf",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:1,Sep:2,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 290, label: "Western Gulf (TX)",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:1,Sep:2,Oct:3,Nov:3,Dec:3}},
   ],
 };
 

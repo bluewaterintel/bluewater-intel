@@ -499,9 +499,9 @@ const ENC_SPECIES = [
   {
     id:"blackseabass", name:"Black Sea Bass", color:"#2d2fa8", cat:"nearshore",
     snippet:"The reliable bottom fish from Long Island to Carolina. Found on wrecks and reefs year-round. Great table fare and easy to limit out.",
-    facts:{ size:"1-5 lbs (occasional 6+)", record:"10 lbs 4 oz (NY)", legal:"12.5-13\" depending on state; 10-15 fish bag", season:"May - October (varies by state)" },
+    facts:{ size:"1-5 lbs (occasional 6+)", record:"10 lbs 4 oz (NY)", legal:"12.5-13\" depending on state; 10-15 fish bag", season:"Regional — New England through Cape Hatteras; summer peak May–Oct (later start in the north). Not a Gulf or Pacific fishery." },
     seasons:{Jan:0,Feb:0,Mar:1,Apr:1,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0},
-    where:"Wrecks and artificial reefs from Montauk to Hatteras. The OC MD Wreck, Va Beach 30-mile wreck, NJ artificial reefs.",
+    where:"Wrecks and artificial reefs from Montauk to Hatteras — NJ reefs, Ocean City MD Wreck, Va Beach 30-mile wreck, and Cape Lookout structure. Not present on the Gulf or West Coast.",
     tackle:[
       "Medium 20-30 lb conventional",
       "Mid-size 12-25 class lever-drag conventionals with 30-50 lb braid",
@@ -523,9 +523,9 @@ const ENC_SPECIES = [
   {
     id:"sheepshead", name:"Sheepshead", color:"#5c1e8e", cat:"inshore",
     snippet:"The convict fish — black-and-white striped, sharp teeth, finicky biters. Pier and bridge structure feeders that love crabs and barnacles.",
-    facts:{ size:"2-15 lbs", record:"21 lbs 4 oz (LA)", legal:"12\" most states; 8-15 fish bag", season:"March - October" },
+    facts:{ size:"2-15 lbs", record:"21 lbs 4 oz (LA)", legal:"12\" most states; 8-15 fish bag", season:"Regional — winter peak South FL/Gulf (Jan–Mar); Mid-Atlantic/NC spring–fall (Mar–Oct). Not a New England fishery." },
     seasons:{Jan:1,Feb:1,Mar:3,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:2,Dec:1},
-    where:"Bridges, piers, jetties, and rocky structure. CBBT, Charleston jetties, Florida coast pilings, OBX inlet rocks.",
+    where:"Bridges, piers, jetties, and rocky structure from VA through the Gulf — CBBT, Charleston jetties, OBX inlet rocks, and Florida/Gulf coast pilings. Not a north-coast or Pacific species.",
     tackle:[
       "Light-medium 7 ft spinning rods",
       "3000-4000 spinning reels with 15-20 lb braid",
@@ -957,9 +957,9 @@ const ENC_SPECIES = [
   {
     id:"spadefish", name:"Atlantic Spadefish", color:"#3a5a7c", cat:"nearshore",
     snippet:"Looks like a saltwater bluegill on steroids. Schools heavy on wrecks, towers, and nearshore reefs in summer. Strong, dogged fight, and surprisingly good eating.",
-    facts:{ size:"3-9 lbs (citation 9+)", record:"14 lbs (VA)", legal:"No federal minimum; 4-fish bag VA", season:"May-September (peak: June-August)" },
+    facts:{ size:"3-9 lbs (citation 9+)", record:"14 lbs (VA)", legal:"No federal minimum; 4-fish bag VA", season:"Regional — Mid-Atlantic/NC summer only (May–Sep peak). Chesapeake Light Tower, Va Beach, OBX towers." },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0},
-    where:"Chesapeake Light Tower, Cape Henry Wreck, Triangle Wrecks Va Beach, OBX nearshore towers, Cape Lookout wrecks, Frying Pan Tower. Always near structure.",
+    where:"Chesapeake Light Tower, Cape Henry Wreck, Triangle Wrecks Va Beach, OBX nearshore towers, and Cape Lookout wrecks. A Mid-Atlantic/NC specialty — not a Gulf, New England, or Pacific target.",
     tackle:[
       "Light-medium 7 ft spinning rods, moderate action",
       "3000-4000 size spinning reels with 15-20 lb braid",
@@ -983,9 +983,9 @@ const ENC_SPECIES = [
   {
     id:"triggerfish", name:"Gray Triggerfish", color:"#6a4a7a", cat:"nearshore",
     snippet:"The artificial reef specialist. Tough, smart, and equipped with teeth that can crush a hook shank. The dependable cooler-filler when grouper and snapper are closed.",
-    facts:{ size:"1-4 lbs (citation 4+)", record:"6 lbs 6 oz (NC)", legal:"14 inch fork length S Atlantic", season:"Seasonal closures — verify NOAA dates" },
+    facts:{ size:"1-4 lbs (citation 4+)", record:"6 lbs 6 oz (NC)", legal:"14 inch fork length S Atlantic", season:"Regional — VA through Gulf reefs; spring–fall peak (verify NOAA closure dates). Absent north of NJ and from the Pacific." },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"Artificial reefs, wrecks, live bottom 60-200 ft. NC reefs (AR-285, AR-302, AR-410), VA Beach Triangle Wrecks, OBX wrecks, Charleston Bump reefs, FL east coast reefs.",
+    where:"Artificial reefs, wrecks, and live bottom 60–200 ft from VA Beach south — NC reefs (AR-285, AR-302, AR-410), Charleston Bump, FL east coast reefs, and Gulf hard bottom. Not a New England or SoCal fishery.",
     tackle:[
       "Medium-heavy 6-7 ft conventional rods, fast action",
       "Star-drag conventional 20-30 size with 40-50 lb braid",
