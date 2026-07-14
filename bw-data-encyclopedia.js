@@ -379,10 +379,10 @@ const ENC_SPECIES = [
   },
   {
     id:"tilefish", name:"Golden Tilefish", color:"#a83010", cat:"offshore",
-    snippet:"Deep-water structure fish — 250-450 ft on mud bottom along the canyon walls. Excellent table fare; year-round bottom fishing.",
+    snippet:"Deep-water mud-bottom fish — 250-450 ft in Mid-Atlantic canyons, and 600-1,200+ ft on deeper shelf and Gulf mud. Excellent table fare; year-round bottom fishing.",
     facts:{ size:"5-50 lbs", record:"66 lbs (NJ)", legal:"24\" total length; 5 fish bag limit", season:"Year-round" },
     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3},
-    where:"Mud-bottom edges of Hudson, Wilmington, Norfolk, and Hatteras canyons. 250-450 ft. Look for mud burrows on bottom machine.",
+    where:"Green mud bottom — classic Mid-Atlantic canyon fishery at 250-450 ft (Hudson, Wilmington, Norfolk, Hatteras), plus deeper shelf-edge and Gulf drops at 600-1,200+ ft. Canyons are world-class but not required; look for mud burrows on the bottom machine.",
     tackle:[
       "Heavy-duty deep-drop electric reels (or 80-class manual 2-speed)",
       "Or 80-130 lb stand-up rod with manual 80W reel for the workout",
@@ -398,16 +398,16 @@ const ENC_SPECIES = [
     tips:[
       "Anchor or hover directly over the marked fish — they don't move much",
       "Find mud burrows on the bottom machine — that's the spot",
-      "Hudson Canyon edges are world-class for tilefish",
+      "Hudson Canyon mud is world-class, but any green-mud shelf break in the 250-450 ft or 600+ ft range can hold fish",
       "Clean bites are normal — set the hook on the second tap",
       "Year-round fishery, but seas dictate when you can run 60+ miles offshore"],
   },
   {
     id:"bluelinetile", name:"Blueline Tilefish", color:"#3a6080", cat:"offshore",
-    snippet:"The 'other' tilefish — smaller, shallower, harder-fighting cousin of the golden. 240-700 ft on hard bottom. NC/VA winter staple.",
+    snippet:"The 'other' tilefish — smaller, shallower, harder-fighting cousin of the golden. 240-820 ft on hard-bottom ledges along the shelf edge. NC/VA winter staple.",
     facts:{ size:"3-25 lbs", record:"26 lbs (NC)", legal:"Atlantic: 16\" min, 5/day; closed certain months — check NOAA/SAFMC", season:"Winter/Spring peak in NC/VA" },
     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:1,Aug:1,Sep:1,Oct:2,Nov:3,Dec:3},
-    where:"Hard-bottom ledges 240-700 ft along the shelf edge. Strongest fishery is Hatteras / Norfolk Canyon edges and out to ~50 miles. Also Gulf coast deep ledges.",
+    where:"Hard-bottom ledges 240-820 ft along the shelf edge — canyon lips are hot spots but not required. Strongest fishery is Hatteras / Norfolk shelf breaks and out to ~50 miles. Also Gulf coast deep ledges.",
     tackle:[
       "Lighter than golden tilefish — they don't live as deep",
       "60-80 lb spectra mainline, 60-80 lb mono leader",
@@ -422,7 +422,7 @@ const ENC_SPECIES = [
     tips:[
       "Find them on HARD bottom — they like rocky ledges, not the mud of golden tilefish",
       "Bites are softer than golden tile — watch the rod tip for subtle taps",
-      "Winter is the prime season — they move shallower in cold months",
+      "Shelf-edge ledges at 300-500 ft are prime winter water — you don't have to run to a named canyon",
       "Strict bag limits and seasonal closures — check SAFMC/MAFMC before keeping",
       "Excellent eating — milder and slightly sweeter than golden tilefish"],
   },

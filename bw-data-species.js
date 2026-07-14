@@ -111,7 +111,11 @@ const PREDICT_SPECIES_PREFS = {
   flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable", demersal:true },
   blackseabass: {tempIdeal:[58,72], tempWorking:[52,76], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable", demersal:true },
   tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable", demersal:true },
-  tilefish:     {tempIdeal:[48,60], tempWorking:[42,64], chlorPref:"any",     depthBands:[[150,500]],  breakPref:"any", bottom:true },
+  // Golden tilefish — two fisheries, not canyon-gated. Mid-Atlantic canyon mud
+  // (MAFMC 250-450 ft ≈ 75-140 m) and a deeper shelf-edge / Gulf band (~575-1,380 ft
+  // ≈ 175-420 m). The old [[150,500]] floor (~492 ft) zeroed classic canyon mud and
+  // most shelf ledges via the steep shallow-side decay.
+  tilefish:     {tempIdeal:[48,60], tempWorking:[42,64], chlorPref:"any",     depthBands:[[75,140],[175,420]], breakPref:"any", bottom:true },
   snapper:      {tempIdeal:[68,78], tempWorking:[62,82], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
   grouper:      {tempIdeal:[64,76], tempWorking:[58,80], chlorPref:"any",     depthBands:[[30,200]],   breakPref:"any", demersal:true },
   sheepshead:   {tempIdeal:[60,76], tempWorking:[55,82], chlorPref:"high",    depthBands:[[2,30]],     breakPref:"stable"},
@@ -144,7 +148,10 @@ const PREDICT_SPECIES_PREFS = {
   hogfish:      {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[10,40]],    breakPref:"any", demersal:true },
   muttonsnap:   {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
   // ── GULF COAST + DEEP REEF SPECIES ─────────────────────────────────
-  bluelinetile: {tempIdeal:[55,68], tempWorking:[50,72], chlorPref:"any",     depthBands:[[120,700]],  breakPref:"any", bottom:true },
+  // Blueline tilefish — hard-bottom ledges ~240-820 ft (70-250 m). Canyons are hot
+  // spots but not required; the old [[120,700]] floor (~394 ft) kept 300-400 ft
+  // shelf ledges cold on the bite map.
+  bluelinetile: {tempIdeal:[55,68], tempWorking:[50,72], chlorPref:"any",     depthBands:[[70,250]],  breakPref:"any", bottom:true },
   gaggrouper:   {tempIdeal:[66,76], tempWorking:[60,82], chlorPref:"any",     depthBands:[[20,150]],   breakPref:"any", demersal:true },
   amberjack:    {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
   tripletail:   {tempIdeal:[72,84], tempWorking:[68,88], chlorPref:"any",     depthBands:[[2,40]],     breakPref:"any"  },
