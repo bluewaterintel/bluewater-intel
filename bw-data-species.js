@@ -185,7 +185,8 @@ const MIGRATION_PHASE = {
   // NOTE: striper, bluefish, cobia, tarpon, king/Spanish mackerel, bonito,
   // false albacore, snook, redfish, speckledtrout, bonefish, permit,
   // cayellowtail, spearfish, swordfish, skipjack, snapper, gaggrouper, vermilion,
-  // amberjack, blackseabass, spadefish, triggerfish, and sheepshead now use
+  // amberjack, blackseabass, spadefish, triggerfish, sheepshead, grouper, hogfish,
+  // muttonsnap, lanesnap, yellowtail, pompano, tripletail, and ceromack now use
   // explicit REGIONAL_SEASONS tables (below), which bypass this latitude-shift
   // entirely. Entries kept here only for species WITHOUT a regional table take
   // effect.
@@ -201,7 +202,8 @@ const MIGRATION_PHASE = {
   // ── RESIDENTS (no significant latitudinal migration) ─────────────────
   // Anything not listed here defaults to latPhase: 0 — including all the
   // inshore tropical residents (snook, redfish, flounder, snapper, grouper,
-  // bonefish, permit, hogfish, muttonsnap, lanesnap, etc.).
+  // bonefish, permit, cod, haddock, pollock, tautog, tilefish, bluelinetile,
+  // croaker, etc.).
 };
 
 const REGIONAL_SEASONS = {
@@ -939,6 +941,134 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:1,Sep:2,Oct:3,Nov:3,Dec:3}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 290, label: "Western Gulf (TX)",
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:1,Sep:2,Oct:3,Nov:3,Dec:3}},
+  ],
+
+  // ── GROUPER (GAG / BLACK / SCAMP) ─────────────────────────────────────────
+  // Generic grouper picker covers live-bottom fish on SE Atlantic ledges and
+  // Gulf reefs. The flat May–Aug curve scored grouper off New England and
+  // California. Gag has its own ID (gaggrouper); this table guards the rest.
+  grouper: [
+    {centerLat: 34.0, centerLng: -77.5, radiusNm: 150, label: "NC / SC ledges",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
+    {centerLat: 32.5, centerLng: -79.5, radiusNm: 170, label: "Charleston Bump / GA",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
+    {centerLat: 28.5, centerLng: -80.5, radiusNm: 160, label: "FL Atlantic reefs",
+     seasons:{Jan:1,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 29.0, centerLng: -85.5, radiusNm: 180, label: "FL Panhandle",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+  ],
+
+  // ── HOGFISH ────────────────────────────────────────────────────────────────
+  // Keys/SE FL/Bahamas reef specialty. Atlantic harvest closed May–Oct but
+  // fish are present year-round on patch reefs. No north-coast or Pacific
+  // fishery.
+  hogfish: [
+    {centerLat: 24.8, centerLng: -81.0, radiusNm: 140, label: "Florida Keys reefs",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:3}},
+    {centerLat: 26.5, centerLng: -79.5, radiusNm: 120, label: "SE FL Atlantic reefs",
+     seasons:{Jan:2,Feb:3,Mar:3,Apr:3,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:2}},
+    {centerLat: 26.0, centerLng: -78.0, radiusNm: 170, label: "Bahamas",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 180, label: "Gulf FL west coast",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+  ],
+
+  // ── MUTTON SNAPPER ───────────────────────────────────────────────────────
+  // Keys and South FL reef icon — spawning aggregations late spring. The
+  // year-round national curve lit up muttons off Oregon Inlet and the Gulf
+  // of Maine.
+  muttonsnap: [
+    {centerLat: 24.6, centerLng: -81.4, radiusNm: 150, label: "Florida Keys",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 26.5, centerLng: -79.8, radiusNm: 160, label: "SE FL nearshore reefs",
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 26.0, centerLng: -78.0, radiusNm: 170, label: "Bahamas",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
+  ],
+
+  // ── LANE SNAPPER ─────────────────────────────────────────────────────────
+  // Gulf reef schoolies year-round; Keys and South Atlantic patch reefs in
+  // warm months. Absent north of the Carolinas and from the Pacific.
+  lanesnap: [
+    {centerLat: 32.5, centerLng: -79.5, radiusNm: 160, label: "SC / GA patch reefs",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
+    {centerLat: 28.5, centerLng: -80.5, radiusNm: 150, label: "FL Atlantic",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 24.8, centerLng: -81.0, radiusNm: 140, label: "Florida Keys",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 280, label: "N. Gulf",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 290, label: "Western Gulf (TX)",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
+  ],
+
+  // ── YELLOWTAIL SNAPPER (KEYS) ────────────────────────────────────────────
+  // Ocyurus chrysurus — the Keys chum-and-cast classic. Distinct from
+  // California yellowtail (cayellowtail). No Atlantic north of FL or Pacific
+  // coverage.
+  yellowtail: [
+    {centerLat: 24.6, centerLng: -81.4, radiusNm: 150, label: "Florida Keys",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 25.7, centerLng: -80.1, radiusNm: 100, label: "Key West / SE FL",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 26.0, centerLng: -78.0, radiusNm: 170, label: "Bahamas",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 160, label: "Gulf FL (eastern)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:2,Sep:2,Oct:1,Nov:1,Dec:1}},
+  ],
+
+  // ── FLORIDA POMPANO ──────────────────────────────────────────────────────
+  // Surf-zone migrant on SE/Gulf beaches — winter residents in South FL,
+  // spring/fall runs along the Panhandle and Texas coast. Not a Mid-Atlantic
+  // or Pacific target.
+  pompano: [
+    {centerLat: 26.5, centerLng: -80.0, radiusNm: 180, label: "SE FL beaches",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:2,May:1,Jun:1,Jul:1,Aug:1,Sep:2,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 30.0, centerLng: -81.2, radiusNm: 140, label: "NE FL beaches",
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:2,Jun:1,Jul:0,Aug:0,Sep:2,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 29.0, centerLng: -85.0, radiusNm: 200, label: "FL Panhandle beaches",
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:1,Aug:1,Sep:2,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf beaches",
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:1,Aug:1,Sep:2,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:1,Aug:1,Sep:2,Oct:3,Nov:3,Dec:2}},
+  ],
+
+  // ── TRIPLETAIL ───────────────────────────────────────────────────────────
+  // Buoy-and-debris specialist of the Gulf and nearshore SE Atlantic. The
+  // year-round curve scored tripletail off New England and SoCal.
+  tripletail: [
+    {centerLat: 29.0, centerLng: -85.0, radiusNm: 200, label: "FL Panhandle / Apalachicola",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 280, label: "N. Gulf (LA marsh)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 290, label: "Western Gulf (TX)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 32.5, centerLng: -79.5, radiusNm: 150, label: "SC nearshore",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
+  ],
+
+  // ── CERO MACKEREL ────────────────────────────────────────────────────────
+  // Tropical Spanish-mackerel cousin — essentially a Keys/South FL/Bahamas
+  // fish. The flat year-round curve credited cero off New Jersey and the
+  // Gulf of Maine.
+  ceromack: [
+    {centerLat: 24.8, centerLng: -81.2, radiusNm: 160, label: "Florida Keys",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 26.5, centerLng: -80.0, radiusNm: 150, label: "SE FL (Miami–Keys)",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 26.0, centerLng: -78.0, radiusNm: 170, label: "Bahamas",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
   ],
 };
 

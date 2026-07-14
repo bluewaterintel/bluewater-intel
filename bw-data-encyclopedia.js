@@ -477,9 +477,9 @@ const ENC_SPECIES = [
   {
     id:"grouper", name:"Grouper (Gag/Black/Scamp)", color:"#4a4038", cat:"nearshore",
     snippet:"Hard-pulling reef fish on bottom structure 80-300 ft. Several species; strict size and seasonal limits.",
-    facts:{ size:"5-50 lbs", record:"110 lbs (gag, FL)", legal:"24\" gag, 22\" black; varies by state and species", season:"Varies by species (typically May - August)" },
+    facts:{ size:"5-50 lbs", record:"110 lbs (gag, FL)", legal:"24\" gag, 22\" black; varies by state and species", season:"Regional — NC/SC ledges and Gulf reefs; summer–fall peak (May–Oct). Not a New England or Pacific fishery." },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0},
-    where:"Live bottom and ledges off NC, SC, GA. The Charleston Bump, Cape Lookout, Frying Pan Tower, Georgetown Hole.",
+    where:"Live bottom and ledges off NC, SC, and GA — Charleston Bump, Cape Lookout, Frying Pan Tower, Georgetown Hole — plus Gulf and FL Atlantic reefs. Use gaggrouper for Gulf gag-specific timing.",
     tackle:[
       "50-80 lb conventional, stout rod",
       "Stout 25-class lever-drag conventionals with 65-80 lb braid",
@@ -1116,9 +1116,9 @@ const ENC_SPECIES = [
         {species:"Spanish Mackerel", tell:"Spanish has spots but NO midbody stripe. The presence of the yellow stripe means cero."},
         {species:"King Mackerel", tell:"King has the sharp lateral-line dip, no stripe, no black dorsal patch, and grows much larger."}]
     },
-    facts:{ size:"4-12 lbs", record:"17 lbs 2 oz (FL)", legal:"FL: 15\" fork length, 15/day combined with Spanish", season:"Year-round south FL; peak Apr-Sep" },
+    facts:{ size:"4-12 lbs", record:"17 lbs 2 oz (FL)", legal:"FL: 15\" fork length, 15/day combined with Spanish", season:"Regional — Florida Keys, SE FL, and Bahamas; peak Apr–Sep. Not a Mid-Atlantic or Pacific species." },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:1},
-    where:"Florida Keys reefs, patch reefs of Biscayne Bay, FL east coast nearshore reefs 20-60ft deep. Often mixed with kingfish.",
+    where:"Florida Keys reefs, Biscayne Bay, and the Bahamas — a Keys/South FL specialty. Not a Mid-Atlantic or Pacific species.",
     tackle:[
       "7-foot medium spinning rod with 20-30 lb braid",
       "30-40 lb fluorocarbon leader, 18 inches long",
@@ -1138,9 +1138,9 @@ const ENC_SPECIES = [
   {
     id:"hogfish", name:"Hogfish", color:"#c44a4a", cat:"nearshore",
     snippet:"Stunning pink-and-white reef fish with a distinctive snout. Sight-fished with shrimp. Considered the best-eating fish in Florida.",
-    facts:{ size:"2-8 lbs", record:"22 lbs (FL)", legal:"FL Atlantic: 16\" fork, 1/day; FL Gulf: 14\" fork, 5/day", season:"Closed Atlantic May-Oct; check FWC current regs" },
+    facts:{ size:"2-8 lbs", record:"22 lbs (FL)", legal:"FL Atlantic: 16\" fork, 1/day; FL Gulf: 14\" fork, 5/day", season:"Regional — Florida Keys, SE FL, Bahamas, and Gulf FL; Atlantic harvest closed May–Oct (verify FWC)." },
     seasons:{Jan:2,Feb:3,Mar:3,Apr:3,May:0,Jun:0,Jul:0,Aug:0,Sep:0,Oct:0,Nov:2,Dec:2},
-    where:"FL reefs 30-90ft deep, Keys patch reefs, FL east coast hard bottom. Look for sandy patches between coral heads.",
+    where:"FL Keys patch reefs, SE FL hard bottom 30–90 ft, and Bahamas coral patches. Gulf west coast also holds fish. Not a north-coast fishery.",
     tackle:[
       "7-foot medium-light spinning rod with 15-20 lb braid",
       "20-30 lb fluorocarbon leader (hogfish are line-shy)",
@@ -1161,9 +1161,9 @@ const ENC_SPECIES = [
   {
     id:"muttonsnap", name:"Mutton Snapper", color:"#7a1a40", cat:"nearshore",
     snippet:"Beautiful red-and-blue reef snapper. Bigger, smarter cousin of the yellowtail. Keys and FL east coast favorite.",
-    facts:{ size:"4-15 lbs (avg)", record:"30 lbs 4 oz (FL)", legal:"FL: 18\" fork length, 10 snapper/day combined", season:"Year-round; spawning aggregations late spring" },
+    facts:{ size:"4-15 lbs (avg)", record:"30 lbs 4 oz (FL)", legal:"FL: 18\" fork length, 10 snapper/day combined", season:"Regional — Florida Keys, SE FL, and Bahamas; spawning aggregations late spring (Apr–Jun)." },
     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2},
-    where:"FL Keys reefs and patch reefs, FL east coast deep reefs 80-300ft. Aggregate over coral heads and live bottom.",
+    where:"Florida Keys patch reefs, SE FL deep reefs 80–300 ft, and the Bahamas. Not a Mid-Atlantic, Gulf mainstream, or Pacific fishery.",
     tackle:[
       "7-foot medium-heavy spinning or conventional rod with 30-50 lb braid",
       "40-60 lb fluorocarbon leader — line-shy in clear water",
@@ -1233,9 +1233,9 @@ const ENC_SPECIES = [
   {
     id:"tripletail", name:"Tripletail", color:"#6a5a3a", cat:"nearshore",
     snippet:"Bizarre triangular fish that hangs sideways under floating debris. Sight-fishing specialty of the Gulf coast.",
-    facts:{ size:"3-25 lbs", record:"42 lbs 5 oz (SC)", legal:"FL: 18\" total, 2/day; LA/MS/AL: 17-18\" min, 3-5/day", season:"Year-round in FL; April-September peak farther north" },
+    facts:{ size:"3-25 lbs", record:"42 lbs 5 oz (SC)", legal:"FL: 18\" total, 2/day; LA/MS/AL: 17-18\" min, 3-5/day", season:"Regional — Gulf coast year-round (Apr–Sep peak); thin SC nearshore presence. Not a New England or Pacific fishery." },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1},
-    where:"Crab trap buoys off Apalachicola, FL crab line buoys, debris in the Gulf 1-10nm offshore. Also LA marsh buoys.",
+    where:"Crab-trap buoys and floating debris in the Gulf 1–10 nm offshore — Apalachicola, LA marsh, Texas coast. Occasional SC nearshore buoys in summer.",
     tackle:[
       "Medium spinning rod, 7-foot, 15-20 lb braid",
       "20-30 lb fluorocarbon leader",
@@ -1256,9 +1256,9 @@ const ENC_SPECIES = [
   {
     id:"pompano", name:"Florida Pompano", color:"#c4b078", cat:"inshore",
     snippet:"Surf zone gold. Silver torpedo with yellow fins that runs the beaches feeding on sand fleas. Highly prized table fare.",
-    facts:{ size:"1-5 lbs", record:"8 lbs 4 oz (FL)", legal:"FL: 11\" fork, 6/day; LA: 11\" fork, 10/day", season:"Spring/Fall migrations; winter in south FL" },
+    facts:{ size:"1-5 lbs", record:"8 lbs 4 oz (FL)", legal:"FL: 11\" fork, 6/day; LA: 11\" fork, 10/day", season:"Regional — SE/Gulf beaches; winter residents in South FL, spring/fall runs along the Panhandle and Texas coast." },
     seasons:{Jan:2,Feb:3,Mar:3,Apr:3,May:2,Jun:1,Jul:1,Aug:1,Sep:2,Oct:3,Nov:3,Dec:2},
-    where:"Sandy beaches from FL panhandle through TX. Casting from surf or running boats along the beach in 5-15 ft. Pompano love sand bars.",
+    where:"Sandy beaches from South FL through the Gulf to Texas — surf casting and beach trolling in 5–15 ft. Not a Mid-Atlantic or Pacific species.",
     tackle:[
       "Surf: 11-13 ft surf rod with 4000-6000 spinning reel, 20 lb braid",
       "Boat: 7 ft medium spinning rod, 15 lb braid",
@@ -1303,9 +1303,9 @@ const ENC_SPECIES = [
   {
     id:"lanesnap", name:"Lane Snapper", color:"#b04848", cat:"nearshore",
     snippet:"Schoolies of the Gulf reef. Smaller pink-yellow snapper that fills the cooler when bigger reds are scarce. Excellent table fare.",
-    facts:{ size:"0.5-3 lbs", record:"8 lbs 3 oz (FL)", legal:"Gulf/Atl: 8\" total, 100-lb aggregate snapper limit; check current FWC regs", season:"Year-round" },
+    facts:{ size:"0.5-3 lbs", record:"8 lbs 3 oz (FL)", legal:"Gulf/Atl: 8\" total, 100-lb aggregate snapper limit; check current FWC regs", season:"Regional — Gulf year-round; Keys and South Atlantic patch reefs spring–fall. Absent north of the Carolinas." },
     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2},
-    where:"Patch reefs and live bottom 60-200 ft. Often mixed with vermilions and yellowtails. Florida Gulf coast, Texas reefs, FL Keys.",
+    where:"Gulf patch reefs and hard bottom 60–200 ft (year-round), plus Florida Keys and South Atlantic reefs in warm months. Often mixed with vermilions.",
     tackle:[
       "Light to medium tackle: 7 ft medium rod with 20 lb braid",
       "20-30 lb fluorocarbon leader",
@@ -1325,9 +1325,9 @@ const ENC_SPECIES = [
   {
     id:"yellowtail", name:"Yellowtail Snapper", color:"#e8b820", cat:"nearshore",
     snippet:"The Keys' signature reef fish. Bright yellow lateral stripe, light-tackle classic. Smart and finicky — chum is everything.",
-    facts:{ size:"1-5 lbs (3-lb 'flag' is a trophy)", record:"11 lbs (Bahamas)", legal:"FL: 12\" total, 10/day; part of 10-fish snapper aggregate", season:"Year-round in FL Keys; best Mar-Aug" },
+    facts:{ size:"1-5 lbs (3-lb 'flag' is a trophy)", record:"11 lbs (Bahamas)", legal:"FL: 12\" total, 10/day; part of 10-fish snapper aggregate", season:"Regional — Florida Keys & Bahamas year-round; best Mar–Aug. Not Atlantic north of FL or Pacific." },
     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:2,Nov:2,Dec:2},
-    where:"FL Keys patch reefs 30-120 ft, Marathon humps, Islamorada reefs, Key West Sambos. Also Bahamas, Cuba, eastern Gulf reefs. Travel in schools above the structure (not on bottom like other snappers).",
+    where:"Florida Keys patch reefs 30–120 ft, Marathon humps, Islamorada reefs, Key West Sambos, and the Bahamas. Distinct from California yellowtail (cayellowtail).",
     tackle:[
       "Light spinning: 7 ft medium-light rod with 10-15 lb braid",
       "12-20 lb fluorocarbon leader — long (8-12 ft), as light as you can get away with",
