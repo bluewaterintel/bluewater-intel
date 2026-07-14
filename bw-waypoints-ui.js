@@ -1644,13 +1644,15 @@ async function fetchForecast(lat, lng){
 
 // Nearest NOAA CO-OPS station's high/low tide predictions across a time window,
 // as [{ type:"H"|"L", atMs }]. Reuses the same station-resolution path the
-// header tide uses (BW_OCEAN.fetchOcean → sources.tide). Returns [] on any gap.
+// header tide uses (bwFetchPortConditions → sources.tide). Returns [] on any gap.
 async function _fcFetchTideEvents(lat, lng, startMs, endMs){
   let station = (typeof _cachedTideStation === "function") ? _cachedTideStation(lat, lng) : null;
   if(!station){
-    if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchOcean) return [];
+    if(typeof BW_OCEAN === "undefined" || (!BW_OCEAN.fetchConditions && !BW_OCEAN.fetchOcean)) return [];
     try {
-      const o = await BW_OCEAN.fetchOcean(lat, lng);
+      const o = await (typeof bwFetchPortConditions === "function"
+        ? bwFetchPortConditions(lat, lng)
+        : BW_OCEAN.fetchOcean(lat, lng));
       station = o && o.sources ? o.sources.tide : null;
       if(station && typeof _cacheTideStation === "function") _cacheTideStation(lat, lng, station);
     } catch(e){ return []; }

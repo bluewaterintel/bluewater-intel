@@ -13445,7 +13445,7 @@ async function updateHeaderConditions(attempt){
   }
   const lat = p.lat + 0.05, lng = p.lng + 0.05;
   try {
-    const o = await BW_OCEAN.fetchOcean(lat, lng);
+    const o = await bwFetchPortConditions(lat, lng);
     // A different port may have been selected while awaiting — bail if so.
     if(!activePort || PORTS[activePort] !== p) return;
     const waterF = (o?.waterTemp?.value != null) ? o.waterTemp.value : (o?.sst?.value != null ? o.sst.value : null);
@@ -13506,6 +13506,12 @@ function bwiFetchSignal(ms){
   setTimeout(() => ctrl.abort(), ms);
   return ctrl.signal;
 }
+// Fast header / tide-station fetch — uses ocean edge `mode=conditions` when deployed.
+function bwFetchPortConditions(lat, lng){
+  if(typeof BW_OCEAN === "undefined") return Promise.reject(new Error("BW_OCEAN unavailable"));
+  if(typeof BW_OCEAN.fetchConditions === "function") return BW_OCEAN.fetchConditions(lat, lng);
+  return BW_OCEAN.fetchOcean(lat, lng);
+}
 
 // Tide for the header: shows the current STATE (Rising / Falling / Slack) plus
 // the next two tide events in CHRONOLOGICAL order, e.g.
@@ -13537,7 +13543,7 @@ async function updateHeaderTide(){
   const portKey = activePort;
   try {
     if(typeof BW_OCEAN === "undefined"){ setTideText("—"); requestAnimationFrame(syncHeaderHeightVar); return; }
-    const o = await BW_OCEAN.fetchOcean(p.lat + 0.05, p.lng + 0.05);
+    const o = await bwFetchPortConditions(p.lat + 0.05, p.lng + 0.05);
     if(activePort !== portKey) return;  // port changed while we were fetching
     const station = o && o.sources ? o.sources.tide : null;
     if(station) _cacheTideStation(p.lat + 0.05, p.lng + 0.05, station);
