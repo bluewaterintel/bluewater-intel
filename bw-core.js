@@ -1721,15 +1721,32 @@ function reportsBoost(lat, lng, speciesId){
 // the same offset selects the forecast hour. When a real value isn't available
 // it is withheld and labeled — never synthesized.
 // ════════════════════════════════════════════════════════════════════════════
-let FORECAST_HOUR_OFFSET = 0;  // pinned to 0 (now) — the +12/+24h ocean-model
-                               // forecast overlay was removed: RTOFS SST/SSH at
-                               // lead time was not trustworthy enough to show.
+let FORECAST_HOUR_OFFSET = 0;  // 0=now, 12=+12h, 24=+24h. Drives the BITE SCORE
+                               // forecast (weather/tide/solunar/pressure — all
+                               // reliably forecast via Open-Meteo + deterministic
+                               // astronomy). The ocean MAP overlays stay observed
+                               // (see OCEAN_OVERLAY_FORECAST_ENABLED below).
 
 function normalizeForecastHour(hours){
-  // Ocean-model forecast is disabled — everything reads the current ("now")
-  // observed/analysis fields. Kept as a function so existing call sites and
-  // cache keys stay valid without branching.
-  return 0;
+  // Snap the requested lead time to the supported horizons (0 / 12 / 24 h). The
+  // bite forecast reads real Open-Meteo forecast weather + deterministic tide/
+  // solunar/moon at this offset — SST/chlorophyll hold at the latest observation
+  // (they move little over a day), so a future bite score is trustworthy.
+  const h = Number(hours);
+  if(!isFinite(h) || h <= 0) return 0;
+  if(h <= 6)  return 0;
+  if(h <= 18) return 12;
+  return 24;
+}
+
+// The ocean MAP overlays (SST tiles, currents field, altimetry) are OBSERVED-ONLY:
+// the RTOFS model at lead time referenced to a local box mean was not comparable
+// to the observed products and painted false eddies / large false SST swings. So
+// the overlays ignore FORECAST_HOUR_OFFSET even when the bite forecast uses it.
+// Flip to true only if a trustworthy gridded ocean forecast is wired up.
+const OCEAN_OVERLAY_FORECAST_ENABLED = false;
+function oceanOverlayForecastHour(){
+  return OCEAN_OVERLAY_FORECAST_ENABLED ? (FORECAST_HOUR_OFFSET || 0) : 0;
 }
 
 function forecastTimeMs(){
@@ -3423,8 +3440,10 @@ function scoreCell(lat, lng, speciesId){
     {name:"Wind direction",     weight:W.wind,          score:windScoreVal,     raw:windObj.dir != null ? `${Math.round(windObj.dir)}°` : "—"}]
   // Drop factors that aren't applicable to this species category
   .filter(f => f.weight > 0)
-  // Sort by contribution to final score
-  .map(f => ({...f, score:f.score*f.weight}))
+  // Keep BOTH the factor's own 0–1 quality (how good this signal is here — drives
+  // the display bar so "peak"/"MAJOR" reads as a full bar) AND its weighted
+  // contribution (quality×weight — drives the sort so the biggest drivers lead).
+  .map(f => ({...f, quality: Math.max(0, Math.min(1, f.score)), score: f.score*f.weight}))
   .sort((a,b) => b.score - a.score);
 
   // Human-readable top-factor summary for the brief & explainer. allFactors is
@@ -5793,7 +5812,7 @@ async function buildCurrentFieldForMap(){
         .then(() => { if(seq === _curFetchSeq && currentsLayer && typeof currentsLayer._drawShade === "function") currentsLayer._drawShade(); })
         .catch(() => {});
     }
-    const data = await BW_OCEAN.fetchCurrentGrid(latMin, latMax, lngMin, lngMax, FORECAST_HOUR_OFFSET || 0);
+    const data = await BW_OCEAN.fetchCurrentGrid(latMin, latMax, lngMin, lngMax, oceanOverlayForecastHour());
     if(seq !== _curFetchSeq) return;
     setCurrentGridFromData(data);
     CURRENT_STATUS = CURRENT_GRID ? "ready" : "unavailable";
@@ -6188,7 +6207,7 @@ const SstForecastLayer = L.Layer.extend({
     if(!SST_FORECAST_GRID) this._requestData();
   },
   _requestData: function(){
-    if(!layerVis.sst || FORECAST_HOUR_OFFSET <= 0 || !MAP || typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchSstGrid) return;
+    if(!layerVis.sst || oceanOverlayForecastHour() <= 0 || !MAP || typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchSstGrid) return;
     const seq = ++_sstFcFetchSeq;
     let b;
     try { b = MAP.getBounds(); } catch(e){ return; }
@@ -6199,8 +6218,8 @@ const SstForecastLayer = L.Layer.extend({
       w: b.getWest() - (b.getEast() - b.getWest()) * pad,
       e: b.getEast() + (b.getEast() - b.getWest()) * pad,
     };
-    BW_OCEAN.fetchSstGrid(bx.s, bx.n, bx.w, bx.e, FORECAST_HOUR_OFFSET).then(data => {
-      if(seq !== _sstFcFetchSeq || !layerVis.sst || FORECAST_HOUR_OFFSET <= 0) return;
+    BW_OCEAN.fetchSstGrid(bx.s, bx.n, bx.w, bx.e, oceanOverlayForecastHour()).then(data => {
+      if(seq !== _sstFcFetchSeq || !layerVis.sst || oceanOverlayForecastHour() <= 0) return;
       applySstForecastGrid(data);
       updateSatDateDisplay();
       if(typeof updateOceanLegend === "function") updateOceanLegend();
@@ -6231,7 +6250,9 @@ const SstForecastLayer = L.Layer.extend({
 
 function syncSstOverlayMode(){
   if(!MAP) return;
-  const fc = FORECAST_HOUR_OFFSET > 0;
+  // Overlay stays observed regardless of the bite forecast offset (see
+  // OCEAN_OVERLAY_FORECAST_ENABLED). oceanOverlayForecastHour() is 0 while disabled.
+  const fc = oceanOverlayForecastHour() > 0;
   if(layerVis.sst && fc){
     if(MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
     if(!sstForecastLayer) sstForecastLayer = new SstForecastLayer();
@@ -7140,6 +7161,17 @@ function drawPrediction(){
       };
       predictionData = hotspots;
       renderPrediction(hotspots, species, true, heatGrid, gridStep, gridOrigin, badges);
+      // If the explainer is open (e.g. the user just changed the forecast hour),
+      // re-score its cell now that fresh forecast ocean/weather has arrived so the
+      // panel reflects the +12/+24 h conditions, not the pre-fetch snapshot.
+      if(_explainerState && _explainerState.cell && _explainerState.species && typeof scoreCell === "function"){
+        const c = _explainerState.cell;
+        const fresh = scoreCell(c.lat, c.lng, _explainerState.species.id);
+        if(fresh){
+          _explainerState.cell = Object.assign({}, c, fresh, { lat: c.lat, lng: c.lng, distNm: c.distNm });
+          if(typeof renderExplainerMain === "function") renderExplainerMain();
+        }
+      }
     }
   );
 }
@@ -7301,8 +7333,11 @@ function renderExplainerMain(){
   const savedBriefCount = BW_PAID ? briefHistoryLoad().length : 0;
 
   const factorBars = cell.factors.map(f => {
-    const pct = Math.round((f.score / 0.30) * 100);
-    const w = Math.min(100, Math.max(0, pct));
+    // Bar reflects this factor's OWN strength here (0–100%), so a "peak" season
+    // or "MAJOR" solunar reads as a full bar. (It's not the weighted share of the
+    // total — factors are already ordered by that, biggest driver first.)
+    const q = (typeof f.quality === "number") ? f.quality : (f.score / 0.30);
+    const w = Math.min(100, Math.max(0, Math.round(q * 100)));
     return `
       <div style="margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;margin-bottom:3px">
@@ -7318,9 +7353,8 @@ function renderExplainerMain(){
 
   const verdict = biteVerdict(Math.round(cell.score * 100));
 
-  // Forecast time selector pills — when the user picks a different horizon,
-  // we regenerate the prediction grid for that time and re-render the
-  // explainer with the new scores.
+  // Forecast time selector pills — picking a horizon recomputes the bite for that
+  // moment (weather/tide/solunar/pressure shift; ocean fields hold at latest obs).
   const forecastPills = FORECAST_OPTIONS.map(opt => {
     const active = opt.hours === FORECAST_HOUR_OFFSET;
     return `<button onclick="setForecastHour(${opt.hours})" style="
@@ -7662,7 +7696,7 @@ function toggleLayer(key){
 // layer so the imagery updates in place. Forward dates are impossible (observed
 // data), so satDayOffset only ever increases the days-back.
 function rebuildSatelliteLayers(){
-  if(FORECAST_HOUR_OFFSET > 0 && layerVis.sst){
+  if(oceanOverlayForecastHour() > 0 && layerVis.sst){
     if(typeof syncSstOverlayMode === "function") syncSstOverlayMode();
     updateSatDateDisplay();
     return;
@@ -7726,8 +7760,8 @@ function satDateLabel(){
 function updateSatDateDisplay(){
   const el = document.getElementById("sat-date-display");
   if(el){
-    if(FORECAST_HOUR_OFFSET > 0 && layerVis.sst){
-      el.textContent = `Model +${FORECAST_HOUR_OFFSET}h · ${forecastTimeDisplay()}`;
+    if(oceanOverlayForecastHour() > 0 && layerVis.sst){
+      el.textContent = `Model +${oceanOverlayForecastHour()}h · ${forecastTimeDisplay()}`;
     } else {
       const back = satCurrentDaysBack();
       const age = back <= 0 ? "today" : back === 1 ? "1 day ago" : back + " days ago";
@@ -7753,7 +7787,7 @@ function onSatSliderInput(sliderPos){
   setSatDayOffset(SAT_MAX_DAYS_BACK - (sliderPos|0));
 }
 function setSatDayOffset(days){
-  if(FORECAST_HOUR_OFFSET > 0 && layerVis.sst) return;
+  if(oceanOverlayForecastHour() > 0 && layerVis.sst) return;
   const v = Math.max(0, Math.min(SAT_MAX_DAYS_BACK, days|0));
   if(v === satDayOffset){ updateSatDateDisplay(); return; }
   satDayOffset = v;
@@ -7773,12 +7807,12 @@ function updateSatDateControlVisibility(){
     const chlorOnly = layerVis.chlor && !layerVis.sst;
     const label = chlorOnly ? "Chlorophyll" : "SST";
     if(titleEl) titleEl.textContent = label;
-    if(hintEl) hintEl.textContent = (FORECAST_HOUR_OFFSET > 0 && layerVis.sst)
-      ? "RTOFS model · use Ocean Model Forecast slider"
+    if(hintEl) hintEl.textContent = (oceanOverlayForecastHour() > 0 && layerVis.sst)
+      ? "RTOFS model"
       : "Observed imagery only";
     const row = box.querySelector(".map-time-pill-row");
     const footer = box.querySelector(".map-time-pill-footer");
-    const forecastLocked = FORECAST_HOUR_OFFSET > 0 && layerVis.sst;
+    const forecastLocked = oceanOverlayForecastHour() > 0 && layerVis.sst;
     if(row) row.style.opacity = forecastLocked ? "0.45" : "";
     if(row) row.style.pointerEvents = forecastLocked ? "none" : "";
     if(footer) footer.style.opacity = forecastLocked ? "0.45" : "";
@@ -7966,7 +8000,7 @@ function activeOceanLayerKey(){
 // crossfade or date change so the new tile layer inherits the chosen opacity).
 function applyOceanOpacity(){
   if(layerVis.sst){
-    if(FORECAST_HOUR_OFFSET > 0 && sstForecastLayer && typeof sstForecastLayer._draw === "function"){
+    if(oceanOverlayForecastHour() > 0 && sstForecastLayer && typeof sstForecastLayer._draw === "function"){
       sstForecastLayer._draw();
     } else if(sstLayer) sstLayer.setOpacity(oceanOpacity.sst);
   }
@@ -7979,7 +8013,7 @@ function onOceanOpacityInput(pct){
   const v = Math.max(0, Math.min(1, (pct|0) / 100));
   oceanOpacity[key] = v;
   if(key === "sst"){
-    if(FORECAST_HOUR_OFFSET > 0 && sstForecastLayer && typeof sstForecastLayer._draw === "function") sstForecastLayer._draw();
+    if(oceanOverlayForecastHour() > 0 && sstForecastLayer && typeof sstForecastLayer._draw === "function") sstForecastLayer._draw();
     else if(sstLayer) sstLayer.setOpacity(v);
   }
   if(key === "chlor" && chlorLayer) chlorLayer.setOpacity(v);
@@ -9531,8 +9565,8 @@ function updateOceanLegend(){
   // the map (see updateBiteBanner), not in this side panel — it was taking up
   // too much room here. This panel now only covers the gradient overlays.
   if(layerVis.sst){
-    const sstTitle = FORECAST_HOUR_OFFSET > 0
-      ? `SST FORECAST (+${FORECAST_HOUR_OFFSET}h)`
+    const sstTitle = oceanOverlayForecastHour() > 0
+      ? `SST FORECAST (+${oceanOverlayForecastHour()}h)`
       : "SST (°F)";
     parts.push(`
       <div style="${gap()}">
@@ -9541,7 +9575,7 @@ function updateOceanLegend(){
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>40°</span><span>50°</span><span>60°</span><span>68°</span><span>72°</span><span>78°</span><span>84°+</span>
         </div>
-        ${FORECAST_HOUR_OFFSET > 0 ? `<div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">RTOFS model · ~9 km</div>` : ""}
+        ${oceanOverlayForecastHour() > 0 ? `<div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">RTOFS model · ~9 km</div>` : ""}
       </div>`);
   }
   if(layerVis.chlor){
@@ -12338,9 +12372,17 @@ function renderBrief(){
   const speciesNote = !allowed.length
     ? `<p style="color:#9ec5e8;font-size:12px;margin-bottom:8px">Select a home port or drop a chart pin to see species for your area.</p>`
     : (allowed.length < 12 ? "" : `<p style="color:#9ec5e8;font-size:11px;margin-bottom:6px;line-height:1.4">Showing ${allowed.length} species for this spot — extraneous coast-wide fish are hidden.</p>`);
+  // Recent briefs live at the BOTTOM so the panel reads top-to-bottom as a
+  // workflow: where you're leaving from → which day → target → generate, with
+  // past briefs tucked underneath for reference.
+  const recentSection = recentHtml
+    ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(107,191,234,.15)">
+         <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:8px;letter-spacing:.05em">RECENT BRIEFS</div>
+         ${recentHtml}
+       </div>`
+    : "";
   pbody(`
     ${departCard}
-    ${recentHtml}
     ${!hasPin?`<p style="color:#9ec5e8;font-size:12px;margin-bottom:12px;line-height:1.5">Tap the chart to drop a weather pin first.</p>`:""}
     <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">WHICH DAY ARE YOU FISHING?</div>
     <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px">${dayBtns}</div>
@@ -12353,6 +12395,7 @@ function renderBrief(){
     <button id="brief-btn" ${!hasPin||aiLoading?"disabled":""} onclick="runBrief()">
       ${aiLoading?"GENERATING BRIEF...":"GENERATE AI CAPTAIN'S BRIEF"}</button>
     ${(aiCOA && !aiLoading)?`<button type="button" class="brief-view-btn" style="margin-top:2px;background:rgba(168,85,247,.16);color:#e2c9ff;border:1px solid rgba(192,132,252,.4)" onclick="openBriefModal()">View your Captain's Brief ↗</button>`:""}
+    ${recentSection}
   `);
 }
 function toggleBriefSp(id){briefAutoPick=false;briefSp=briefSp.includes(id)?briefSp.filter(x=>x!==id):[...briefSp,id];renderBrief();}
@@ -12860,11 +12903,14 @@ async function runBrief(){
 // SPECIES DROPDOWN
 // ════════════════════════════════════════════════════════════════════════════
 function buildSpDropdown(){
-  const cats=["all","offshore","nearshore","inshore"];
+  // "All Species" is intentionally omitted — the bite map scores ONE species at a
+  // time (picking "all" produced an empty map). Other tabs keep their own "All"
+  // filter; here the captain always chooses a concrete target.
+  const cats=["offshore","nearshore","inshore"];
   let html="";
   cats.forEach(cat=>{
-    const items=cat==="all"?SPECIES.filter(s=>s.id==="all"):SPECIES.filter(s=>s.cat===cat);
-    if(cat!=="all")html+=`<div class="sc-lbl">${cat.toUpperCase()}</div>`;
+    const items=SPECIES.filter(s=>s.cat===cat && s.id!=="all");
+    html+=`<div class="sc-lbl">${cat.toUpperCase()}</div>`;
     items.forEach(sp=>{
       html+=`<button class="sp-opt ${sp.id===activeSpId?"sel":""}" onclick="selectSp('${sp.id}')">
         <div class="sdot" style="background:${sp.color}"></div>${sp.name}
