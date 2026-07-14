@@ -453,9 +453,9 @@ const ENC_SPECIES = [
   {
     id:"snapper", name:"Red Snapper", color:"#991010", cat:"nearshore",
     snippet:"Reef and wreck fish off the Carolinas and Georgia. Tightly regulated — short federal seasons but a phenomenal catch when open.",
-    facts:{ size:"5-30 lbs", record:"50 lbs 4 oz (LA)", legal:"20\" total length; 1 fish bag (federal); season usually 1-2 weeks/year", season:"Federal season usually July (check NOAA each year)" },
+    facts:{ size:"5-30 lbs", record:"50 lbs 4 oz (LA)", legal:"20\" total length; 1 fish bag (federal); season usually 1-2 weeks/year", season:"Regional — Gulf federal season peak Jun–Aug; South Atlantic (NC/SC/GA) brief Jul window. Not a NE or Pacific fishery." },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:0,Jul:3,Aug:1,Sep:0,Oct:0,Nov:0,Dec:0},
-    where:"Live bottom and wrecks 80-300 ft off SC, GA, NC. Charleston Bump, Georgetown Hole, Frying Pan Tower area.",
+    where:"Gulf reefs and federal waters off TX/LA/FL Panhandle (summer season), plus live bottom off SC, GA, and NC (short July window). Charleston Bump, Georgetown Hole, and western Gulf platforms.",
     tackle:[
       "Heavy 30-50 lb conventional or spinning",
       "30-50 class lever-drag conventional reels with 65-80 lb braid",
@@ -1187,9 +1187,9 @@ const ENC_SPECIES = [
   {
     id:"gaggrouper", name:"Gag Grouper", color:"#403828", cat:"nearshore",
     snippet:"The Gulf's signature grouper. Big, smart, ambush predator that lives on hard bottom and ledges 40-300 ft.",
-    facts:{ size:"5-50 lbs", record:"80 lbs 6 oz (FL)", legal:"FL Gulf: 24\" total, 2/day; closed seasons vary — check FWC", season:"Closed mid-winter; peak fall in Gulf" },
+    facts:{ size:"5-50 lbs", record:"80 lbs 6 oz (FL)", legal:"FL Gulf: 24\" total, 2/day; closed seasons vary — check FWC", season:"Regional — Gulf & FL peak summer–fall (Oct–Nov best); Feb–Mar harvest closures. Thin NC/SC presence." },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2},
-    where:"Florida Middle Grounds, Steamboat Lumps, Apalachicola/Destin offshore reefs. Also FL east coast wrecks. Hard bottom and ledges 40-300 ft.",
+    where:"Florida Middle Grounds, Steamboat Lumps, Apalachicola/Destin offshore reefs, and Gulf hard bottom through Texas. FL Atlantic wrecks and occasional NC/SC ledges. Not a New England fishery.",
     tackle:[
       "7-foot heavy spinning or conventional rod with 50-80 lb braid",
       "60-100 lb fluorocarbon leader (gags fight hard for cover)",
@@ -1210,9 +1210,9 @@ const ENC_SPECIES = [
   {
     id:"amberjack", name:"Greater Amberjack", color:"#a8771a", cat:"nearshore",
     snippet:"Reef donkey. The hardest-fighting fish in the Gulf pound-for-pound. Wrecks, rigs, and deep reefs.",
-    facts:{ size:"15-100 lbs", record:"224 lbs (NC)", legal:"Gulf: 34\" fork, 1/day; closed most of year — check NOAA", season:"Short open window — typically Aug-Oct in Gulf" },
+    facts:{ size:"15-100 lbs", record:"224 lbs (NC)", legal:"Gulf: 34\" fork, 1/day; closed most of year — check NOAA", season:"Regional — Gulf rigs peak Aug–Oct (short federal window); NC/VA towers Jun–Sep; FL reefs summer." },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:1,Jul:0,Aug:3,Sep:3,Oct:3,Nov:0,Dec:0},
-    where:"Gulf rigs, FL reefs, Texas wrecks, NC offshore towers. They school around any vertical structure in 60-300 ft.",
+    where:"Gulf rigs and platforms, FL reefs, Texas wrecks, and NC offshore towers (AR-370, Frying Pan area). Vertical structure in 60–300 ft — not a New England target.",
     tackle:[
       "Heavy 6.5-7 foot conventional rod with 50-80 lb braid",
       "100-130 lb fluorocarbon leader (AJs grind through everything)",
@@ -1279,9 +1279,9 @@ const ENC_SPECIES = [
   {
     id:"vermilion", name:"Vermilion Snapper", color:"#c43030", cat:"nearshore",
     snippet:"Beeliner. Smaller but plentiful Gulf snapper that fills coolers when bigger reds and gags shut off. Open year-round.",
-    facts:{ size:"1-4 lbs", record:"7 lbs 3 oz (FL)", legal:"Gulf: 10\" total, 10/day; year-round", season:"Year-round" },
+    facts:{ size:"1-4 lbs", record:"7 lbs 3 oz (FL)", legal:"Gulf: 10\" total, 10/day; year-round", season:"Regional — Gulf year-round; South Atlantic ledges spring–fall. Absent north of VA." },
     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3},
-    where:"Hard-bottom and natural ledges 100-300 ft. Vermilion schools sit just above the structure — easy fishing once located.",
+    where:"Gulf hard-bottom and natural ledges 100–300 ft (year-round beeliner schools), plus SC/GA/FL Atlantic ledges in warm months. Schools sit just above the structure.",
     tackle:[
       "7-foot medium-heavy conventional with 30-50 lb braid",
       "30-40 lb fluorocarbon leader",

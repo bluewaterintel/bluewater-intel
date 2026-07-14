@@ -184,9 +184,10 @@ const MIGRATION_PHASE = {
   // ── COASTAL MIGRATORS (spring north / fall south) ────────────────────
   // NOTE: striper, bluefish, cobia, tarpon, king/Spanish mackerel, bonito,
   // false albacore, snook, redfish, speckledtrout, bonefish, permit,
-  // cayellowtail, spearfish, swordfish, and skipjack now use explicit
-  // REGIONAL_SEASONS tables (below), which bypass this latitude-shift entirely.
-  // Entries kept here only for species WITHOUT a regional table take effect.
+  // cayellowtail, spearfish, swordfish, skipjack, snapper, gaggrouper, vermilion,
+  // and amberjack now use explicit REGIONAL_SEASONS tables (below), which bypass
+  // this latitude-shift entirely. Entries kept here only for species WITHOUT a
+  // regional table take effect.
   striper:      {refLat: 38, latPhase: 0.30},
   bluefish:     {refLat: 36, latPhase: 0.30},
   cobia:        {refLat: 32, latPhase: 0.30},
@@ -201,7 +202,7 @@ const MIGRATION_PHASE = {
   // ── RESIDENTS (no significant latitudinal migration) ─────────────────
   // Anything not listed here defaults to latPhase: 0 — including all the
   // inshore tropical residents (snook, redfish, flounder, sheepshead,
-  // snapper, grouper, bonefish, permit, hogfish, muttonsnap, etc.).
+  // snapper, grouper, bonefish, permit, hogfish, muttonsnap, lanesnap, etc.).
 };
 
 const REGIONAL_SEASONS = {
@@ -793,6 +794,79 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Gulf of Mexico",
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+  ],
+
+  // ── RED SNAPPER ──────────────────────────────────────────────────────────
+  // Federally managed — Gulf summer season (Jun–Aug) vs South Atlantic's brief
+  // July window. The old flat Jul:3 curve scored red snapper off Maine and
+  // California. NE and SoCal intentionally uncovered.
+  snapper: [
+    {centerLat: 32.5, centerLng: -79.5, radiusNm: 180, label: "SC / GA / Charleston Bump",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:1,Jul:3,Aug:1,Sep:0,Oct:0,Nov:0,Dec:0}},
+    {centerLat: 34.5, centerLng: -76.5, radiusNm: 160, label: "NC offshore",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:1,Jul:3,Aug:1,Sep:0,Oct:0,Nov:0,Dec:0}},
+    {centerLat: 28.5, centerLng: -80.5, radiusNm: 150, label: "FL Atlantic",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:1,Jul:2,Aug:1,Sep:0,Oct:0,Nov:0,Dec:0}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf (Panhandle/LA)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
+  ],
+
+  // ── GAG GROUPER ────────────────────────────────────────────────────────────
+  // Gulf signature grouper — peak fall (Sep–Nov) on hard bottom; Feb–Mar harvest
+  // closures in the Gulf. Also a FL Atlantic reef fishery; thin NC/SC presence.
+  gaggrouper: [
+    {centerLat: 34.0, centerLng: -77.5, radiusNm: 150, label: "NC / SC offshore",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:0}},
+    {centerLat: 28.5, centerLng: -80.5, radiusNm: 160, label: "FL Atlantic",
+     seasons:{Jan:1,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 29.0, centerLng: -85.5, radiusNm: 180, label: "FL Panhandle",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf (LA/MS/AL)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+  ],
+
+  // ── GREATER AMBERJACK ────────────────────────────────────────────────────
+  // Gulf rigs peak Aug–Oct (short federal harvest window); NC/VA tower fish
+  // Jun–Sep; FL reefs year-round with summer peak. Not a New England fishery.
+  amberjack: [
+    {centerLat: 36.3, centerLng: -75.5, radiusNm: 140, label: "NC / VA offshore towers",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
+    {centerLat: 32.5, centerLng: -79.5, radiusNm: 170, label: "SC / GA offshore",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 28.0, centerLng: -80.5, radiusNm: 150, label: "FL Atlantic reefs",
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:2,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf rigs",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX rigs)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
+  ],
+
+  // ── VERMILION SNAPPER (BEELINER) ─────────────────────────────────────────
+  // Abundant year-round on Gulf hard bottom; South Atlantic ledges peak spring
+  // through fall. The old flat year-round curve scored beeliners off New England.
+  vermilion: [
+    {centerLat: 36.5, centerLng: -75.5, radiusNm: 120, label: "VA / NC ledges",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
+    {centerLat: 32.5, centerLng: -79.5, radiusNm: 180, label: "SC / GA ledges",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 28.5, centerLng: -80.5, radiusNm: 160, label: "FL Atlantic",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 29.5, centerLng: -88.0, radiusNm: 280, label: "N. Gulf",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 27.8, centerLng: -95.5, radiusNm: 290, label: "Western Gulf (TX)",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
   ],
 };
 
