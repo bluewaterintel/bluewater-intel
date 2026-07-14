@@ -19,7 +19,7 @@ const ENC_SPECIES = [
         {species:"White Marlin", tell:"White marlin is much smaller (typically 50-90 lbs) with ROUNDED tips on the first dorsal, pectoral, and anal fins — blue marlin's are pointed. White also shows tan/lavender body color vs blue's cobalt."},
         {species:"Sailfish", tell:"Sailfish has a huge sail-like dorsal fin running most of the body length and a very slender body. Blue marlin's dorsal is comparatively low and the body is heavy."}]
     },
-    facts:{ size:"200-1,000 lbs", record:"1,402 lbs 2 oz (Brazil)", legal:"99\" lower jaw fork length", season:"June - October" },
+    facts:{ size:"200-1,000 lbs", record:"1,402 lbs 2 oz (Brazil)", legal:"99\" lower jaw fork length", season:"Warm-season Gulf Stream fishery — Jun-Sep up the shelf edge (earlier & longer the farther south); Bahamas spring peak (Mar-May); Gulf Jun-Aug" },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0},
     where:"Norfolk Canyon, Hatteras Canyon, The Big Rock, Wilmington Canyon. Best on the 100-fathom line where 79°F+ blue water meets the green shelf water.",
     tackle:[
@@ -56,7 +56,7 @@ const ENC_SPECIES = [
         {species:"Longbill Spearfish", tell:"Spearfish is much more slender with a more angular dorsal and a shorter, slimmer bill. The giveaway is the vent (anus): far forward of the anal fin on a spearfish, but right beside it on a white marlin."},
         {species:"Sailfish", tell:"Sailfish has the towering full-length sail dorsal; white marlin's dorsal is short and rounded. Roundtip + modest dorsal = white marlin."}]
     },
-    facts:{ size:"40-100 lbs", record:"181 lbs 14 oz (Brazil)", legal:"66\" lower jaw fork length", season:"July - September" },
+    facts:{ size:"40-100 lbs", record:"181 lbs 14 oz (Brazil)", legal:"66\" lower jaw fork length", season:"Warm-season shelf-edge fishery — Mid-Atlantic canyons (Ocean City) peak Jul-Sep; NC/Carolinas summer; Gulf Jul-Sep" },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0},
     where:"The Fingers, Baltimore Canyon, Wilmington Canyon, Washington Canyon. Mid-Atlantic Bight is the world's premier white marlin fishery.",
     tackle:[
@@ -129,7 +129,7 @@ const ENC_SPECIES = [
     },
     facts:{ size:"40-90 lbs", record:"142 lbs (Atlantic)", legal:"63\" lower jaw fork length", season:"July - October" },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0},
-    where:"Hatteras Canyon south to Charleston. The 100-fathom line off Hatteras is reliable; Charleston Bump in late summer.",
+    where:"SE FL/Keys (Stuart, Palm Beach, Miami) and the Bahamas are the classic WINTER run (Dec-Mar), often stacking on north cold fronts. Off NC (Oregon Inlet/Hatteras) and the Mid-Atlantic it's a summer-fall Gulf Stream fishery — the 100-fathom line and the Charleston Bump.",
     tackle:[
       "20-30 lb class spinning or trolling outfits",
       "16-30 class lever-drag reels with 20-30 lb mono",
@@ -151,7 +151,7 @@ const ENC_SPECIES = [
   {
     id:"swordfish", name:"Swordfish", color:"#7c2d8e", cat:"offshore",
     snippet:"The gladiators of the deep. Daytime deep-drop or nighttime drift fishery in 1,000-2,000 ft. Hatteras Hole is the East Coast hot spot.",
-    facts:{ size:"100-500 lbs", record:"1,182 lbs (Chile)", legal:"47\" lower jaw fork length", season:"Year-round (peak: May-October)" },
+    facts:{ size:"100-500 lbs", record:"1,182 lbs (Chile)", legal:"47\" lower jaw fork length", season:"Regional — SE FL/Keys/Bahamas peak in WINTER (Dec-Mar); NC & Mid-Atlantic canyons are a summer-fall Gulf Stream fishery (Jul-Oct); Gulf late spring-summer" },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
     where:"Hatteras Hole, Norfolk Canyon, Hudson Canyon. Daytime swordfishing in 1,500-2,000 ft. Night fishing in 1,000-1,500 ft over the canyon edges.",
     tackle:[
@@ -284,9 +284,9 @@ const ENC_SPECIES = [
   {
     id:"wahoo", name:"Wahoo", color:"#c84a10", cat:"offshore",
     snippet:"The fastest fish on the East Coast. Lightning-fast strikes on high-speed trolled lures along temperature breaks and the 100-fathom line.",
-    facts:{ size:"20-90 lbs", record:"184 lbs (Mexico)", legal:"No federal size limit (state limits vary)", season:"Year-round (peak: October - February)" },
+    facts:{ size:"20-90 lbs", record:"184 lbs (Mexico)", legal:"No federal size limit (state limits vary)", season:"Regional — SE FL/Keys/Bahamas peak in WINTER (Nov-Mar); NC & Mid-Atlantic peak in FALL (Sep-Nov); Gulf year-round with a fall peak" },
     seasons:{Jan:3,Feb:3,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3},
-    where:"100-fathom line off Hatteras and Oregon Inlet, the Charleston Bump, the Continental Shelf edge from Cape May south.",
+    where:"SE FL, the Keys, and the Bahamas in winter (high-speed trolling the deep drop-offs); the 100-fathom line off Hatteras/Oregon Inlet and the Charleston Bump on the fall run; Gulf rigs and shelf edge year-round.",
     tackle:[
       "30-50 lb class trolling outfits with bent-butt for high-speed",
       "50-80 class lever-drag reels with 80-130 lb braid backing + 80-130 lb mono topshot",
@@ -308,9 +308,9 @@ const ENC_SPECIES = [
   {
     id:"mahi", name:"Mahi Mahi (Dolphinfish)", color:"#0f7a50", cat:"offshore",
     snippet:"The clown of the offshore — bright colors, aerial leaps, schools of dozens. Found on weedlines, floating debris, and color changes.",
-    facts:{ size:"5-50 lbs (cows up to 80)", record:"87 lbs (Costa Rica)", legal:"20\" fork length (most states); 10 fish per person bag limit", season:"May - October" },
+    facts:{ size:"5-50 lbs (cows up to 80)", record:"87 lbs (Costa Rica)", legal:"20\" fork length (most states); 10 fish per person bag limit", season:"Regional — NC/Mid-Atlantic late spring-summer (peak May-Jul); South FL/Keys/Bahamas spring peak (Mar-May) & near year-round; Gulf spring-fall" },
     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0},
-    where:"Anywhere offshore with weed lines, color changes, or floating debris. 30-80nm out from Hatteras to Charleston in summer.",
+    where:"Anywhere offshore with weed lines, color changes, or floating debris. NC and the Mid-Atlantic in late spring-summer; South FL, the Keys, and the Bahamas in spring and near year-round; the Gulf spring-fall.",
     tackle:[
       "20-30 lb spinning or light conventional",
       "6000-class offshore spinning reels with 30-50 lb braid",
