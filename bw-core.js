@@ -13485,6 +13485,28 @@ function viewportPanelTopPx(gap){
   return hdr + banner + (gap != null ? gap : 8);
 }
 
+// Tide station cache — reused by the 6-day forecast so it doesn't need a full
+// ocean round-trip just to resolve the nearest CO-OPS id.
+let _tideStationCache = { key: "", station: null, atMs: 0 };
+function _tideStationKey(lat, lng){ return `${lat.toFixed(2)},${lng.toFixed(2)}`; }
+function _cacheTideStation(lat, lng, station){
+  if(!station) return;
+  _tideStationCache = { key: _tideStationKey(lat, lng), station, atMs: Date.now() };
+}
+function _cachedTideStation(lat, lng){
+  if(_tideStationCache.key !== _tideStationKey(lat, lng)) return null;
+  if(Date.now() - _tideStationCache.atMs > 30 * 60 * 1000) return null;
+  return _tideStationCache.station;
+}
+// AbortSignal.timeout polyfill for older Safari (used by CO-OPS tide fetches).
+function bwiFetchSignal(ms){
+  if(typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function")
+    return AbortSignal.timeout(ms);
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), ms);
+  return ctrl.signal;
+}
+
 // Tide for the header: shows the current STATE (Rising / Falling / Slack) plus
 // the next two tide events in CHRONOLOGICAL order, e.g.
 // "Falling · Low 1:37 AM → High 7:22 AM". This removes the old ambiguity where
@@ -13518,6 +13540,7 @@ async function updateHeaderTide(){
     const o = await BW_OCEAN.fetchOcean(p.lat + 0.05, p.lng + 0.05);
     if(activePort !== portKey) return;  // port changed while we were fetching
     const station = o && o.sources ? o.sources.tide : null;
+    if(station) _cacheTideStation(p.lat + 0.05, p.lng + 0.05, station);
     let text = "—";
     if(station){
       const next = await fetchNextTideEvent(station);
@@ -13572,7 +13595,7 @@ async function fetchNextTideEvent(station){
   const url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
     + "?product=predictions&interval=hilo&datum=MLLW&units=english&time_zone=gmt&format=json&application=bluewaterintel"
     + `&station=${encodeURIComponent(station)}&begin_date=${encodeURIComponent(fmt(begin))}&end_date=${encodeURIComponent(fmt(end))}`;
-  const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  const r = await fetch(url, { signal: bwiFetchSignal(8000) });
   if(!r.ok) return null;
   const d = await r.json();
   const preds = (d && d.predictions) ? d.predictions : [];

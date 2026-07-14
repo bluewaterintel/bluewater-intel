@@ -1646,19 +1646,22 @@ async function fetchForecast(lat, lng){
 // as [{ type:"H"|"L", atMs }]. Reuses the same station-resolution path the
 // header tide uses (BW_OCEAN.fetchOcean → sources.tide). Returns [] on any gap.
 async function _fcFetchTideEvents(lat, lng, startMs, endMs){
-  if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchOcean) return [];
-  let station = null;
-  try {
-    const o = await BW_OCEAN.fetchOcean(lat, lng);
-    station = o && o.sources ? o.sources.tide : null;
-  } catch(e){ return []; }
+  let station = (typeof _cachedTideStation === "function") ? _cachedTideStation(lat, lng) : null;
+  if(!station){
+    if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchOcean) return [];
+    try {
+      const o = await BW_OCEAN.fetchOcean(lat, lng);
+      station = o && o.sources ? o.sources.tide : null;
+      if(station && typeof _cacheTideStation === "function") _cacheTideStation(lat, lng, station);
+    } catch(e){ return []; }
+  }
   if(!station) return [];
   const pad = (n) => String(n).padStart(2, "0");
   const fmt = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
   const url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
     + "?product=predictions&interval=hilo&datum=MLLW&units=english&time_zone=gmt&format=json&application=bluewaterintel"
     + `&station=${encodeURIComponent(station)}&begin_date=${encodeURIComponent(fmt(new Date(startMs)))}&end_date=${encodeURIComponent(fmt(new Date(endMs)))}`;
-  const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  const r = await fetch(url, { signal: (typeof bwiFetchSignal === "function" ? bwiFetchSignal(8000) : undefined) });
   if(!r.ok) return [];
   const d = await r.json();
   const preds = (d && d.predictions) ? d.predictions : [];

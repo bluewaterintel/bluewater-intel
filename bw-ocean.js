@@ -94,19 +94,35 @@
     const k = keyOf(lat, lng, opts);
     const hit = cache.get(k);
     if (hit && Date.now() - hit.atMs < TTL) return mergeBestAvailable(k, { ...hit.payload, _cache: "fresh-cache" }, opts);
-    try {
+    const doFetch = async (fetchOpts) => {
+      const fk = keyOf(lat, lng, fetchOpts);
+      const fhit = fetchOpts === opts ? hit : cache.get(fk);
+      const timeoutMs = fetchOpts.mode === "conditions" ? 15000 : 45000;
       const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
-      if (opts.mode) params.set("mode", opts.mode);
-      if (opts.hours > 0) params.set("hours", String(opts.hours));
+      if (fetchOpts.mode) params.set("mode", fetchOpts.mode);
+      if (fetchOpts.hours > 0) params.set("hours", String(fetchOpts.hours));
       const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: fetchTimeout(12000),
+        signal: fetchTimeout(timeoutMs),
       });
       if (!res.ok) throw new Error(`ocean ${res.status}`);
       const payload = await res.json();
-      cache.set(k, { payload, atMs: Date.now() });
-      return mergeBestAvailable(k, payload, opts);
+      cache.set(fk, { payload, atMs: Date.now() });
+      return mergeBestAvailable(fk, payload, fetchOpts);
+    };
+    try {
+      return await doFetch(opts);
     } catch (e) {
+      // Pre-deploy servers ignore mode=conditions and still run the slow full
+      // assembly (~25s). Fall back once to the default ocean call with a longer
+      // timeout so the header isn't left blank.
+      if (opts.mode === "conditions") {
+        try {
+          const fallback = await doFetch({ hours: opts.hours });
+          cache.set(k, { payload: fallback, atMs: Date.now() });
+          return mergeBestAvailable(k, fallback, opts);
+        } catch (e2) { /* fall through to stale / empty */ }
+      }
       if (hit) return mergeBestAvailable(k, { ...hit.payload, _cache: "stale-cache" }, opts);
       return mergeBestAvailable(k, {
         point: { lat, lng }, fetchedAtMs: Date.now(),
@@ -332,5 +348,8 @@
   root.BW_OCEAN = {
     fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs, clearPredictInputsCache,
     fetchWindGrid, fetchCurrentGrid, fetchAltimetryGrid, fetchSstGrid,
+    // After deploying the ocean edge function, pass { mode: "conditions" } for
+    // fast header / tide-station resolution (~3–8 s vs 25 s+ full assembly).
+    fetchConditions: (lat, lng, hours = 0) => fetchOcean(lat, lng, { mode: "conditions", hours }),
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

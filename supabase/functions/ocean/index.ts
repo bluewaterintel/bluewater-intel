@@ -1349,6 +1349,52 @@ async function fetchSstRows(latMin: number, latMax: number, lngMin: number, lngM
   }
 }
 
+// Header banner + tide-station resolution — buoy, one SST grid point, and tide.
+// Skips RTOFS current, chlorophyll, and the buoy-wtmp sweep so cold-start stays
+// ~2–8 s instead of the 25 s+ full ocean assembly (which was timing out the
+// client at 12 s and leaving the banner blank).
+async function assembleConditions(lat: number, lng: number, hoursAhead = 0) {
+  const useForecast = hoursAhead > 0;
+  const [buoy, sst, tide, model, marine] = await Promise.all([
+    useForecast ? Promise.resolve(null) : fetchBuoy(lat, lng),
+    fetchGridPoint(SST_ERDDAP, SST_DATASET, SST_VAR, lat, lng, SST_HAS_ALTITUDE, SST_LOOKBACK),
+    fetchTide(lat, lng, hoursAhead),
+    fetchModelWind(lat, lng, hoursAhead),
+    fetchModelMarine(lat, lng, hoursAhead),
+  ]);
+  let gridSstF: SstSrc = { value: null, observedAtMs: sst.observedAtMs };
+  if (sst.value != null) {
+    let c = sst.value;
+    if (c > 200) c = c - 273.15;
+    gridSstF = { value: Math.round((c * 9 / 5 + 32) * 10) / 10, observedAtMs: sst.observedAtMs };
+  }
+  const wx = useForecast && model ? forecastWeatherFields(model, marine, hoursAhead) : null;
+  const waves = wx ? wx.waves : pickWaves(buoy?.waves, marine);
+  return {
+    point: { lat, lng },
+    fetchedAtMs: Date.now(),
+    ...(wx ? { forecastHour: wx.forecastHour } : {}),
+    sst: gridSstF,
+    chlor: { value: null, observedAtMs: null },
+    wind: wx ? wx.wind : (buoy?.wind ?? model.wind ?? { value: null, observedAtMs: null }),
+    waves,
+    waterTemp: wx ? wx.waterTemp : (buoy?.waterTemp ?? { value: null, observedAtMs: null }),
+    airTemp: wx ? wx.airTemp : (buoy?.airTemp ?? model.airTemp ?? { value: null, observedAtMs: null }),
+    pressure: wx ? wx.pressure : (buoy?.pressure ?? model.pressure ?? { value: null, observedAtMs: null }),
+    barometer: wx ? wx.barometer : (buoy?.barometer ?? model.barometer ?? { value: null, observedAtMs: null }),
+    tide: tidePayload(tide),
+    current: null,
+    sources: {
+      sst: gridSstF.value != null ? SST_DATASET : null,
+      buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
+      tide: tide.station,
+      waves: buoy?.waves?.value != null ? `NDBC ${buoy.buoyId}` : marine.source,
+      ...(wx?.sources ?? {}),
+      ...(!wx && !buoy?.wind?.value && model.wind.value != null ? { wind: model.source } : {}),
+    },
+  };
+}
+
 // Light field point: buoy (wind/waves/temps/pressure) + tide only. SST and
 // chlorophyll come from their grids, so we skip the per-point ERDDAP calls here.
 async function assembleFieldPoint(lat: number, lng: number, hoursAhead = 0) {
@@ -1851,6 +1897,13 @@ export const handler = async (req: Request): Promise<Response> => {
   const lng = num(u.searchParams.get("lng"));
   if (lat == null || lng == null) return json({ error: "lat and lng required" }, cors, 400);
   const hoursAhead = num(u.searchParams.get("hours")) ?? 0;
+
+  if (mode === "conditions") {
+    const payload = await assembleConditions(lat, lng, hoursAhead);
+    return new Response(JSON.stringify(payload), {
+      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=900" },
+    });
+  }
 
   if (mode === "wind") {
     const model = await fetchModelWind(lat, lng, hoursAhead);
