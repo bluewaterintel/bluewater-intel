@@ -62,7 +62,11 @@ const SPECIES=[
   {id:"cayellowtail",name:"California Yellowtail",color:"#d9a520",cat:"nearshore"}];
 
 const PREDICT_SPECIES_PREFS = {
-  bluemarlin:   {tempIdeal:[76,84], tempWorking:[72,86], chlorPref:"low",     depthBands:[[200,1500]], breakPref:"edge"  },
+  // Blue marlin band starts at 150 m (≈80 fathoms): a large share of Atlantic
+  // blues are raised right on the 100-fathom line and canyon lips (150–275 m),
+  // not only over 200 m+ deep water. Starting at 200 m made the exact edge these
+  // are trolled on read "poor." The blue-water gate still requires real depth.
+  bluemarlin:   {tempIdeal:[76,84], tempWorking:[72,86], chlorPref:"low",     depthBands:[[150,1500]], breakPref:"edge"  },
   whitemarlin:  {tempIdeal:[72,80], tempWorking:[68,82], chlorPref:"low",     depthBands:[[100,800]],  breakPref:"edge"  },
   spearfish:    {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"low",     depthBands:[[300,2000]], breakPref:"edge"  },
   sailfish:     {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"low",     depthBands:[[50,500]],   breakPref:"edge"  },
@@ -103,7 +107,10 @@ const PREDICT_SPECIES_PREFS = {
   pollock:      {tempIdeal:[44,54], tempWorking:[40,60], chlorPref:"high",    depthBands:[[80,300]],   breakPref:"stable", demersal:true },
   bonito:       {tempIdeal:[64,72], tempWorking:[60,76], chlorPref:"edge",    depthBands:[[10,80]],    breakPref:"any"  },
   bluefish:     {tempIdeal:[60,72], tempWorking:[55,78], chlorPref:"high",    salinityPref:"moderate", depthBands:[[1,60]],     breakPref:"stable"},
-  bigeye:       {tempIdeal:[64,74], tempWorking:[58,78], chlorPref:"low",     depthBands:[[300,2000]], breakPref:"edge"  },
+  // Bigeye band starts at 180 m (100-fathom line): Mid-Atlantic/canyon bigeye
+  // are worked on the shelf-edge lip and canyon walls at dawn/dusk, not only in
+  // 300 m+ water. Starting at 300 m scored the 100-fathom troll at ~20%.
+  bigeye:       {tempIdeal:[64,74], tempWorking:[58,78], chlorPref:"low",     depthBands:[[180,2000]], breakPref:"edge"  },
   // ── INSHORE / NEARSHORE EAST COAST ─────────────────────────────────────
   speckledtrout:{tempIdeal:[62,75], tempWorking:[55,82], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,20]],     breakPref:"stable"},
   spadefish:    {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[6,80]],     breakPref:"any"  },
@@ -621,7 +628,12 @@ const PREDICT_WEIGHTS = {
   offshore: {
     temperature:   0.22,   // Trimmed — warm water alone was over-credited. Pelagics hold at the
                            //   EDGE, not just the hottest water; emphasis moves to the edge factors.
-    depthStruct:   0.16,   // Structure still matters offshore, but secondary to the thermal/color edge.
+    depthStruct:   0.09,   // Depth-BAND match only. Trimmed from 0.16 because offshore bands are
+                           //   broad (e.g. 150–1500 m all = 1.0), so band-match barely discriminates
+                           //   one deep cell from another — the freed weight moves to `structure`.
+    structure:     0.07,   // Bottom STRUCTURE (slope/steepness): shelf-edge lip, canyon walls, humps,
+                           //   fingers. This is what separates the canyon rip from flat abyssal plain —
+                           //   the water tournament boats actually key on. See bottomStructureStrengthAt().
     chlorophyll:   0.11,   // Color breaks.
     thermalBreak:  0.16,   // Temperature break — a defined thermal wall stacks bait and fish.
     convergence:   0.18,   // Rewards where SST break + chlorophyll edge COINCIDE (altimetry). Boosted

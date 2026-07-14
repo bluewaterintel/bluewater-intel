@@ -2845,7 +2845,14 @@ function scoreCell(lat, lng, speciesId){
   // SST (the Stream edge, e.g. The Point) rather than the cool inshore side.
   // Bottom-dwellers (tilefish) are scored on bottom temp above and have NO
   // relationship to the warm surface skin, so they are excluded here.
-  if(speciesCat === "offshore" && !_isBottom && sst != null){
+  //
+  // BLUEFIN EXEMPTION: bluefin are a COLD-water tuna (ideal 58–68°F). The
+  // warm-side logic below — full credit past the ideal max + a bias toward the
+  // warmest fishable SST — is correct for warm pelagics (yellowfin/marlin) but
+  // backwards for bluefin: it discounted their prime 58–63°F water and rewarded
+  // the too-warm edge. Bluefin therefore use the plain symmetric Gaussian above,
+  // which correctly peaks in the cool ideal band and falls off on BOTH sides.
+  if(speciesCat === "offshore" && speciesId !== "bluefin" && !_isBottom && sst != null){
     const warmEdge = prefs.tempWorking[1];
     if(sst >= prefs.tempIdeal[1]){
       // Warm side: full credit through the ideal/working band; only fall off once
@@ -3022,6 +3029,15 @@ function scoreCell(lat, lng, speciesId){
     }
   }
 
+  // ── Factor: Bottom structure (offshore edge pelagics) ──────────────────────
+  // Slope/steepness of the bottom — shelf-edge lip, canyon walls, humps. Only
+  // computed where it carries weight (offshore table sets W.structure > 0; it's
+  // 0 for near/inshore, which use the separate structure-proximity bonus below).
+  let structureScore = 0;
+  if((W.structure || 0) > 0 && typeof bottomStructureStrengthAt === "function"){
+    structureScore = bottomStructureStrengthAt(lat, lng);
+  }
+
   // ── Factor 5: Recent fishing reports ──
   const reportScore = reportsBoost(lat, lng, speciesId);
 
@@ -3142,6 +3158,7 @@ function scoreCell(lat, lng, speciesId){
     { key:"wind",   variable:"wind",     baseWeight:W.wind,          score:windScoreVal,     observedAtMs:windObj.observedAtMs },
     { key:"pres",   variable:"pressure", baseWeight:W.pressure,      score:pressureScore,    observedAtMs:presObj.observedAtMs },
     { key:"depth",  variable:"depth",    baseWeight:W.depthStruct,   score:depthScore,       observedAtMs:now },
+    { key:"structure", variable:"depth", baseWeight:(W.structure||0), score:structureScore,  observedAtMs:now },
     { key:"break",  variable:"sst",      baseWeight:W.thermalBreak,  score:breakScore,       observedAtMs:sstObj.observedAtMs },
     { key:"convergence", variable:"sst",  baseWeight:(W.convergence||0), score:convergence,  observedAtMs:sstObj.observedAtMs },
     { key:"solunar", variable:null,       baseWeight:W.solunar,       score:solunarScoreVal },
@@ -3157,6 +3174,7 @@ function scoreCell(lat, lng, speciesId){
     tempScore         * W.temperature   +
     chlorScore        * W.chlorophyll   +
     depthScore        * W.depthStruct   +
+    structureScore    * (W.structure || 0) +
     breakScore        * W.thermalBreak  +
     convergence       * (W.convergence || 0) +
     seasonScore       * W.season        +
@@ -3453,6 +3471,8 @@ function scoreCell(lat, lng, speciesId){
   const allFactors = [
     {name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: (_isBottom || _isDemersal) ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
     {name:"Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
+    {name:"Bottom structure",   weight:(W.structure||0), score:structureScore,
+     raw: structureScore > 0.05 ? `${Math.round(structureScore*100)}% · edge/slope` : "flat bottom"},
     {name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
     {name:"Chlorophyll",        weight:W.chlorophyll,   score:chlorScore,
      raw: chlor != null
@@ -5803,6 +5823,50 @@ function currentShearAt(lat, lng){
     if(grad > maxGrad) maxGrad = grad;
   }
   return maxGrad * 10;   // kt per 10 nm
+}
+
+// ── BOTTOM STRUCTURE (bathymetric slope / steepness) ────────────────────────
+// Tournament pelagics don't just want the right DEPTH ZONE — they stack on
+// bottom STRUCTURE: the shelf-edge lip, canyon walls, fingers, humps, and
+// ledges where upwelling and current deflection concentrate bait. The depth
+// factor alone can't see this: a flat abyssal plain at 1,000 m and a canyon
+// wall at 250 m both sit "in the band" and score identically. This detector
+// measures the local bottom GRADIENT (m of depth change per nm) from the same
+// real bathymetry the scorer uses (PREDICT_BATHY_GRID via predictDepth), so a
+// steep drop-off reads high and open flat bottom reads ~0.
+//
+// Returns 0..1 structure strength, or 0 when depth is unavailable/flat. Uses
+// 8-way sampling (cardinals + diagonals) so canyon walls at any orientation are
+// caught. null-safe: while bathy is still loading predictDepth returns a flat
+// placeholder → gradient 0 → no false structure signal.
+function bottomStructureStrengthAt(lat, lng){
+  if(typeof predictDepth !== "function") return 0;
+  const d0 = predictDepth(lat, lng);
+  if(d0 == null || d0 <= 0) return 0;
+  const rNm = 2.0;                                  // baseline for the gradient
+  const dLat = rNm / 60;
+  const dLng = rNm / (60 * Math.cos(lat * Math.PI / 180));
+  const diagNm = rNm * Math.SQRT2;
+  const nbrs = [
+    [predictDepth(lat + dLat, lng),        rNm],
+    [predictDepth(lat - dLat, lng),        rNm],
+    [predictDepth(lat, lng + dLng),        rNm],
+    [predictDepth(lat, lng - dLng),        rNm],
+    [predictDepth(lat + dLat, lng + dLng), diagNm],
+    [predictDepth(lat - dLat, lng - dLng), diagNm],
+    [predictDepth(lat + dLat, lng - dLng), diagNm],
+    [predictDepth(lat - dLat, lng + dLng), diagNm],
+  ];
+  let maxGrad = 0;   // m per nm
+  for(const [dn, dist] of nbrs){
+    if(dn == null || dn <= 0) continue;             // land / no data → skip
+    const g = Math.abs(dn - d0) / dist;
+    if(g > maxGrad) maxGrad = g;
+  }
+  // Ramp m/nm → 0..1. Flat sand/mud (<8 m/nm) → 0; pronounced ledge/hump
+  // (~40 m/nm) → ~0.3; shelf break & canyon lips (~120 m/nm) → ~1.0; canyon
+  // walls saturate at 1.0. Tuned to real US-Atlantic shelf-edge gradients.
+  return Math.max(0, Math.min(1, (maxGrad - 8) / (120 - 8)));
 }
 
 function _curGridCoversView(){
