@@ -78,6 +78,32 @@ function bearingDistance(fromLat: number, fromLng: number, toLat: number, toLng:
 const num = (v: unknown): number | null => (typeof v === "number" && isFinite(v) ? v : null);
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
+// Claude Sonnet 5+ returns adaptive-thinking blocks before text. The old
+// content[0].text read saw "thinking" first → null → "Empty brief." Also,
+// max_tokens is shared between thinking and output on those models.
+function extractBriefText(d: Record<string, unknown>): string | null {
+  const content = d?.content;
+  if (!Array.isArray(content)) return null;
+  const parts: string[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const b = block as Record<string, unknown>;
+    if (b.type === "text" && typeof b.text === "string") {
+      const t = b.text.trim();
+      if (t) parts.push(t);
+    }
+  }
+  return parts.length ? parts.join("\n") : null;
+}
+
+// Sonnet 5 defaults to adaptive thinking; disable for fast tactical briefs.
+function briefRequestExtras(model: string): Record<string, unknown> {
+  if (/claude-sonnet-5/i.test(model)) {
+    return { thinking: { type: "disabled" } };
+  }
+  return {};
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
   const cors = corsHeaders(origin);
@@ -213,6 +239,7 @@ ${JSON.stringify(payloadForModel)}`;
         // window reuse it at ~90% lower input cost.
         system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content: user }],
+        ...briefRequestExtras(MODEL),
       }),
       // A full multi-species 5-section brief can take well over 30s to generate,
       // so the old 30s abort was firing mid-generation and surfacing as a
@@ -243,9 +270,24 @@ ${JSON.stringify(payloadForModel)}`;
       }
       return new Response(JSON.stringify({ error: msg, upstreamStatus: r.status }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
     }
-    const d = await r.json();
-    const brief = d?.content?.[0]?.text ?? null;
-    if (!brief) return new Response(JSON.stringify({ error: "Empty brief." }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+    const d = await r.json() as Record<string, unknown>;
+    const brief = extractBriefText(d);
+    if (!brief) {
+      const stopReason = str(d.stop_reason);
+      const blockTypes = Array.isArray(d.content)
+        ? (d.content as Array<Record<string, unknown>>).map((b) => str(b.type)).filter(Boolean).join(", ")
+        : "";
+      let msg = "Empty brief.";
+      if (stopReason === "refusal") {
+        msg = "Brief was declined by the model safety filter. Try a different spot or species.";
+      } else if (blockTypes.includes("thinking")) {
+        msg = `Brief returned no text — ${MODEL} spent the token budget on thinking. Redeploy the brief function (thinking is now disabled for Sonnet 5) or set BRIEF_MODEL=claude-haiku-4-5.`;
+      } else if (stopReason === "max_tokens") {
+        msg = "Brief was truncated before any text was returned. Increase max_tokens or use a lighter model.";
+      }
+      console.error("Empty brief", { model: MODEL, stopReason, blockTypes });
+      return new Response(JSON.stringify({ error: msg }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+    }
     return new Response(JSON.stringify({ brief }), { headers: { ...cors, "Content-Type": "application/json" } });
   } catch (e) {
     const em = (e as Error)?.message || "";
