@@ -616,7 +616,8 @@ body.nav-open .leaflet-control-zoom,
 body.nav-open #layers-ctrl,
 body.nav-open #ocean-opacity-control,
 body.nav-open #map-scale-bar,
-body.nav-open #ruler-readout{
+body.nav-open #ruler-readout,
+body.nav-open #brief-fab{
   opacity:0;
   pointer-events:none;
   transition:opacity .15s ease-out;
@@ -645,6 +646,63 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
   display:flex;
   flex-direction:column;
   gap:8px;
+}
+
+/* ── PRIMARY "Captain's Brief" FAB ─────────────────────────────────────────
+   Purple to stay consistent with the AI Captain's Brief panel/buttons.
+   Bottom-center so it clears the right-edge icon column (#layers-ctrl) and
+   the Leaflet zoom controls. restackBottomControls() in JS raises it above
+   any stacked bottom bars. */
+#brief-fab{
+  position:absolute;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:650;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  padding:13px 22px;
+  border-radius:26px;
+  border:1px solid rgba(192,132,252,.55);
+  background:linear-gradient(180deg,#7c3aed 0%,#6d28d9 100%);
+  color:#f5ecff;
+  font-family:'Segoe UI',Arial,sans-serif;
+  font-size:15px;
+  font-weight:800;
+  letter-spacing:.02em;
+  cursor:pointer;
+  box-shadow:0 6px 20px rgba(124,58,237,.45),0 1px 0 rgba(255,255,255,.12) inset;
+  transition:transform .16s cubic-bezier(.4,0,.2,1),box-shadow .16s,opacity .2s;
+  -webkit-backdrop-filter:blur(6px);
+  backdrop-filter:blur(6px);
+  max-width:calc(100vw - 32px);
+  white-space:nowrap;
+}
+#brief-fab:hover{
+  box-shadow:0 8px 26px rgba(124,58,237,.6),0 1px 0 rgba(255,255,255,.16) inset;
+  transform:translateX(-50%) translateY(-1px);
+}
+#brief-fab:active{ transform:translateX(-50%) scale(.97); }
+#brief-fab #brief-fab-icon{ font-size:17px; line-height:1; }
+#brief-fab #brief-fab-label{ overflow:hidden; text-overflow:ellipsis; }
+#brief-fab.is-setup{
+  background:linear-gradient(180deg,rgba(124,58,237,.22),rgba(109,40,217,.22));
+  color:#e2c9ff;
+  border-color:rgba(192,132,252,.4);
+  box-shadow:0 4px 14px rgba(0,0,0,.4);
+}
+body.nav-open #brief-fab,
+body.modal-open #brief-fab{
+  opacity:0;
+  pointer-events:none;
+}
+@media (max-width:680px){
+  #brief-fab{
+    bottom:16px;
+    padding:12px 20px;
+    font-size:15px;
+  }
 }
 
 /* OCEAN OPACITY SLIDER — vertical dimmer, hidden until an ocean layer is on.
@@ -2600,6 +2658,14 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
     Start by picking your <b>Home Port</b> above<br>so we can find fish within range of you.
   </div>
 </div>
+
+<!-- PRIMARY ACTION FAB — single obvious call-to-action on the map.
+     Purple to match the AI Captain's Brief styling used elsewhere.
+     Label + action adapt to setup state; see updateBriefFab() in bw-core.js. -->
+<button id="brief-fab" type="button" onclick="onBriefFabClick()" aria-label="Captain's Brief">
+  <span id="brief-fab-icon" aria-hidden="true">✦</span>
+  <span id="brief-fab-label">Captain's Brief</span>
+</button>
 
 <!-- ICON COLUMN (right edge of map): MAP, LAYERS, RULER, SETTINGS -->
 <div id="layers-ctrl">

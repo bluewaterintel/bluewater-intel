@@ -749,6 +749,7 @@ async function initMap(){
 
   // Show empty-state overlay until user picks port + species
   updateEmptyState();
+  updateBriefFab();
 
   // If we opened with no connectivity and a trip is saved, load it straight onto
   // the map — the whole point of "Download my trip".
@@ -7504,6 +7505,7 @@ function showPredictionExplainer(cell, species){
   }
 
   renderExplainerMain();
+  updateBriefFab();
 }
 
 function renderExplainerMain(){
@@ -7771,6 +7773,7 @@ function closeExplainer(){
   if(el) el.remove();
   _explainerState = null;
   if(wxAutoRefreshTimer){ clearInterval(wxAutoRefreshTimer); wxAutoRefreshTimer = null; }
+  updateBriefFab();
 }
 
 // Open a sub-panel inside the explainer (replaces main content with weather,
@@ -8187,6 +8190,16 @@ function restackBottomControls(){
     legend.style.maxHeight = oceanLegendMaxHeightPx() + "px";
   }
   updateMobileLayerMode();
+
+  const fab = document.getElementById("brief-fab");
+  if(fab){
+    const fabBase = 20;
+    if(canCollapse || shown.length > 0){
+      fab.style.bottom = (topOfStack + 14) + "px";
+    } else {
+      fab.style.bottom = fabBase + "px";
+    }
+  }
 }
 
 // ── OCEAN OPACITY SLIDER ─────────────────────────────────────────────────────
@@ -13306,6 +13319,74 @@ function updateEmptyState(){
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// PRIMARY "CAPTAIN'S BRIEF" FAB
+// One obvious call-to-action on the map. Its label + action adapt to setup:
+//   no port    → open the Home Port picker
+//   no species → open the Target Species picker
+//   both set   → open the AI Captain's Brief panel
+// Reuses existing functions; adds no new brief-generation logic.
+// ════════════════════════════════════════════════════════════════════════════
+function updateBriefFab(){
+  const fab   = document.getElementById("brief-fab");
+  if(!fab) return;
+  const label = document.getElementById("brief-fab-label");
+  const icon  = document.getElementById("brief-fab-icon");
+  const expl  = document.getElementById("predict-explainer");
+
+  if(expl){
+    fab.style.opacity = "0";
+    fab.style.pointerEvents = "none";
+  } else {
+    fab.style.opacity = "";
+    fab.style.pointerEvents = "";
+  }
+
+  if(!activePort){
+    fab.classList.add("is-setup");
+    if(icon)  icon.textContent  = "⚓";
+    if(label) label.textContent = "Set your home port";
+  } else if(!activeSpId || activeSpId === "all"){
+    fab.classList.add("is-setup");
+    if(icon)  icon.textContent  = "🎯";
+    if(label) label.textContent = "Pick a target";
+  } else {
+    fab.classList.remove("is-setup");
+    if(icon)  icon.textContent  = "✦";
+    if(label) label.textContent = "Captain's Brief";
+  }
+}
+
+function onBriefFabClick(){
+  if(!activePort){
+    if(typeof togglePortDd === "function") togglePortDd();
+    return;
+  }
+  if(!activeSpId || activeSpId === "all"){
+    if(typeof toggleDd === "function") toggleDd();
+    return;
+  }
+
+  const p  = PORTS[activePort];
+  const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === activeSpId) : null;
+  if(!p || !sp){
+    updateBriefFab();
+    return;
+  }
+
+  pinLL = { lat: p.lat, lng: p.lng };
+  let cell = { lat: p.lat, lng: p.lng };
+  if(typeof scoreCell === "function"){
+    const scored = scoreCell(p.lat, p.lng, sp.id);
+    if(scored) cell = Object.assign({}, cell, scored);
+  }
+
+  if(typeof showPredictionExplainer === "function"){
+    showPredictionExplainer(cell, sp);
+    if(typeof openSubPanel === "function") openSubPanel("brief");
+  }
+}
+
 // Returns true if the port sits outside the lat range of the species AND
 // would still be out of range even with the maximum allowed offshore run.
 // This is what powers the "wrong port for this species" empty-state.
@@ -13352,6 +13433,7 @@ function selectSp(id){
   ensurePredictLayerOn();
   drawPrediction();
   updateEmptyState();
+  updateBriefFab();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -13506,6 +13588,7 @@ function selectPort(name){
   }
   updateEmptyState();
   updateHeaderConditions();
+  updateBriefFab();
 }
 
 // Load real bathy + header conditions for a port's fishing range. Safe to call
