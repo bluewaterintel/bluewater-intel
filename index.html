@@ -1081,6 +1081,8 @@ body.modal-open #brief-fab{
 .map-time-pill-step{
   flex:0 0 auto;font-weight:800;font-size:16px;border-radius:8px;
   padding:6px 12px;cursor:pointer;font-family:inherit;line-height:1;
+  min-width:44px;min-height:40px;
+  display:inline-flex;align-items:center;justify-content:center;
 }
 .map-time-pill-step:disabled{opacity:.35;cursor:not-allowed}
 .map-time-pill-slider{
@@ -1236,7 +1238,7 @@ body.modal-open #brief-fab{
   .map-time-pill--open .map-time-pill-head{margin-bottom:6px !important}
   .map-time-pill-title{font-size:10px !important;letter-spacing:.08em !important}
   .map-time-pill-display{font-size:11px !important}
-  .map-time-pill-step{font-size:13px !important;padding:4px 9px !important}
+  .map-time-pill-step{font-size:14px !important;padding:6px 10px !important;min-width:44px !important;min-height:40px !important}
   .map-time-pill-slider{height:6px !important}
   .map-time-pill-slider::-webkit-slider-thumb{width:18px !important;height:18px !important}
   .map-time-pill-footer{font-size:10px !important;margin-top:4px !important}
@@ -2180,7 +2182,7 @@ body.modal-open #brief-fab{
 
     <!-- Home Port — uses same custom dropdown architecture as Target Species -->
     <div id="port-wrap">
-      <div id="port-btn" class="ctrl-card" role="button" tabindex="0" onclick="togglePortDd()" onkeydown="if(event.key==='Enter')togglePortDd()">
+      <div id="port-btn" class="ctrl-card" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" onclick="togglePortDd()" onkeydown="if(event.key==='Enter')togglePortDd()">
         <div class="ctrl-card-label">Home Port</div>
         <div class="ctrl-card-value">
           <span class="ctrl-card-icon">⚓</span>
@@ -2188,12 +2190,12 @@ body.modal-open #brief-fab{
           <span id="port-arr" style="font-size:9px;color:#6bbfea;opacity:.7;flex-shrink:0">▼</span>
         </div>
       </div>
-      <div id="port-dd"></div>
+      <div id="port-dd" role="listbox" aria-label="Home port"></div>
     </div>
 
     <!-- Target Species — same dropdown architecture as Home Port -->
     <div id="sp-wrap">
-      <div id="sp-btn" class="ctrl-card" role="button" tabindex="0" onclick="toggleDd()" onkeydown="if(event.key==='Enter')toggleDd()">
+      <div id="sp-btn" class="ctrl-card" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" onclick="toggleDd()" onkeydown="if(event.key==='Enter')toggleDd()">
         <div class="ctrl-card-label">Target Species</div>
         <div class="ctrl-card-value">
           <div id="sp-dot" class="sdot ctrl-card-icon" style="opacity:.3;background:#888"></div>
@@ -2201,7 +2203,7 @@ body.modal-open #brief-fab{
           <span id="sp-arr" style="font-size:9px;color:#6bbfea;opacity:.7;flex-shrink:0">▼</span>
         </div>
       </div>
-      <div id="sp-dd"></div>
+      <div id="sp-dd" role="listbox" aria-label="Target species"></div>
     </div>
 
     <!-- Weather widget — combined cells. Values are EMPTY until a home port is
@@ -2638,20 +2640,6 @@ body.modal-open #brief-fab{
   text-align:center;max-width:340px;
   display:none;
 ">
-  <!-- Close X — pointer-events:auto so it's clickable even though the parent
-       popup is pointer-events:none (which lets the user pan the map through
-       the popup body). One tap dismisses the prompt for the rest of the
-       session so it doesn't keep re-appearing. -->
-  <button type="button" onclick="dismissEmptyState()" aria-label="Dismiss prompt" style="
-    position:absolute;top:6px;right:8px;
-    width:26px;height:26px;
-    background:transparent;border:none;
-    color:#7dd3fc;font-size:18px;font-weight:700;
-    cursor:pointer;pointer-events:auto;
-    display:flex;align-items:center;justify-content:center;
-    border-radius:50%;
-    font-family:inherit;line-height:1;
-  " onmouseover="this.style.background='rgba(107,191,234,.15)'" onmouseout="this.style.background='transparent'">×</button>
   <div id="empty-state-icon" style="font-size:36px;margin-bottom:8px">⚓</div>
   <div id="empty-state-title" style="font-size:14px;font-weight:700;color:#7dd3fc;letter-spacing:.04em;margin-bottom:6px">CHOOSE YOUR HOME PORT</div>
   <div id="empty-state-text" style="font-size:12px;color:#cfe5ff;line-height:1.55">

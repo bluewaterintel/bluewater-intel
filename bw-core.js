@@ -12457,10 +12457,36 @@ function closeBriefModal(){
 }
 // Close on Escape for desktop users.
 document.addEventListener("keydown", e => {
-  if(e.key === "Escape"){
-    const m = document.getElementById("brief-modal");
-    if(m && m.classList.contains("open")) closeBriefModal();
-  }
+  if(e.key !== "Escape") return;
+
+  // 1. Brief modal (highest z-index content overlay)
+  const briefM = document.getElementById("brief-modal");
+  if(briefM && briefM.classList.contains("open")){ closeBriefModal(); return; }
+
+  // 2. Centered modals: layers, basemap, settings
+  const layersM = document.getElementById("layers-modal");
+  if(layersM && layersM.classList.contains("open")){ toggleLayersPanel(); return; }
+  const baseM = document.getElementById("basemap-modal");
+  if(baseM && baseM.classList.contains("open")){ toggleBaseMapPanel(); return; }
+  const setM = document.getElementById("settings-modal");
+  if(setM && setM.classList.contains("open")){ toggleSettingsPanel(); return; }
+
+  // 3. Ocean-legend detail bottom sheet
+  const legendSheet = document.getElementById("ocean-legend-sheet");
+  if(legendSheet && legendSheet.classList.contains("open")){ closeOceanLegendSheet(); return; }
+
+  // 4. Header dropdowns (species / port)
+  const spDd = document.getElementById("sp-dd");
+  if(spDd && spDd.classList.contains("open")){ closeDd(); return; }
+  const portDd = document.getElementById("port-dd");
+  if(portDd && portDd.classList.contains("open")){ closePortDd(); return; }
+
+  // 5. Bite-map explainer panel
+  const expl = document.getElementById("predict-explainer");
+  if(expl){ closeExplainer(); return; }
+
+  // 6. Nav menu
+  if(document.body.classList.contains("nav-open")){ closeNav(); return; }
 });
 
 function briefDayLabel(off){
@@ -13237,6 +13263,7 @@ function toggleDd(){
   }
 
   document.getElementById("sp-arr").textContent=willOpen?"▲":"▼";
+  document.getElementById("sp-btn").setAttribute("aria-expanded", willOpen ? "true" : "false");
 }
 
 function closeDd(){
@@ -13249,14 +13276,14 @@ function closeDd(){
   const backdrop=document.getElementById("sp-backdrop");
   if(backdrop) backdrop.style.display="none";
   document.getElementById("sp-arr").textContent="▼";
+  document.getElementById("sp-btn").setAttribute("aria-expanded", "false");
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // EMPTY-STATE OVERLAY — shows when port or species isn't selected
 // ════════════════════════════════════════════════════════════════════════════
-// Session-level flag: once the user dismisses the empty-state prompt with
-// the X button, don't show it again this session. Selecting a port or
-// species also hides it but via the natural state flow in updateEmptyState.
+// Session-level flag: legacy dismiss path — the empty-state X was removed so
+// the prompt stays until port/species are chosen via updateEmptyState().
 let emptyStateDismissed = false;
 
 function dismissEmptyState(){
@@ -13533,6 +13560,7 @@ function togglePortDd(){
   }
 
   document.getElementById("port-arr").textContent=willOpen?"▲":"▼";
+  document.getElementById("port-btn").setAttribute("aria-expanded", willOpen ? "true" : "false");
 }
 
 function closePortDd(){
@@ -13544,6 +13572,7 @@ function closePortDd(){
   const backdrop=document.getElementById("sp-backdrop");
   if(backdrop) backdrop.style.display="none";
   document.getElementById("port-arr").textContent="▼";
+  document.getElementById("port-btn").setAttribute("aria-expanded", "false");
 }
 
 function selectPort(name){
@@ -13630,7 +13659,7 @@ function refreshActiveOceanLayers(){
   if(activePort) updateHeaderConditions();
 }
 // With no port selected there is no location to source conditions from, so the
-// cells stay blank ("—") rather than showing misleading placeholder numbers.
+// water cell prompts setup and the other cells stay quiet.
 async function updateHeaderConditions(attempt){
   const tryNum = attempt || 0;
   const water = document.getElementById("hdr-water");
@@ -13639,7 +13668,8 @@ async function updateHeaderConditions(attempt){
   if(!water || !air || !wind) return;
   const p = activePort ? PORTS[activePort] : null;
   if(!p){
-    water.textContent = air.textContent = wind.textContent = "—";
+    water.innerHTML = "<span style='opacity:.6;font-weight:600'>Select a port</span>";
+    air.textContent = wind.textContent = "";
     updateHeaderTide();
     requestAnimationFrame(syncHeaderHeightVar);
     return;
