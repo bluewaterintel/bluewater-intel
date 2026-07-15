@@ -41,7 +41,9 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 // Claude Haiku 4.5 — fast + low-cost, ample quality for these tactical briefs.
 // Override via BRIEF_MODEL secret if you want a heavier model.
-const MODEL = Deno.env.get("BRIEF_MODEL") ?? "claude-haiku-4-5";
+const BRIEF_FN_VERSION = "20260715a";
+const MODEL_RAW = Deno.env.get("BRIEF_MODEL") ?? "claude-haiku-4-5";
+const MODEL = MODEL_RAW.trim() || "claude-haiku-4-5";
 
 // Reflect the caller's Origin (fallback to configured list / "*"). Strict
 // matching returned the apex domain for www./mobile-webview callers, which the
@@ -55,6 +57,7 @@ function corsHeaders(origin: string | null) {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
+    "X-Brief-Function-Version": BRIEF_FN_VERSION,
   };
 }
 
@@ -78,9 +81,7 @@ function bearingDistance(fromLat: number, fromLng: number, toLat: number, toLng:
 const num = (v: unknown): number | null => (typeof v === "number" && isFinite(v) ? v : null);
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
-// Claude Sonnet 5+ returns adaptive-thinking blocks before text. The old
-// content[0].text read saw "thinking" first → null → "Empty brief." Also,
-// max_tokens is shared between thinking and output on those models.
+// Sonnet 5+ may return thinking blocks before text; collect all text blocks.
 function extractBriefText(d: Record<string, unknown>): string | null {
   const content = d?.content;
   if (!Array.isArray(content)) return null;
@@ -96,12 +97,18 @@ function extractBriefText(d: Record<string, unknown>): string | null {
   return parts.length ? parts.join("\n") : null;
 }
 
+function isAdaptiveThinkingModel(model: string): boolean {
+  return /sonnet-5|sonnet-4-6|opus-4-[78]|fable-5|mythos/i.test(model);
+}
+
 // Sonnet 5 defaults to adaptive thinking; disable for fast tactical briefs.
-function briefRequestExtras(model: string): Record<string, unknown> {
-  if (/claude-sonnet-5/i.test(model)) {
-    return { thinking: { type: "disabled" } };
-  }
-  return {};
+// max_tokens is shared between thinking + text on those models — keep headroom.
+function briefAnthropicRequest(model: string): { max_tokens: number; thinking?: { type: string } } {
+  const adaptive = isAdaptiveThinkingModel(model);
+  return {
+    max_tokens: adaptive ? 4096 : 2000,
+    ...(adaptive ? { thinking: { type: "disabled" } } : {}),
+  };
 }
 
 Deno.serve(async (req) => {
@@ -230,16 +237,12 @@ ${JSON.stringify(payloadForModel)}`;
       },
       body: JSON.stringify({
         model: MODEL,
-        // Output tokens are the main cost driver on Haiku, and the prompt now
-        // asks for a tight brief. 2000 still covers a multi-species / run-plan
-        // brief across all 5 sections without truncating mid-section.
-        max_tokens: 2000,
+        ...briefAnthropicRequest(MODEL),
         // Prompt caching: the system prompt is identical on every brief, so mark
         // it cacheable. After the first call, repeat calls within the cache
         // window reuse it at ~90% lower input cost.
         system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content: user }],
-        ...briefRequestExtras(MODEL),
       }),
       // A full multi-species 5-section brief can take well over 30s to generate,
       // so the old 30s abort was firing mid-generation and surfacing as a
@@ -277,18 +280,20 @@ ${JSON.stringify(payloadForModel)}`;
       const blockTypes = Array.isArray(d.content)
         ? (d.content as Array<Record<string, unknown>>).map((b) => str(b.type)).filter(Boolean).join(", ")
         : "";
-      let msg = "Empty brief.";
+      let msg = `Empty brief from ${MODEL}.`;
       if (stopReason === "refusal") {
         msg = "Brief was declined by the model safety filter. Try a different spot or species.";
       } else if (blockTypes.includes("thinking")) {
-        msg = `Brief returned no text — ${MODEL} spent the token budget on thinking. Redeploy the brief function (thinking is now disabled for Sonnet 5) or set BRIEF_MODEL=claude-haiku-4-5.`;
+        msg = `Brief returned no text — ${MODEL} used thinking tokens only. Redeploy brief function ${BRIEF_FN_VERSION} (thinking disabled for Sonnet 5) or set BRIEF_MODEL=claude-haiku-4-5.`;
       } else if (stopReason === "max_tokens") {
         msg = "Brief was truncated before any text was returned. Increase max_tokens or use a lighter model.";
+      } else if (!blockTypes) {
+        msg = `Brief returned no content blocks (model=${MODEL}, fn=${BRIEF_FN_VERSION}). Check BRIEF_MODEL secret and redeploy.`;
       }
-      console.error("Empty brief", { model: MODEL, stopReason, blockTypes });
-      return new Response(JSON.stringify({ error: msg }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+      console.error("Empty brief", { model: MODEL, stopReason, blockTypes, fn: BRIEF_FN_VERSION });
+      return new Response(JSON.stringify({ error: msg, fnVersion: BRIEF_FN_VERSION, model: MODEL, stopReason, blockTypes }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
     }
-    return new Response(JSON.stringify({ brief }), { headers: { ...cors, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ brief, fnVersion: BRIEF_FN_VERSION }), { headers: { ...cors, "Content-Type": "application/json" } });
   } catch (e) {
     const em = (e as Error)?.message || "";
     console.error("Brief exception", em);

@@ -12284,7 +12284,7 @@ function openBriefModal(){
   const body = document.getElementById("brief-modal-body");
   const sub = document.getElementById("brief-modal-sub");
   if(!modal || !body) return;
-  const hasBrief = !!(aiCOA && aiCOA.trim() && !/^(sign in|brief unavailable|couldn't reach)/i.test(aiCOA.trim()));
+  const hasBrief = briefLooksSuccessful(aiCOA);
   const historyHtml = briefHistoryPanelHtml({ placement: "modal", max: 6, highlightId: _lastBriefId });
   body.innerHTML = (hasBrief ? `<div class="brief-md">${briefMarkdownToHtml(aiCOA)}</div>` : "")
     + historyHtml
@@ -12339,6 +12339,14 @@ function briefDayLabel(off){
   return d.toLocaleDateString("en-US", { weekday: "short" });
 }
 function setBriefDay(off){ briefDayOffset = off; renderBrief(); }
+
+function briefLooksSuccessful(text){
+  if(!text || !String(text).trim()) return false;
+  const t = String(text).trim();
+  if(/^(sign in|brief unavailable|couldn't reach|empty brief)/i.test(t)) return false;
+  if(/^brief /i.test(t)) return false;
+  return /##\s/m.test(t) || /\*\*[^*]+\*\*/.test(t);
+}
 
 // ── Brief history (48-hour recall) ───────────────────────────────────────────
 function briefHistoryLoad(){
@@ -12501,7 +12509,8 @@ function renderBrief(){
     <div class="sp-pills">${pills || `<span style="font-size:12px;color:#9ec5e8">No species for this location yet.</span>`}</div>
     <button id="brief-btn" ${!hasPin||aiLoading?"disabled":""} onclick="runBrief()">
       ${aiLoading?"GENERATING BRIEF...":"GENERATE AI CAPTAIN'S BRIEF"}</button>
-    ${(aiCOA && !aiLoading)?`<button type="button" class="brief-view-btn" style="margin-top:2px;background:rgba(168,85,247,.16);color:#e2c9ff;border:1px solid rgba(192,132,252,.4)" onclick="openBriefModal()">View your Captain's Brief ↗</button>`:""}
+    ${(briefLooksSuccessful(aiCOA) && !aiLoading)?`<button type="button" class="brief-view-btn" style="margin-top:2px;background:rgba(168,85,247,.16);color:#e2c9ff;border:1px solid rgba(192,132,252,.4)" onclick="openBriefModal()">View your Captain's Brief ↗</button>`:""}
+    ${(aiCOA && !aiLoading && !briefLooksSuccessful(aiCOA))?`<p style="margin-top:10px;font-size:12px;color:#f0a0a0;line-height:1.45">${String(aiCOA).replace(/</g,"&lt;")}</p>`:""}
     ${recentSection}
   `);
 }
@@ -12957,7 +12966,7 @@ async function runBrief(){
   try {
     const { brief } = await window.BW_AUTH.callBrief(payload);
     aiCOA = brief || "Brief unavailable.";
-    briefOk = !!brief;
+    briefOk = briefLooksSuccessful(aiCOA);
     if(briefOk && pinLL){
       const briefId = "b-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
       _lastBriefId = briefId;
