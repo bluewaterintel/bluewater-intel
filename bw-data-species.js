@@ -311,6 +311,17 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
   ],
 
+  // ── BLUELINE TILEFISH ────────────────────────────────────────────────
+  // Mid-Atlantic shelf winter/spring staple (Norfolk/Hatteras ledges); Gulf
+  // hard-bottom a longer season. Without this table July cells used the generic
+  // peak curve and overstated a summer blueline bite off VA/NC.
+  bluelinetile: [
+    {centerLat: 36.5, centerLng: -75.5, radiusNm: 130, label: "Mid-Atlantic shelf (VA/NC)",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:1,Jul:1,Aug:1,Sep:1,Oct:2,Nov:3,Dec:3}},
+    {centerLat: 28.5, centerLng: -88.5, radiusNm: 220, label: "Gulf deep ledges",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
+  ],
+
   // ── BLUEFISH ─────────────────────────────────────────────────────────
   // Spring/fall blitz pattern in mid-Atlantic; summer resident in NE.
   bluefish: [

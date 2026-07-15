@@ -1270,7 +1270,12 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
   font-size:9px;font-weight:600;letter-spacing:.04em;
   font-family:inherit;cursor:pointer;padding:3px 4px;
   border-radius:4px;transition:color .15s,background .15s;
-  min-width:32px;
+  min-width:32px;flex:1;
+}
+#bite-banner-forecast .fc-mark{
+  font-size:10px;padding:5px 4px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.10);
 }
 .fc-mark:hover{color:#7dd3fc;background:rgba(125,211,252,.08)}
 .fc-mark.active{color:#7dd3fc;background:rgba(125,211,252,.16);font-weight:700}
@@ -2375,17 +2380,18 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
     font-family:'Segoe UI',Arial,sans-serif;
     color:#e8f4ff;
     box-shadow:0 3px 12px rgba(0,0,0,.5);
-    pointer-events:none;
+    pointer-events:auto;
     width:min(440px, 92vw);
   ">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;pointer-events:none">
       <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#fb923c">BITE SCORE</span>
       <span style="font-size:10px;color:#9ec5e8">predicted fishing quality</span>
     </div>
-    <div style="height:12px;border-radius:6px;background:linear-gradient(90deg,#65a30d 0%,#84cc16 22%,#eab308 45%,#f59e0b 68%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)"></div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#dde8f5;margin-top:3px">
+    <div style="height:12px;border-radius:6px;background:linear-gradient(90deg,#65a30d 0%,#84cc16 22%,#eab308 45%,#f59e0b 68%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);pointer-events:none"></div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#dde8f5;margin-top:3px;pointer-events:none">
       <span>POOR</span><span>FAIR</span><span>GOOD</span><span>EXCELLENT</span>
     </div>
+    <div id="bite-banner-forecast"></div>
   </div>
 
   <!-- OCEAN OVERLAY LEGEND — shows color scales for SST / chlorophyll
@@ -3788,7 +3794,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
       <div class="tut-data-icon">📍</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Recent catch reports</div>
-        <div class="tut-data-desc">Recent fishing reports for a species near a location bump up scores in that area. Reports decay with an ~8-hour half-life — a 2-hour-old report carries full weight, yesterday's much less. The known-areas table recognizes ~22 named offshore locations (canyons, banks, ledges from Maine to Southern California) for precise spatial matching; reports without a recognized area fall back to the port location.</div>
+        <div class="tut-data-desc">Recent fishing reports for a species near a location bump up scores in that area. Reports decay with an ~8-hour half-life — a 2-hour-old report carries full weight, yesterday's much less. Only reports that include an approximate map location move the bite map (matched by lat/lng within ~24–90 nm); region-only forum posts show in the forum but do not shift scores.</div>
       </div>
     </div>
 

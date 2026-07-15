@@ -39,8 +39,8 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-// Claude Haiku 4.5 — fast + low-cost, ample quality for these tactical briefs.
-// Override via BRIEF_MODEL secret if you want a heavier model.
+// Deployed default: Claude Haiku 4.5 — fast + low-cost, ample quality for tactical briefs.
+// Override via BRIEF_MODEL secret (e.g. claude-sonnet-5) for a heavier model.
 const BRIEF_FN_VERSION = "20260715a";
 const MODEL_RAW = Deno.env.get("BRIEF_MODEL") ?? "claude-haiku-4-5";
 const MODEL = MODEL_RAW.trim() || "claude-haiku-4-5";

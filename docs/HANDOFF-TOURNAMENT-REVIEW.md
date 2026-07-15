@@ -122,7 +122,7 @@ A captain should be able to:
 | `bw-core.js` | `generateBrief` / payload builder ~12800+, `briefSpotSummary` ~12602 |
 | `bw-auth.js` | `callBrief` ~243 |
 
-**Brief model:** `BRIEF_MODEL` secret (currently `claude-sonnet-5`). Sonnet 5 thinking-block fix deployed (`b7675f4`).
+**Brief model:** `BRIEF_MODEL` secret (deployed default `claude-haiku-4-5`; override to Sonnet 5 or other models as needed). Sonnet 5 thinking-block fix deployed (`b7675f4`).
 
 ---
 

@@ -1777,6 +1777,25 @@ function forecastTimeDisplay(hoursOverride){
   return `${day} ${time}`;
 }
 
+// Map Captain's Brief day (0=today, 1=tomorrow) to bite-score forecast lead.
+function forecastHourForBriefDay(dayOffset){
+  return (dayOffset >= 1) ? 24 : 0;
+}
+
+// Run a callback with FORECAST_HOUR_OFFSET temporarily set; restores on exit.
+function withForecastHour(hours, fn){
+  const prev = FORECAST_HOUR_OFFSET;
+  FORECAST_HOUR_OFFSET = normalizeForecastHour(hours);
+  try { return fn(); }
+  finally { FORECAST_HOUR_OFFSET = prev; }
+}
+
+// Captain-facing note when bite forecast is ahead of now but SST/chlor stay observed.
+function forecastOceanFieldsDisclaimer(){
+  if(!FORECAST_HOUR_OFFSET) return "";
+  return "SST & chlorophyll use the latest satellite pass; wind, tide, pressure & solunar are forecasted for this time.";
+}
+
 function moonPhase(){
   // Reference new moon: Jan 6 2000 18:14 UTC. Synodic period: 29.53059 days.
   const refNewMoon = new Date("2000-01-06T18:14:00Z").getTime();
@@ -2430,16 +2449,11 @@ function realDepthAt(lat, lng){
 }
 
 // Depth used by the prediction engine: prefer bite-map bathy, then map-wide grid,
-// then a conservative inshore default near the active port, then the shelf model.
+// then the shelf model. No synthetic shallow placeholder — buildPredictInputs
+// finishes before the grid scores, so a fake 15 m reading can't flash on the map.
 function predictDepth(lat, lng){
   const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
   if(real != null) return real;
-  const port = (typeof activePort !== "undefined" && activePort) ? PORTS[activePort] : null;
-  if(port){
-    const d = nmBetween(port.lat, port.lng, lat, lng);
-    const maxRange = (typeof maxRangeForPort === "function") ? maxRangeForPort(port) : 120;
-    if(d <= maxRange) return 15;  // ~50 ft — avoids 600 ft shelf-model spikes while bathy loads
-  }
   return seaDepth(lat, lng);
 }
 
@@ -2613,6 +2627,8 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
     buildChlorGrid(latMin, latMax, lngMin, lngMax),
     buildOceanField(latMin, latMax, lngMin, lngMax, { maxPoints: 90 }),
   ]);
+  // Fallback path only populated BATHY_GRID — mirror it for bite scoring too.
+  if(!PREDICT_BATHY_GRID && BATHY_GRID) PREDICT_BATHY_GRID = BATHY_GRID;
 }
 
 function nearestSample(lat, lng){
@@ -3365,6 +3381,7 @@ function scoreCell(lat, lng, speciesId){
   // normalizeScore expands the realistic operating band across the full 0-1
   // display range. It's strictly monotonic, so cell RANKING is unchanged —
   // we're only stretching contrast, not reordering hotspots.
+  const rawScoreBeforeNorm = finalScore;
   finalScore = normalizeScore(finalScore);
 
   const confidenceFallback = { confidence: Math.min(95, 25 + [tempScore, chlorScore, depthScore, breakScore].filter(s => s > 0.7).length * 5), annotations: [] };
@@ -3521,6 +3538,7 @@ function scoreCell(lat, lng, speciesId){
 
   return {
     score: Math.max(0, Math.min(1, finalScore)),
+    rawScore: Math.max(0, Math.min(1, rawScoreBeforeNorm)),
     confidence,
     freshnessAnnotations,
     sst, chlor, depth, tBreak,
@@ -4582,42 +4600,44 @@ function briefSpeciesForSpot(){
 // then pick the best targets for an "I just want to go fishing" Bluewater Choice
 // brief. Favors in-season fish with strong scores and confidence.
 function briefPickSpeciesAuto(lat, lng, allowed, limit = 3){
-  const candidates = [];
   if(typeof scoreCell !== "function" || !allowed || !allowed.length) return { picks: [], candidates: [] };
-  for(const sp of allowed){
-    const r = scoreCell(lat, lng, sp.id);
-    if(!r || r.outOfRange) continue;
-    const score = Number.isFinite(r.score) ? r.score : 0;
-    const conf = Number.isFinite(r.confidence) ? r.confidence : 0.5;
-    const inSeason = r.inSeason !== false;
-    const season = Number.isFinite(r.seasonStrength) ? r.seasonStrength : (inSeason ? 0.75 : 0.2);
-    const seasonWt = inSeason ? (0.35 + 0.65 * season) : 0.12;
-    const rank = score * (0.45 + 0.55 * conf) * seasonWt;
-    candidates.push({
-      id: sp.id,
-      name: sp.name,
-      rank,
-      scorePct: Math.round(score * 100),
-      confidencePct: Math.round(conf * 100),
-      inSeason,
-      seasonStrength: season,
-      topFactor: r.topFactor || null,
-    });
-  }
-  // Deterministic ordering: rank desc, then score desc, then species id asc as a
-  // stable tie-break. Without the tie-break, near-equal ranks (common while the
-  // ocean grids are still streaming in) could reorder between renders, which is
-  // why "Bluewater Choice" appeared to pick different species on each click.
-  candidates.sort((a, b) =>
-    (b.rank - a.rank) || (b.scorePct - a.scorePct) ||
-    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  // Only recommend genuinely worthwhile targets: a FAIR-or-better bite score
-  // (>=40/100). This stops junk picks like "Swordfish 6/100" when nothing is
-  // really biting. If nothing clears the bar we return NO picks and the UI says
-  // so honestly rather than surfacing a bad recommendation.
-  const MIN_SCORE_PCT = 40;
-  const picks = candidates.filter(c => c.scorePct >= MIN_SCORE_PCT).slice(0, limit);
-  return { picks, candidates };
+  return withForecastHour(forecastHourForBriefDay(briefDayOffset), () => {
+    const candidates = [];
+    for(const sp of allowed){
+      const r = scoreCell(lat, lng, sp.id);
+      if(!r || r.outOfRange) continue;
+      const score = Number.isFinite(r.score) ? r.score : 0;
+      const conf = Number.isFinite(r.confidence) ? r.confidence : 0.5;
+      const inSeason = r.inSeason !== false;
+      const season = Number.isFinite(r.seasonStrength) ? r.seasonStrength : (inSeason ? 0.75 : 0.2);
+      const seasonWt = inSeason ? (0.35 + 0.65 * season) : 0.12;
+      const rank = score * (0.45 + 0.55 * conf) * seasonWt;
+      candidates.push({
+        id: sp.id,
+        name: sp.name,
+        rank,
+        scorePct: Math.round(score * 100),
+        confidencePct: Math.round(conf * 100),
+        inSeason,
+        seasonStrength: season,
+        topFactor: r.topFactor || null,
+      });
+    }
+    // Deterministic ordering: rank desc, then score desc, then species id asc as a
+    // stable tie-break. Without the tie-break, near-equal ranks (common while the
+    // ocean grids are still streaming in) could reorder between renders, which is
+    // why "Bluewater Choice" appeared to pick different species on each click.
+    candidates.sort((a, b) =>
+      (b.rank - a.rank) || (b.scorePct - a.scorePct) ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    // Only recommend genuinely worthwhile targets: a FAIR-or-better bite score
+    // (>=40/100). This stops junk picks like "Swordfish 6/100" when nothing is
+    // really biting. If nothing clears the bar we return NO picks and the UI says
+    // so honestly rather than surfacing a bad recommendation.
+    const MIN_SCORE_PCT = 40;
+    const picks = candidates.filter(c => c.scorePct >= MIN_SCORE_PCT).slice(0, limit);
+    return { picks, candidates };
+  });
 }
 
 // Maximum reasonable run distance from home port to fishing grounds.
@@ -4702,6 +4722,16 @@ function predictResultCacheKey(){
 }
 function invalidatePredictCache(){ _predictResultCache = null; }
 
+// Rank score for hotspot badge selection — favors in-season, high-confidence runs.
+function hotspotRankScore(cell){
+  const score = Number(cell.score) || 0;
+  const conf = (Number.isFinite(cell.confidence) ? cell.confidence : 50) / 100;
+  const inSeason = cell.inSeason !== false && !cell.outOfRange;
+  const season = Number.isFinite(cell.seasonStrength) ? cell.seasonStrength : (inSeason ? 0.75 : 0.2);
+  const seasonWt = inSeason ? (0.35 + 0.65 * season) : 0.12;
+  return score * (0.45 + 0.55 * conf) * seasonWt;
+}
+
 // Pick the top N hotspot badges with geographic separation so the pins represent
 // genuinely different areas. Shared by renderPrediction and topBriefHotspots so
 // the banner run plan and map badges always agree.
@@ -4713,7 +4743,8 @@ function pickTopHotspotBadges(hotspots, limit){
     const d = (typeof cell.distNm === "number") ? cell.distNm : 20;
     return Math.min(13, Math.max(5, d * 0.18));
   };
-  for(const cell of hotspots){
+  const ranked = hotspots.slice().sort((a, b) => hotspotRankScore(b) - hotspotRankScore(a));
+  for(const cell of ranked){
     if(chosen.length >= limit) break;
     const minSep = sepFor(cell);
     const farEnough = chosen.every(c => nmBetween(c.lat, c.lng, cell.lat, cell.lng) >= minSep);
@@ -4923,7 +4954,7 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
         requestAnimationFrame(step_frame);
       } else {
         // Grid finished → begin the chunked hotspot refinement phase.
-        refineList = hotspotGrid.slice().sort((a,b)=>b.score-a.score);
+        refineList = hotspotGrid.slice().sort((a,b)=>hotspotRankScore(b)-hotspotRankScore(a));
         refineIdx = 0;
         phase = "refine";
         requestAnimationFrame(step_frame);
@@ -4942,7 +4973,7 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
     } else {
       onDone && onDone({
         heatGrid: heatGrid.sort((a,b)=>b.score-a.score),
-        hotspots: refineList.sort((a,b)=>b.score-a.score),
+        hotspots: refineList.sort((a,b)=>hotspotRankScore(b)-hotspotRankScore(a)),
         gridStep: step,
         gridOriginLat: latMin,
         gridOriginLng: lngMin,
@@ -7189,7 +7220,7 @@ function showPredictLoading(){
     _predictLoadingEl = document.createElement("div");
     _predictLoadingEl.id = "predict-loading";
     _predictLoadingEl.style.cssText = "position:absolute;top:64px;left:50%;transform:translateX(-50%);z-index:600;background:rgba(10,22,40,.92);border:1px solid rgba(125,211,252,.35);color:#e8f4ff;font:600 12px 'Segoe UI',Arial,sans-serif;padding:8px 14px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,.5);display:flex;align-items:center;gap:8px;pointer-events:none";
-    _predictLoadingEl.innerHTML = '<span style="width:14px;height:14px;border:2px solid rgba(125,211,252,.3);border-top-color:#7dd3fc;border-radius:50%;display:inline-block;animation:bwspin .8s linear infinite"></span><span>Generating heat map…</span><style>@keyframes bwspin{to{transform:rotate(360deg)}}</style>';
+    _predictLoadingEl.innerHTML = '<span style="width:14px;height:14px;border:2px solid rgba(125,211,252,.3);border-top-color:#7dd3fc;border-radius:50%;display:inline-block;animation:bwspin .8s linear infinite"></span><span>Loading bathymetry &amp; ocean data…</span><style>@keyframes bwspin{to{transform:rotate(360deg)}}</style>';
     MAP.getContainer().appendChild(_predictLoadingEl);
   }
   _predictLoadingEl.style.display = "flex";
@@ -7445,10 +7476,11 @@ function renderExplainerMain(){
     // total — factors are already ordered by that, biggest driver first.)
     const q = (typeof f.quality === "number") ? f.quality : (f.score / 0.30);
     const w = Math.min(100, Math.max(0, Math.round(q * 100)));
+    const wtPct = f.weight > 0 ? Math.round(f.weight * 100) : 0;
     return `
       <div style="margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;margin-bottom:3px">
-          <span style="color:#cfe5ff;font-weight:600;white-space:nowrap;flex-shrink:0">${f.name}</span>
+          <span style="color:#cfe5ff;font-weight:600;white-space:nowrap;flex-shrink:0">${f.name}<span style="color:#6b8bab;font-size:10px;font-weight:600;margin-left:5px">${wtPct}%</span></span>
           <span style="color:#9ec5e8;font-weight:600;text-align:right;white-space:nowrap">${f.raw}</span>
         </div>
         <div style="height:5px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden">
@@ -7459,6 +7491,24 @@ function renderExplainerMain(){
   }).join("");
 
   const verdict = biteVerdict(Math.round(cell.score * 100));
+  let verdictText = verdict.text;
+  let gateBanner = "";
+  if(cell.outOfRange){
+    gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);border-radius:8px;font-size:12px;color:#fecaca;line-height:1.5"><b>Outside known range</b> — this species isn't part of a fishery here. High confidence the bite is poor.</div>`;
+    verdictText = "Don't burn fuel here — this species isn't established in these waters.";
+  } else if(cell.seasonStrength != null && cell.seasonStrength < 0.2){
+    gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);border-radius:8px;font-size:12px;color:#fecaca;line-height:1.5"><b>Off-season</b> — the fish simply aren't around this month.</div>`;
+    verdictText = "Off-season here — even good-looking water won't hold this species right now.";
+  } else if(cell.inSeason === false || (cell.seasonStrength != null && cell.seasonStrength < 0.33)){
+    gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.30);border-radius:8px;font-size:12px;color:#fde68a;line-height:1.5"><b>Marginal season</b> — fish are mostly elsewhere on the coast this month.</div>`;
+    verdictText = "Marginal season — better runs are likely up or down the coast.";
+  }
+
+  const scorePct = Math.round(cell.score * 100);
+  const rawPct = cell.rawScore != null ? Math.round(cell.rawScore * 100) : null;
+  const scoreFootnote = (rawPct != null && Math.abs(rawPct - scorePct) >= 4)
+    ? `raw ${rawPct}% · stretched for map contrast`
+    : "ranking unchanged · scores stretched for contrast";
 
   // Forecast time selector pills — picking a horizon recomputes the bite for that
   // moment (weather/tide/solunar/pressure shift; ocean fields hold at latest obs).
@@ -7492,13 +7542,16 @@ function renderExplainerMain(){
         <div style="font-size:10px;color:#cfe5ff;font-weight:600">${forecastTimeDisplay()}</div>
       </div>
       <div style="display:flex;gap:4px">${forecastPills}</div>
+      ${FORECAST_HOUR_OFFSET > 0 ? `<div style="margin-top:6px;font-size:10px;color:#9ec5e8;line-height:1.45">${forecastOceanFieldsDisclaimer()}</div>` : ""}
     </div>
+
+    ${gateBanner}
 
     <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:10px">
       <div style="flex-shrink:0">
-        <div style="font-size:32px;font-weight:bold;color:${verdict.color};line-height:1">${Math.round(cell.score*100)}<span style="font-size:14px;font-weight:normal">%</span></div>
+        <div style="font-size:32px;font-weight:bold;color:${verdict.color};line-height:1">${scorePct}<span style="font-size:14px;font-weight:normal">%</span></div>
         <div style="font-size:9px;color:#9ec5e8;letter-spacing:.08em;text-transform:uppercase;margin-top:3px;font-weight:700">Bite Score</div>
-        <div style="font-size:9.5px;color:#7a9ec0;margin-top:2px;font-style:italic">how favorable</div>
+        <div style="font-size:9.5px;color:#7a9ec0;margin-top:2px;font-style:italic">${scoreFootnote}</div>
       </div>
       <div style="flex-shrink:0;padding-left:14px;border-left:1px solid rgba(107,191,234,.15)">
         <div style="font-size:22px;font-weight:bold;color:#cfe5ff;line-height:1">${cell.confidence}<span style="font-size:12px;font-weight:normal">%</span></div>
@@ -7526,7 +7579,7 @@ function renderExplainerMain(){
       })()}
     </div>` : ''}
 
-    <div style="font-size:12.5px;color:#cfe5ff;background:rgba(220,38,38,.06);border-left:2px solid ${verdict.color};padding:8px 11px;margin-bottom:11px;line-height:1.5;border-radius:4px">${verdict.text}</div>
+    <div style="font-size:12.5px;color:#cfe5ff;background:rgba(220,38,38,.06);border-left:2px solid ${verdict.color};padding:8px 11px;margin-bottom:11px;line-height:1.5;border-radius:4px">${verdictText}</div>
 
     <div style="font-size:11px;color:#6bbfea;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:8px">Contributing Factors</div>
     ${factorBars}
@@ -7578,6 +7631,7 @@ function setForecastHour(hours){
   const slider = document.getElementById("forecast-slider-input");
   if(slider && String(slider.value) !== String(target)) slider.value = target;
   updateForecastSliderDisplay();
+  if(typeof updateBiteBanner === "function") updateBiteBanner();
   if(typeof refreshOceanForecastLayers === "function") refreshOceanForecastLayers();
   if(typeof drawPrediction === "function" && activeSpId && activePort){
     drawPrediction();
@@ -7661,8 +7715,9 @@ function updateForecastSliderDisplay(){
 function updateForecastSliderVisibility(){
   const el = document.getElementById("forecast-slider");
   if(!el) return;
-  // Ocean model time (+12/+24 h) applies to SST, altimetry, currents, and the
-  // bite map — show whenever any of those overlays is active.
+  // Bite-score forecast (+12/+24 h) shifts tide/solunar/pressure/wind in the
+  // score. SST/chlorophyll map overlays stay on the latest observation until
+  // OCEAN_OVERLAY_FORECAST_ENABLED is true. Show when bite map or ocean layers on.
   const shouldShow = oceanForecastLayersActive();
   el.style.display = shouldShow ? "block" : "none";
   if(shouldShow) updateForecastSliderDisplay();
@@ -9813,6 +9868,25 @@ function updateBiteBanner(){
   const b = document.getElementById("bite-banner");
   if(!b) return;
   b.style.display = layerVis.predict ? "block" : "none";
+  const fc = document.getElementById("bite-banner-forecast");
+  if(fc){
+    if(layerVis.predict){
+      const pills = FORECAST_OPTIONS.map(opt => {
+        const active = opt.hours === FORECAST_HOUR_OFFSET;
+        return `<button type="button" class="fc-mark${active ? " active" : ""}" onclick="setForecastHour(${opt.hours})">${opt.short}</button>`;
+      }).join("");
+      fc.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)">
+          <span style="font-size:9px;color:#6bbfea;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Forecast</span>
+          <span style="font-size:10px;color:#cfe5ff;font-weight:600">${forecastTimeDisplay()}</span>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:4px">${pills}</div>
+        ${FORECAST_HOUR_OFFSET > 0 ? `<div style="margin-top:4px;font-size:9px;color:#9ec5e8;line-height:1.35">${forecastOceanFieldsDisclaimer()}</div>` : ""}
+      `;
+    } else {
+      fc.innerHTML = "";
+    }
+  }
   const expl = document.getElementById("predict-explainer");
   if(expl && typeof viewportPanelTopPx === "function"){
     const top = viewportPanelTopPx(8);
@@ -12871,43 +12945,43 @@ async function runBrief(){
   }
 
   // Per-species bite score + top factor + confidence at this exact pin, from the
-  // same engine that drives the Bite Map — so the brief's "why" matches the map.
-  const scored = [];
-  try {
-    if(typeof scoreCell === "function"){
-      for(const id of sp){
-        const r = scoreCell(pinLL.lat, pinLL.lng, id);
-        if(r){
-          scored.push({
-            species: SPECIES.find(s=>s.id===id)?.name || id,
-            score: r.score != null ? Math.round(r.score*100) : null,
-            topFactor: r.topFactor || null,
-            // Top 3 weighted drivers with their raw readings, so the brief can
-            // explain WHY the score is what it is in concrete terms.
-            topFactors: Array.isArray(r.topFactors) ? r.topFactors : null,
-            confidence: r.confidence != null ? Math.round(r.confidence*100) : null,
-            inSeason: r.inSeason !== false,
-            outOfRange: r.outOfRange === true,
-            seasonStrength: r.seasonStrength != null ? r.seasonStrength : null,
-            sstF: r.sst != null ? Math.round(r.sst*10)/10 : null,
-            thermalBreakFper10nm: r.tBreak != null && r.tBreak > 0 ? Math.round(r.tBreak*10)/10 : null,
-          });
+  // same engine that drives the Bite Map — scoped to the brief's fish day
+  // (Tomorrow → +24 h forecast) so scores match the weather block above.
+  let scored = [];
+  let runPlan = null;
+  withForecastHour(forecastHourForBriefDay(briefDayOffset), () => {
+    try {
+      if(typeof scoreCell === "function"){
+        for(const id of sp){
+          const r = scoreCell(pinLL.lat, pinLL.lng, id);
+          if(r){
+            scored.push({
+              species: SPECIES.find(s=>s.id===id)?.name || id,
+              score: r.score != null ? Math.round(r.score*100) : null,
+              topFactor: r.topFactor || null,
+              // Top 3 weighted drivers with their raw readings, so the brief can
+              // explain WHY the score is what it is in concrete terms.
+              topFactors: Array.isArray(r.topFactors) ? r.topFactors : null,
+              confidence: r.confidence != null ? Math.round(r.confidence*100) : null,
+              inSeason: r.inSeason !== false,
+              outOfRange: r.outOfRange === true,
+              seasonStrength: r.seasonStrength != null ? r.seasonStrength : null,
+              sstF: r.sst != null ? Math.round(r.sst*10)/10 : null,
+              thermalBreakFper10nm: r.tBreak != null && r.tBreak > 0 ? Math.round(r.tBreak*10)/10 : null,
+            });
+          }
         }
       }
+    } catch(e){}
+    // Optional RUN PLAN: top 2-3 Bite Map spots in one model call.
+    if(_briefRunPlanSpots && _briefRunPlanSpots.length >= 2){
+      runPlan = _briefRunPlanSpots.map((s, i) => briefSpotSummary({ lat: s.lat, lng: s.lng }, sp, portObj, i + 1));
     }
-  } catch(e){}
+  });
 
   // The day the captain plans to fish (0=today..6), as both an offset and a date
   // string, so the prompt can scope the forecast and reports to that day.
   const fishDate = new Date(); fishDate.setDate(fishDate.getDate() + briefDayOffset);
-
-  // Optional RUN PLAN: when launched from the banner button over an active Bite
-  // Map, cover the top 2-3 spots ranked in a SINGLE model call. Compact per-spot
-  // summaries keep the payload (and cost) modest — one call, not three.
-  let runPlan = null;
-  if(_briefRunPlanSpots && _briefRunPlanSpots.length >= 2){
-    runPlan = _briefRunPlanSpots.map((s, i) => briefSpotSummary({ lat: s.lat, lng: s.lng }, sp, portObj, i + 1));
-  }
 
   const payload = {
     lat: pinLL.lat,
