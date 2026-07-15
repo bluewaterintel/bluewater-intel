@@ -2446,7 +2446,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
     </div>
     <div class="map-time-pill-footer">
       <span>Now</span>
-      <span class="map-time-pill-hint">GFS/HRRR blend · 3-hour steps</span>
+      <span class="map-time-pill-hint" id="wind-bite-sync-hint">GFS/HRRR blend · 3-hour steps</span>
       <span>+96 h →</span>
     </div>
     <div id="wind-forecast-display" style="display:none"></div>
@@ -2473,13 +2473,13 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
     </div>
   </div>
 
-  <!-- ALTIMETRY DATE — step through daily SSH passes -->
+  <!-- CONVERGENCE DATE — step through daily SSH passes (front convergence layer) -->
   <div id="alti-date-control" class="map-time-pill map-time-pill--pink">
     <div class="map-time-pill-head">
-      <div class="map-time-pill-title">Altimetry Date</div>
+      <div class="map-time-pill-title">Convergence Date</div>
       <div class="map-time-pill-head-right">
         <div id="alti-date-display" class="map-time-pill-display">Latest pass</div>
-        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show altimetry date controls">▾</button>
+        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show convergence date controls">▾</button>
       </div>
     </div>
     <div class="map-time-pill-row">
@@ -2815,13 +2815,13 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="Sea-surface height anomaly (SSH) from satellite altimetry — reveals warm-core eddies (red, +SSH), cold-core eddies (blue, -SSH), and Gulf Stream meanders. Arrows show geostrophic flow derived from the SSH slope — eddy circulation pattern, not actual drift direction. For real surface drift use the Ocean Currents layer. Source: NOAA CoastWatch RADS NRT, ~1–3 day latency.">
+    <label class="layer-row" title="Front convergence from satellite sea-surface height (SSH) — reveals warm-core eddies (red, +SSH), cold-core eddies (blue, -SSH), and Gulf Stream meanders. Magenta lines mark the strongest breaks near your port. Arrows show geostrophic flow derived from the SSH slope — eddy circulation pattern, not actual drift direction. For real surface drift use the Ocean Currents layer. Source: NOAA CoastWatch RADS NRT, ~1–3 day latency.">
       <input type="checkbox" id="chk-altimetry" onchange="toggleLayer('altimetry')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e879f9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12c0-2.5 1.5-4 4-4s4 1.5 4 4"/><path d="M5 12c0-4 3-7 7-7s7 3 7 7"/><path d="M8 12c0 2.5 1.5 4 4 4s4-1.5 4-4"/></svg>
         </span>
-        <span>Altimetry / SSH <span style="font-size:8px;color:#e879f9;opacity:.85">(NOAA RADS NRT)</span></span>
+        <span>Front Convergence (SSH) <span style="font-size:8px;color:#e879f9;opacity:.85">(NOAA RADS NRT)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -3631,6 +3631,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
       <div class="tut-step-body">
         <div class="tut-step-title">Read the Bite Map</div>
         <div class="tut-step-desc">Colored areas show where your target species is most likely to be biting <em>right now</em>. The scale goes from green (decent) → yellow → orange → red (best). Tap any colored area for a breakdown of why that spot scored well — and tap the 🔊 button in that breakdown to have it read aloud.</div>
+        <div class="tut-step-desc" style="margin-top:10px">Planning ahead? Use the <b>Forecast</b> pills on the bite-score banner (Now / +12h / +24h) to see how wind, tide, solunar, and pressure shift the score — without leaving the map.</div>
         <div class="tut-step-desc" style="margin-top:10px">Planning a specific day? Tap any waypoint and open the <b>6-Day Forecast</b> tab for a 3-hour breakdown of wind, seas, air, water, and the tides — so you can pick which day and tide to run.</div>
         <div class="tut-step-desc" style="margin-top:10px;background:rgba(107,191,234,.05);border:1px solid rgba(107,191,234,.15);border-radius:7px;padding:10px 12px">
           <b style="color:#f0f6ff">Two numbers, two meanings:</b><br>
@@ -3648,7 +3649,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
         <div class="tut-step-title">Use the right-side icon column</div>
         <div class="tut-step-desc" style="line-height:1.7">
           <div style="margin:6px 0"><span class="tut-icon">🗺</span> <b>Base Map</b> — switch between Satellite, <b>Ocean Bathymetric</b>, or Street + SeaMarks. The Ocean Bathymetric basemap (Esri World Ocean Base, from GEBCO/NOAA/NGA) shows shaded depth relief and contours — the right basemap for depth reference.</div>
-          <div style="margin:6px 0"><span class="tut-icon">◆</span> <b>Layers</b> — iOS-style toggles grouped into Predictions, Map Markers, Ocean Data, and an Advanced section. Toggle the <b>Bite Map</b> (the color-coded bite forecast for your target species), <b>Major Fishing Areas</b> (canyons, wrecks, reefs, lumps and ledges — the 15 closest to your port), ports, your catches, satellite <b>SST &amp; Chlorophyll</b>, and the new animated <b>Wind</b> layer. Closures and LORAN-C live under Advanced.</div>
+          <div style="margin:6px 0"><span class="tut-icon">◆</span> <b>Layers</b> — iOS-style toggles grouped into Predictions, Map Markers, Ocean Data, and an Advanced section. Toggle the <b>Bite Map</b> (the color-coded bite forecast for your target species), <b>Major Fishing Areas</b> (canyons, wrecks, reefs, lumps and ledges — the 15 closest to your port), ports, your catches, satellite <b>SST &amp; Chlorophyll</b>, animated <b>Wind</b>, <b>Front Convergence (SSH)</b>, and ocean currents. Closures and LORAN-C live under Advanced.</div>
           <div style="margin:6px 0"><span class="tut-icon">📏</span> <b>Ruler</b> — tap to measure distance in nautical miles. Drop multiple points to plot a route.</div>
           <div style="margin:6px 0"><span class="tut-icon">⚙</span> <b>Settings</b> — set defaults like home port, species, base map, and account preferences.</div>
         </div>
@@ -3660,7 +3661,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
       <div class="tut-step-num">5</div>
       <div class="tut-step-body">
         <div class="tut-step-title">Explore the menu</div>
-        <div class="tut-step-desc">Tap <b>MENU</b> in the top right. It's organized into grouped sections like iOS Settings: <b>Map &amp; Data</b> (Offshore Chart, Fishing Reports), <b>My Tools</b> (My Catches with logging + pattern analytics, Waypoints &amp; Structure, AI Catch Measure, Virtual Tackle Box, Download My Trip), and <b>Reference</b> (Regulations, Terminal Tackle, Fish Encyclopedia, Tutorial, Help &amp; Contact). Ocean layers — SST, chlorophyll, wind, radar, currents, and altimetry — are toggled on the map itself under <b>Layers</b>. To log a catch, open <b>My Catches</b> and tap <b>Log a Catch</b>.</div>
+        <div class="tut-step-desc">Tap <b>MENU</b> in the top right. It's organized into grouped sections like iOS Settings: <b>Map &amp; Data</b> (Offshore Chart, Fishing Reports), <b>My Tools</b> (My Catches with logging + pattern analytics, Waypoints &amp; Structure, AI Catch Measure, Virtual Tackle Box, Download My Trip), and <b>Reference</b> (Regulations, Terminal Tackle, Fish Encyclopedia, Tutorial, Help &amp; Contact). Ocean layers — SST, chlorophyll, wind, radar, currents, and front convergence — are toggled on the map itself under <b>Layers</b>. To log a catch, open <b>My Catches</b> and tap <b>Log a Catch</b>.</div>
       </div>
     </div>
 
@@ -3737,8 +3738,16 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
     <div class="tut-data">
       <div class="tut-data-icon">📊</div>
       <div class="tut-data-body">
-        <div class="tut-data-title">Thermal breaks (temperature edges)</div>
-        <div class="tut-data-desc">The boundary between cold and warm water — what fishermen call a "color line" or "the wall" — concentrates baitfish, which attracts predators. We measure the temperature gradient and treat sharp breaks as a strong signal for pelagics.</div>
+        <div class="tut-data-title">Temperature break</div>
+        <div class="tut-data-desc">The boundary between cold and warm water — what fishermen call a "color line" or "the wall" — concentrates baitfish, which attracts predators. We measure the temperature gradient and treat sharp breaks as a strong signal for pelagics. In the bite breakdown this shows as <b>Temperature break</b>.</div>
+      </div>
+    </div>
+
+    <div class="tut-data">
+      <div class="tut-data-icon">◎</div>
+      <div class="tut-data-body">
+        <div class="tut-data-title">Front convergence</div>
+        <div class="tut-data-desc">Where a temperature break, color edge, ocean-current shear, and satellite sea-surface height (SSH) features stack together — the same <b>convergence</b> ROFFS and Hiltons chart for tuna. On the bite map this shows up as <b>Front convergence</b> in the breakdown; toggle <b>Front Convergence (SSH)</b> under Ocean Data to see the underlying eddies and breaks. Magenta lines mark the strongest SSH edges near your port.</div>
       </div>
     </div>
 

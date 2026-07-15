@@ -1796,6 +1796,46 @@ function forecastOceanFieldsDisclaimer(){
   return "SST & chlorophyll use the latest satellite pass; wind, tide, pressure & solunar are forecasted for this time.";
 }
 
+// Shared captain vocabulary — bite breakdown, map layers & tutorial use the same words.
+const BITE_FACTOR_TEMP_BREAK = "Temperature break";
+const BITE_FACTOR_FRONT_CONVERGENCE = "Front convergence";
+const MAP_LAYER_FRONT_CONVERGENCE = "Front Convergence (SSH)";
+const MAP_CONVERGENCE_DATE_LABEL = "Convergence Date";
+
+function biteForecastTimeLabel(){
+  if(!FORECAST_HOUR_OFFSET) return "Now";
+  const opt = FORECAST_OPTIONS.find(o => o.hours === FORECAST_HOUR_OFFSET);
+  return opt ? opt.short : `+${FORECAST_HOUR_OFFSET}h`;
+}
+
+function windBiteTimesMisaligned(){
+  return !!layerVis.predict && WIND_FORECAST_HOUR !== FORECAST_HOUR_OFFSET;
+}
+
+function windBiteTimeMismatchHtml(){
+  if(!windBiteTimesMisaligned()) return "";
+  const biteLbl = biteForecastTimeLabel();
+  const windLbl = windForecastLabel(WIND_FORECAST_HOUR);
+  return `<div style="margin-top:5px;padding:5px 8px;border-radius:6px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);font-size:9px;color:#fde68a;line-height:1.4">
+    <b style="color:#fbbf24">Times differ:</b> Bite score ${biteLbl} · Wind layer ${windLbl}
+  </div>`;
+}
+
+function updateWindBiteSyncHints(){
+  const hint = document.getElementById("wind-bite-sync-hint");
+  if(!hint) return;
+  if(layerVis.predict && windBiteTimesMisaligned()){
+    hint.textContent = `Bite score: ${biteForecastTimeLabel()} — times differ`;
+    hint.style.color = "#fbbf24";
+  } else if(layerVis.predict && FORECAST_HOUR_OFFSET > 0){
+    hint.textContent = `Bite score: ${biteForecastTimeLabel()}`;
+    hint.style.color = "#9ec5e8";
+  } else {
+    hint.textContent = "GFS/HRRR blend · 3-hour steps";
+    hint.style.color = "";
+  }
+}
+
 function moonPhase(){
   // Reference new moon: Jan 6 2000 18:14 UTC. Synodic period: 29.53059 days.
   const refNewMoon = new Date("2000-01-06T18:14:00Z").getTime();
@@ -1920,6 +1960,7 @@ function updateWindForecastDisplay(){
   const next = document.getElementById("wind-next-btn");
   if(prev) prev.disabled = WIND_FORECAST_HOUR <= 0;
   if(next) next.disabled = WIND_FORECAST_HOUR >= 96;
+  updateWindBiteSyncHints();
 }
 
 function onWindSliderInput(val){ setWindForecastHour((val|0) * 3); }
@@ -1935,6 +1976,7 @@ function updateWindForecastSliderVisibility(){
 function setWindForecastHour(hours){
   WIND_FORECAST_HOUR = Math.max(0, Math.min(96, Math.round((Number(hours)||0) / 3) * 3));
   updateWindForecastDisplay();
+  if(layerVis.predict && typeof updateBiteBanner === "function") updateBiteBanner();
   if(windLayer && layerVis.wind && typeof windLayer.refreshForecast === "function"){
     windLayer.refreshForecast();
   }
@@ -3500,16 +3542,16 @@ function scoreCell(lat, lng, speciesId){
     // suggests one. Weight shown is an effective bonus weight.
     ...(reportScore > 0.05 ? [{name:"🎣 Recent catch reports", weight:0.18, score:Math.min(1, reportScore * 2.5), raw:"+bonus"}] : []),
     {name:"Solunar window",     weight:W.solunar,       score:solunarScoreVal,  raw:solunar > 0.7 ? "MAJOR" : solunar > 0.4 ? "minor" : "off"},
-    {name:"Temp break",         weight:W.thermalBreak,  score:breakScore,
+    {name:BITE_FACTOR_TEMP_BREAK, weight:W.thermalBreak,  score:breakScore,
      raw: frontSensor === "ssh"
-          ? (tBreak > 0 ? `SSH · ${tBreak.toFixed(1)}°F/10nm` : "SSH edge")
-          : (tBreak > 0 ? `${tBreak.toFixed(1)}°F/10nm` : (_sshEdge01 > 0 ? "SSH edge" : "—"))},
-    {name:"Altimetry",          weight:(W.convergence||0), score:convergence,
+          ? (tBreak > 0 ? `SSH front · ${tBreak.toFixed(1)}°F/10nm` : "SSH front")
+          : (tBreak > 0 ? `${tBreak.toFixed(1)}°F/10nm` : (_sshEdge01 > 0 ? "SSH front" : "—"))},
+    {name:BITE_FACTOR_FRONT_CONVERGENCE, weight:(W.convergence||0), score:convergence,
      raw: convergence > 0
-          ? `${Math.round(convergence*100)}%` + (
-              [_sshEdge01>0?"SSH":null, _curEdge01>0?"current":null, chlorBreak>0?"chlor":null]
+          ? `${Math.round(convergence*100)}% stack` + (
+              [_sshEdge01>0?"SSH":null, _curEdge01>0?"current":null, chlorBreak>0?"color":null]
                 .filter(Boolean).length
-                ? ` · ` + [_sshEdge01>0?"SSH":null, _curEdge01>0?"current":null, chlorBreak>0?"chlor":null].filter(Boolean).join("+")
+                ? ` · ` + [_sshEdge01>0?"SSH":null, _curEdge01>0?"current":null, chlorBreak>0?"color":null].filter(Boolean).join("+")
                 : ""
             )
           : "—"},
@@ -9789,10 +9831,10 @@ function updateOceanLegend(){
         ? new Date(ALTIMETRY_GRID.observedAtMs).toLocaleDateString("en-US",{month:"short",day:"numeric"})
         : "—");
     const statusRow = loading
-      ? `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#f0abfc;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em"><span class="alti-spinner"></span>Loading altimetry…</div>`
+      ? `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#f0abfc;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em"><span class="alti-spinner"></span>Loading convergence data…</div>`
       : (ALTIMETRY_STATUS==="unavailable"
-        ? `<div style="font-size:12px;color:#f8a5a5;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Altimetry unavailable</div>`
-        : `<div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">NOAA altimetry · ${altiDate}</div>`);
+        ? `<div style="font-size:12px;color:#f8a5a5;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Convergence data unavailable</div>`
+        : `<div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">NOAA SSH · ${altiDate}</div>`);
     const altiPort = (typeof activePort!=="undefined"&&activePort&&PORTS[activePort]) ? activePort.split(",")[0] : null;
     const altiRangeNm = altiBreakRadiusForActivePort();
     const altiRangeNote = altiPort
@@ -9800,14 +9842,14 @@ function updateOceanLegend(){
       : `within <b style="color:#e8f4ff">${altiRangeNm} nm</b> of your home port <span style="color:#fbbf24">(select a port)</span>`;
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em;margin-bottom:3px">SEA-SURFACE HEIGHT</div>
+        <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em;margin-bottom:3px">FRONT CONVERGENCE (SSH)</div>
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1e3a8a 0%,#38bdf8 30%,rgba(60,60,75,0.55) 50%,#f87171 70%,#7f1d1d 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>Cold / low</span><span>Flat</span><span>Warm / high</span>
         </div>
         ${statusRow}
         ${detail(`
-        <div style="font-size:13px;color:#7aa8c8;margin-top:6px;line-height:1.45"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">Altimetry Date</b> bar to step day-by-day. Amber arrow = how far a tracked break moved.</div>
+        <div style="font-size:13px;color:#7aa8c8;margin-top:6px;line-height:1.45"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">${MAP_CONVERGENCE_DATE_LABEL}</b> bar to step day-by-day. Amber arrow = how far a tracked break moved. The bite breakdown labels this signal <b style="color:#fbcfe8">Front convergence</b>.</div>
         <div style="margin-top:7px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
           <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${altiRangeNm}-nm fishing range are highlighted.</span>
           <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">↗</span><span><b style="color:#fde68a">Amber arrow</b> — 1-day drift for a <b>tracked</b> break (2–${ALTI_MAX_DRIFT_NM_PER_DAY} nm). No arrow = different feature or moved too far to link.</span>
@@ -9882,11 +9924,13 @@ function updateBiteBanner(){
         </div>
         <div style="display:flex;gap:4px;margin-top:4px">${pills}</div>
         ${FORECAST_HOUR_OFFSET > 0 ? `<div style="margin-top:4px;font-size:9px;color:#9ec5e8;line-height:1.35">${forecastOceanFieldsDisclaimer()}</div>` : ""}
+        ${windBiteTimeMismatchHtml()}
       `;
     } else {
       fc.innerHTML = "";
     }
   }
+  updateWindBiteSyncHints();
   const expl = document.getElementById("predict-explainer");
   if(expl && typeof viewportPanelTopPx === "function"){
     const top = viewportPanelTopPx(8);
