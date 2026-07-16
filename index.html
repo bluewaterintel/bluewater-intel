@@ -670,11 +670,18 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
   border-color:rgba(94,234,212,.3);
   box-shadow:0 4px 14px rgba(14,165,165,.22);
 }
-#brief-toggle.is-setup img{ opacity:.75; }
+#brief-toggle.is-setup img{
+  opacity:.92;
+  filter:brightness(0) saturate(100%) invert(84%) sepia(48%) saturate(748%) hue-rotate(358deg) brightness(104%) contrast(101%) drop-shadow(0 1px 2px rgba(4,47,46,.45));
+}
 #brief-toggle img{
   width:30px;height:30px;object-fit:contain;
-  filter:brightness(1.15) contrast(1.05);
+  /* Gold marlin — high contrast on teal, matches brand accent tones */
+  filter:brightness(0) saturate(100%) invert(84%) sepia(48%) saturate(748%) hue-rotate(358deg) brightness(104%) contrast(101%) drop-shadow(0 1px 3px rgba(4,47,46,.5));
   pointer-events:none;
+}
+#brief-toggle:hover img{
+  filter:brightness(0) saturate(100%) invert(90%) sepia(52%) saturate(900%) hue-rotate(358deg) brightness(108%) contrast(101%) drop-shadow(0 2px 4px rgba(4,47,46,.65));
 }
 body.modal-open #brief-toggle{
   opacity:0;
