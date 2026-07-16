@@ -241,7 +241,7 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
 
 /* Trailing spacer in the conditions strip — keeps the mobile right-edge fade
    mask off the last real value (tide time). Empty, non-interactive. */
-.wx-spacer{min-width:18px;border-right:none !important;padding:0 !important}
+.wx-spacer{min-width:34px;border-right:none !important;padding:0 !important}
 /* The real last content cell (tide) sits just before the spacer, so it isn't
    :last-child and would otherwise draw its divider — a faint vertical line
    trailing the tide time. Drop the divider on whichever cell precedes the spacer. */
@@ -352,18 +352,18 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     scroll-snap-type:x proximity;
     scrollbar-width:none;
     border-radius:8px;
-    margin-top:2px;
+    margin-top:4px;
     touch-action:pan-x;
     /* Fade hints that more conditions are off-screen (swipe sideways). */
-    mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
-    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
+    mask-image:linear-gradient(90deg,#000 calc(100% - 20px),transparent);
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 20px),transparent);
   }
   .hdr-wx::-webkit-scrollbar{display:none}
   .hdr-wx .wx-cell{
     display:flex !important;
     flex-shrink:0;
-    padding:4px 12px;
-    min-width:72px;
+    padding:5px 13px;
+    min-width:76px;
     scroll-snap-align:start;
   }
   .hdr-wx .wx-cell-label{font-size:10px;letter-spacing:.08em}
@@ -675,7 +675,7 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
   filter:brightness(0) saturate(100%) invert(84%) sepia(48%) saturate(748%) hue-rotate(358deg) brightness(104%) contrast(101%) drop-shadow(0 1px 2px rgba(4,47,46,.45));
 }
 #brief-toggle img{
-  width:30px;height:30px;object-fit:contain;
+  width:36px;height:36px;object-fit:contain;
   /* Gold marlin — high contrast on teal, matches brand accent tones */
   filter:brightness(0) saturate(100%) invert(84%) sepia(48%) saturate(748%) hue-rotate(358deg) brightness(104%) contrast(101%) drop-shadow(0 1px 3px rgba(4,47,46,.5));
   pointer-events:none;
@@ -2625,7 +2625,7 @@ body.modal-open #brief-toggle{
   border:1px solid rgba(107,191,234,.3);
   box-shadow:0 16px 48px rgba(0,0,0,.6);
   font-family:'Segoe UI',Arial,sans-serif;
-  text-align:center;max-width:340px;
+  text-align:center;max-width:min(340px, calc(100vw - 28px));
   display:none;
 ">
   <div id="empty-state-icon" style="font-size:36px;margin-bottom:8px">⚓</div>
@@ -2638,7 +2638,7 @@ body.modal-open #brief-toggle{
 <!-- ICON COLUMN (right edge of map): BRIEF, MAP, LAYERS, RULER, SETTINGS -->
 <div id="layers-ctrl">
   <div id="brief-toggle" onclick="onBriefFabClick()" title="AI Captain's Brief" aria-label="AI Captain's Brief">
-    <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" width="30" height="30">
+    <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" width="36" height="36">
   </div>
   <div id="basemap-toggle" onclick="toggleBaseMapPanel()" title="Base map" aria-label="Base map selection">
     <!-- Map icon: folded paper map -->
@@ -4967,6 +4967,20 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
     <div id="brief-modal-body" class="brief-card-body"><div class="brief-md"></div></div>
   </div>
 </div>
+
+<script>
+(function(){
+  var wx = document.querySelector('.hdr-wx');
+  var hint = document.querySelector('.hdr-wx-hint');
+  if(wx && hint){
+    wx.addEventListener('scroll', function once(){
+      hint.style.transition = 'opacity .4s';
+      hint.style.opacity = '0';
+      wx.removeEventListener('scroll', once);
+    }, {passive:true});
+  }
+})();
+</script>
 
 </body>
 </html>

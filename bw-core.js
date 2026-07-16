@@ -8330,6 +8330,16 @@ function restackBottomControls(){
     topOfStack = offset;
   }
 
+  // Belt-and-suspenders: if the stack would eat more than ~55% of the map on a
+  // short screen, start collapsed so the chart stays usable.
+  if(phone && !collapsed){
+    const mapH = (document.getElementById("map") || {}).clientHeight || window.innerHeight;
+    if(topOfStack > mapH * 0.55 && shown.length >= 3){
+      _bwControlsCollapsed = true;
+      return restackBottomControls();
+    }
+  }
+
   // Lift the scale bar to ride just above the tallest point of the stack (or to
   // a sensible resting spot if nothing is showing). In layer-mode the CSS hides
   // it entirely; this keeps the fallback position sane otherwise.
