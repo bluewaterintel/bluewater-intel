@@ -7435,7 +7435,7 @@ const AltimetryLayer = L.Layer.extend({
           const matchedGhost={ gm:pb.ghostBrk.gm, peaks:drifts.map(d=>d.from) };
           _altiDrawMagentaBreaks(ctx, this._map, gg, matchedGhost, {
             strokeStyle:"rgba(236,72,153,0.30)", lineWidth:2, shadowBlur:0,
-            dotR:2.6, dotFill:"rgba(236,72,153,0.38)",
+            underStroke:false, dotR:2.6, dotFill:"rgba(236,72,153,0.38)",
           }, po.lat, po.lng, altimetryBreakRadiusNm(po));
         }
       }
