@@ -6883,11 +6883,11 @@ function _altimetryRGBA(slaM){
   if(!isFinite(slaM)) return null;
   const mag = Math.abs(slaM);
   // Hide only true flat water; show weak edges that still mark a break.
-  if(mag < 0.02) return null;
-  // Full chroma by ~±0.18 m (typical Stream/eddy wall), not ±0.33 m.
-  const t = Math.min(1, mag / 0.18);
-  // Opacity: readable at weak edges, solid at strong ones (was capped ~0.62).
-  const alpha = Math.round((0.28 + 0.62 * Math.pow(t, 0.75)) * 255);
+  if(mag < 0.015) return null;
+  // Full chroma by ~±0.15 m so Stream/eddy walls saturate sooner (was 0.18 / 0.33).
+  const t = Math.min(1, mag / 0.15);
+  // Keep fill a notch under full so white edge contours stay readable on top.
+  const alpha = Math.round((0.22 + 0.58 * Math.pow(t, 0.7)) * 255);
   if(slaM > 0){
     // Warm / anticyclonic — gold → orange → red → deep red
     const stops = [
@@ -7042,19 +7042,17 @@ function _altiSegInBreakRange(pts, pk, portLat, portLng, portMaxNm){
 function _altiDrawMagentaBreaks(ctx, map, g, brk, opt, portLat, portLng, portMaxNm){
   if(!brk || !brk.peaks.length || !g) return;
   const strokeStyle = opt.strokeStyle || "rgba(244,63,180,1)";
-  const lineWidth = opt.lineWidth || 4;
-  const shadowBlur = opt.shadowBlur != null ? opt.shadowBlur : 10;
+  const lineWidth = opt.lineWidth || 4.5;
+  const shadowBlur = opt.shadowBlur != null ? opt.shadowBlur : 12;
   const shadowColor = opt.shadowColor || "rgba(244,63,180,0.95)";
-  const dotR = opt.dotR || 4;
+  const underStroke = opt.underStroke !== false; // white/dark halo so breaks read on red+blue fill
+  const underColor = opt.underColor || "rgba(10,18,36,0.85)";
+  const underWidth = opt.underWidth || (lineWidth + 2.4);
+  const dotR = opt.dotR || 4.2;
   const dotFill = opt.dotFill || "rgba(244,63,180,1)";
   const gmA = brk.gm;
   const clipPort = Number.isFinite(portLat) && Number.isFinite(portLng) && portMaxNm > 0;
-  ctx.save();
-  ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.shadowColor = shadowColor; ctx.shadowBlur = shadowBlur;
-  ctx.strokeStyle = strokeStyle; ctx.lineWidth = lineWidth;
-  for(const pk of brk.peaks){
-    if(clipPort && nmBetween(portLat, portLng, pk.lat, pk.lng) > portMaxNm) continue;
+  const strokePeakPath = (pk) => {
     const L = pk.level, gth = 0.5 * pk.gmag;
     const traceLat = ALTI_BREAK_TRACE_NM / 60;
     const traceLng = ALTI_BREAK_TRACE_NM / (60 * Math.cos(pk.lat * Math.PI / 180) || 1e-6);
@@ -7085,8 +7083,29 @@ function _altiDrawMagentaBreaks(ctx, map, g, brk, opt, portLat, portLng, portMax
         }
       }
     }
+  };
+  ctx.save();
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for(const pk of brk.peaks){
+    if(clipPort && nmBetween(portLat, portLng, pk.lat, pk.lng) > portMaxNm) continue;
+    if(underStroke){
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = underColor;
+      ctx.lineWidth = underWidth;
+      strokePeakPath(pk);
+      ctx.stroke();
+    }
+    ctx.shadowColor = shadowColor; ctx.shadowBlur = shadowBlur;
+    ctx.strokeStyle = strokeStyle; ctx.lineWidth = lineWidth;
+    strokePeakPath(pk);
     ctx.stroke();
     const pc = map.latLngToContainerPoint([pk.lat, pk.lng]);
+    if(underStroke){
+      ctx.shadowBlur = 0;
+      ctx.beginPath(); ctx.arc(pc.x, pc.y, dotR + 1.4, 0, Math.PI*2);
+      ctx.fillStyle = underColor; ctx.fill();
+    }
+    ctx.shadowColor = shadowColor; ctx.shadowBlur = shadowBlur;
     ctx.beginPath(); ctx.arc(pc.x, pc.y, dotR, 0, Math.PI*2);
     ctx.fillStyle = dotFill; ctx.fill();
   }
@@ -7340,7 +7359,7 @@ const AltimetryLayer = L.Layer.extend({
             if(!isFinite(A)||!isFinite(B)||!isFinite(C)||!isFinite(D)) continue;
             if(L<Math.min(A,B,C,D)||L>Math.max(A,B,C,D)) continue;
             const cellRange = Math.max(A,B,C,D) - Math.min(A,B,C,D);
-            const isEdge = cellRange >= 0.04; // ~real front across one cell
+            const isEdge = cellRange >= 0.035; // ~real front across one cell
             if(pass === "base" && isEdge) continue;
             if(pass === "edge" && !isEdge) continue;
             const pts=_altiIsoSegs(A,B,C,D,L,latA,g.minLng+j*step,step);
@@ -7354,14 +7373,21 @@ const AltimetryLayer = L.Layer.extend({
         }
         if(!any) continue;
         if(pass === "base"){
-          ctx.strokeStyle=major?"rgba(255,255,255,0.38)":"rgba(255,255,255,0.18)";
-          ctx.lineWidth=major?1.15:0.75;
+          ctx.shadowBlur=0;
+          ctx.strokeStyle=major?"rgba(255,255,255,0.32)":"rgba(255,255,255,0.14)";
+          ctx.lineWidth=major?1.05:0.7;
+          ctx.stroke();
         } else {
-          // Steep cells — punchy white so the break reads like a chart wall.
-          ctx.strokeStyle=major?"rgba(255,255,255,0.88)":"rgba(255,255,255,0.62)";
-          ctx.lineWidth=major?2.2:1.45;
+          // Dark understroke + bright white so packed isolines read as a wall
+          // against both warm (red) and cold (blue) SSH fill.
+          ctx.shadowBlur=0;
+          ctx.strokeStyle="rgba(8,16,32,0.72)";
+          ctx.lineWidth=major?3.1:2.2;
+          ctx.stroke();
+          ctx.strokeStyle=major?"rgba(255,255,255,0.95)":"rgba(255,255,255,0.78)";
+          ctx.lineWidth=major?2.35:1.55;
+          ctx.stroke();
         }
-        ctx.stroke();
       }
     }
 
