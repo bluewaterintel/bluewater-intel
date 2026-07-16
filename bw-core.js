@@ -4709,29 +4709,78 @@ function briefSpeciesForSpot(){
 // Rank local species at the pin using the same bite-map engine as the heat grid,
 // then pick the best targets for an "I just want to go fishing" Bluewater Choice
 // brief. Favors in-season fish with strong scores and confidence.
+// Rank local species using the same bite-map engine. Scans the top cells the
+// captain is already looking at on the heat map (not just the zone pin) so a
+// strong yellowfin score at The Point still surfaces in Bluewater Recommendation.
+function briefPickScoreLocations(fallbackLat, fallbackLng){
+  const pts = [];
+  const seen = new Set();
+  const add = (la, ln) => {
+    if(la == null || ln == null) return;
+    const k = `${la.toFixed(3)},${ln.toFixed(3)}`;
+    if(seen.has(k)) return;
+    seen.add(k);
+    pts.push({ lat: la, lng: ln });
+  };
+  const cacheOk = _predictResultCache && _predictResultCache.key === predictResultCacheKey();
+  if(cacheOk){
+    const hs = Array.isArray(_predictResultCache.hotspots) ? _predictResultCache.hotspots : [];
+    hs.slice().sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 30)
+      .forEach(c => add(c.lat, c.lng));
+    const badges = Array.isArray(_predictResultCache.badges) ? _predictResultCache.badges : [];
+    badges.forEach(c => add(c.lat, c.lng));
+  }
+  if(Array.isArray(_predictGrid) && _predictGrid.length){
+    _predictGrid.slice().sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 20)
+      .forEach(c => add(c.lat, c.lng));
+  }
+  const portObj = (activePort && PORTS[activePort]) ? PORTS[activePort] : null;
+  if(portObj && briefRunZone){
+    const zonePin = briefPinForZone(portObj, briefRunZone);
+    add(zonePin.lat, zonePin.lng);
+  }
+  if(fallbackLat != null && fallbackLng != null) add(fallbackLat, fallbackLng);
+  return pts;
+}
+
 function briefPickSpeciesAuto(lat, lng, allowed, limit = 3){
   if(typeof scoreCell !== "function" || !allowed || !allowed.length) return { picks: [], candidates: [] };
-  return withForecastHour(forecastHourForBriefDay(briefDayOffset), () => {
+  const hour = (briefDayOffset >= 1)
+    ? forecastHourForBriefDay(briefDayOffset)
+    : (typeof FORECAST_HOUR_OFFSET === "number" ? FORECAST_HOUR_OFFSET : 0);
+  return withForecastHour(hour, () => {
+    const locations = briefPickScoreLocations(lat, lng);
+    if(!locations.length && lat != null && lng != null) locations.push({ lat, lng });
     const candidates = [];
     for(const sp of allowed){
-      const r = scoreCell(lat, lng, sp.id);
-      if(!r || r.outOfRange) continue;
-      const score = Number.isFinite(r.score) ? r.score : 0;
-      const conf = Number.isFinite(r.confidence) ? r.confidence : 0.5;
-      const inSeason = r.inSeason !== false;
-      const season = Number.isFinite(r.seasonStrength) ? r.seasonStrength : (inSeason ? 0.75 : 0.2);
-      const seasonWt = inSeason ? (0.35 + 0.65 * season) : 0.12;
-      const rank = score * (0.45 + 0.55 * conf) * seasonWt;
-      candidates.push({
-        id: sp.id,
-        name: sp.name,
-        rank,
-        scorePct: Math.round(score * 100),
-        confidencePct: Math.round(conf * 100),
-        inSeason,
-        seasonStrength: season,
-        topFactor: r.topFactor || null,
-      });
+      let best = null;
+      for(const pt of locations){
+        const r = scoreCell(pt.lat, pt.lng, sp.id);
+        if(!r || r.outOfRange) continue;
+        const score = Number.isFinite(r.score) ? r.score : 0;
+        const conf = Number.isFinite(r.confidence) ? r.confidence : 0.5;
+        const inSeason = r.inSeason !== false;
+        const season = Number.isFinite(r.seasonStrength) ? r.seasonStrength : (inSeason ? 0.75 : 0.2);
+        const seasonWt = inSeason ? (0.35 + 0.65 * season) : 0.12;
+        const rank = score * (0.45 + 0.55 * conf) * seasonWt;
+        const scorePct = Math.round(score * 100);
+        const entry = {
+          id: sp.id,
+          name: sp.name,
+          rank,
+          scorePct,
+          confidencePct: Math.round(conf * 100),
+          inSeason,
+          seasonStrength: season,
+          topFactor: r.topFactor || null,
+          lat: pt.lat,
+          lng: pt.lng,
+        };
+        if(!best || entry.scorePct > best.scorePct || (entry.scorePct === best.scorePct && entry.rank > best.rank)){
+          best = entry;
+        }
+      }
+      if(best) candidates.push(best);
     }
     // Deterministic ordering: rank desc, then score desc, then species id asc as a
     // stable tie-break. Without the tie-break, near-equal ranks (common while the
@@ -12763,7 +12812,15 @@ function renderBrief(){
 function toggleBriefSp(id){briefAutoPick=false;briefSp=briefSp.includes(id)?briefSp.filter(x=>x!==id):[...briefSp,id];renderBrief();}
 function setBriefAutoPick(on){
   briefAutoPick = !!on;
-  if(briefAutoPick) briefSp = [];
+  if(briefAutoPick){
+    briefSp = [];
+    const preview = (pinLL && typeof briefPickSpeciesAuto === "function")
+      ? briefPickSpeciesAuto(pinLL.lat, pinLL.lng, briefSpeciesForSpot(), 1)
+      : { picks: [] };
+    if(preview.picks[0] && preview.picks[0].lat != null){
+      pinLL = { lat: preview.picks[0].lat, lng: preview.picks[0].lng };
+    }
+  }
   renderBrief();
 }
 function structureNear(lat, lng, maxNm = 40, limit = 4){
@@ -13446,15 +13503,6 @@ function updateEmptyState(){
 function updateBriefFab(){
   const btn = document.getElementById("brief-toggle");
   if(!btn) return;
-  const expl = document.getElementById("predict-explainer");
-
-  if(expl){
-    btn.style.opacity = "0";
-    btn.style.pointerEvents = "none";
-  } else {
-    btn.style.opacity = "";
-    btn.style.pointerEvents = "";
-  }
 
   btn.classList.remove("is-setup");
   if(!activePort || !activeSpId || activeSpId === "all"){
@@ -13466,6 +13514,33 @@ function updateBriefFab(){
       ? "Pick a target species"
       : "AI Captain's Brief";
   btn.setAttribute("aria-label", btn.title);
+}
+
+function briefBestCellForSpecies(sp, portObj){
+  const zone = briefRunZone || defaultBriefRunZone(sp.id);
+  const zonePin = briefPinForZone(portObj, zone);
+  const zoneNm = BRIEF_ZONE_NM[zone] || 12;
+  let best = { lat: zonePin.lat, lng: zonePin.lng, distNm: zoneNm };
+  let bestScore = -1;
+  const locations = briefPickScoreLocations(zonePin.lat, zonePin.lng);
+  for(const pt of locations){
+    if(typeof scoreCell !== "function") break;
+    const scored = scoreCell(pt.lat, pt.lng, sp.id);
+    if(!scored || scored.outOfRange) continue;
+    const s = Number.isFinite(scored.score) ? scored.score : 0;
+    if(s > bestScore){
+      bestScore = s;
+      const distNm = (typeof nmBetween === "function")
+        ? Math.round(nmBetween(portObj.lat, portObj.lng, pt.lat, pt.lng))
+        : zoneNm;
+      best = Object.assign({}, scored, { lat: pt.lat, lng: pt.lng, distNm });
+    }
+  }
+  if(bestScore < 0 && typeof scoreCell === "function"){
+    const scored = scoreCell(zonePin.lat, zonePin.lng, sp.id);
+    if(scored) best = Object.assign({}, scored, { lat: zonePin.lat, lng: zonePin.lng, distNm: zoneNm });
+  }
+  return best;
 }
 
 function onBriefFabClick(){
@@ -13488,12 +13563,8 @@ function onBriefFabClick(){
   _briefRunPlanSpots = null;
   briefRunZone = defaultBriefRunZone(sp.id);
   pinLL = briefPinForZone(p, briefRunZone);
-  const zoneNm = BRIEF_ZONE_NM[briefRunZone] || 12;
-  let cell = { lat: pinLL.lat, lng: pinLL.lng, distNm: zoneNm };
-  if(typeof scoreCell === "function"){
-    const scored = scoreCell(pinLL.lat, pinLL.lng, sp.id);
-    if(scored) cell = Object.assign({}, cell, scored, { lat: pinLL.lat, lng: pinLL.lng, distNm: zoneNm });
-  }
+  const cell = briefBestCellForSpecies(sp, p);
+  pinLL = { lat: cell.lat, lng: cell.lng };
 
   if(typeof showPredictionExplainer === "function"){
     showPredictionExplainer(cell, sp);
