@@ -353,6 +353,7 @@ try {
 let briefSp=[], briefAutoPick=false, aiCOA="", aiLoading=false, briefDayOffset=0;  // briefDayOffset: 0=today,1=tomorrow,...
 let briefRunZone=null;  // inshore | nearshore | offshore — where the captain plans to fish
 const BRIEF_ZONE_NM = { inshore: 3, nearshore: 12, offshore: 35 };
+const BRIEF_MAX_SPECIES = 3;  // hard cap — keeps brief tokens + captain focus tight
 const BRIEF_HISTORY_KEY = "bwi_brief_history_v1";
 const BRIEF_HISTORY_TTL_MS = 48 * 3600 * 1000;  // recall window
 const BRIEF_HISTORY_MAX = 12;
@@ -4815,13 +4816,86 @@ function briefPickScoreLocations(fallbackLat, fallbackLng){
   return pts;
 }
 
+// Coarse search grid from the home port so multi-species briefs can find
+// divergent grounds (e.g. white marlin N of Oregon Inlet vs wahoo S) without
+// requiring the captain to open each Bite Map first.
+function briefPortSearchLocations(portObj, fallbackLat, fallbackLng){
+  const pts = briefPickScoreLocations(fallbackLat, fallbackLng);
+  const seen = new Set(pts.map(p => `${p.lat.toFixed(3)},${p.lng.toFixed(3)}`));
+  const add = (la, ln) => {
+    if(la == null || ln == null) return;
+    const k = `${la.toFixed(3)},${ln.toFixed(3)}`;
+    if(seen.has(k)) return;
+    seen.add(k);
+    pts.push({ lat: la, lng: ln });
+  };
+  if(!portObj || typeof pointNmFromBearing !== "function") return pts;
+  const maxNm = (typeof maxRangeForPort === "function") ? maxRangeForPort(portObj) : 100;
+  const zoneNm = briefRunZone ? (BRIEF_ZONE_NM[briefRunZone] || 12) : 20;
+  const minNm = Math.max(3, Math.round(zoneNm * 0.35));
+  const outer = Math.min(maxNm, Math.max(zoneNm + 30, Math.round(zoneNm * 2)));
+  for(let nm = minNm; nm <= outer; nm += 8){
+    for(let brg = 0; brg < 360; brg += 30){
+      const pt = pointNmFromBearing(portObj.lat, portObj.lng, nm, brg);
+      add(pt.lat, pt.lng);
+    }
+  }
+  // Named structure (canyons/points) inside the fishing radius — high-value pins.
+  if(typeof CANYONS !== "undefined" && Array.isArray(CANYONS) && typeof nmBetween === "function"){
+    for(const c of CANYONS){
+      if(c.lat == null || c.lng == null) continue;
+      if(nmBetween(portObj.lat, portObj.lng, c.lat, c.lng) <= outer + 5) add(c.lat, c.lng);
+    }
+  }
+  return pts;
+}
+
+function briefRunMetaFromPort(portObj, lat, lng){
+  if(!portObj || lat == null || lng == null || typeof nmBetween !== "function"){
+    return { runFromPortNm: null, runCompass: null, bearingDeg: null };
+  }
+  const nm = Math.round(nmBetween(portObj.lat, portObj.lng, lat, lng));
+  let bearingDeg = null, runCompass = null;
+  if(typeof bwiCompass16 === "function"){
+    const toRad = d => d * Math.PI / 180;
+    const y = Math.sin(toRad(lng - portObj.lng)) * Math.cos(toRad(lat));
+    const x = Math.cos(toRad(portObj.lat)) * Math.sin(toRad(lat)) -
+              Math.sin(toRad(portObj.lat)) * Math.cos(toRad(lat)) * Math.cos(toRad(lng - portObj.lng));
+    bearingDeg = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    runCompass = bwiCompass16(bearingDeg);
+  }
+  return { runFromPortNm: nm, runCompass, bearingDeg };
+}
+
+function briefEnrichSpeciesSpot(entry, portObj){
+  if(!entry || entry.scoredAtLat == null) return entry;
+  const meta = briefRunMetaFromPort(portObj, entry.scoredAtLat, entry.scoredAtLng);
+  let depthFt = null;
+  try {
+    if(typeof realDepthAt === "function"){
+      const m = realDepthAt(entry.scoredAtLat, entry.scoredAtLng);
+      if(m != null) depthFt = Math.round(m * 3.281);
+    }
+  } catch(e){}
+  const nearby = (typeof structureNear === "function")
+    ? structureNear(entry.scoredAtLat, entry.scoredAtLng, 25, 2)
+    : [];
+  return Object.assign({}, entry, meta, {
+    depthFt,
+    nearbyStructure: nearby,
+    spotLabel: (nearby[0] && nearby[0].name) ? nearby[0].name : null,
+  });
+}
+
 function briefPickSpeciesAuto(lat, lng, allowed, limit = 3){
   if(typeof scoreCell !== "function" || !allowed || !allowed.length) return { picks: [], candidates: [] };
   const hour = (briefDayOffset >= 1)
     ? forecastHourForBriefDay(briefDayOffset)
     : (typeof FORECAST_HOUR_OFFSET === "number" ? FORECAST_HOUR_OFFSET : 0);
   return withForecastHour(hour, () => {
-    const locations = briefPickScoreLocations(lat, lng);
+    const locations = (typeof briefPortSearchLocations === "function" && activePort && PORTS[activePort])
+      ? briefPortSearchLocations(PORTS[activePort], lat, lng)
+      : briefPickScoreLocations(lat, lng);
     if(!locations.length && lat != null && lng != null) locations.push({ lat, lng });
     const candidates = [];
     for(const sp of allowed){
@@ -12804,21 +12878,23 @@ function renderBrief(){
     pinLL = briefPinForZone(portObj, briefRunZone);
   }
   const allowed = briefSpeciesForSpot();
-  briefSp = briefSp.filter(id => allowed.some(s => s.id === id));
+  briefSp = briefSp.filter(id => allowed.some(s => s.id === id)).slice(0, BRIEF_MAX_SPECIES);
   if(briefDayOffset > 1) briefDayOffset = 1;
   if(!briefAutoPick && !briefSp.length && typeof activeSpId !== "undefined" &&
      activeSpId && activeSpId !== "all" && allowed.some(s => s.id === activeSpId)){
     briefSp = [activeSpId];
   }
   const autoPreview = (briefAutoPick && pinLL)
-    ? briefPickSpeciesAuto(pinLL.lat, pinLL.lng, allowed, 3)
+    ? briefPickSpeciesAuto(pinLL.lat, pinLL.lng, allowed, BRIEF_MAX_SPECIES)
     : { picks: [], candidates: [] };
   const recOn = briefAutoPick;
   const recColor = "#5eead4";
+  const atCap = !briefAutoPick && briefSp.length >= BRIEF_MAX_SPECIES;
   const speciesPills = allowed.map(sp => {
     const on = !briefAutoPick && briefSp.includes(sp.id);
-    const disabled = briefAutoPick ? "disabled" : "";
-    const dim = briefAutoPick ? "opacity:.45;pointer-events:none" : "";
+    const disabled = briefAutoPick || (atCap && !on) ? "disabled" : "";
+    const dim = briefAutoPick ? "opacity:.45;pointer-events:none"
+      : (atCap && !on) ? "opacity:.35;pointer-events:none" : "";
     return `<button class="sp-pill" style="border-color:${on?sp.color:"rgba(255,255,255,.16)"};background:${on?sp.color+"22":"rgba(255,255,255,.04)"};color:${on?sp.color:"#cfe5ff"};${dim}" ${disabled} onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
   }).join("");
   const recPill = `<button type="button" class="sp-pill" style="border-color:${recOn?recColor:"rgba(94,234,212,.35)"};background:${recOn?"rgba(14,165,165,.22)":"rgba(255,255,255,.04)"};color:${recOn?recColor:"#9ec5e8"};font-weight:800" onclick="setBriefAutoPick(true)">✦ Bluewater Recommendation</button>`;
@@ -12827,6 +12903,9 @@ function renderBrief(){
     : (recOn && pinLL
       ? `<p style="color:#f0a868;font-size:12px;margin:0 0 10px;line-height:1.45">No strong bite for any species here on ${briefDayLabel(briefDayOffset)}. Pick a target manually to brief it anyway.</p>`
       : "");
+  const speciesCapNote = !briefAutoPick
+    ? `<p style="color:#9ec5e8;font-size:11px;margin:0 0 8px;line-height:1.4">Pick up to ${BRIEF_MAX_SPECIES} targets${atCap ? " (max reached)" : ""} — multi-species briefs get a separate run for each fish when their best water differs.</p>`
+    : "";
   const recentCount = briefHistoryLoad().length;
   const recentFooter = recentCount
     ? `<button type="button" class="brief-view-btn brief-recent-btn" onclick="openRecentBriefsModal()">Open all recent briefs (${recentCount}) ↗</button>`
@@ -12885,6 +12964,7 @@ function renderBrief(){
     <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px">${zoneBtns}</div>` : ""}
     <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">TARGET SPECIES</div>
     ${speciesNote}
+    ${speciesCapNote}
     ${autoPreviewHtml}
     <div class="sp-pills">${speciesPills || `<span style="font-size:12px;color:#9ec5e8">No species for this zone yet.</span>`}${allowed.length ? recPill : ""}</div>
     <button id="brief-btn" ${!hasPin||aiLoading?"disabled":""} onclick="runBrief()">
@@ -12894,7 +12974,21 @@ function renderBrief(){
     ${recentFooter}
   `);
 }
-function toggleBriefSp(id){briefAutoPick=false;briefSp=briefSp.includes(id)?briefSp.filter(x=>x!==id):[...briefSp,id];renderBrief();}
+function toggleBriefSp(id){
+  briefAutoPick = false;
+  if(briefSp.includes(id)){
+    briefSp = briefSp.filter(x => x !== id);
+  } else {
+    if(briefSp.length >= BRIEF_MAX_SPECIES){
+      if(typeof showToast === "function"){
+        showToast(`Captain's Brief is capped at ${BRIEF_MAX_SPECIES} species — deselect one to add another.`, "info");
+      }
+      return;
+    }
+    briefSp = [...briefSp, id];
+  }
+  renderBrief();
+}
 function setBriefAutoPick(on){
   briefAutoPick = !!on;
   if(briefAutoPick){
@@ -13051,12 +13145,12 @@ async function runBrief(){
   let autoPickMeta = null;
   let sp;
   if(briefAutoPick){
-    const { picks } = briefPickSpeciesAuto(pinLL.lat, pinLL.lng, allowed, 3);
+    const { picks } = briefPickSpeciesAuto(pinLL.lat, pinLL.lng, allowed, BRIEF_MAX_SPECIES);
     if(!picks.length){
       showToast("Nothing's biting strongly here for that day. Pick a target manually to brief it anyway.", "info");
       return;
     }
-    sp = picks.map(p => p.id);
+    sp = picks.map(p => p.id).slice(0, BRIEF_MAX_SPECIES);
     autoPickMeta = {
       mode: "auto",
       rationale: picks.map((p, i) => ({
@@ -13072,6 +13166,7 @@ async function runBrief(){
     };
   } else {
     sp = briefSp.length ? briefSp : (activeSpId==="all" ? [] : [activeSpId]);
+    sp = sp.slice(0, BRIEF_MAX_SPECIES);
     if(!sp.length){
       showToast("Pick target species below, or choose Bluewater Recommendation.", "info");
       return;
@@ -13112,7 +13207,7 @@ async function runBrief(){
           wavePeriodS:o.waves?.periodS != null ? Math.round(o.waves.periodS) : null,
           windKt:     o.wind?.value != null ? Math.round(o.wind.value) : null,
           windDir:    o.wind?.dir != null ? (typeof bwiCompass16==="function"?bwiCompass16(o.wind.dir):o.wind.dir) : null,
-          windGustKt: o.wind?.gustKts != null ? Math.round(o.wind.gustKts) : null,
+          windGustKt: o.wind?.gustKts != null ? Math.max(Math.round(o.wind.gustKts), o.wind?.value != null ? Math.round(o.wind.value) : 0) : null,
           pressureMb: o.barometer?.value != null ? Math.round(o.barometer.value) : null,
           pressureTrend: o.barometer?.trend || null,
           chlorophyll: o.chlor?.value != null ? Math.round(o.chlor.value*100)/100 : null,
@@ -13286,30 +13381,22 @@ async function runBrief(){
     }
   } catch(e){ /* CO-OPS hi/lo enrichment is best-effort */ }
 
-  // Per-species bite score at the BEST nearby Bite Map cell (not only the zone
-  // pin). A captain looking at Sailfish 93% on the heat map must see that same
-  // number in the brief — scoring only the fixed offshore pin was returning junk
-  // secondary scores (e.g. Sailfish 9) a few miles off the hotspot.
+  // Per-species bite score at each species' BEST cell across the port fishing
+  // range (not one shared pin). White marlin N of the inlet and wahoo S must
+  // get separate run bearings when the Bite Map disagrees.
   let scored = [];
   let runPlan = null;
+  let speciesLocationsDiverge = false;
   withForecastHour(forecastHourForBriefDay(briefDayOffset), () => {
     try {
       if(typeof scoreCell === "function"){
-        const locations = (typeof briefPickScoreLocations === "function")
-          ? briefPickScoreLocations(pinLL.lat, pinLL.lng)
-          : [{ lat: pinLL.lat, lng: pinLL.lng }];
+        const locations = (typeof briefPortSearchLocations === "function")
+          ? briefPortSearchLocations(portObj, pinLL.lat, pinLL.lng)
+          : (typeof briefPickScoreLocations === "function")
+            ? briefPickScoreLocations(pinLL.lat, pinLL.lng)
+            : [{ lat: pinLL.lat, lng: pinLL.lng }];
         if(!locations.length) locations.push({ lat: pinLL.lat, lng: pinLL.lng });
-        // Ring samples around the pin so a secondary species (e.g. sailfish 93%
-        // a few nm from a yellowfin hotspot) isn't scored only at the primary
-        // cell — that was producing junk like "Sailfish 9" next to a 93% badge.
-        if(typeof pointNmFromBearing === "function"){
-          for(const d of [5, 10, 15, 20]){
-            for(const brg of [0, 45, 90, 135, 180, 225, 270, 315]){
-              locations.push(pointNmFromBearing(pinLL.lat, pinLL.lng, d, brg));
-            }
-          }
-        }
-        for(const id of sp){
+        for(const id of sp.slice(0, BRIEF_MAX_SPECIES)){
           let best = null;
           for(const pt of locations){
             const r = scoreCell(pt.lat, pt.lng, id);
@@ -13318,6 +13405,7 @@ async function runBrief(){
             if(!best || score > best._score){
               best = {
                 _score: score,
+                speciesId: id,
                 species: SPECIES.find(s=>s.id===id)?.name || id,
                 score: Math.round(score * 100),
                 topFactor: r.topFactor || null,
@@ -13335,19 +13423,37 @@ async function runBrief(){
           }
           if(best){
             delete best._score;
-            scored.push(best);
+            scored.push(briefEnrichSpeciesSpot(best, portObj));
           }
         }
-        // Keep the brief pin on the primary species' best cell so depth/structure
-        // match the scores the captain just saw on the map.
+        // Sort best-first so the primary header follows the strongest target.
+        scored.sort((a, b) => (b.score || 0) - (a.score || 0));
+        // Spots diverge when any two best cells are >~10 nm apart — brief must
+        // list separate runs (N vs S of the inlet) instead of one shared Point.
+        if(scored.length >= 2 && typeof nmBetween === "function"){
+          for(let i = 0; i < scored.length && !speciesLocationsDiverge; i++){
+            for(let j = i + 1; j < scored.length; j++){
+              const a = scored[i], b = scored[j];
+              if(a.scoredAtLat == null || b.scoredAtLat == null) continue;
+              if(nmBetween(a.scoredAtLat, a.scoredAtLng, b.scoredAtLat, b.scoredAtLng) >= 10){
+                speciesLocationsDiverge = true;
+                break;
+              }
+            }
+          }
+        }
+        // Keep the brief pin on the primary species' best cell for area weather.
         if(scored[0] && scored[0].scoredAtLat != null){
           pinLL = { lat: scored[0].scoredAtLat, lng: scored[0].scoredAtLng };
-          try {
-            if(typeof realDepthAt === "function"){
-              const m = realDepthAt(pinLL.lat, pinLL.lng);
-              if(m != null) depthFt = Math.round(m * 3.281);
-            }
-          } catch(e){}
+          if(scored[0].depthFt != null) depthFt = scored[0].depthFt;
+          else {
+            try {
+              if(typeof realDepthAt === "function"){
+                const m = realDepthAt(pinLL.lat, pinLL.lng);
+                if(m != null) depthFt = Math.round(m * 3.281);
+              }
+            } catch(e){}
+          }
         }
       }
     } catch(e){}
@@ -13430,6 +13536,24 @@ async function runBrief(){
     conditions: cond,
     tide,
     biteScores: scored,
+    // Per-species best grounds (nm + compass from port). When
+    // speciesLocationsDiverge is true, the brief MUST list a separate run for
+    // each fish instead of collapsing everything onto one Point.
+    speciesTargets: scored.map((s, i) => ({
+      rank: i + 1,
+      species: s.species,
+      speciesId: s.speciesId || null,
+      score: s.score,
+      confidence: s.confidence,
+      lat: s.scoredAtLat,
+      lng: s.scoredAtLng,
+      runFromPortNm: s.runFromPortNm,
+      runCompass: s.runCompass,
+      depthFt: s.depthFt,
+      spotLabel: s.spotLabel,
+      nearbyStructure: s.nearbyStructure,
+    })),
+    speciesLocationsDiverge,
     // Ranked candidate spots for a multi-spot run plan (null for single-spot).
     // The top-level spot/conditions describe rank 1's area.
     runPlan,
@@ -13456,6 +13580,7 @@ async function runBrief(){
     structure:    Array.isArray(payload.nearbyStructure) && payload.nearbyStructure.length > 0,
     sky:          !!(cond && cond.sky),
     runPlan:      !!(runPlan && runPlan.length >= 2),
+    speciesLocationsDiverge,
   };
 
   let briefOk = false;
