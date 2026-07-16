@@ -1293,7 +1293,16 @@ body.modal-open #brief-toggle{
 /* Species legend pill — top left, below header */
 /* MAP */
 #map{flex:1;min-height:0;position:relative}
-.leaflet-container{background:#3a4a5a}
+.leaflet-container{
+  background:#3a4a5a;
+  -webkit-backface-visibility:hidden;
+  backface-visibility:hidden;
+}
+.leaflet-tile-pane img.leaflet-tile{
+  outline:1px solid transparent;
+  -webkit-backface-visibility:hidden;
+  backface-visibility:hidden;
+}
 
 #wind-forecast-slider{touch-action:none}
 .wind-step-btn{

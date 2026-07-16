@@ -445,6 +445,8 @@ async function initMap(){
   ).addTo(MAP);
 
   // ── OCEAN BATHYMETRIC: Esri Ocean Base + NOAA BlueTopo hillshade (US) ──
+  // World_Ocean_Reference is intentionally omitted — it draws lat/lon graticule
+  // lines that read as a distracting grid over the chart.
   esriOceanLayer=L.layerGroup([
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
@@ -461,10 +463,7 @@ async function initMap(){
       {maxZoom:19,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.78,
         attribution:'© NOAA OCS · BlueTopo CUDEM',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
     ),
-    L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}",
-      {maxZoom:19,maxNativeZoom:13,minZoom:0,crossOrigin:'anonymous',attribution:'© Esri',opacity:0.85}
-    )]);
+  ]);
 
   // ── STREET + SEAMARKS ──
   osmLayer=L.layerGroup([
@@ -760,6 +759,8 @@ async function initMap(){
   updateEmptyState();
   updateBriefFab();
 
+  initUserGeoTimezone();
+
   // If we opened with no connectivity and a trip is saved, load it straight onto
   // the map — the whole point of "Download my trip".
   try{
@@ -882,8 +883,7 @@ async function prefetchCurrentView(){
       `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,
       `https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/${z}/${y}/${x}`],
     ocean: (z,x,y) => [
-      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/${z}/${y}/${x}`,
-      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/${z}/${y}/${x}`],
+      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/${z}/${y}/${x}`],
     osm: (z,x,y) => [
       `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`,
       `https://tiles.openseamap.org/seamark/${z}/${x}/${y}.png`],
@@ -1054,8 +1054,7 @@ async function dtPrefetchTiles(bounds, onProgress){
       `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,
       `https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/${z}/${y}/${x}`],
     ocean: (z,x,y) => [
-      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/${z}/${y}/${x}`,
-      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/${z}/${y}/${x}`],
+      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/${z}/${y}/${x}`],
     osm: (z,x,y) => [
       `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`,
       `https://tiles.openseamap.org/seamark/${z}/${x}/${y}.png`],
@@ -1763,6 +1762,78 @@ function forecastTimeMs(){
   return Date.now() + FORECAST_HOUR_OFFSET * 3600 * 1000;
 }
 
+// ── Local time for forecast UI ───────────────────────────────────────────────
+// Bite-score times follow the selected home port when set; otherwise the user's
+// GPS fix; otherwise the browser timezone. Longitude buckets cover US fishing
+// coasts without pulling in a timezone library.
+let _userGeoTz = null;  // { lat, lng, tz } from a one-shot geolocation read
+
+function ianaTimezoneForCoords(lat, lng){
+  if(lng == null || !Number.isFinite(lng)) return null;
+  if(lat != null && lng < -154 && lat >= 18 && lat <= 23) return "America/Honolulu";
+  if(lng < -125) return "America/Los_Angeles";
+  if(lng < -115) return "America/Denver";
+  if(lng < -90) return "America/Chicago";
+  return "America/New_York";
+}
+
+function displayTimezone(){
+  if(typeof activePort !== "undefined" && activePort && typeof PORTS !== "undefined" && PORTS[activePort]){
+    const p = PORTS[activePort];
+    const tz = ianaTimezoneForCoords(p.lat, p.lng);
+    if(tz) return tz;
+  }
+  if(_userGeoTz && _userGeoTz.tz) return _userGeoTz.tz;
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch(e){
+    return "UTC";
+  }
+}
+
+function calendarDayKeyInTz(ms, tz){
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date(ms));
+}
+
+function nextCalendarDayKeyInTz(nowMs, tz){
+  const today = calendarDayKeyInTz(nowMs, tz);
+  for(let h = 20; h <= 36; h++){
+    const k = calendarDayKeyInTz(nowMs + h * 3600000, tz);
+    if(k !== today) return k;
+  }
+  return today;
+}
+
+function formatTimeInTz(ms, tz){
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hour: "numeric", minute: "2-digit", hour12: true,
+  }).format(new Date(ms));
+}
+
+function formatWeekdayInTz(ms, tz){
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, weekday: "short",
+  }).format(new Date(ms));
+}
+
+function initUserGeoTimezone(){
+  if(!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      _userGeoTz = { lat, lng, tz: ianaTimezoneForCoords(lat, lng) };
+      if(typeof updateBiteBanner === "function") updateBiteBanner();
+      if(typeof updateForecastSliderDisplay === "function") updateForecastSliderDisplay();
+      if(typeof updateWindForecastDisplay === "function") updateWindForecastDisplay();
+    },
+    () => {},
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
+  );
+}
+
 // Forecast horizons with labels for UI
 const FORECAST_OPTIONS = [
   { hours:  0, label: "Now",   short: "Now"   },
@@ -1775,16 +1846,14 @@ const FORECAST_OPTIONS = [
 function forecastTimeDisplay(hoursOverride){
   const lead = (typeof hoursOverride === "number") ? hoursOverride : FORECAST_HOUR_OFFSET;
   const ms = Date.now() + lead * 3600 * 1000;
-  const d = new Date(ms);
-  const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
-  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
-  const sameTomorrow = d.toDateString() === tomorrow.toDateString();
-  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-  if (sameDay) return `Today ${time}`;
-  if (sameTomorrow) return `Tomorrow ${time}`;
-  const day = d.toLocaleDateString("en-US", { weekday: "short" });
-  return `${day} ${time}`;
+  const nowMs = Date.now();
+  const tz = displayTimezone();
+  const time = formatTimeInTz(ms, tz);
+  const todayKey = calendarDayKeyInTz(nowMs, tz);
+  const targetKey = calendarDayKeyInTz(ms, tz);
+  if(targetKey === todayKey) return `Today ${time}`;
+  if(targetKey === nextCalendarDayKeyInTz(nowMs, tz)) return `Tomorrow ${time}`;
+  return `${formatWeekdayInTz(ms, tz)} ${time}`;
 }
 
 // Map Captain's Brief day (0=today, 1=tomorrow) to bite-score forecast lead.
@@ -1944,10 +2013,13 @@ function windForecastLabel(hours){
 function windForecastDateParts(hours){
   const h = Math.max(0, Math.min(96, Math.round(Number(hours)||0)));
   if(h === 0) return { date: "Current", time: "" };
-  const d = new Date(Date.now() + h * 3600000);
+  const ms = Date.now() + h * 3600000;
+  const tz = displayTimezone();
   return {
-    date: d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" }),
-    time: d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" }),
+    date: new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, weekday: "short", month: "short", day: "numeric",
+    }).format(new Date(ms)),
+    time: formatTimeInTz(ms, tz),
   };
 }
 
@@ -12643,10 +12715,13 @@ document.addEventListener("keydown", e => {
 });
 
 function briefDayLabel(off){
-  const d = new Date(); d.setDate(d.getDate() + off);
-  if(off === 0) return "Today";
-  if(off === 1) return "Tomorrow";
-  return d.toLocaleDateString("en-US", { weekday: "short" });
+  const tz = displayTimezone();
+  const ms = Date.now() + (off || 0) * 86400000;
+  const todayKey = calendarDayKeyInTz(Date.now(), tz);
+  const targetKey = calendarDayKeyInTz(ms, tz);
+  if(off === 0 || targetKey === todayKey) return "Today";
+  if(off === 1 || targetKey === nextCalendarDayKeyInTz(Date.now(), tz)) return "Tomorrow";
+  return formatWeekdayInTz(ms, tz);
 }
 function setBriefDay(off){ briefDayOffset = off; renderBrief(); }
 
@@ -13167,7 +13242,9 @@ async function runBrief(){
   // ── Tide: use the DEPARTURE PORT (inlet) when the offshore pin has none ──────
   // Offshore spots have no nearby NOAA tide station, so the pin fetch returns no
   // tide. But the inlet the captain leaves from does — and inlet tide timing is
-  // exactly what matters for the run out and back. Fill it from the port.
+  // exactly what matters for the run out and back. Fill it from the port, then
+  // enrich with the same CO-OPS high/low schedule the header banner uses
+  // (ocean fetch only returns state, not nextHigh/nextLow).
   if(!tide && portObj && typeof BW_OCEAN !== "undefined" && BW_OCEAN.fetchOcean){
     try {
       const op = await BW_OCEAN.fetchOcean(portObj.lat, portObj.lng);
@@ -13182,33 +13259,95 @@ async function runBrief(){
       }
     } catch(e){ /* port tide is best-effort */ }
   }
+  try {
+    let station = tide && tide.station;
+    if(!station && portObj && typeof bwFetchPortConditions === "function"){
+      const op = await bwFetchPortConditions(portObj.lat + 0.05, portObj.lng + 0.05);
+      station = op && op.sources ? op.sources.tide : null;
+    }
+    if(station && typeof fetchNextTideEvent === "function"){
+      const next = await fetchNextTideEvent(station);
+      if(next && next.events && next.events.length){
+        const nextH = next.events.find(e => e.type === "H");
+        const nextL = next.events.find(e => e.type === "L");
+        tide = {
+          state: next.state || (tide && tide.state) || null,
+          nextHigh: nextH ? nextH.timeTxt : null,
+          nextLow: nextL ? nextL.timeTxt : null,
+          nextEvents: next.events.slice(0, 2).map(e => ({
+            type: e.type === "H" ? "High" : "Low",
+            time: e.timeTxt,
+          })),
+          headerText: (typeof formatTideHeader === "function") ? formatTideHeader(next) : null,
+          station,
+          atPort: true,
+        };
+      }
+    }
+  } catch(e){ /* CO-OPS hi/lo enrichment is best-effort */ }
 
-  // Per-species bite score + top factor + confidence at this exact pin, from the
-  // same engine that drives the Bite Map — scoped to the brief's fish day
-  // (Tomorrow → +24 h forecast) so scores match the weather block above.
+  // Per-species bite score at the BEST nearby Bite Map cell (not only the zone
+  // pin). A captain looking at Sailfish 93% on the heat map must see that same
+  // number in the brief — scoring only the fixed offshore pin was returning junk
+  // secondary scores (e.g. Sailfish 9) a few miles off the hotspot.
   let scored = [];
   let runPlan = null;
   withForecastHour(forecastHourForBriefDay(briefDayOffset), () => {
     try {
       if(typeof scoreCell === "function"){
-        for(const id of sp){
-          const r = scoreCell(pinLL.lat, pinLL.lng, id);
-          if(r){
-            scored.push({
-              species: SPECIES.find(s=>s.id===id)?.name || id,
-              score: r.score != null ? Math.round(r.score*100) : null,
-              topFactor: r.topFactor || null,
-              // Top 3 weighted drivers with their raw readings, so the brief can
-              // explain WHY the score is what it is in concrete terms.
-              topFactors: Array.isArray(r.topFactors) ? r.topFactors : null,
-              confidence: r.confidence != null ? Math.round(r.confidence*100) : null,
-              inSeason: r.inSeason !== false,
-              outOfRange: r.outOfRange === true,
-              seasonStrength: r.seasonStrength != null ? r.seasonStrength : null,
-              sstF: r.sst != null ? Math.round(r.sst*10)/10 : null,
-              thermalBreakFper10nm: r.tBreak != null && r.tBreak > 0 ? Math.round(r.tBreak*10)/10 : null,
-            });
+        const locations = (typeof briefPickScoreLocations === "function")
+          ? briefPickScoreLocations(pinLL.lat, pinLL.lng)
+          : [{ lat: pinLL.lat, lng: pinLL.lng }];
+        if(!locations.length) locations.push({ lat: pinLL.lat, lng: pinLL.lng });
+        // Ring samples around the pin so a secondary species (e.g. sailfish 93%
+        // a few nm from a yellowfin hotspot) isn't scored only at the primary
+        // cell — that was producing junk like "Sailfish 9" next to a 93% badge.
+        if(typeof pointNmFromBearing === "function"){
+          for(const d of [5, 10, 15, 20]){
+            for(const brg of [0, 45, 90, 135, 180, 225, 270, 315]){
+              locations.push(pointNmFromBearing(pinLL.lat, pinLL.lng, d, brg));
+            }
           }
+        }
+        for(const id of sp){
+          let best = null;
+          for(const pt of locations){
+            const r = scoreCell(pt.lat, pt.lng, id);
+            if(!r || r.outOfRange) continue;
+            const score = Number.isFinite(r.score) ? r.score : 0;
+            if(!best || score > best._score){
+              best = {
+                _score: score,
+                species: SPECIES.find(s=>s.id===id)?.name || id,
+                score: Math.round(score * 100),
+                topFactor: r.topFactor || null,
+                topFactors: Array.isArray(r.topFactors) ? r.topFactors : null,
+                confidence: r.confidence != null ? Math.round(r.confidence*100) : null,
+                inSeason: r.inSeason !== false,
+                outOfRange: r.outOfRange === true,
+                seasonStrength: r.seasonStrength != null ? r.seasonStrength : null,
+                sstF: r.sst != null ? Math.round(r.sst*10)/10 : null,
+                thermalBreakFper10nm: r.tBreak != null && r.tBreak > 0 ? Math.round(r.tBreak*10)/10 : null,
+                scoredAtLat: pt.lat,
+                scoredAtLng: pt.lng,
+              };
+            }
+          }
+          if(best){
+            delete best._score;
+            scored.push(best);
+          }
+        }
+        // Keep the brief pin on the primary species' best cell so depth/structure
+        // match the scores the captain just saw on the map.
+        if(scored[0] && scored[0].scoredAtLat != null){
+          pinLL = { lat: scored[0].scoredAtLat, lng: scored[0].scoredAtLng };
+          try {
+            if(typeof realDepthAt === "function"){
+              const m = realDepthAt(pinLL.lat, pinLL.lng);
+              if(m != null) depthFt = Math.round(m * 3.281);
+            }
+          } catch(e){}
         }
       }
     } catch(e){}
@@ -13217,6 +13356,49 @@ async function runBrief(){
       runPlan = _briefRunPlanSpots.map((s, i) => briefSpotSummary({ lat: s.lat, lng: s.lng }, sp, portObj, i + 1));
     }
   });
+
+  // Refresh water/break at the primary species' best cell after pin snap.
+  try {
+    cond = cond || {};
+    if(typeof sstGridAt === "function"){
+      const s = sstGridAt(pinLL.lat, pinLL.lng);
+      if(s && s.value != null){
+        cond.waterTempF = Math.round(s.value * 10) / 10;
+        cond.waterTempSource = "satellite SST grid";
+        cond.waterTempRegional = false;
+      }
+    }
+    if(typeof thermalBreakReal === "function"){
+      const tb = thermalBreakReal(pinLL.lat, pinLL.lng);
+      if(tb != null && tb > 0) cond.thermalBreakFper10nm = Math.round(tb * 10) / 10;
+    }
+    if(typeof chlorGridAt === "function"){
+      const ch = chlorGridAt(pinLL.lat, pinLL.lng);
+      if(ch && ch.value != null) cond.chlorophyll = Math.round(ch.value * 100) / 100;
+    }
+  } catch(e){}
+
+  // Captain-facing translations — the model must use these instead of raw
+  // °F/10nm / mg/m³ jargon after the first mention.
+  try {
+    cond = cond || {};
+    if(cond.thermalBreakFper10nm != null && cond.thermalBreakFper10nm >= 1){
+      const sharp = cond.thermalBreakFper10nm >= 3;
+      cond.thermalBreakHowToFish = sharp
+        ? "Sharp temp wall — look for a green-to-blue color change, a rip or weed line, and a jump on the surface-temp gauge. Troll ALONG that seam (repeated passes), not straight through it."
+        : "Modest temp edge — watch for a subtle color change or slick; work both sides of the seam until you mark bait or birds.";
+    }
+    if(cond.chlorophyll != null){
+      cond.waterClarityHowToFish = cond.chlorophyll < 0.3
+        ? "Clean blue water — natural/translucent baits; color changes may be subtle, so trust rips, weed, birds, and the temp gauge more than a muddy edge."
+        : cond.chlorophyll < 1.0
+          ? "Slightly green/productive water — mix natural and higher-contrast skirts; fish the cleaner edge of the color change."
+          : "Greener/dirtier water — darker, high-contrast baits; work the cleaner blue edge if you can find it.";
+    }
+    if(cond.currentEdgeKtPer10nm != null && cond.currentEdgeKtPer10nm >= 0.3){
+      cond.currentEdgeHowToFish = "Current shear line — look for a visible rip, weed line, or current slick where drift changes; bait often pins on that edge.";
+    }
+  } catch(e){}
 
   // The day the captain plans to fish (0=today..6), as both an offset and a date
   // string, so the prompt can scope the forecast and reports to that day.
@@ -13269,6 +13451,7 @@ async function runBrief(){
     currentEdge:  !!(cond && cond.currentEdgeKtPer10nm != null),
     tide:         !!tide,
     tideAtPort:   !!(tide && tide.atPort),
+    tideTimes:    !!(tide && (tide.headerText || tide.nextHigh || tide.nextLow || (tide.nextEvents && tide.nextEvents.length))),
     biteScores:   scored.length > 0,
     structure:    Array.isArray(payload.nearbyStructure) && payload.nearbyStructure.length > 0,
     sky:          !!(cond && cond.sky),
@@ -14041,7 +14224,9 @@ async function fetchNextTideEvent(station){
   const events = future.slice(0, 4).map(e => ({
     type: e.type,
     atMs: e.atMs,
-    timeTxt: new Date(e.atMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+    timeTxt: (typeof formatTimeInTz === "function" && typeof displayTimezone === "function")
+      ? formatTimeInTz(e.atMs, displayTimezone())
+      : new Date(e.atMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
   }));
 
   return { state, events };
