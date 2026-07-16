@@ -6868,33 +6868,55 @@ function getAltimetryField(lat, lng){
 }
 
 // Color for SSH anomaly: blue (cold/cyclonic eddy) → transparent (neutral) → red (warm/anticyclonic)
+// Fishing-focused: most of the ramp sits in ±0.05–0.30 m where Gulf Stream edges
+// and eddy walls live — the old ×4 gain washed those into the same pale tint.
 function _altimetryColor(slaM){
-  const a=Math.min(1, Math.abs(slaM)*4.0);  // full opacity at ±0.25m
-  if(a < 0.04) return null;
-  if(slaM > 0){
-    // Warm/anticyclonic: orange-red
-    const r=Math.round(220+35*Math.min(1,slaM*3));
-    const g=Math.round(80-60*Math.min(1,slaM*3));
-    return `rgba(${r},${g},30,${(a*0.62).toFixed(2)})`;
-  } else {
-    // Cold/cyclonic: blue-cyan
-    const b=Math.round(200+55*Math.min(1,(-slaM)*3));
-    const gr=Math.round(180-80*Math.min(1,(-slaM)*3));
-    return `rgba(30,${gr},${b},${(a*0.62).toFixed(2)})`;
-  }
+  const rgba = _altimetryRGBA(slaM);
+  if(!rgba) return null;
+  return `rgba(${rgba[0]},${rgba[1]},${rgba[2]},${(rgba[3]/255).toFixed(2)})`;
 }
 // Same color ramp as _altimetryColor but returns [r,g,b,a0-255] for ImageData,
 // or null for near-flat / no-data cells (drawn transparent). Used by the
 // smooth-fill offscreen canvas so SSH renders as a continuous gradient instead
 // of blocky cells.
 function _altimetryRGBA(slaM){
-  const a=Math.min(1, Math.abs(slaM)*4.0);
-  if(a < 0.04) return null;
-  const alpha=Math.round(a*0.62*255);
+  if(!isFinite(slaM)) return null;
+  const mag = Math.abs(slaM);
+  // Hide only true flat water; show weak edges that still mark a break.
+  if(mag < 0.015) return null;
+  // Full chroma by ~±0.15 m so Stream/eddy walls saturate sooner (was 0.18 / 0.33).
+  const t = Math.min(1, mag / 0.15);
+  // Keep fill a notch under full so white edge contours stay readable on top.
+  const alpha = Math.round((0.22 + 0.58 * Math.pow(t, 0.7)) * 255);
   if(slaM > 0){
-    return [Math.round(220+35*Math.min(1,slaM*3)), Math.round(80-60*Math.min(1,slaM*3)), 30, alpha];
+    // Warm / anticyclonic — gold → orange → red → deep red
+    const stops = [
+      [0.00, 210, 160,  60],
+      [0.35, 235, 110,  40],
+      [0.65, 220,  55,  30],
+      [1.00, 160,  20,  40],
+    ];
+    return _altiLerpStop(stops, t).concat([alpha]);
   }
-  return [30, Math.round(180-80*Math.min(1,(-slaM)*3)), Math.round(200+55*Math.min(1,(-slaM)*3)), alpha];
+  // Cold / cyclonic — cyan → blue → deep navy
+  const stops = [
+    [0.00,  80, 180, 210],
+    [0.35,  40, 130, 220],
+    [0.65,  25,  80, 190],
+    [1.00,  15,  40, 140],
+  ];
+  return _altiLerpStop(stops, t).concat([alpha]);
+}
+function _altiLerpStop(stops, t){
+  let i = 0;
+  while(i < stops.length - 2 && t > stops[i + 1][0]) i++;
+  const a = stops[i], b = stops[i + 1];
+  const f = (t - a[0]) / Math.max(0.001, b[0] - a[0]);
+  return [
+    Math.round(a[1] + (b[1] - a[1]) * f),
+    Math.round(a[2] + (b[2] - a[2]) * f),
+    Math.round(a[3] + (b[3] - a[3]) * f),
+  ];
 }
 // Build a grid-resolution offscreen canvas (one pixel per SSH cell, north at
 // top). Drawn scaled-up with image smoothing → free bilinear interpolation, the
@@ -6934,7 +6956,7 @@ function _altiIsoSegs(A,B,C,D,L,latA,lngA,step){
 }
 // Node-wise SSH gradient magnitude (m per 10 nm) + up to 3 spatially-distinct
 // "break" peaks (the steepest fronts). Grid-only, so it's cached alongside the
-// smooth canvas. A break must clear ~0.06 m/10nm (a real edge, not noise) and
+// smooth canvas. A break must clear ~0.045 m/10nm (a real edge, not noise) and
 // sit ≥ ~1.1° from a stronger one so we surface separate fronts, not one blob.
 // Magenta highlights are limited to the port's tailored fishing radius (see
 // portFishingRangeNm) so captains only see breaks they can actually run to.
@@ -6961,7 +6983,7 @@ function _altiComputeBreaks(g, portLat, portLng, maxNm){
   const cand=[];
   for(let i=1;i<n-1;i++) for(let j=1;j<m-1;j++){
     const v=gm[i*m+j];
-    if(v<0.06) continue;
+    if(v<0.045) continue;
     const lat=latOf(i), lng=g.minLng+j*g.step;
     if(nmBetween(portLat,portLng,lat,lng)>maxNm) continue;
     cand.push({i,j,v});
@@ -7019,20 +7041,18 @@ function _altiSegInBreakRange(pts, pk, portLat, portLng, portMaxNm){
 }
 function _altiDrawMagentaBreaks(ctx, map, g, brk, opt, portLat, portLng, portMaxNm){
   if(!brk || !brk.peaks.length || !g) return;
-  const strokeStyle = opt.strokeStyle || "rgba(236,72,153,0.95)";
-  const lineWidth = opt.lineWidth || 3;
-  const shadowBlur = opt.shadowBlur != null ? opt.shadowBlur : 8;
-  const shadowColor = opt.shadowColor || "rgba(236,72,153,0.85)";
-  const dotR = opt.dotR || 3.4;
-  const dotFill = opt.dotFill || "rgba(236,72,153,0.95)";
+  const strokeStyle = opt.strokeStyle || "rgba(244,63,180,1)";
+  const lineWidth = opt.lineWidth || 4.5;
+  const shadowBlur = opt.shadowBlur != null ? opt.shadowBlur : 12;
+  const shadowColor = opt.shadowColor || "rgba(244,63,180,0.95)";
+  const underStroke = opt.underStroke !== false; // white/dark halo so breaks read on red+blue fill
+  const underColor = opt.underColor || "rgba(10,18,36,0.85)";
+  const underWidth = opt.underWidth || (lineWidth + 2.4);
+  const dotR = opt.dotR || 4.2;
+  const dotFill = opt.dotFill || "rgba(244,63,180,1)";
   const gmA = brk.gm;
   const clipPort = Number.isFinite(portLat) && Number.isFinite(portLng) && portMaxNm > 0;
-  ctx.save();
-  ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.shadowColor = shadowColor; ctx.shadowBlur = shadowBlur;
-  ctx.strokeStyle = strokeStyle; ctx.lineWidth = lineWidth;
-  for(const pk of brk.peaks){
-    if(clipPort && nmBetween(portLat, portLng, pk.lat, pk.lng) > portMaxNm) continue;
+  const strokePeakPath = (pk) => {
     const L = pk.level, gth = 0.5 * pk.gmag;
     const traceLat = ALTI_BREAK_TRACE_NM / 60;
     const traceLng = ALTI_BREAK_TRACE_NM / (60 * Math.cos(pk.lat * Math.PI / 180) || 1e-6);
@@ -7063,8 +7083,29 @@ function _altiDrawMagentaBreaks(ctx, map, g, brk, opt, portLat, portLng, portMax
         }
       }
     }
+  };
+  ctx.save();
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for(const pk of brk.peaks){
+    if(clipPort && nmBetween(portLat, portLng, pk.lat, pk.lng) > portMaxNm) continue;
+    if(underStroke){
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = underColor;
+      ctx.lineWidth = underWidth;
+      strokePeakPath(pk);
+      ctx.stroke();
+    }
+    ctx.shadowColor = shadowColor; ctx.shadowBlur = shadowBlur;
+    ctx.strokeStyle = strokeStyle; ctx.lineWidth = lineWidth;
+    strokePeakPath(pk);
     ctx.stroke();
     const pc = map.latLngToContainerPoint([pk.lat, pk.lng]);
+    if(underStroke){
+      ctx.shadowBlur = 0;
+      ctx.beginPath(); ctx.arc(pc.x, pc.y, dotR + 1.4, 0, Math.PI*2);
+      ctx.fillStyle = underColor; ctx.fill();
+    }
+    ctx.shadowColor = shadowColor; ctx.shadowBlur = shadowBlur;
     ctx.beginPath(); ctx.arc(pc.x, pc.y, dotR, 0, Math.PI*2);
     ctx.fillStyle = dotFill; ctx.fill();
   }
@@ -7297,33 +7338,57 @@ const AltimetryLayer = L.Layer.extend({
     ctx.imageSmoothingEnabled=prevSmooth;
 
     // ── 2) CONTOUR ISOLINES ─────────────────────────────────────────────────
-    // SSH contours every 0.05 m (like a real altimetry chart). Where lines pack
-    // tightly = the strongest gradient = the break to fish. Only walk levels
-    // that occur in view. Every third line (0.15 m) is brighter for reference.
+    // SSH contours every 0.05 m. Where lines pack tightly = the break. Brightness
+    // and width scale with local cell range so steep fronts jump out and flat
+    // water stays quiet.
     const step=g.step, lo=Math.floor(this._small.min/0.05)*0.05, hi=Math.ceil(this._small.max/0.05)*0.05;
     const toPt=(p)=>this._map.latLngToContainerPoint(p);
     ctx.lineCap="round"; ctx.lineJoin="round";
     for(let L=lo; L<=hi+1e-9; L+=0.05){
-      const major=Math.abs(Math.round(L/0.05)%3)===0;
-      ctx.beginPath();
-      for(let i=0;i<g.nLat-1;i++){
-        const latA=g.minLat+i*step;
-        for(let j=0;j<g.nLng-1;j++){
-          const A=g.sla[i*g.nLng+j], B=g.sla[i*g.nLng+(j+1)],
-                C=g.sla[(i+1)*g.nLng+(j+1)], D=g.sla[(i+1)*g.nLng+j];
-          if(!isFinite(A)||!isFinite(B)||!isFinite(C)||!isFinite(D)) continue;
-          if(L<Math.min(A,B,C,D)||L>Math.max(A,B,C,D)) continue;
-          const pts=_altiIsoSegs(A,B,C,D,L,latA,g.minLng+j*step,step);
-          if(pts.length>=2){
-            let a=toPt(pts[0]), b=toPt(pts[1]);
-            ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
-            if(pts.length===4){ a=toPt(pts[2]); b=toPt(pts[3]); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); }
+      const major=Math.abs(Math.round(L/0.05)%2)===0; // every 0.10 m is a major
+      // Two passes: faint base for context, then reinforced where the cell
+      // spans a real gradient (front definition).
+      for(const pass of ["base", "edge"]){
+        ctx.beginPath();
+        let any=false;
+        for(let i=0;i<g.nLat-1;i++){
+          const latA=g.minLat+i*step;
+          for(let j=0;j<g.nLng-1;j++){
+            const A=g.sla[i*g.nLng+j], B=g.sla[i*g.nLng+(j+1)],
+                  C=g.sla[(i+1)*g.nLng+(j+1)], D=g.sla[(i+1)*g.nLng+j];
+            if(!isFinite(A)||!isFinite(B)||!isFinite(C)||!isFinite(D)) continue;
+            if(L<Math.min(A,B,C,D)||L>Math.max(A,B,C,D)) continue;
+            const cellRange = Math.max(A,B,C,D) - Math.min(A,B,C,D);
+            const isEdge = cellRange >= 0.035; // ~real front across one cell
+            if(pass === "base" && isEdge) continue;
+            if(pass === "edge" && !isEdge) continue;
+            const pts=_altiIsoSegs(A,B,C,D,L,latA,g.minLng+j*step,step);
+            if(pts.length>=2){
+              let a=toPt(pts[0]), b=toPt(pts[1]);
+              ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+              if(pts.length===4){ a=toPt(pts[2]); b=toPt(pts[3]); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); }
+              any=true;
+            }
           }
         }
+        if(!any) continue;
+        if(pass === "base"){
+          ctx.shadowBlur=0;
+          ctx.strokeStyle=major?"rgba(255,255,255,0.32)":"rgba(255,255,255,0.14)";
+          ctx.lineWidth=major?1.05:0.7;
+          ctx.stroke();
+        } else {
+          // Dark understroke + bright white so packed isolines read as a wall
+          // against both warm (red) and cold (blue) SSH fill.
+          ctx.shadowBlur=0;
+          ctx.strokeStyle="rgba(8,16,32,0.72)";
+          ctx.lineWidth=major?3.1:2.2;
+          ctx.stroke();
+          ctx.strokeStyle=major?"rgba(255,255,255,0.95)":"rgba(255,255,255,0.78)";
+          ctx.lineWidth=major?2.35:1.55;
+          ctx.stroke();
+        }
       }
-      ctx.strokeStyle=major?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.26)";
-      ctx.lineWidth=major?1.4:0.9;
-      ctx.stroke();
     }
 
     // ── 3) GEOSTROPHIC FLOW ARROWS (subtle, so contours read) ────────────────
@@ -10134,9 +10199,9 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em;margin-bottom:3px">FRONT CONVERGENCE (SSH)</div>
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1e3a8a 0%,#38bdf8 30%,rgba(60,60,75,0.55) 50%,#f87171 70%,#7f1d1d 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#0f288c 0%,#2870dc 22%,#50b4d2 38%,rgba(70,70,90,0.35) 50%,#eb9e28 62%,#dc4620 78%,#a01428 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
-          <span>Cold / low</span><span>Flat</span><span>Warm / high</span>
+          <span>−0.2 m</span><span>Flat</span><span>+0.2 m</span>
         </div>
         ${statusRow}
         ${detail(`
