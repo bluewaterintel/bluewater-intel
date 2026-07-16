@@ -7724,8 +7724,7 @@ function restoreExplainerState(){
 function showPredictionExplainer(cell, species){
   if(typeof rulerActive !== "undefined" && rulerActive) return;
   // Close existing
-  const old = document.getElementById("predict-explainer");
-  if(old) old.remove();
+  closeExplainer();
 
   // Default to a single-spot brief; the banner run-plan opener re-arms this
   // AFTER calling here (a normal map tap must never inherit a stale run plan).
@@ -7733,65 +7732,27 @@ function showPredictionExplainer(cell, species){
 
   _explainerState = {cell, species};
 
+  const backdrop = document.createElement("div");
+  backdrop.id = "predict-explainer-backdrop";
+  document.body.appendChild(backdrop);
+  document.body.classList.add("explainer-open");
+
   const div = document.createElement("div");
   div.id = "predict-explainer";
-  // ── SIZING NOTES ──
-  // position:fixed   → anchors to viewport, not the map (which can be sized weird)
-  // 100dvh           → dynamic viewport height; correctly excludes mobile browser
-  //                   chrome (address bar). Old browsers fall back to 100vh via
-  //                   the duplicate rule below.
-  // top:64px         → just below the header, leaves room for it
-  // bottom:14px      → guarantees a 14px gap at the bottom of the visible screen
-  // The two-sided anchoring (top + bottom) means the popup's height auto-fits the
-  // available space and overflow-y:auto scrolls within it — so "Reports near here"
-  // and the action buttons at the bottom are always reachable.
   const panelTop = (typeof viewportPanelTopPx === "function") ? viewportPanelTopPx(8) : 128;
   const panelBottom = 14;
-  div.style.cssText = [
-    "position:fixed",
-    // Horizontal centering — escapes both the layers panel (bottom-left) and
-    // the zoom controls (top-right). Was previously right-anchored which
-    // collided with the zoom buttons after they moved to top-right.
-    "left:50%",
-    "transform:translateX(-50%)",
-    // Top offset: clears the app header (taller on phones) plus the BITE SCORE
-    // banner when the prediction layer is on.
-    `top:${panelTop}px`,
-    `bottom:${panelBottom}px`,
-    // z-index 1100 sits above Leaflet's default control z-index (1000) so
-    // the zoom buttons don't punch through the popup. Still below the nav
-    // menu (2000), tutorial overlay (5000), and centered modals (10000).
-    "z-index:1100",
-    "background:#0a1628",
-    "color:#e8f4ff",
-    "padding:16px 18px",
-    "border-radius:12px",
-    "font-size:12.5px",
-    "border:1px solid rgba(220,38,38,.4)",
-    "box-shadow:0 8px 32px rgba(0,0,0,.6)",
-    "font-family:'Segoe UI',Arial,sans-serif",
-    "width:360px",
-    "max-width:calc(100vw - 28px)",
-    // Fallback height cap for older browsers that don't support dvh:
-    `max-height:calc(100vh - ${panelTop + panelBottom}px)`,
-    // Modern browsers — dynamic viewport correctly excludes mobile chrome:
-    `max-height:calc(100dvh - ${panelTop + panelBottom}px)`,
-    "overflow-y:auto",
-    "overscroll-behavior:contain",
-    "-webkit-overflow-scrolling:touch"].join(";");
+  div.style.top = `${panelTop}px`;
+  div.style.bottom = `${panelBottom}px`;
+  div.style.maxHeight = `calc(100dvh - ${panelTop + panelBottom}px)`;
   document.body.appendChild(div);
 
   // Stop scroll events from bubbling to the map underneath
-  // overscroll-behavior:contain handles the at-boundary case in modern browsers,
-  // but we also need to block events from reaching Leaflet's pan/zoom handlers
-  // while the user is interacting with the popup interior.
   const stopProp = e => e.stopPropagation();
   div.addEventListener("wheel",       stopProp, {passive: true});
   div.addEventListener("touchstart",  stopProp, {passive: true});
   div.addEventListener("touchmove",   stopProp, {passive: true});
   div.addEventListener("mousedown",   stopProp);
   div.addEventListener("dblclick",    stopProp);
-  // Leaflet also has its own internal way to ignore events on certain elements
   if(typeof L !== "undefined" && L.DomEvent){
     L.DomEvent.disableClickPropagation(div);
     L.DomEvent.disableScrollPropagation(div);
@@ -8065,6 +8026,9 @@ function updateForecastSliderVisibility(){
 function closeExplainer(){
   const el = document.getElementById("predict-explainer");
   if(el) el.remove();
+  const bd = document.getElementById("predict-explainer-backdrop");
+  if(bd) bd.remove();
+  document.body.classList.remove("explainer-open");
   _explainerState = null;
   clearExplainerState();
   if(wxAutoRefreshTimer){ clearInterval(wxAutoRefreshTimer); wxAutoRefreshTimer = null; }
@@ -10361,8 +10325,7 @@ function rulerHandleMarkerClick(e, lat, lng){
     L.DomEvent.stop(e);
   }
   if(typeof MAP !== "undefined" && MAP && MAP.closePopup) MAP.closePopup();
-  const old = document.getElementById("predict-explainer");
-  if(old) old.remove();
+  if(document.getElementById("predict-explainer") && typeof closeExplainer === "function") closeExplainer();
   rulerAddPoint({lat, lng});
   return true;
 }
@@ -10379,8 +10342,7 @@ function rulerActivate(){
   if(typeof wpDropMode !== "undefined" && wpDropMode && typeof wpDropDeactivate === "function") wpDropDeactivate();
   rulerActive = true;
   if(typeof MAP !== "undefined" && MAP && MAP.closePopup) MAP.closePopup();
-  const explainer = document.getElementById("predict-explainer");
-  if(explainer) explainer.remove();
+  if(document.getElementById("predict-explainer") && typeof closeExplainer === "function") closeExplainer();
   document.getElementById("ruler-toggle").classList.add("active");
   document.getElementById("ruler-readout").classList.add("active");
   document.getElementById("ruler-total").textContent = "Tap map to measure";

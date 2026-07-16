@@ -1481,7 +1481,7 @@ body.modal-open #brief-toggle{
 #brief-modal{
   position:fixed;inset:0;z-index:100000;display:none;
   align-items:flex-start;justify-content:center;
-  background:rgba(4,12,24,.72);backdrop-filter:blur(4px);
+  background:#060e1a;
   padding:max(24px,env(safe-area-inset-top)) 16px 24px;overflow-y:auto;
 }
 #brief-modal.open{display:flex}
@@ -4491,6 +4491,50 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 }
 .ex-action-btn:hover{transform:translateX(2px)}
 .ex-action-btn:active{transform:scale(.98)}
+@media (hover:none){
+  .ex-action-btn:hover{transform:none}
+}
+
+/* ── Prediction explainer (bite hotspot popup) ─────────────────────────────── */
+body.explainer-open{overflow:hidden;overscroll-behavior:none}
+#predict-explainer-backdrop{
+  position:fixed;inset:0;z-index:1099;
+  background:#060e1a;
+  pointer-events:auto;
+}
+#predict-explainer{
+  position:fixed;z-index:1100;
+  left:max(10px, calc((100vw - min(360px, calc(100vw - 20px))) / 2));
+  right:max(10px, calc((100vw - min(360px, calc(100vw - 20px))) / 2));
+  width:auto;max-width:none;
+  transform:none !important;
+  margin:0;
+  background:#0a1628;
+  color:#e8f4ff;
+  padding:16px 18px;
+  box-sizing:border-box;
+  border-radius:12px;
+  font-size:12.5px;
+  border:1px solid rgba(220,38,38,.45);
+  box-shadow:0 8px 32px rgba(0,0,0,.85);
+  font-family:'Segoe UI',Arial,sans-serif;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  scrollbar-gutter:stable;
+}
+#predict-explainer *{box-sizing:border-box;max-width:100%}
+#predict-explainer img,#predict-explainer svg,#predict-explainer table{max-width:100%}
+@media (max-width:680px){
+  #predict-explainer{
+    left:8px !important;
+    right:8px !important;
+    padding:14px 14px;
+    border-radius:10px;
+  }
+}
 
 /* ───────────────────────────────────────────────────────────────────────
    KNOT DIAGRAM COLOR CODING & ANIMATION
@@ -4928,8 +4972,7 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 .fc-modal{
   position:fixed; inset:0; z-index:10001; display:none;
   align-items:center; justify-content:center; padding:18px;
-  background:rgba(0,0,0,.58);
-  -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+  background:#060e1a;
 }
 .fc-modal.open{display:flex}
 .fc-dialog{max-width:440px}
