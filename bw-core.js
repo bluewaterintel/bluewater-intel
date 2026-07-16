@@ -10202,7 +10202,7 @@ function updateOceanLegend(){
   el.style.display = "block";
   // If the bite-score banner is also showing at the top, push this panel down so
   // they don't overlap; otherwise sit at the normal top inset.
-  el.style.top = (layerVis.predict ? 70 : 10) + "px";
+  el.style.top = (layerVis.predict ? (typeof biteBannerHeightPx === "function" ? biteBannerHeightPx() + 10 : 70) : 10) + "px";
   if(phone){
     el.style.maxHeight = "none";
     el.style.overflowY = "visible";
@@ -10218,10 +10218,35 @@ function updateOceanLegend(){
 // Show/hide the slim bite-score gradient banner across the top of the map. It
 // appears whenever the prediction (bite score) layer is on. The colors and word
 // order are fixed in the markup and match the hot=good heat overlay.
+function toggleBiteBannerForecast(){
+  const b = document.getElementById("bite-banner");
+  if(!b) return;
+  b.classList.toggle("bite-fc-open");
+  const btn = document.getElementById("bite-fc-toggle");
+  if(btn) btn.setAttribute("aria-expanded", b.classList.contains("bite-fc-open") ? "true" : "false");
+}
+
+function biteBannerHeightPx(){
+  if(typeof layerVis === "undefined" || !layerVis.predict) return 0;
+  const b = document.getElementById("bite-banner");
+  if(b && b.style.display !== "none"){
+    const h = b.offsetHeight;
+    if(h > 0) return h + 6;
+  }
+  return (typeof isPhoneView === "function" && isPhoneView()) ? 44 : 56;
+}
+
 function updateBiteBanner(){
   const b = document.getElementById("bite-banner");
   if(!b) return;
   b.style.display = layerVis.predict ? "block" : "none";
+  if(!layerVis.predict) b.classList.remove("bite-fc-open");
+  const fcToggleLbl = document.getElementById("bite-fc-toggle-label");
+  if(fcToggleLbl){
+    fcToggleLbl.textContent = FORECAST_HOUR_OFFSET === 0
+      ? "Now"
+      : (typeof biteForecastTimeLabel === "function" ? biteForecastTimeLabel() : `+${FORECAST_HOUR_OFFSET}h`);
+  }
   const fc = document.getElementById("bite-banner-forecast");
   if(fc){
     if(layerVis.predict){
@@ -10229,14 +10254,15 @@ function updateBiteBanner(){
         const active = opt.hours === FORECAST_HOUR_OFFSET;
         return `<button type="button" class="fc-mark${active ? " active" : ""}" onclick="setForecastHour(${opt.hours})">${opt.short}</button>`;
       }).join("");
+      const windHint = windBiteTimeMismatchHtml();
       fc.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)">
+        <div class="bite-fc-head" style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)">
           <span style="font-size:9px;color:#6bbfea;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Forecast</span>
           <span style="font-size:10px;color:#cfe5ff;font-weight:600">${forecastTimeDisplay()}</span>
         </div>
-        <div style="display:flex;gap:4px;margin-top:4px">${pills}</div>
-        ${FORECAST_HOUR_OFFSET > 0 ? `<div style="margin-top:4px;font-size:9px;color:#9ec5e8;line-height:1.35">${forecastOceanFieldsDisclaimer()}</div>` : ""}
-        ${windBiteTimeMismatchHtml()}
+        <div class="bite-fc-pills" style="display:flex;gap:4px;margin-top:4px">${pills}</div>
+        ${FORECAST_HOUR_OFFSET > 0 ? `<div class="bite-fc-disclaimer" style="margin-top:4px;font-size:9px;color:#9ec5e8;line-height:1.35">${forecastOceanFieldsDisclaimer()}</div>` : ""}
+        ${windHint ? `<div class="bite-fc-wind-hint">${windHint}</div>` : ""}
       `;
     } else {
       fc.innerHTML = "";
@@ -13746,8 +13772,8 @@ function closeDd(){
 // ════════════════════════════════════════════════════════════════════════════
 // EMPTY-STATE OVERLAY — shows when port or species isn't selected
 // ════════════════════════════════════════════════════════════════════════════
-// Session-level flag: legacy dismiss path — the empty-state X was removed so
-// the prompt stays until port/species are chosen via updateEmptyState().
+// Session-level flag: once the user dismisses the empty-state prompt with
+// the X button, don't show it again this session.
 let emptyStateDismissed = false;
 
 function dismissEmptyState(){
@@ -14197,7 +14223,7 @@ function syncHeaderHeightVar(){
 // Viewport-fixed panel top: header + optional bite banner + gap.
 function viewportPanelTopPx(gap){
   const hdr = syncHeaderHeightVar();
-  const banner = (typeof layerVis !== "undefined" && layerVis.predict) ? 56 : 0;
+  const banner = (typeof biteBannerHeightPx === "function") ? biteBannerHeightPx() : ((typeof layerVis !== "undefined" && layerVis.predict) ? 56 : 0);
   return hdr + banner + (gap != null ? gap : 8);
 }
 

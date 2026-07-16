@@ -1182,8 +1182,13 @@ body.modal-open #brief-toggle{
 @media (max-width:680px){
   /* Pinch-zoom only — +/- removed to reclaim top-left map space */
   .leaflet-control-zoom{display:none !important}
-  /* Compact right toolbar */
+  /* Compact right toolbar — brief FAB matches other map icons on phone */
   #layers-ctrl{right:6px;gap:6px}
+  #brief-toggle{
+    width:40px !important;height:40px !important;border-radius:10px;
+    box-shadow:0 3px 10px rgba(14,165,165,.32) !important;
+  }
+  #brief-toggle img{width:22px !important;height:22px !important;}
   #layers-toggle,#ruler-toggle,#wpdrop-toggle,#basemap-toggle,#settings-toggle,#catch-log-toggle{
     width:40px !important;height:40px !important;border-radius:10px;
   }
@@ -1227,6 +1232,61 @@ body.modal-open #brief-toggle{
   .map-time-pill-footer{font-size:10px !important;margin-top:4px !important}
   .map-time-pill-hint{display:none !important}
   .map-time-pill-play{font-size:11px !important;padding:5px 10px !important}
+  /* Bite score banner — slim strip; forecast collapses to save map space */
+  #bite-banner{
+    top:4px !important;
+    left:6px !important;
+    right:6px !important;
+    width:auto !important;
+    max-width:none !important;
+    transform:none !important;
+    padding:4px 8px 5px !important;
+    border-radius:8px !important;
+  }
+  #bite-banner .bite-banner-hdr{margin-bottom:2px !important}
+  #bite-banner .bite-banner-hdr .bite-banner-subtitle{display:none !important}
+  #bite-banner .bite-banner-hdr > span:first-child{font-size:9px !important}
+  #bite-banner .bite-banner-gradient{height:7px !important;border-radius:4px !important}
+  #bite-banner .bite-banner-labels{
+    font-size:7.5px !important;
+    margin-top:1px !important;
+    letter-spacing:.02em;
+  }
+  #bite-banner .bite-banner-labels span:nth-child(2),
+  #bite-banner .bite-banner-labels span:nth-child(3){display:none}
+  #bite-banner-forecast .bite-fc-head{display:none !important}
+  #bite-banner-forecast .bite-fc-disclaimer,
+  #bite-banner-forecast .bite-fc-wind-hint{display:none !important}
+  #bite-banner-forecast .fc-mark{
+    font-size:9px !important;
+    padding:4px 2px !important;
+    min-width:0 !important;
+  }
+  #bite-banner-forecast .bite-fc-pills{margin-top:0 !important}
+  #bite-banner:not(.bite-fc-open) #bite-banner-forecast .bite-fc-pills{display:none !important}
+  #bite-banner .bite-fc-toggle{
+    display:flex !important;
+    align-items:center;
+    justify-content:space-between;
+    width:100%;
+    margin-top:3px;
+    padding:3px 0 0;
+    border-top:1px solid rgba(255,255,255,.08);
+    background:none;
+    border-left:none;
+    border-right:none;
+    border-bottom:none;
+    color:#9ec5e8;
+    font-size:9px;
+    font-weight:700;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    font-family:inherit;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #bite-banner.bite-fc-open .bite-fc-toggle::after{content:" ▴"}
+  #bite-banner:not(.bite-fc-open) .bite-fc-toggle::after{content:" ▾"}
   /* Smaller port/canyon map labels */
   .leaflet-tooltip.port-label-home,.leaflet-tooltip.port-label-hover{
     font-size:11px !important;padding:3px 7px !important;border-radius:8px !important;
@@ -1331,6 +1391,19 @@ body.modal-open #brief-toggle{
 }
 .fc-mark:hover{color:#7dd3fc;background:rgba(125,211,252,.08)}
 .fc-mark.active{color:#7dd3fc;background:rgba(125,211,252,.16);font-weight:700}
+.bite-fc-toggle{display:none}
+#empty-state-close{
+  position:absolute;top:6px;right:8px;
+  width:30px;height:30px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(107,191,234,.25);
+  color:#7dd3fc;font-size:18px;font-weight:700;
+  cursor:pointer;pointer-events:auto;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;font-family:inherit;line-height:1;
+  -webkit-tap-highlight-color:transparent;
+}
+#empty-state-close:hover{background:rgba(107,191,234,.15)}
 
 /* Legend pill */
 #legend{
@@ -2440,14 +2513,15 @@ body.modal-open #brief-toggle{
     pointer-events:auto;
     width:min(440px, 92vw);
   ">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;pointer-events:none">
+    <div class="bite-banner-hdr" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;pointer-events:none">
       <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#fb923c">BITE SCORE</span>
-      <span style="font-size:10px;color:#9ec5e8">predicted fishing quality</span>
+      <span class="bite-banner-subtitle" style="font-size:10px;color:#9ec5e8">predicted fishing quality</span>
     </div>
-    <div style="height:12px;border-radius:6px;background:linear-gradient(90deg,#65a30d 0%,#84cc16 22%,#eab308 45%,#f59e0b 68%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);pointer-events:none"></div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#dde8f5;margin-top:3px;pointer-events:none">
+    <div class="bite-banner-gradient" style="height:12px;border-radius:6px;background:linear-gradient(90deg,#65a30d 0%,#84cc16 22%,#eab308 45%,#f59e0b 68%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);pointer-events:none"></div>
+    <div class="bite-banner-labels" style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#dde8f5;margin-top:3px;pointer-events:none">
       <span>POOR</span><span>FAIR</span><span>GOOD</span><span>EXCELLENT</span>
     </div>
+    <button type="button" class="bite-fc-toggle" id="bite-fc-toggle" onclick="toggleBiteBannerForecast()" aria-expanded="false" aria-controls="bite-banner-forecast">Forecast · <span id="bite-fc-toggle-label">Now</span></button>
     <div id="bite-banner-forecast"></div>
   </div>
 
@@ -2627,16 +2701,18 @@ body.modal-open #brief-toggle{
      Centered banner that nudges the user to make the two key selections. -->
 <div id="empty-state" style="
   position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-  z-index:500;pointer-events:none;
+  z-index:850;pointer-events:none;
   background:rgba(10,22,40,.94);
   color:#e8f4ff;
-  padding:20px 26px;border-radius:14px;
+  padding:28px 22px 18px;
+  border-radius:14px;
   border:1px solid rgba(107,191,234,.3);
   box-shadow:0 16px 48px rgba(0,0,0,.6);
   font-family:'Segoe UI',Arial,sans-serif;
   text-align:center;max-width:min(340px, calc(100vw - 28px));
   display:none;
 ">
+  <button type="button" id="empty-state-close" onclick="dismissEmptyState()" aria-label="Dismiss prompt">×</button>
   <div id="empty-state-icon" style="font-size:36px;margin-bottom:8px">⚓</div>
   <div id="empty-state-title" style="font-size:14px;font-weight:700;color:#7dd3fc;letter-spacing:.04em;margin-bottom:6px">CHOOSE YOUR HOME PORT</div>
   <div id="empty-state-text" style="font-size:12px;color:#cfe5ff;line-height:1.55">
