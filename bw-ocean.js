@@ -318,9 +318,8 @@
   }
 
   const sstGridCache = new Map();
-  async function fetchSstGrid(latMin, latMax, lngMin, lngMax, hours = 12) {
+  async function fetchSstGrid(latMin, latMax, lngMin, lngMax, hours = 0) {
     const fh = normalizeOceanHours(hours);
-    if (fh <= 0) return null;
     const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${fh}`;
     const hit = sstGridCache.get(k);
     if (hit && Date.now() - hit.atMs < 2 * 60 * 60 * 1000) return hit.data;

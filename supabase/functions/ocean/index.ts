@@ -1770,7 +1770,7 @@ export const handler = async (req: Request): Promise<Response> => {
     });
   }
 
-  // ── RTOFS SST forecast grid (12/24 h model, for map overlay + bite score) ───
+  // ── SST grid: hours=0 → observed MUR; hours>0 → RTOFS forecast ───────────
   if (mode === "sstgrid") {
     const latMin = num(u.searchParams.get("latMin"));
     const latMax = num(u.searchParams.get("latMax"));
@@ -1779,7 +1779,24 @@ export const handler = async (req: Request): Promise<Response> => {
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
       return json({ error: "latMin,latMax,lngMin,lngMax required" }, cors, 400);
     }
-    const hoursAhead = normalizeOceanForecastHour(num(u.searchParams.get("hours")) ?? 12);
+    const hoursAhead = normalizeOceanForecastHour(num(u.searchParams.get("hours")) ?? 0);
+    if (hoursAhead <= 0) {
+      const mur = await fetchSstRows(latMin, latMax, lngMin, lngMax);
+      const rows = (mur.rows as number[][]).filter((r) => r && r[2] != null);
+      if (!rows.length) return json({ error: "MUR SST unavailable" }, cors, 502);
+      let freshest = 0;
+      for (const r of rows) if (r[3] && r[3] > freshest) freshest = r[3] as number;
+      return new Response(JSON.stringify({
+        stepDeg: mur.stepDeg,
+        rows,
+        observedAtMs: freshest || null,
+        forecastHour: 0,
+        source: SST_DATASET,
+        _forecast: false,
+      }), {
+        headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
+      });
+    }
     const out = await fetchRtofsSstGrid(latMin, latMax, lngMin, lngMax, hoursAhead);
     if (!out) return json({ error: "RTOFS SST forecast unavailable" }, cors, 502);
     return new Response(JSON.stringify(out), {

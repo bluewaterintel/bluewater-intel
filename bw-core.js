@@ -503,7 +503,7 @@ async function initMap(){
     scoped.textContent =
       '.ocean-overlays-smooth img.leaflet-tile { image-rendering:auto !important; image-rendering:smooth !important; }' +
       // Blur the whole tile CONTAINER per layer so seams between tiles smooth too.
-      '.sst-smooth   { filter: blur(2px); }' +   // 1km MUR — keep fronts sharp
+      '.sst-smooth   { filter: blur(1px) contrast(1.45) saturate(1.35); }' +   // fallback GIBS — sharpen warm fronts
       '.chlor-smooth { filter: blur(2px); }';    // 1km VIIRS chlor
     document.head.appendChild(scoped);
   })();
@@ -6557,14 +6557,22 @@ let _sstFcFetchSeq = 0;
 
 function _sstForecastRGBA(tempF){
   if(!isFinite(tempF)) return null;
-  // Match the on-screen SST legend ramp EXACTLY (40–84°F) so a cell reads the
-  // same temperature whether you're viewing observed imagery or the +12/+24h
-  // model. A mismatched ramp made identical water look ~30°F different when
-  // flipping to forecast — a rendering artifact, not a real temperature change.
-  const t = Math.max(40, Math.min(84, tempF));
+  // Fishing-focused ramp: spend most of the color budget in the warm band
+  // where 1–2°F fronts matter (summer Mid-Atlantic / Gulf Stream edge). The old
+  // 40–84°F GIBS-style ramp compressed 78–84°F into nearly identical oranges.
+  const t = Math.max(50, Math.min(88, tempF));
   const stops = [
-    [40, 10, 46, 107], [50, 14, 114, 181], [60, 77, 190, 213], [68, 143, 217, 107],
-    [72, 232, 214, 90], [78, 232, 151, 90], [84, 200, 53, 32],
+    [50,  8,  36,  96],   // deep blue — cool
+    [60, 14,  90, 170],   // blue
+    [68, 40, 170, 200],   // cyan
+    [72, 90, 200, 120],   // green
+    [74, 160, 210, 70],   // yellow-green
+    [76, 220, 210, 50],   // yellow
+    [78, 235, 170, 40],   // gold
+    [80, 235, 120, 35],   // orange
+    [82, 220,  70, 30],   // red-orange
+    [84, 190,  40, 35],   // red
+    [88, 140,  20, 50],   // deep red — hottest
   ];
   let i = 0;
   while(i < stops.length - 2 && t > stops[i + 1][0]) i++;
@@ -6574,7 +6582,7 @@ function _sstForecastRGBA(tempF){
     Math.round(a[1] + (b[1] - a[1]) * f),
     Math.round(a[2] + (b[2] - a[2]) * f),
     Math.round(a[3] + (b[3] - a[3]) * f),
-    200,
+    215,
   ];
 }
 
@@ -6650,7 +6658,8 @@ const SstForecastLayer = L.Layer.extend({
     if(!SST_FORECAST_GRID) this._requestData();
   },
   _requestData: function(){
-    if(!layerVis.sst || oceanOverlayForecastHour() <= 0 || !MAP || typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchSstGrid) return;
+    if(!layerVis.sst || !MAP || typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchSstGrid) return;
+    const hours = (typeof oceanOverlayForecastHour === "function") ? oceanOverlayForecastHour() : 0;
     const seq = ++_sstFcFetchSeq;
     let b;
     try { b = MAP.getBounds(); } catch(e){ return; }
@@ -6661,9 +6670,12 @@ const SstForecastLayer = L.Layer.extend({
       w: b.getWest() - (b.getEast() - b.getWest()) * pad,
       e: b.getEast() + (b.getEast() - b.getWest()) * pad,
     };
-    BW_OCEAN.fetchSstGrid(bx.s, bx.n, bx.w, bx.e, oceanOverlayForecastHour()).then(data => {
-      if(seq !== _sstFcFetchSeq || !layerVis.sst || oceanOverlayForecastHour() <= 0) return;
+    BW_OCEAN.fetchSstGrid(bx.s, bx.n, bx.w, bx.e, hours).then(data => {
+      if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
+      if((typeof oceanOverlayForecastHour === "function" ? oceanOverlayForecastHour() : 0) !== hours) return;
       applySstForecastGrid(data);
+      // High-contrast canvas is ready — drop the GIBS fallback tiles.
+      if(typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
       updateSatDateDisplay();
       if(typeof updateOceanLegend === "function") updateOceanLegend();
       this._draw();
@@ -6693,18 +6705,21 @@ const SstForecastLayer = L.Layer.extend({
 
 function syncSstOverlayMode(){
   if(!MAP) return;
-  // Overlay stays observed regardless of the bite forecast offset (see
-  // OCEAN_OVERLAY_FORECAST_ENABLED). oceanOverlayForecastHour() is 0 while disabled.
-  const fc = oceanOverlayForecastHour() > 0;
-  if(layerVis.sst && fc){
-    if(MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
+  // Prefer our fishing-focused canvas palette for BOTH observed MUR (hours=0)
+  // and RTOFS forecast. GIBS tiles stay as a brief fallback while the grid loads
+  // — their global colormap washes out summer fronts (78–84°F all look red).
+  if(layerVis.sst){
     if(!sstForecastLayer) sstForecastLayer = new SstForecastLayer();
     if(!MAP.hasLayer(sstForecastLayer)) sstForecastLayer.addTo(MAP);
     else sstForecastLayer.refresh();
+    if(!SST_FORECAST_GRID && sstLayer && !MAP.hasLayer(sstLayer)){
+      sstLayer.setOpacity(oceanOpacity.sst);
+      sstLayer.addTo(MAP);
+    }
   } else {
     if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
     SST_FORECAST_GRID = null;
-    if(layerVis.sst && sstLayer && !MAP.hasLayer(sstLayer)) sstLayer.addTo(MAP);
+    if(sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
   }
   updateSatDateDisplay();
   updateSatDateControlVisibility();
@@ -8480,7 +8495,7 @@ function activeOceanLayerKey(){
 // crossfade or date change so the new tile layer inherits the chosen opacity).
 function applyOceanOpacity(){
   if(layerVis.sst){
-    if(oceanOverlayForecastHour() > 0 && sstForecastLayer && typeof sstForecastLayer._draw === "function"){
+    if(sstForecastLayer && MAP && MAP.hasLayer(sstForecastLayer) && typeof sstForecastLayer._draw === "function"){
       sstForecastLayer._draw();
     } else if(sstLayer) sstLayer.setOpacity(oceanOpacity.sst);
   }
@@ -10051,9 +10066,9 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:14px;font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle}</div>
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#0a2e6b 0%,#0e72b5 20%,#4dbed5 40%,#8fd96b 55%,#e8d65a 70%,#e8975a 85%,#c83520 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#082460 0%,#0e5aaa 18%,#28aac8 32%,#5ac878 44%,#dcd232 56%,#ebb028 68%,#eb7823 80%,#be281f 92%,#8c1432 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
-          <span>40°</span><span>50°</span><span>60°</span><span>68°</span><span>72°</span><span>78°</span><span>84°+</span>
+          <span>50°</span><span>60°</span><span>68°</span><span>74°</span><span>78°</span><span>82°</span><span>86°+</span>
         </div>
         ${oceanOverlayForecastHour() > 0 ? `<div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">RTOFS model · ~9 km</div>` : ""}
       </div>`);
