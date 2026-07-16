@@ -279,9 +279,16 @@ async function loadReports(){
   if(_reportsLoading) return;
   if(typeof window === "undefined" || !window.BW_AUTH || !window.BW_AUTH.fetchReports) return;
   _reportsLoading = true;
+  const prevReportSig = (typeof SOCIAL !== "undefined" && SOCIAL.length)
+    ? `${SOCIAL.length}:${SOCIAL[0]?.hoursAgo ?? ""}:${SOCIAL[0]?.id ?? ""}`
+    : "0";
   try {
     const rows = await window.BW_AUTH.fetchReports({ sinceDays: 21, limit: 400 });
     SOCIAL = (rows || []).map(mapReport);
+    const newReportSig = SOCIAL.length
+      ? `${SOCIAL.length}:${SOCIAL[0]?.hoursAgo ?? ""}:${SOCIAL[0]?.id ?? ""}`
+      : "0";
+    if(prevReportSig === newReportSig) return;
     invalidatePredictCache();
     const ov = document.getElementById("rp-overlay");
     if(typeof rpRender === "function" && ov && ov.style.display === "block") rpRender();
@@ -344,6 +351,8 @@ try {
   }
 } catch(e){}
 let briefSp=[], briefAutoPick=false, aiCOA="", aiLoading=false, briefDayOffset=0;  // briefDayOffset: 0=today,1=tomorrow,...
+let briefRunZone=null;  // inshore | nearshore | offshore — where the captain plans to fish
+const BRIEF_ZONE_NM = { inshore: 3, nearshore: 12, offshore: 35 };
 const BRIEF_HISTORY_KEY = "bwi_brief_history_v1";
 const BRIEF_HISTORY_TTL_MS = 48 * 3600 * 1000;  // recall window
 const BRIEF_HISTORY_MAX = 12;
@@ -4621,6 +4630,62 @@ function speciesAllowedAtLat(speciesId, lat, lng){
   return inBand(range);
 }
 
+// Species valid for a brief run zone (inshore includes bay fish).
+function speciesAllowedInBriefZone(speciesId, zone){
+  const allowed = SPECIES_HABITAT[speciesId];
+  if(!allowed) return true;
+  if(zone === "inshore") return allowed.some(h => h === "inshore" || h === "bay");
+  return allowed.includes(zone);
+}
+
+// Typical offshore bearing from a home port (degrees true).
+function portOffshoreBearing(port){
+  if(!port) return 90;
+  if(port.lng > -98 && port.lat < 31) return 200;   // western Gulf
+  if(port.lng > -125) return 270;                   // Pacific
+  if(port.lng > -88 && port.lat < 30) return 225;   // Florida Gulf
+  return 90;                                        // Atlantic — E offshore
+}
+
+function pointNmFromBearing(lat, lng, nm, bearingDeg){
+  const R = 3440.065;
+  const toRad = d => d * Math.PI / 180;
+  const brg = toRad(bearingDeg);
+  const lat1 = toRad(lat), lng1 = toRad(lng);
+  const d = nm / R;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brg));
+  const lng2 = lng1 + Math.atan2(
+    Math.sin(brg) * Math.sin(d) * Math.cos(lat1),
+    Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  return { lat: lat2 * 180 / Math.PI, lng: ((lng2 * 180 / Math.PI + 540) % 360) - 180 };
+}
+
+function briefPinForZone(port, zone){
+  const nm = BRIEF_ZONE_NM[zone] || 12;
+  return pointNmFromBearing(port.lat, port.lng, nm, portOffshoreBearing(port));
+}
+
+function defaultBriefRunZone(speciesId){
+  const hab = SPECIES_HABITAT[speciesId];
+  if(!hab) return "offshore";
+  if(hab.includes("offshore")) return "offshore";
+  if(hab.includes("nearshore")) return "nearshore";
+  return "inshore";
+}
+
+function briefZoneLabel(zone){
+  return zone === "inshore" ? "Inshore" : zone === "nearshore" ? "Nearshore" : "Offshore";
+}
+
+function setBriefRunZone(zone){
+  if(!["inshore", "nearshore", "offshore"].includes(zone)) return;
+  briefRunZone = zone;
+  const portObj = (activePort && PORTS[activePort]) ? PORTS[activePort] : null;
+  if(portObj) pinLL = briefPinForZone(portObj, zone);
+  briefSp = briefSp.filter(id => briefSpeciesForSpot().some(s => s.id === id));
+  renderBrief();
+}
+
 // Species that realistically occur at the brief's spot (or departure port when
 // no pin yet). Keeps the brief species picker from listing 50+ extraneous fish
 // that don't apply to Oregon Inlet, Stuart, Venice LA, etc.
@@ -4630,11 +4695,13 @@ function briefSpeciesForSpot(){
   const lat = pinLL ? pinLL.lat : (portObj ? portObj.lat : null);
   const lng = pinLL ? pinLL.lng : (portObj ? portObj.lng : null);
   if(lat == null || lng == null) return [];
-  const wt = (typeof classifyWaterType === "function") ? classifyWaterType(lat, lng) : "offshore";
+  const wt = briefRunZone
+    || ((typeof classifyWaterType === "function") ? classifyWaterType(lat, lng) : "offshore");
+  const zoneWt = (wt === "bay") ? "inshore" : wt;
   return SPECIES.filter(s => {
     if(s.id === "all") return false;
     if(typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(s.id, lat, lng)) return false;
-    if(typeof speciesAllowedInWater === "function" && !speciesAllowedInWater(s.id, wt)) return false;
+    if(!speciesAllowedInBriefZone(s.id, zoneWt)) return false;
     return true;
   });
 }
@@ -7149,7 +7216,7 @@ function nearestPredictCell(latlng){
 function bindPredictInteractionHandlers(){
   if(!_predictTooltip){
     _predictTooltip = L.tooltip({sticky:true, direction:"top",
-                                 className:"predict-tooltip", opacity:.95});
+                                 className:"predict-tooltip", opacity:1});
   }
   // Suppress hover hit-testing during an active zoom so the gesture stays smooth.
   MAP.on('zoomstart', () => { _predictZooming = true; });
@@ -7342,17 +7409,9 @@ function drawPrediction(){
       };
       predictionData = hotspots;
       renderPrediction(hotspots, species, true, heatGrid, gridStep, gridOrigin, badges);
-      // If the explainer is open (e.g. the user just changed the forecast hour),
-      // re-score its cell now that fresh forecast ocean/weather has arrived so the
-      // panel reflects the +12/+24 h conditions, not the pre-fetch snapshot.
-      if(_explainerState && _explainerState.cell && _explainerState.species && typeof scoreCell === "function"){
-        const c = _explainerState.cell;
-        const fresh = scoreCell(c.lat, c.lng, _explainerState.species.id);
-        if(fresh){
-          _explainerState.cell = Object.assign({}, c, fresh, { lat: c.lat, lng: c.lng, distNm: c.distNm });
-          if(typeof renderExplainerMain === "function") renderExplainerMain();
-        }
-      }
+      // Do not re-score an open explainer here — async grid completion was
+      // shifting the displayed bite score when the tab refocused or ocean
+      // layers refreshed. setForecastHour() handles intentional time changes.
     }
   );
 }
@@ -7427,6 +7486,45 @@ function renderPrediction(grid, species, final, heatGridOverride, gridStep, grid
 // or fishing reports for that location (with a back button to return).
 // ════════════════════════════════════════════════════════════════════════════
 let _explainerState = null;  // {cell, species} of currently shown hotspot
+const EXPLAINER_STATE_KEY = "bwi_explainer_state_v1";
+
+function persistExplainerState(subPanel){
+  if(typeof sessionStorage === "undefined" || !_explainerState) return;
+  try {
+    sessionStorage.setItem(EXPLAINER_STATE_KEY, JSON.stringify({
+      lat: _explainerState.cell.lat,
+      lng: _explainerState.cell.lng,
+      speciesId: _explainerState.species.id,
+      subPanel: subPanel || null,
+      briefRunZone: briefRunZone || null,
+    }));
+  } catch(e){}
+}
+
+function clearExplainerState(){
+  try { sessionStorage.removeItem(EXPLAINER_STATE_KEY); } catch(e){}
+}
+
+function restoreExplainerState(){
+  if(typeof sessionStorage === "undefined" || !MAP) return;
+  try {
+    const raw = sessionStorage.getItem(EXPLAINER_STATE_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(x => x.id === s.speciesId) : null;
+    if(!sp) return;
+    let cell = { lat: s.lat, lng: s.lng };
+    if(typeof scoreCell === "function"){
+      const scored = scoreCell(s.lat, s.lng, sp.id);
+      if(scored) cell = Object.assign({}, cell, scored, { lat: s.lat, lng: s.lng });
+    }
+    if(s.briefRunZone) briefRunZone = s.briefRunZone;
+    showPredictionExplainer(cell, sp);
+    if(s.subPanel === "brief" && typeof openSubPanel === "function") openSubPanel("brief");
+    else if(s.subPanel === "wx" && typeof openSubPanel === "function") openSubPanel("wx");
+    else if(s.subPanel === "reports" && typeof openSubPanel === "function") openSubPanel("reports");
+  } catch(e){ clearExplainerState(); }
+}
 
 function showPredictionExplainer(cell, species){
   if(typeof rulerActive !== "undefined" && rulerActive) return;
@@ -7469,7 +7567,7 @@ function showPredictionExplainer(cell, species){
     // the zoom buttons don't punch through the popup. Still below the nav
     // menu (2000), tutorial overlay (5000), and centered modals (10000).
     "z-index:1100",
-    "background:rgba(10,22,40,.96)",
+    "background:#0a1628",
     "color:#e8f4ff",
     "padding:16px 18px",
     "border-radius:12px",
@@ -7505,6 +7603,7 @@ function showPredictionExplainer(cell, species){
   }
 
   renderExplainerMain();
+  persistExplainerState();
   updateBriefFab();
 }
 
@@ -7636,10 +7735,10 @@ function renderExplainerMain(){
           <span style="flex:1;text-align:left">Weather Forecast</span>
           <span style="color:#7dd3fc;opacity:.6">→</span>
         </button>
-        <button onclick="openSubPanel('brief')" class="ex-action-btn" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.4);color:#c084fc">
+        <button onclick="openSubPanel('brief')" class="ex-action-btn" style="background:rgba(14,165,165,.14);border:1px solid rgba(45,212,191,.45);color:#5eead4">
           <span style="font-size:16px">✦</span>
           <span style="flex:1;text-align:left">AI Captain's Brief</span>
-          <span style="color:#c084fc;opacity:.6">→</span>
+          <span style="color:#5eead4;opacity:.6">→</span>
         </button>
         ${savedBriefCount ? `<button onclick="openRecentBriefsModal()" class="ex-action-btn" style="background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.35);color:#7dd3fc">
           <span style="font-size:16px">📋</span>
@@ -7772,6 +7871,7 @@ function closeExplainer(){
   const el = document.getElementById("predict-explainer");
   if(el) el.remove();
   _explainerState = null;
+  clearExplainerState();
   if(wxAutoRefreshTimer){ clearInterval(wxAutoRefreshTimer); wxAutoRefreshTimer = null; }
   updateBriefFab();
 }
@@ -7785,7 +7885,7 @@ function openSubPanel(kind){
 
   const titles = {
     wx:      {label:"Weather",            emoji:"🌊", color:"#7dd3fc"},
-    brief:   {label:"AI Captain's Brief", emoji:"✦", color:"#c084fc"},
+    brief:   {label:"AI Captain's Brief", emoji:"✦", color:"#5eead4"},
     reports: {label:"Reports nearby",     emoji:"📋", color:"#34d399"},
   };
   const t = titles[kind];
@@ -7808,14 +7908,18 @@ function openSubPanel(kind){
   // Dispatch to the appropriate renderer (these all write into #explainer-subpanel-content via pbody())
   if(kind === "wx")       renderWX(cell.lat, cell.lng);
   else if(kind === "brief") {
-    // The brief generator needs pinLL set so update it briefly
     pinLL = {lat: cell.lat, lng: cell.lng};
+    if(typeof classifyWaterType === "function"){
+      const wt = classifyWaterType(cell.lat, cell.lng);
+      briefRunZone = (wt === "bay") ? "inshore" : wt;
+    }
     renderBrief();
   }
   else if(kind === "reports"){
     pinLL = {lat: cell.lat, lng: cell.lng};
     renderReports();
   }
+  persistExplainerState(kind);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -8190,16 +8294,6 @@ function restackBottomControls(){
     legend.style.maxHeight = oceanLegendMaxHeightPx() + "px";
   }
   updateMobileLayerMode();
-
-  const fab = document.getElementById("brief-fab");
-  if(fab){
-    const fabBase = 20;
-    if(canCollapse || shown.length > 0){
-      fab.style.bottom = (topOfStack + 14) + "px";
-    } else {
-      fab.style.bottom = fabBase + "px";
-    }
-  }
 }
 
 // ── OCEAN OPACITY SLIDER ─────────────────────────────────────────────────────
@@ -12393,7 +12487,7 @@ function briefHistoryPanelHtml(opts = {}){
   }
   const items = recent.slice(0, max).map(b => {
     const spLabel = (b.speciesNames && b.speciesNames.length)
-      ? (b.speciesAutoPick ? "Bluewater Choice · " : "") + b.speciesNames.slice(0, 2).join(", ") + (b.speciesNames.length > 2 ? "…" : "")
+      ? (b.speciesAutoPick ? "Bluewater Recommendation · " : "") + b.speciesNames.slice(0, 2).join(", ") + (b.speciesNames.length > 2 ? "…" : "")
       : "General";
     const run = b.runFromPortNm != null ? `${b.runFromPortNm} nm` : "";
     const safeId = (b.id || "").replace(/'/g, "\\'");
@@ -12560,22 +12654,24 @@ function recallBrief(id){
   pinLL = { lat: h.pinLat, lng: h.pinLng };
   briefDayOffset = h.fishDayOffset || 0;
   briefSp = Array.isArray(h.speciesIds) ? h.speciesIds.filter(x => x) : [];
+  briefAutoPick = !!h.speciesAutoPick;
+  if(typeof classifyWaterType === "function"){
+    const wt = classifyWaterType(h.pinLat, h.pinLng);
+    briefRunZone = (wt === "bay") ? "inshore" : wt;
+  }
   renderBrief();
   openBriefModal();
 }
 
 function renderBrief(){
+  const portObj = (activePort && typeof PORTS !== "undefined") ? PORTS[activePort] : null;
+  if(portObj && !briefRunZone && activeSpId && activeSpId !== "all"){
+    briefRunZone = defaultBriefRunZone(activeSpId);
+    pinLL = briefPinForZone(portObj, briefRunZone);
+  }
   const allowed = briefSpeciesForSpot();
-  // Drop any prior selections that don't apply to this spot/port anymore.
   briefSp = briefSp.filter(id => allowed.some(s => s.id === id));
-  // Marine forecast + ocean data are only trustworthy a day or two out, so the
-  // brief is scoped to Today/Tomorrow. Clamp any stale offset (e.g. recalled
-  // from an older brief) back into that window.
   if(briefDayOffset > 1) briefDayOffset = 1;
-  // Default to the captain's CURRENTLY selected target species (from the top
-  // banner) instead of silently auto-picking — that was the source of "why is
-  // it targeting King/Spadefish when I chose Triggerfish?" confusion. Only seed
-  // once, when nothing is selected yet and auto mode isn't on.
   if(!briefAutoPick && !briefSp.length && typeof activeSpId !== "undefined" &&
      activeSpId && activeSpId !== "all" && allowed.some(s => s.id === activeSpId)){
     briefSp = [activeSpId];
@@ -12583,34 +12679,30 @@ function renderBrief(){
   const autoPreview = (briefAutoPick && pinLL)
     ? briefPickSpeciesAuto(pinLL.lat, pinLL.lng, allowed, 3)
     : { picks: [], candidates: [] };
-  const pills = allowed.map(sp => {
+  const recOn = briefAutoPick;
+  const recColor = "#5eead4";
+  const speciesPills = allowed.map(sp => {
     const on = !briefAutoPick && briefSp.includes(sp.id);
     const disabled = briefAutoPick ? "disabled" : "";
     const dim = briefAutoPick ? "opacity:.45;pointer-events:none" : "";
     return `<button class="sp-pill" style="border-color:${on?sp.color:"rgba(255,255,255,.16)"};background:${on?sp.color+"22":"rgba(255,255,255,.04)"};color:${on?sp.color:"#cfe5ff"};${dim}" ${disabled} onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
   }).join("");
-  const autoOn = briefAutoPick;
-  const autoPickBtn = `<button type="button" class="brief-day" style="border:1px solid ${autoOn?'#a855f7':'rgba(255,255,255,.12)'};background:${autoOn?'rgba(168,85,247,.2)':'rgba(255,255,255,.04)'};color:${autoOn?'#e9d5ff':'#cfe5ff'};font-family:inherit;font-weight:800;font-size:12px;padding:9px 12px;border-radius:8px;cursor:pointer;width:100%;text-align:left;margin-bottom:8px" onclick="setBriefAutoPick(true)">🎯 Bluewater Choice — let us pick the best targets for ${briefDayLabel(briefDayOffset)}</button>`;
-  const manualBtn = `<button type="button" class="brief-day" style="border:1px solid ${!autoOn?'#7dd3fc':'rgba(255,255,255,.12)'};background:${!autoOn?'rgba(125,211,252,.14)':'rgba(255,255,255,.04)'};color:${!autoOn?'#7dd3fc':'#cfe5ff'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;margin-bottom:10px" onclick="setBriefAutoPick(false)">I'll choose my own targets</button>`;
-  const autoPreviewHtml = autoOn && autoPreview.picks.length
-    ? `<p style="color:#d8b4fe;font-size:12px;margin:0 0 10px;line-height:1.45"><b>Targeting:</b> ${autoPreview.picks.map(p => `${p.name} (${p.scorePct}/100${p.inSeason ? "" : ", off-season"})`).join(" · ")}</p>`
-    : (autoOn && pinLL
+  const recPill = `<button type="button" class="sp-pill" style="border-color:${recOn?recColor:"rgba(94,234,212,.35)"};background:${recOn?"rgba(14,165,165,.22)":"rgba(255,255,255,.04)"};color:${recOn?recColor:"#9ec5e8"};font-weight:800" onclick="setBriefAutoPick(true)">✦ Bluewater Recommendation</button>`;
+  const autoPreviewHtml = recOn && autoPreview.picks.length
+    ? `<p style="color:#99f6e4;font-size:12px;margin:0 0 10px;line-height:1.45"><b>Targeting:</b> ${autoPreview.picks.map(p => `${p.name} (${p.scorePct}/100${p.inSeason ? "" : ", off-season"})`).join(" · ")}</p>`
+    : (recOn && pinLL
       ? `<p style="color:#f0a868;font-size:12px;margin:0 0 10px;line-height:1.45">No strong bite for any species here on ${briefDayLabel(briefDayOffset)}. Pick a target manually to brief it anyway.</p>`
       : "");
-  const recentHtml = briefHistoryPanelHtml({ showEmpty: true, highlightId: _lastBriefId })
-    + (briefHistoryLoad().length ? `<button type="button" class="brief-view-btn" style="margin-top:0;margin-bottom:12px;background:rgba(56,189,248,.15);color:#7dd3fc;border:1px solid rgba(56,189,248,.35);box-shadow:none" onclick="openRecentBriefsModal()">Open all recent briefs ↗</button>` : "");
-  // Day selector — Today / Tomorrow only. Marine forecast + ocean data (SST,
-  // currents, break) go stale fast, so a brief past tomorrow is guesswork; we
-  // cap the choice rather than imply a reliable multi-day outlook.
+  const recentCount = briefHistoryLoad().length;
+  const recentFooter = recentCount
+    ? `<button type="button" class="brief-view-btn brief-recent-btn" onclick="openRecentBriefsModal()">Open all recent briefs (${recentCount}) ↗</button>`
+    : "";
   const dayBtns = [0,1].map(off=>{
     const on = briefDayOffset === off;
-    return `<button class="brief-day" style="border:1px solid ${on?'#7dd3fc':'rgba(255,255,255,.12)'};background:${on?'rgba(125,211,252,.16)':'rgba(255,255,255,.04)'};color:${on?'#7dd3fc':'#9ec5e8'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap" onclick="setBriefDay(${off})">${briefDayLabel(off)}</button>`;
+    return `<button class="brief-day" style="border:1px solid ${on?'#5eead4':'rgba(255,255,255,.12)'};background:${on?'rgba(14,165,165,.18)':'rgba(255,255,255,.04)'};color:${on?'#5eead4':'#9ec5e8'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap" onclick="setBriefDay(${off})">${briefDayLabel(off)}</button>`;
   }).join("");
-  const hasPin=!!pinLL;
-
-  // ── Departure-port card — always show WHICH port the run is planned from ──
-  // Users were confused about the origin; make it unmistakable at the top.
-  const portObj = (activePort && typeof PORTS !== "undefined") ? PORTS[activePort] : null;
+  const hasPin = !!pinLL;
+  const showZonePicker = !!portObj;
   let runMeta = "";
   if(portObj && pinLL && typeof nmBetween === "function"){
     const nm = Math.round(nmBetween(portObj.lat, portObj.lng, pinLL.lat, pinLL.lng));
@@ -12636,39 +12728,36 @@ function renderBrief(){
       </div>
       <div class="brief-depart-meta">
         ${planCount > 1 ? `<span class="brief-depart-chip">Top ${planCount} Bite Map spots</span>` : ""}
+        ${briefRunZone ? `<span class="brief-depart-chip">${briefZoneLabel(briefRunZone)}</span>` : ""}
         ${runMeta ? `<span>${runMeta}</span>` : ""}
         <span>🗓️ ${briefDayLabel(briefDayOffset)}</span>
       </div>
-      ${planCount > 1 ? `<div style="font-size:10.5px;color:#b79fd8;margin-top:7px;line-height:1.4">Ranked from the Bite Map's highest-scoring water for your species — not a fixed inshore/offshore choice.</div>` : ""}
+      ${planCount > 1 ? `<div style="font-size:10.5px;color:#7dd3fc;margin-top:7px;line-height:1.4">Ranked from the Bite Map's highest-scoring water for your species — not a fixed inshore/offshore choice.</div>` : ""}
     </div>`;
+  const zoneBtns = ["inshore", "nearshore", "offshore"].map(zone => {
+    const on = briefRunZone === zone;
+    return `<button class="brief-day" style="border:1px solid ${on?'#5eead4':'rgba(255,255,255,.12)'};background:${on?'rgba(14,165,165,.18)':'rgba(255,255,255,.04)'};color:${on?'#5eead4':'#9ec5e8'};font-family:inherit;font-weight:700;font-size:11px;padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap" onclick="setBriefRunZone('${zone}')">${briefZoneLabel(zone)}</button>`;
+  }).join("");
   const speciesNote = !allowed.length
-    ? `<p style="color:#9ec5e8;font-size:12px;margin-bottom:8px">Select a home port or drop a chart pin to see species for your area.</p>`
-    : (allowed.length < 12 ? "" : `<p style="color:#9ec5e8;font-size:11px;margin-bottom:6px;line-height:1.4">Showing ${allowed.length} species for this spot — extraneous coast-wide fish are hidden.</p>`);
-  // Recent briefs live at the BOTTOM so the panel reads top-to-bottom as a
-  // workflow: where you're leaving from → which day → target → generate, with
-  // past briefs tucked underneath for reference.
-  const recentSection = recentHtml
-    ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(107,191,234,.15)">
-         <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:8px;letter-spacing:.05em">RECENT BRIEFS</div>
-         ${recentHtml}
-       </div>`
+    ? `<p style="color:#9ec5e8;font-size:12px;margin-bottom:8px">Select a home port and fishing zone to see species for your area.</p>`
     : "";
   pbody(`
     ${departCard}
-    ${!hasPin?`<p style="color:#9ec5e8;font-size:12px;margin-bottom:12px;line-height:1.5">Tap the chart to drop a weather pin first.</p>`:""}
+    ${!hasPin && !showZonePicker ? `<p style="color:#9ec5e8;font-size:12px;margin-bottom:12px;line-height:1.5">Tap the chart to drop a weather pin first.</p>` : ""}
     <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">WHICH DAY ARE YOU FISHING?</div>
     <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px">${dayBtns}</div>
+    ${showZonePicker ? `
+    <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">WHERE ARE YOU FISHING?</div>
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px">${zoneBtns}</div>` : ""}
     <div style="font-size:11px;color:#cfe5ff;font-weight:600;margin-bottom:6px;letter-spacing:.05em">TARGET SPECIES</div>
-    ${autoPickBtn}
-    ${autoPreviewHtml}
-    ${manualBtn}
     ${speciesNote}
-    <div class="sp-pills">${pills || `<span style="font-size:12px;color:#9ec5e8">No species for this location yet.</span>`}</div>
+    ${autoPreviewHtml}
+    <div class="sp-pills">${speciesPills || `<span style="font-size:12px;color:#9ec5e8">No species for this zone yet.</span>`}${allowed.length ? recPill : ""}</div>
     <button id="brief-btn" ${!hasPin||aiLoading?"disabled":""} onclick="runBrief()">
       ${aiLoading?"GENERATING BRIEF...":"GENERATE AI CAPTAIN'S BRIEF"}</button>
-    ${(briefLooksSuccessful(aiCOA) && !aiLoading)?`<button type="button" class="brief-view-btn" style="margin-top:2px;background:rgba(168,85,247,.16);color:#e2c9ff;border:1px solid rgba(192,132,252,.4)" onclick="openBriefModal()">View your Captain's Brief ↗</button>`:""}
+    ${(briefLooksSuccessful(aiCOA) && !aiLoading)?`<button type="button" class="brief-view-btn" onclick="openBriefModal()">View your Captain's Brief ↗</button>`:""}
     ${(aiCOA && !aiLoading && !briefLooksSuccessful(aiCOA))?`<p style="margin-top:10px;font-size:12px;color:#f0a0a0;line-height:1.45">${String(aiCOA).replace(/</g,"&lt;")}</p>`:""}
-    ${recentSection}
+    ${recentFooter}
   `);
 }
 function toggleBriefSp(id){briefAutoPick=false;briefSp=briefSp.includes(id)?briefSp.filter(x=>x!==id):[...briefSp,id];renderBrief();}
@@ -12842,7 +12931,7 @@ async function runBrief(){
   } else {
     sp = briefSp.length ? briefSp : (activeSpId==="all" ? [] : [activeSpId]);
     if(!sp.length){
-      showToast("Pick target species below, or tap Bluewater Choice for a recommendation.", "info");
+      showToast("Pick target species below, or choose Bluewater Recommendation.", "info");
       return;
     }
   }
@@ -13355,33 +13444,28 @@ function updateEmptyState(){
 // Reuses existing functions; adds no new brief-generation logic.
 // ════════════════════════════════════════════════════════════════════════════
 function updateBriefFab(){
-  const fab   = document.getElementById("brief-fab");
-  if(!fab) return;
-  const label = document.getElementById("brief-fab-label");
-  const icon  = document.getElementById("brief-fab-icon");
-  const expl  = document.getElementById("predict-explainer");
+  const btn = document.getElementById("brief-toggle");
+  if(!btn) return;
+  const expl = document.getElementById("predict-explainer");
 
   if(expl){
-    fab.style.opacity = "0";
-    fab.style.pointerEvents = "none";
+    btn.style.opacity = "0";
+    btn.style.pointerEvents = "none";
   } else {
-    fab.style.opacity = "";
-    fab.style.pointerEvents = "";
+    btn.style.opacity = "";
+    btn.style.pointerEvents = "";
   }
 
-  if(!activePort){
-    fab.classList.add("is-setup");
-    if(icon)  icon.textContent  = "⚓";
-    if(label) label.textContent = "Set your home port";
-  } else if(!activeSpId || activeSpId === "all"){
-    fab.classList.add("is-setup");
-    if(icon)  icon.textContent  = "🎯";
-    if(label) label.textContent = "Pick a target";
-  } else {
-    fab.classList.remove("is-setup");
-    if(icon)  icon.textContent  = "✦";
-    if(label) label.textContent = "Captain's Brief";
+  btn.classList.remove("is-setup");
+  if(!activePort || !activeSpId || activeSpId === "all"){
+    btn.classList.add("is-setup");
   }
+  btn.title = !activePort
+    ? "Set your home port"
+    : (!activeSpId || activeSpId === "all")
+      ? "Pick a target species"
+      : "AI Captain's Brief";
+  btn.setAttribute("aria-label", btn.title);
 }
 
 function onBriefFabClick(){
@@ -13401,11 +13485,14 @@ function onBriefFabClick(){
     return;
   }
 
-  pinLL = { lat: p.lat, lng: p.lng };
-  let cell = { lat: p.lat, lng: p.lng };
+  _briefRunPlanSpots = null;
+  briefRunZone = defaultBriefRunZone(sp.id);
+  pinLL = briefPinForZone(p, briefRunZone);
+  const zoneNm = BRIEF_ZONE_NM[briefRunZone] || 12;
+  let cell = { lat: pinLL.lat, lng: pinLL.lng, distNm: zoneNm };
   if(typeof scoreCell === "function"){
-    const scored = scoreCell(p.lat, p.lng, sp.id);
-    if(scored) cell = Object.assign({}, cell, scored);
+    const scored = scoreCell(pinLL.lat, pinLL.lng, sp.id);
+    if(scored) cell = Object.assign({}, cell, scored, { lat: pinLL.lat, lng: pinLL.lng, distNm: zoneNm });
   }
 
   if(typeof showPredictionExplainer === "function"){
@@ -14146,9 +14233,10 @@ document.addEventListener('click',e=>{
 window.addEventListener("load",initMap);
 document.addEventListener("visibilitychange", () => {
   if(document.visibilityState !== "visible") return;
-  // Re-probe the freshest published satellite date first (cached ~30min, so this
-  // is cheap) so a session left open across a NOAA/NASA publish picks up the new
-  // day's SST/chlor imagery, then refresh the live ocean layers.
   if(typeof ensureFreshestSatDates === "function") ensureFreshestSatDates();
   if(typeof refreshActiveOceanLayers === "function") refreshActiveOceanLayers();
+});
+window.addEventListener("pageshow", (e) => {
+  if(!e.persisted) return;
+  if(typeof restoreExplainerState === "function") restoreExplainerState();
 });
