@@ -10196,7 +10196,7 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:14px;font-weight:700;color:#2dd4bf;letter-spacing:.08em;margin-bottom:3px">CURRENT DRIFT (kt)</div>
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#93c5e0 0%,#38bdf8 18%,#2dd4bf 40%,#5eead4 62%,#fbbf24 88%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#93c5e0 0%,#38bdf8 18%,#2dd4bf 40%,#5eead4 62%,#fbbf24 88%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="position:relative;height:11px;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600">
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
         </div>
