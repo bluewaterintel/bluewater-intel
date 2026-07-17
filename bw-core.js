@@ -9642,8 +9642,7 @@ function prefResetAll(){
   refreshSettingsModal();
 }
 
-// Populates the settings modal dropdowns and checkboxes from the current
-// USER_PREFS values. Called each time the modal opens so it stays in sync.
+// Populates the settings modal dropdowns from the current USER_PREFS values.
 function refreshSettingsModal(){
   // ── Port dropdown ──
   const portSel = document.getElementById("pref-port");
@@ -9673,33 +9672,6 @@ function refreshSettingsModal(){
   const bmSel = document.getElementById("pref-basemap");
   if(bmSel) bmSel.value = USER_PREFS.defaultBaseMap;
 
-  // ── Checkboxes ──
-  const cb = id => document.getElementById(id);
-  if(cb("pref-autozoom-port"))    cb("pref-autozoom-port").checked    = !!USER_PREFS.autozoomPort;
-  if(cb("pref-keep-loran-on"))    cb("pref-keep-loran-on").checked    = !!USER_PREFS.persistLoran;
-  // LORAN-C is a Pro layer, so the "keep it on by default" setting must not be
-  // usable by free users — otherwise they could set a default that auto-enables
-  // a Pro-only layer. Disable + dim the row and badge it PRO when unentitled.
-  const loranRow = document.getElementById("pref-loran-row");
-  const loranChk = cb("pref-keep-loran-on");
-  if(loranRow && loranChk){
-    if(!BW_PREMIUM){
-      loranChk.checked = false;      // never show it as defaulted-on for free
-      loranChk.disabled = true;
-      loranRow.style.opacity = "0.5";
-      loranRow.style.pointerEvents = "none";
-      if(!loranRow.querySelector(".pro-badge")){
-        const b = document.createElement("span");
-        b.className = "pro-badge"; b.textContent = "★ PRO";
-        loranRow.appendChild(b);
-      }
-    } else {
-      loranChk.disabled = false;
-      loranRow.style.opacity = "";
-      loranRow.style.pointerEvents = "";
-      const b = loranRow.querySelector(".pro-badge"); if(b) b.remove();
-    }
-  }
   if(typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
 }
 
