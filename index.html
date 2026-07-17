@@ -97,8 +97,9 @@ body{
   height:60px;
   width:auto;
   display:block;
-  /* Platinum marlin accent — crisp on retina via 3× source PNG */
-  filter:var(--bw-marlin-filter);
+  /* The logo PNG includes the wordmark, accent line, and marlin baked in.
+     Stored at 3× display density (180px PNG height → 60px CSS display) so
+     it stays crisp on retina screens. */
 }
 
 /* Center controls zone */
@@ -1129,6 +1130,23 @@ body.modal-open #brief-toggle{
 .map-time-pill--cyan .map-time-pill-step{color:#e0f2fe;border:1px solid rgba(56,189,248,.45);background:rgba(56,189,248,.14)}
 .map-time-pill--cyan .map-time-pill-slider{background:linear-gradient(90deg,#1c3a5e 0%,#38bdf8 100%)}
 .map-time-pill--cyan .map-time-pill-footer{color:#9ec5e8}
+.map-time-pill--info{padding:8px 12px 7px}
+.map-time-pill--info .map-time-pill-head{margin-bottom:0}
+.map-time-pill--info .map-time-pill-row,
+.map-time-pill--info .map-time-pill-footer{display:none !important}
+#predict-loading{
+  position:absolute;z-index:600;left:50%;transform:translateX(-50%);
+  background:rgba(10,22,40,.92);border:1px solid rgba(125,211,252,.35);
+  color:#e8f4ff;font:600 12px 'Segoe UI',Arial,sans-serif;
+  padding:8px 14px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,.5);
+  display:flex;align-items:center;gap:8px;pointer-events:none;
+}
+#predict-loading .bw-load-spin{
+  width:14px;height:14px;min-width:14px;min-height:14px;flex:0 0 14px;
+  border-radius:50%;border:2px solid rgba(125,211,252,.3);border-top-color:#7dd3fc;
+  box-sizing:border-box;animation:bwspin .8s linear infinite;
+}
+@keyframes bwspin{to{transform:rotate(360deg)}}
 .map-time-pill--green{border:1px solid rgba(34,197,94,.40)}
 .map-time-pill--green .map-time-pill-title{color:#4ade80}
 .map-time-pill--green .map-time-pill-display{color:#bbf7d0}
@@ -2612,7 +2630,7 @@ body.modal-open #brief-toggle{
   </div>
 
   <!-- SATELLITE IMAGERY — SST or chlorophyll; manual day stepping (no autoplay) -->
-  <div id="sat-date-control" class="map-time-pill map-time-pill--amber">
+  <div id="sat-date-control" class="map-time-pill map-time-pill--cyan">
     <div class="map-time-pill-head">
       <div id="sat-date-title" class="map-time-pill-title">SST</div>
       <div class="map-time-pill-head-right">
@@ -2633,9 +2651,9 @@ body.modal-open #brief-toggle{
   </div>
 
   <!-- CONVERGENCE DATE — step through daily SSH passes (front convergence layer) -->
-  <div id="alti-date-control" class="map-time-pill map-time-pill--pink">
+  <div id="alti-date-control" class="map-time-pill map-time-pill--cyan">
     <div class="map-time-pill-head">
-      <div class="map-time-pill-title">Convergence Date</div>
+      <div class="map-time-pill-title">Front Convergence</div>
       <div class="map-time-pill-head-right">
         <div id="alti-date-display" class="map-time-pill-display">Latest pass</div>
         <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show convergence date controls">▾</button>
@@ -2648,8 +2666,18 @@ body.modal-open #brief-toggle{
     </div>
     <div class="map-time-pill-footer">
       <span>6 days ago</span>
-      <span class="map-time-pill-hint">NOAA observed · use Ocean Model for +12/+24h</span>
+      <span class="map-time-pill-hint">NOAA SSH · observed passes</span>
       <span>Latest →</span>
+    </div>
+  </div>
+
+  <!-- OCEAN CURRENTS — model valid time (read-only; currents layer has no day slider) -->
+  <div id="currents-meta-control" class="map-time-pill map-time-pill--cyan map-time-pill--info">
+    <div class="map-time-pill-head">
+      <div class="map-time-pill-title">Ocean Currents</div>
+      <div class="map-time-pill-head-right">
+        <div id="currents-meta-display" class="map-time-pill-display">—</div>
+      </div>
     </div>
   </div>
 </div>

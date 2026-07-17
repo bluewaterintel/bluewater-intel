@@ -1910,6 +1910,9 @@ function updateWindBiteSyncHints(){
   } else if(layerVis.predict && FORECAST_HOUR_OFFSET > 0){
     hint.textContent = `Bite score: ${biteForecastTimeLabel()}`;
     hint.style.color = "#9ec5e8";
+  } else if(layerVis.wind){
+    hint.textContent = compactOceanLegendStatus(windStatusLabel());
+    hint.style.color = "";
   } else {
     hint.textContent = "GFS/HRRR blend · 3-hour steps";
     hint.style.color = "";
@@ -6243,6 +6246,7 @@ async function buildCurrentFieldForMap(){
   if(CURRENT_GRID && _curGridCoversView() && (Date.now() - CURRENT_GRID.fetchedAtMs) < 30*60*1000) return;
   const seq = ++_curFetchSeq;
   CURRENT_STATUS = "loading";
+  if(typeof updateCurrentsMetaDisplay === "function") updateCurrentsMetaDisplay();
   try {
     // Fetch a padded box around the view so panning doesn't refetch constantly.
     const b = MAP.getBounds();
@@ -6270,10 +6274,12 @@ async function buildCurrentFieldForMap(){
       currentsLayer._drawShade();
     }
     if(typeof updateOceanLegend === "function") updateOceanLegend();
+    if(typeof updateCurrentsMetaDisplay === "function") updateCurrentsMetaDisplay();
   } catch(e){
     if(seq !== _curFetchSeq) return;
     CURRENT_GRID = null;
     CURRENT_STATUS = "unavailable";
+    if(typeof updateCurrentsMetaDisplay === "function") updateCurrentsMetaDisplay();
   }
 }
 
@@ -6562,10 +6568,8 @@ function drawCurrents(){
     if(currentsLayer && MAP && MAP.hasLayer(currentsLayer)) MAP.removeLayer(currentsLayer);
   }
   if(typeof updateOceanLegend === "function") updateOceanLegend();
+  if(typeof updateCurrentsMetaControlVisibility === "function") updateCurrentsMetaControlVisibility();
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// SST FORECAST OVERLAY — RTOFS/HYCOM model SST at +12/+24 h (not satellite MUR).
 // When FORECAST_HOUR_OFFSET > 0 the GIBS tile layer is hidden and this canvas
 // layer draws the same model field the bite score reads.
 // ═════════════════════════════════════════════════════════════════════════════
@@ -7630,11 +7634,16 @@ function showPredictLoading(){
   if(!_predictLoadingEl){
     _predictLoadingEl = document.createElement("div");
     _predictLoadingEl.id = "predict-loading";
-    _predictLoadingEl.style.cssText = "position:absolute;top:64px;left:50%;transform:translateX(-50%);z-index:600;background:rgba(10,22,40,.92);border:1px solid rgba(125,211,252,.35);color:#e8f4ff;font:600 12px 'Segoe UI',Arial,sans-serif;padding:8px 14px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,.5);display:flex;align-items:center;gap:8px;pointer-events:none";
-    _predictLoadingEl.innerHTML = '<span style="width:14px;height:14px;border:2px solid rgba(125,211,252,.3);border-top-color:#7dd3fc;border-radius:50%;display:inline-block;animation:bwspin .8s linear infinite"></span><span>Loading bathymetry &amp; ocean data…</span><style>@keyframes bwspin{to{transform:rotate(360deg)}}</style>';
+    _predictLoadingEl.innerHTML = '<span class="bw-load-spin" aria-hidden="true"></span><span>Loading bathymetry &amp; ocean data…</span>';
     MAP.getContainer().appendChild(_predictLoadingEl);
   }
+  syncPredictLoadingPosition();
   _predictLoadingEl.style.display = "flex";
+}
+function syncPredictLoadingPosition(){
+  if(!_predictLoadingEl || !MAP) return;
+  const top = (typeof viewportPanelTopPx === "function") ? viewportPanelTopPx(8) : 64;
+  _predictLoadingEl.style.top = top + "px";
 }
 function hidePredictLoading(){ if(_predictLoadingEl) _predictLoadingEl.style.display = "none"; }
 
@@ -8221,6 +8230,7 @@ function toggleLayer(key){
   else if(key==="currents"){
     drawCurrents();
     updateForecastSliderVisibility();
+    if(typeof updateCurrentsMetaControlVisibility === "function") updateCurrentsMetaControlVisibility();
     if(!layerVis.currents && FORECAST_HOUR_OFFSET > 0 && !layerVis.sst && !layerVis.predict) setForecastHour(0);
     else if(layerVis.currents && FORECAST_HOUR_OFFSET > 0 && typeof refreshOceanForecastLayers === "function") refreshOceanForecastLayers();
   }
@@ -8390,8 +8400,8 @@ function updateSatDateControlVisibility(){
     const label = chlorOnly ? "Chlorophyll" : "SST";
     if(titleEl) titleEl.textContent = label;
     if(hintEl) hintEl.textContent = (oceanOverlayForecastHour() > 0 && layerVis.sst)
-      ? "RTOFS model"
-      : "Observed imagery only";
+      ? "NOAA RTOFS model · ~9 km"
+      : (chlorOnly ? "NASA GIBS · VIIRS observed" : "NASA GIBS · MUR observed");
     const row = box.querySelector(".map-time-pill-row");
     const footer = box.querySelector(".map-time-pill-footer");
     const forecastLocked = oceanOverlayForecastHour() > 0 && layerVis.sst;
@@ -8420,17 +8430,14 @@ function altiDateLabel(){
 function updateAltiDateDisplay(){
   const el = document.getElementById("alti-date-display");
   if(el){
-    // Altimetry overlay is observed-only (no model forecast); always show the
-    // observed pass date/age regardless of the ocean-model forecast slider.
     if(ALTIMETRY_GRID && ALTIMETRY_GRID.observedAtMs){
       const obs = new Date(ALTIMETRY_GRID.observedAtMs);
       const ageDays = Math.max(0, Math.round((Date.now() - ALTIMETRY_GRID.observedAtMs) / 86400000));
-      const ageTxt = ageDays <= 0 ? "today" : ageDays === 1 ? "1 day old" : `${ageDays} days old`;
-      const passTxt = altiDayOffset <= 0 ? "latest NOAA pass" : altiDayOffset === 1 ? "1 day earlier" : `${altiDayOffset} days earlier`;
-      el.textContent = `${obs.toLocaleDateString(undefined, { month:"short", day:"numeric" })} · ${ageTxt} · ${passTxt}`;
+      const ageTxt = ageDays <= 0 ? "today" : ageDays === 1 ? "1 day ago" : `${ageDays} days ago`;
+      el.textContent = `Observed ${obs.toLocaleDateString(undefined, { month:"short", day:"numeric" })} · ${ageTxt}`;
     } else {
       const age = altiDayOffset <= 0 ? "latest pass" : altiDayOffset === 1 ? "1 day earlier" : `${altiDayOffset} days earlier`;
-      el.textContent = `${altiDateLabel()} · ${age}`;
+      el.textContent = `Observed ${altiDateLabel()} · ${age}`;
     }
   }
   const inp = document.getElementById("alti-date-input");
@@ -8476,6 +8483,33 @@ function updateAltiDateControlVisibility(){
   restackBottomControls();
 }
 
+function updateCurrentsMetaDisplay(){
+  const el = document.getElementById("currents-meta-display");
+  if(!el) return;
+  if(CURRENT_STATUS === "loading"){
+    el.textContent = "Loading RTOFS…";
+    return;
+  }
+  if(CURRENT_STATUS === "unavailable"){
+    el.textContent = "Currents unavailable";
+    return;
+  }
+  if(CURRENT_STATUS === "ready"){
+    const t = currentsTimeLabel();
+    el.textContent = t ? `NOAA RTOFS · ${t}` : "NOAA RTOFS · surface drift";
+    return;
+  }
+  el.textContent = "NOAA RTOFS";
+}
+function updateCurrentsMetaControlVisibility(){
+  const box = document.getElementById("currents-meta-control");
+  if(!box) return;
+  const show = !!layerVis.currents;
+  box.style.display = show ? "block" : "none";
+  if(show) updateCurrentsMetaDisplay();
+  restackBottomControls();
+}
+
 // ── BOTTOM CONTROL STACKING ──────────────────────────────────────────────────
 // Several control bars share the bottom-center of the map (forecast slider,
 // satellite-date control, radar loop, waypoint radius). Any combination can be
@@ -8486,7 +8520,7 @@ function updateAltiDateControlVisibility(){
 // nearest the thumb-friendly bottom edge. Called by every visibility updater.
 // The distance scale bar is then lifted to sit just above the top of the stack
 // so it never overlaps the bars or the Leaflet attribution line.
-const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider"];
+const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "currents-meta-control", "radar-loop-control", "wind-forecast-slider"];
 const BOTTOM_STACK_GAP  = 8;    // px gap between stacked bars
 // Phase 2 mobile: when collapsed, the bottom control bars fold behind a single
 // "Controls ▴" chip so an active overlay owns the screen. Only meaningful on
@@ -10117,7 +10151,7 @@ function oceanLegendMaxHeightPx(){
   const topInset = layerVis.predict ? 70 : 10;
   const phone = isPhoneView();
   let bottomReserve = phone ? 28 : 12;
-  const stackIds = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider"];
+  const stackIds = ["sat-date-control", "alti-date-control", "currents-meta-control", "radar-loop-control", "wind-forecast-slider"];
   for(const id of stackIds){
     const el = document.getElementById(id);
     if(el && el.style.display && el.style.display !== "none"){
@@ -10168,7 +10202,6 @@ function updateOceanLegend(){
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:1px">
           ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${typeof v === "number" ? v + "°" : v}</span>`).join("")}
         </div>
-        ${oceanOverlayForecastHour() > 0 ? `<div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">RTOFS model · ~9 km</div>` : ""}
       </div>`);
   }
   if(layerVis.chlor){
@@ -10189,7 +10222,6 @@ function updateOceanLegend(){
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:2px">
           ${[0,5,10,15,20,25,30,35,"40+"].map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}</span>`).join("")}
         </div>
-        <div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${compactOceanLegendStatus(windStatusLabel())}</div>
       </div>`);
   }
   if(layerVis.currents){
@@ -10200,7 +10232,6 @@ function updateOceanLegend(){
         <div style="position:relative;height:11px;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600">
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
         </div>
-        <div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
         ${detail(`
         <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
           <span style="justify-self:center;color:#94a3b8;font-size:13px;line-height:1">●</span><span><b style="color:#e2eaf2">Gray/faint</b> — barely moving (&lt;0.5 kt). Negligible drift.</span>
@@ -10218,11 +10249,21 @@ function updateOceanLegend(){
       : (ALTIMETRY_GRID&&ALTIMETRY_GRID.observedAtMs
         ? new Date(ALTIMETRY_GRID.observedAtMs).toLocaleDateString("en-US",{month:"short",day:"numeric"})
         : "—");
-    const statusRow = loading
-      ? `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#f0abfc;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em"><span class="alti-spinner"></span>Loading convergence data…</div>`
+    const altiDateUpper = String(altiDate).toUpperCase();
+    const altiTitleRow = loading
+      ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
+          <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em">FRONT CONVERGENCE (SSH)</div>
+          <span class="alti-spinner" aria-hidden="true"></span>
+        </div>`
       : (ALTIMETRY_STATUS==="unavailable"
-        ? `<div style="font-size:12px;color:#f8a5a5;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Convergence data unavailable</div>`
-        : `<div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">NOAA SSH · ${altiDate}</div>`);
+        ? `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">
+            <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em">FRONT CONVERGENCE (SSH)</div>
+            <div style="font-size:10px;font-weight:700;color:#f8a5a5;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap">Unavailable</div>
+          </div>`
+        : `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">
+            <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em;min-width:0">FRONT CONVERGENCE (SSH)</div>
+            <div style="font-size:11px;font-weight:700;color:#9ec5e8;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;flex-shrink:0">${altiDateUpper}</div>
+          </div>`);
     const altiPort = (typeof activePort!=="undefined"&&activePort&&PORTS[activePort]) ? activePort.split(",")[0] : null;
     const altiRangeNm = altiBreakRadiusForActivePort();
     const altiRangeNote = altiPort
@@ -10230,12 +10271,11 @@ function updateOceanLegend(){
       : `within <b style="color:#e8f4ff">${altiRangeNm} nm</b> of your home port <span style="color:#fbbf24">(select a port)</span>`;
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em;margin-bottom:3px">FRONT CONVERGENCE (SSH)</div>
+        ${altiTitleRow}
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#0f288c 0%,#2870dc 22%,#50b4d2 38%,rgba(70,70,90,0.35) 50%,#eb9e28 62%,#dc4620 78%,#a01428 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>−0.2 m</span><span>Flat</span><span>+0.2 m</span>
         </div>
-        ${statusRow}
         ${detail(`
         <div style="font-size:13px;color:#7aa8c8;margin-top:6px;line-height:1.45"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">${MAP_CONVERGENCE_DATE_LABEL}</b> bar to step day-by-day. Amber arrow = how far a tracked break moved. The bite breakdown labels this signal <b style="color:#fbcfe8">Front convergence</b>.</div>
         <div style="margin-top:7px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
