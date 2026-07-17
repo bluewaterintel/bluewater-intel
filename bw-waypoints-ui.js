@@ -1649,14 +1649,17 @@ async function fetchForecast(lat, lng){
 // header tide uses (bwFetchPortConditions → sources.tide). Returns [] on any gap.
 async function _fcFetchTideEvents(lat, lng, startMs, endMs){
   let station = (typeof _cachedTideStation === "function") ? _cachedTideStation(lat, lng) : null;
+  const portHint = (typeof activePort !== "undefined") ? activePort : null;
   if(!station && typeof resolveTideStation === "function"){
-    station = await resolveTideStation(lat, lng);
+    station = await resolveTideStation(lat, lng, portHint);
   }
-  if(!station && typeof activePort !== "undefined" && activePort && typeof PORTS !== "undefined" && PORTS[activePort]){
-    const p = PORTS[activePort];
-    if(typeof resolveTideStation === "function"){
-      station = await resolveTideStation(p.lat + 0.05, p.lng + 0.05);
+  if(!station && typeof nearestCoopsTideStation === "function"){
+    station = nearestCoopsTideStation(lat, lng, 90);
+    if(!station && portHint && typeof PORTS !== "undefined" && PORTS[portHint]){
+      const p = PORTS[portHint];
+      station = nearestCoopsTideStation(p.lat, p.lng, 120);
     }
+    if(station && typeof _cacheTideStation === "function") _cacheTideStation(lat, lng, station);
   }
   if(!station){
     if(typeof BW_OCEAN === "undefined" || (!BW_OCEAN.fetchConditions && !BW_OCEAN.fetchOcean)) return [];

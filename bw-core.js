@@ -1018,9 +1018,17 @@ function dtComputeGrid(speciesId){
 
 async function dtFetchTides(p){
   try{
-    if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchOcean) return null;
-    const o = await BW_OCEAN.fetchOcean(p.lat + 0.05, p.lng + 0.05);
-    const station = o && o.sources ? o.sources.tide : null;
+    const lat = p.lat + 0.05, lng = p.lng + 0.05;
+    let station = null;
+    if(typeof resolveTideStation === "function" && typeof activePort !== "undefined"){
+      station = await resolveTideStation(lat, lng, activePort);
+    } else if(typeof nearestCoopsTideStation === "function"){
+      station = nearestCoopsTideStation(p.lat, p.lng, 120);
+    }
+    if(!station && typeof BW_OCEAN !== "undefined" && BW_OCEAN.fetchOcean){
+      const o = await BW_OCEAN.fetchOcean(lat, lng);
+      station = o && o.sources ? o.sources.tide : null;
+    }
     if(!station) return null;
     const next = await fetchNextTideEvent(station);
     if(!next) return null;
@@ -7250,26 +7258,47 @@ function altimetryPortBox(port){
 const AltimetryLayer = L.Layer.extend({
   onAdd: function(map){
     this._map=map;
-    this._canvas=L.DomUtil.create("canvas","leaflet-zoom-animated");
+    this._canvas=L.DomUtil.create("canvas","altimetry-canvas");
     this._canvas.style.cssText="position:absolute;top:0;left:0;pointer-events:none;z-index:399";
     map.getPanes().overlayPane.appendChild(this._canvas);
-    map.on("moveend zoomend",this._reset,this);
-    map.on("move",this._onMove,this);
+    map.on("moveend zoomend viewreset resize", this._scheduleReset, this);
+    map.on("zoomstart", this._onZoomStart, this);
+    map.on("move", this._onMove, this);
     this._reset();
     this._requestDisplayData();
     this._requestPortBreaks(true);
   },
   onRemove: function(map){
-    map.off("moveend zoomend",this._reset,this);
-    map.off("move",this._onMove,this);
+    if(this._rafId){ cancelAnimationFrame(this._rafId); this._rafId = null; }
+    if(this._moveRAF){ cancelAnimationFrame(this._moveRAF); this._moveRAF = null; }
+    map.off("moveend zoomend viewreset resize", this._scheduleReset, this);
+    map.off("zoomstart", this._onZoomStart, this);
+    map.off("move", this._onMove, this);
     if(this._canvas&&this._canvas.parentNode) this._canvas.parentNode.removeChild(this._canvas);
     this._canvas=null; this._map=null;
   },
+  _onZoomStart: function(){
+    if(this._canvas) this._canvas.style.visibility = "hidden";
+  },
+  _scheduleReset: function(){
+    if(this._rafId) return;
+    this._rafId = requestAnimationFrame(() => {
+      this._rafId = null;
+      this._reset();
+      if(this._canvas) this._canvas.style.visibility = "visible";
+    });
+  },
   _onMove: function(){
     if(!this._canvas||!this._map) return;
-    const tl=this._map.containerPointToLayerPoint([0,0]);
-    L.DomUtil.setPosition(this._canvas,tl);
-    this._draw();
+    if(this._map._animatingZoom) return;
+    if(this._moveRAF) return;
+    this._moveRAF = requestAnimationFrame(() => {
+      this._moveRAF = null;
+      if(!this._map || !this._canvas) return;
+      const tl=this._map.containerPointToLayerPoint([0,0]);
+      L.DomUtil.setPosition(this._canvas,tl);
+      this._draw();
+    });
   },
   _reset: function(){
     if(!this._map) return;
@@ -12628,7 +12657,8 @@ async function renderWX(lat,lng){
       tideLng = pp.lng + 0.05;
     }
     if(typeof resolveTideStation === "function"){
-      const station = tide.station || await resolveTideStation(tideLat, tideLng);
+      const portHint = (typeof activePort !== "undefined") ? activePort : null;
+      const station = tide.station || await resolveTideStation(tideLat, tideLng, portHint);
       if(station){
         tide.station = station;
         if(typeof fetchNextTideEvent === "function"){
@@ -14450,17 +14480,37 @@ function bwFetchPortConditions(lat, lng){
   return BW_OCEAN.fetchOcean(lat, lng);
 }
 
-async function resolveTideStation(lat, lng){
+async function resolveTideStation(lat, lng, portKey){
   const cached = _cachedTideStation(lat, lng);
   if(cached) return cached;
+  // Home port first — inlet tide timing is what captains care about for the run.
+  if(portKey && typeof PORTS !== "undefined" && PORTS[portKey]){
+    const p = PORTS[portKey];
+    if(typeof nearestCoopsTideStation === "function"){
+      const portStation = nearestCoopsTideStation(p.lat, p.lng, 120);
+      if(portStation){
+        _cacheTideStation(lat, lng, portStation);
+        return portStation;
+      }
+    }
+  }
+  // Client-side NOAA reference catalog (works when mdapi / ocean edge are down).
+  if(typeof nearestCoopsTideStation === "function"){
+    const direct = nearestCoopsTideStation(lat, lng, 90);
+    if(direct){
+      _cacheTideStation(lat, lng, direct);
+      return direct;
+    }
+  }
   try {
     const o = await bwFetchPortConditions(lat, lng);
     const station = o && o.sources ? o.sources.tide : null;
-    if(station) _cacheTideStation(lat, lng, station);
-    return station || null;
-  } catch(e){
-    return null;
-  }
+    if(station){
+      _cacheTideStation(lat, lng, station);
+      return station;
+    }
+  } catch(e){ /* fall through */ }
+  return null;
 }
 
 function applyTideEventsToPanel(tide, next){
@@ -14509,10 +14559,10 @@ async function updateHeaderTide(){
   try {
     if(typeof BW_OCEAN === "undefined"){ setTideText("—"); requestAnimationFrame(syncHeaderHeightVar); return; }
     const sampleLat = p.lat + 0.05, sampleLng = p.lng + 0.05;
-    let station = await resolveTideStation(sampleLat, sampleLng);
+    let station = await resolveTideStation(sampleLat, sampleLng, portKey);
     if(activePort !== portKey) return;
     if(!station){
-      station = await resolveTideStation(p.lat, p.lng);
+      station = await resolveTideStation(p.lat, p.lng, portKey);
       if(activePort !== portKey) return;
     }
     let text = "—";
