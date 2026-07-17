@@ -7851,8 +7851,13 @@ function showPredictionExplainer(cell, species){
   renderExplainerMain();
   persistExplainerState();
   updateBriefFab();
+  resetExplainerScrollTop();
   // Re-measure after paint — phone header wraps to two rows once visible.
-  requestAnimationFrame(() => { syncExplainerPosition(); requestAnimationFrame(syncExplainerPosition); });
+  requestAnimationFrame(() => {
+    syncExplainerPosition();
+    resetExplainerScrollTop();
+    requestAnimationFrame(() => { syncExplainerPosition(); resetExplainerScrollTop(); });
+  });
 }
 
 function renderExplainerMain(){
@@ -8170,6 +8175,9 @@ function openSubPanel(kind){
     pinLL = {lat: cell.lat, lng: cell.lng};
     renderReports();
   }
+  syncExplainerPosition();
+  resetExplainerScrollTop();
+  requestAnimationFrame(() => { syncExplainerPosition(); resetExplainerScrollTop(); });
   persistExplainerState(kind);
 }
 
@@ -10168,7 +10176,7 @@ function updateOceanLegend(){
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:2px">
           ${[0,5,10,15,20,25,30,35,"40+"].map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}</span>`).join("")}
         </div>
-        <div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
+        <div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
         ${detail(`<div style="font-size:12px;color:#7aa8c8;margin-top:4px;line-height:1.4"><b style="color:#bfe3f5">GFS/HRRR blend</b> · HRRR 3 km nearshore &lt;48 h · <b style="color:#bfe3f5">tap the map</b> for speed + gusts</div>`)}
       </div>`);
   }
@@ -10180,7 +10188,7 @@ function updateOceanLegend(){
         <div style="position:relative;height:11px;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600">
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
         </div>
-        <div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
+        <div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
         ${detail(`
         <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
           <span style="justify-self:center;color:#94a3b8;font-size:13px;line-height:1">●</span><span><b style="color:#e2eaf2">Gray/faint</b> — barely moving (&lt;0.5 kt). Negligible drift.</span>
@@ -14275,6 +14283,13 @@ function syncHeaderHeightVar(){
 function viewportPanelTopPx(gap){
   const hdr = syncHeaderHeightVar();
   return hdr + (gap != null ? gap : 8);
+}
+
+function resetExplainerScrollTop(){
+  const expl = document.getElementById("predict-explainer");
+  if(!expl) return;
+  expl.scrollTop = 0;
+  requestAnimationFrame(() => { expl.scrollTop = 0; });
 }
 
 // Pin the bite explainer under the header (top sheet on phone).

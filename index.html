@@ -464,13 +464,18 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   /* ── Ocean/weather legend — centered chip; zoom hidden on phones ── */
   #ocean-legend{
     padding:5px 8px !important;
-    max-width:min(400px, calc(100vw - 100px)) !important;
     min-width:0 !important;
     width:auto !important;
-    left:50% !important;
-    right:auto !important;
-    transform:translateX(-50%) !important;
+    left:8px !important;
+    right:52px !important;
+    transform:none !important;
+    max-width:none !important;
     overflow:visible !important;
+  }
+  #ocean-legend .oc-legend-status{
+    white-space:nowrap;
+    letter-spacing:.04em !important;
+    font-size:10px !important;
   }
   #ocean-legend .oc-legend-bar,
   #ocean-legend [style*="height:11px"]{ height:8px !important; }
@@ -1200,18 +1205,23 @@ body.modal-open #brief-toggle{
     width:20px !important;height:20px !important;
   }
   #ocean-opacity-control{right:52px}
-  /* Ocean legend — centered slim chip; detail opens bottom sheet */
+  /* Ocean legend — full width between left edge and right toolbar */
   #ocean-legend{
     pointer-events:auto !important;
-    left:50% !important;
-    right:auto !important;
-    transform:translateX(-50%) !important;
-    max-width:min(400px, calc(100vw - 100px)) !important;
+    left:8px !important;
+    right:52px !important;
+    transform:none !important;
+    max-width:none !important;
     min-width:0 !important;
     padding:5px 8px !important;
     max-height:none !important;
     overflow:visible !important;
     border-radius:9px;
+  }
+  #ocean-legend .oc-legend-status{
+    white-space:nowrap;
+    letter-spacing:.04em !important;
+    font-size:10px !important;
   }
   #ocean-legend .legend-detail{display:none !important}
   #ocean-legend-content > div > div:first-child{font-size:11px !important;margin-bottom:2px !important}
