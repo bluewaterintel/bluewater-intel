@@ -10323,24 +10323,19 @@ function updateOceanLegend(){
   // If the bite-score banner is also showing at the top, push this panel down so
   // they don't overlap; otherwise sit at the normal top inset.
   el.style.top = (layerVis.predict ? (typeof biteBannerHeightPx === "function" ? biteBannerHeightPx() + 10 : 70) : (phone ? 6 : 10)) + "px";
+  // Keep the top scale bubble centered at ~3/4 map width on all viewports.
+  el.style.left = "50%";
+  el.style.right = "auto";
+  el.style.transform = "translateX(-50%)";
+  el.style.width = "75%";
+  el.style.maxWidth = "75%";
+  el.style.minWidth = "0";
   if(phone){
-    el.style.left = "4px";
-    el.style.right = "4px";
-    el.style.transform = "none";
-    el.style.maxWidth = "none";
-    el.style.minWidth = "0";
-    el.style.width = "auto";
     el.style.padding = "4px 6px";
     el.style.maxHeight = "none";
     el.style.overflowY = "visible";
     syncOceanLegendSheet();
   } else {
-    el.style.left = "";
-    el.style.right = "";
-    el.style.transform = "";
-    el.style.maxWidth = "";
-    el.style.minWidth = "";
-    el.style.width = "";
     el.style.padding = "";
     // Cap height so the panel scrolls instead of covering bottom map controls.
     el.style.maxHeight = oceanLegendMaxHeightPx() + "px";

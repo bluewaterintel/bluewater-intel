@@ -475,15 +475,15 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     border-radius:18px 18px 0 0 !important;
     margin:0 !important;
   }
-  /* ── Ocean/weather legend — ~3/4 width under header (leaves map clear on right) ── */
+  /* ── Ocean/weather legend — ~3/4 width, centered under header ── */
   #ocean-legend{
     padding:4px 6px !important;
     min-width:0 !important;
     width:75% !important;
-    left:4px !important;
+    left:50% !important;
     right:auto !important;
     top:6px !important;
-    transform:none !important;
+    transform:translateX(-50%) !important;
     max-width:75% !important;
     overflow:visible !important;
     border-radius:9px !important;
@@ -499,40 +499,44 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   #ocean-legend-content > div > div:first-child{ font-size:10px !important; margin-bottom:2px !important; letter-spacing:.06em !important; }
   #ocean-legend-content span{ font-size:9px !important; }
   .map-time-pill{
-    width:calc(100vw - 20px) !important;
-    left:10px !important;right:10px !important;transform:none !important;
+    width:75% !important;
+    max-width:75% !important;
+    left:50% !important;
+    right:auto !important;
+    transform:translateX(-50%) !important;
   }
-  /* ── Radar loop control — smaller on phones; vertical position is handled by
-        restackBottomControls() in JS so multiple bars stack instead of overlap. ── */
+  /* Radar loop control — smaller on phones; vertical position is handled by
+        restackBottomControls() in JS so multiple bars stack instead of overlap. */
   #radar-loop-control{
     padding:8px 12px !important;
-    width:calc(100vw - 20px) !important;
-    left:10px !important;
-    right:10px !important;
-    transform:none !important;
   }
   #radar-loop-control > div{ gap:8px !important; }
   #radar-loop-label-main{ font-size:12px !important; }
   #radar-loop-label-sub{ display:none !important; }
   #radar-loop-btn{ font-size:13px !important; padding:9px 0 !important; width:118px !important; flex:0 0 118px !important; }
   #radar-loop-time{ font-size:12px !important; width:auto !important; flex:0 0 auto !important; min-width:38px !important; }
-  /* satellite / altimetry / wind / radar pills — width handled by .map-time-pill */
+  /* satellite / altimetry / wind / radar pills — 3/4 width, centered */
   #sat-date-control,#alti-date-control,#wind-forecast-slider,#radar-loop-control{
-    width:calc(100vw - 20px) !important;
-    left:10px !important;right:10px !important;transform:none !important;
+    width:75% !important;
+    max-width:75% !important;
+    left:50% !important;
+    right:auto !important;
+    transform:translateX(-50%) !important;
   }
-  /* Waypoint / range-from-port control — width/anchor only; JS sets bottom. */
+  /* Waypoint / radius-from-port control — width/anchor only; JS sets bottom. */
   #waypoint-control{
-    width:calc(100vw - 20px) !important;
-    left:10px !important;
-    right:10px !important;
-    transform:none !important;
+    width:75% !important;
+    max-width:75% !important;
+    left:50% !important;
+    right:auto !important;
+    transform:translateX(-50%) !important;
   }
   #wind-forecast-slider{
-    width:calc(100vw - 20px) !important;
-    left:10px !important;
-    right:10px !important;
-    transform:none !important;
+    width:75% !important;
+    max-width:75% !important;
+    left:50% !important;
+    right:auto !important;
+    transform:translateX(-50%) !important;
   }
   /* Waypoint legend — smaller and tighter on phones so it doesn't crowd the map. */
   #waypoint-legend{
@@ -1083,7 +1087,8 @@ body.modal-open #brief-toggle{
   font-family:'Segoe UI',Arial,sans-serif;
   color:#e8f4ff;
   box-shadow:0 4px 14px rgba(0,0,0,.55);
-  width:min(520px, calc(100vw - 32px));
+  width:75%;
+  max-width:min(520px, 75%);
   touch-action:none;
 }
 .map-time-pill-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
@@ -1251,13 +1256,13 @@ body.modal-open #brief-toggle{
   #layers-toggle svg,#ruler-toggle svg,#wpdrop-toggle svg,#basemap-toggle svg,#settings-toggle svg,#catch-log-toggle svg{
     width:20px !important;height:20px !important;
   }
-  /* Ocean legend — ~3/4 width from the left edge */
+  /* Ocean legend — ~3/4 width, centered at top */
   #ocean-legend{
     pointer-events:auto !important;
-    left:4px !important;
+    left:50% !important;
     right:auto !important;
     top:6px !important;
-    transform:none !important;
+    transform:translateX(-50%) !important;
     width:75% !important;
     max-width:75% !important;
     min-width:0 !important;
@@ -2596,7 +2601,7 @@ body.modal-open #brief-toggle{
        behind the app header). Updated by updateOceanLegend(). -->
   <div id="ocean-legend" style="
     display:none;position:absolute;
-    top:6px;left:4px;right:auto;transform:none;z-index:500;
+    top:6px;left:50%;right:auto;transform:translateX(-50%);z-index:500;
     background:var(--bw-map-chrome-bg);
     border:1px solid rgba(107,191,234,.3);
     border-radius:10px;
@@ -3280,7 +3285,7 @@ body.modal-open #brief-toggle{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260717e"></script>
+<script src="bw-core.js?v=20260717f"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
