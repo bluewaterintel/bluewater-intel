@@ -6674,8 +6674,9 @@ const SstForecastLayer = L.Layer.extend({
       if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
       if((typeof oceanOverlayForecastHour === "function" ? oceanOverlayForecastHour() : 0) !== hours) return;
       applySstForecastGrid(data);
-      // High-contrast canvas is ready — drop the GIBS fallback tiles.
-      if(typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
+      // Model forecast only — observed SST stays on GIBS tiles (brighter, matches
+      // what captains see on first load; swapping to canvas looked dim/muted).
+      if(hours > 0 && typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
       updateSatDateDisplay();
       if(typeof updateOceanLegend === "function") updateOceanLegend();
       this._draw();
@@ -6705,17 +6706,21 @@ const SstForecastLayer = L.Layer.extend({
 
 function syncSstOverlayMode(){
   if(!MAP) return;
-  // Prefer our fishing-focused canvas palette for BOTH observed MUR (hours=0)
-  // and RTOFS forecast. GIBS tiles stay as a brief fallback while the grid loads
-  // — their global colormap washes out summer fronts (78–84°F all look red).
-  if(layerVis.sst){
+  const hours = (typeof oceanOverlayForecastHour === "function") ? oceanOverlayForecastHour() : 0;
+  // Observed SST → GIBS MUR tiles (bright on load). Canvas palette only for +12/+24h
+  // model forecast where satellite tiles aren't available.
+  if(layerVis.sst && hours > 0){
     if(!sstForecastLayer) sstForecastLayer = new SstForecastLayer();
     if(!MAP.hasLayer(sstForecastLayer)) sstForecastLayer.addTo(MAP);
     else sstForecastLayer.refresh();
-    if(!SST_FORECAST_GRID && sstLayer && !MAP.hasLayer(sstLayer)){
+    if(sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
+  } else if(layerVis.sst){
+    if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
+    SST_FORECAST_GRID = null;
+    if(sstLayer && !MAP.hasLayer(sstLayer)){
       sstLayer.setOpacity(oceanOpacity.sst);
       sstLayer.addTo(MAP);
-    }
+    } else if(sstLayer) sstLayer.setOpacity(oceanOpacity.sst);
   } else {
     if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
     SST_FORECAST_GRID = null;
