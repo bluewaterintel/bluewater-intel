@@ -504,7 +504,7 @@ async function initMap(){
       '.ocean-overlays-smooth img.leaflet-tile { image-rendering:auto !important; image-rendering:smooth !important; }' +
       // Blur the whole tile CONTAINER per layer so seams between tiles smooth too.
       '.sst-smooth   { filter: blur(1px) contrast(1.45) saturate(1.35); }' +   // fallback GIBS — sharpen warm fronts
-      '.chlor-smooth { filter: blur(1px) contrast(1.55) saturate(1.4); }'; // fallback GIBS — sharpen color edges
+      '.chlor-smooth { filter: blur(2px); }';    // 1km VIIRS chlor
     document.head.appendChild(scoped);
   })();
   // Stamp each ocean-overlay tile inline as it loads — inline styles win over
@@ -6737,202 +6737,6 @@ function refreshOceanForecastLayers(){
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// CHLOROPHYLL MAP OVERLAY — gap-filled VIIRS DINEOF grid with a fishing-focused
-// log-scale palette. GIBS global colormaps wash the 0.05–0.5 mg/m³ "color edge"
-// (where pelagics stack) into near-identical blues; we spend the ramp there.
-// Separate from CHLOR_GRID (bite-score composite) so map pan doesn't clobber it.
-// ═════════════════════════════════════════════════════════════════════════════
-let CHLOR_MAP_GRID = null;
-let chlorMapLayer = null;
-let _chlorMapFetchSeq = 0;
-
-function _chlorMapRGBA(chl){
-  if(!isFinite(chl) || chl <= 0) return null;
-  // Log-scale stops (mg/m³). Dense steps in the blue→green edge band.
-  const stops = [
-    [0.01,  12,  28,  90],   // sterile blue water
-    [0.04,  18,  70, 160],   // deep blue
-    [0.08,  20, 130, 190],   // blue-cyan — clean edge starts
-    [0.12,  25, 175, 175],   // cyan — classic color break
-    [0.18,  40, 200, 120],   // teal-green — productive edge
-    [0.28,  90, 210,  70],   // green
-    [0.45, 160, 210,  45],   // yellow-green
-    [0.80, 220, 195,  40],   // gold
-    [1.50, 230, 140,  35],   // orange — coastal green
-    [3.00, 200,  70,  30],   // red-brown bloom
-    [8.00, 140,  35,  45],   // dense inshore
-  ];
-  const v = Math.max(stops[0][0], Math.min(stops[stops.length - 1][0], chl));
-  const logV = Math.log10(v);
-  let i = 0;
-  while(i < stops.length - 2 && logV > Math.log10(stops[i + 1][0])) i++;
-  const a = stops[i], b = stops[i + 1];
-  const f = (logV - Math.log10(a[0])) / Math.max(1e-6, Math.log10(b[0]) - Math.log10(a[0]));
-  // Slightly stronger alpha in the edge band so breaks read over the basemap.
-  const edge = v >= 0.06 && v <= 0.5;
-  const alpha = edge ? 225 : 200;
-  return [
-    Math.round(a[1] + (b[1] - a[1]) * f),
-    Math.round(a[2] + (b[2] - a[2]) * f),
-    Math.round(a[3] + (b[3] - a[3]) * f),
-    alpha,
-  ];
-}
-
-function applyChlorMapGrid(data){
-  CHLOR_MAP_GRID = null;
-  if(!data || !data.rows || !data.rows.length) return;
-  const step = data.stepDeg || 0.08;
-  let mnLa = Infinity, mxLa = -Infinity, mnLn = Infinity, mxLn = -Infinity, freshest = 0;
-  for(const r of data.rows){
-    if(r[0] < mnLa) mnLa = r[0]; if(r[0] > mxLa) mxLa = r[0];
-    if(r[1] < mnLn) mnLn = r[1]; if(r[1] > mxLn) mxLn = r[1];
-    if(r[3] && r[3] > freshest) freshest = r[3];
-  }
-  if(!isFinite(mnLa) || !isFinite(mxLa)) return;
-  const nLat = Math.max(1, Math.round((mxLa - mnLa) / step) + 1);
-  const nLng = Math.max(1, Math.round((mxLn - mnLn) / step) + 1);
-  // Cap canvas size so a huge pan-box doesn't freeze the main thread.
-  if(nLat * nLng > 180000) return;
-  const val = new Float32Array(nLat * nLng).fill(NaN);
-  for(const r of data.rows){
-    if(r[2] == null || !(r[2] > 0)) continue;
-    const i = Math.round((r[0] - mnLa) / step), j = Math.round((r[1] - mnLn) / step);
-    if(i >= 0 && i < nLat && j >= 0 && j < nLng) val[i * nLng + j] = r[2];
-  }
-  CHLOR_MAP_GRID = {
-    step, minLat: mnLa, minLng: mnLn, nLat, nLng, val,
-    bounds: { s: mnLa, n: mxLa, w: mnLn, e: mxLn },
-    observedAtMs: freshest || null,
-    source: data.source || "VIIRS-DINEOF",
-  };
-}
-
-function _chlorMapBuildSmallCanvas(g){
-  const c = document.createElement("canvas");
-  c.width = g.nLng; c.height = g.nLat;
-  const cx = c.getContext("2d");
-  const img = cx.createImageData(g.nLng, g.nLat);
-  for(let i = 0; i < g.nLat; i++){
-    for(let j = 0; j < g.nLng; j++){
-      const v = g.val[i * g.nLng + j];
-      const y = g.nLat - 1 - i;
-      const o = (y * g.nLng + j) * 4;
-      const rgba = _chlorMapRGBA(v);
-      if(!rgba){ img.data[o + 3] = 0; continue; }
-      img.data[o] = rgba[0]; img.data[o + 1] = rgba[1]; img.data[o + 2] = rgba[2]; img.data[o + 3] = rgba[3];
-    }
-  }
-  cx.putImageData(img, 0, 0);
-  return c;
-}
-
-const ChlorMapLayer = L.Layer.extend({
-  onAdd: function(map){
-    this._map = map;
-    this._canvas = L.DomUtil.create("canvas", "leaflet-chlor-map-layer");
-    this._canvas.style.pointerEvents = "none";
-    const pane = map.getPane("ocean-overlays") || map.getPanes().overlayPane;
-    pane.appendChild(this._canvas);
-    map.on("moveend zoomend resize", this._reset, this);
-    this._reset();
-    this._requestData();
-  },
-  onRemove: function(map){
-    map.off("moveend zoomend resize", this._reset, this);
-    if(this._canvas && this._canvas.parentNode) this._canvas.parentNode.removeChild(this._canvas);
-    this._canvas = null;
-  },
-  _reset: function(){
-    if(!this._map || !this._canvas) return;
-    const size = this._map.getSize();
-    const tl = this._map.containerPointToLayerPoint([0, 0]);
-    L.DomUtil.setPosition(this._canvas, tl);
-    this._canvas.width = size.x; this._canvas.height = size.y;
-    this._draw();
-    // Refresh when the view leaves the cached grid (with a small pad).
-    const g = CHLOR_MAP_GRID;
-    if(!g){ this._requestData(); return; }
-    let b;
-    try { b = this._map.getBounds(); } catch(e){ return; }
-    const pad = g.step * 2;
-    if(b.getSouth() < g.bounds.s - pad || b.getNorth() > g.bounds.n + pad ||
-       b.getWest() < g.bounds.w - pad || b.getEast() > g.bounds.e + pad){
-      this._requestData();
-    }
-  },
-  _requestData: function(){
-    if(!layerVis.chlor || !MAP || typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchChlorGrid) return;
-    // Historical satellite-day steps stay on GIBS tiles (grid is freshest-only).
-    if((typeof satDayOffset !== "undefined") && satDayOffset > 0) return;
-    const seq = ++_chlorMapFetchSeq;
-    let b;
-    try { b = MAP.getBounds(); } catch(e){ return; }
-    const pad = 0.35;
-    const bx = {
-      s: b.getSouth() - (b.getNorth() - b.getSouth()) * pad,
-      n: b.getNorth() + (b.getNorth() - b.getSouth()) * pad,
-      w: b.getWest() - (b.getEast() - b.getWest()) * pad,
-      e: b.getEast() + (b.getEast() - b.getWest()) * pad,
-    };
-    BW_OCEAN.fetchChlorGrid(bx.s, bx.n, bx.w, bx.e).then(data => {
-      if(seq !== _chlorMapFetchSeq || !layerVis.chlor) return;
-      if((typeof satDayOffset !== "undefined") && satDayOffset > 0) return;
-      applyChlorMapGrid(data);
-      if(typeof chlorLayer !== "undefined" && chlorLayer && MAP.hasLayer(chlorLayer)) MAP.removeLayer(chlorLayer);
-      updateSatDateDisplay();
-      if(typeof updateOceanLegend === "function") updateOceanLegend();
-      this._draw();
-    });
-  },
-  _draw: function(){
-    if(!this._canvas || !this._map) return;
-    const ctx = this._canvas.getContext("2d");
-    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-    const g = CHLOR_MAP_GRID;
-    if(!g) return;
-    if(this._smallFor !== g){ this._small = _chlorMapBuildSmallCanvas(g); this._smallFor = g; }
-    const north = g.bounds.n + g.step * 0.5, south = g.bounds.s - g.step * 0.5;
-    const west = g.bounds.w - g.step * 0.5, east = g.bounds.e + g.step * 0.5;
-    const pTL = this._map.latLngToContainerPoint([north, west]);
-    const pBR = this._map.latLngToContainerPoint([south, east]);
-    const prev = ctx.imageSmoothingEnabled;
-    ctx.imageSmoothingEnabled = true;
-    if("imageSmoothingQuality" in ctx) ctx.imageSmoothingQuality = "high";
-    ctx.globalAlpha = oceanOpacity.chlor || 0.55;
-    ctx.drawImage(this._small, pTL.x, pTL.y, pBR.x - pTL.x, pBR.y - pTL.y);
-    ctx.globalAlpha = 1;
-    ctx.imageSmoothingEnabled = prev;
-  },
-  refresh: function(){ this._requestData(); },
-});
-
-function syncChlorOverlayMode(){
-  if(!MAP) return;
-  // Freshest pass → fishing-focused canvas. Older sat-day steps → GIBS tiles.
-  const useCanvas = !!(layerVis.chlor && (typeof satDayOffset === "undefined" || satDayOffset <= 0));
-  if(useCanvas){
-    if(!chlorMapLayer) chlorMapLayer = new ChlorMapLayer();
-    if(!MAP.hasLayer(chlorMapLayer)) chlorMapLayer.addTo(MAP);
-    else chlorMapLayer.refresh();
-    if(!CHLOR_MAP_GRID && chlorLayer && !MAP.hasLayer(chlorLayer)){
-      chlorLayer.setOpacity(oceanOpacity.chlor);
-      chlorLayer.addTo(MAP);
-    }
-  } else {
-    if(chlorMapLayer && MAP.hasLayer(chlorMapLayer)) MAP.removeLayer(chlorMapLayer);
-    CHLOR_MAP_GRID = null;
-    if(layerVis.chlor && chlorLayer && !MAP.hasLayer(chlorLayer)){
-      chlorLayer.setOpacity(oceanOpacity.chlor);
-      chlorLayer.addTo(MAP);
-    }
-    if(!layerVis.chlor && chlorLayer && MAP.hasLayer(chlorLayer)) MAP.removeLayer(chlorLayer);
-  }
-  updateSatDateDisplay();
-  updateSatDateControlVisibility();
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
 // SSH ALTIMETRY — NOAA CoastWatch RADS NRT (nesdisSSH1day)
 // Sea-level anomaly (SLA) from merged-altimeter daily composites. Positive SLA
 // = elevated sea surface = anticyclonic warm-core eddy / Gulf Stream meander.
@@ -8408,14 +8212,8 @@ function toggleLayer(key){
     else if(layerVis.sst && FORECAST_HOUR_OFFSET > 0 && typeof refreshOceanForecastLayers === "function") refreshOceanForecastLayers();
   }
   else if(key==="chlor"){
-    if(layerVis.chlor){
-      if(typeof syncChlorOverlayMode === "function") syncChlorOverlayMode();
-      else { chlorLayer.setOpacity(oceanOpacity.chlor); chlorLayer.addTo(MAP); }
-    } else {
-      if(MAP.hasLayer(chlorLayer)) MAP.removeLayer(chlorLayer);
-      if(chlorMapLayer && MAP.hasLayer(chlorMapLayer)) MAP.removeLayer(chlorMapLayer);
-      CHLOR_MAP_GRID = null;
-    }
+    if(layerVis.chlor){ chlorLayer.setOpacity(oceanOpacity.chlor); chlorLayer.addTo(MAP); }
+    else if(MAP.hasLayer(chlorLayer)) MAP.removeLayer(chlorLayer);
     updateOceanLegend();
     updateSatDateControlVisibility();
     updateOpacityControl();
@@ -8453,20 +8251,13 @@ function rebuildSatelliteLayers(){
     updateSatDateDisplay();
     return;
   }
-  // High-contrast canvas overlays ignore historical sat-day steps (freshest grid
-  // only). When the user steps back in time, drop canvas and crossfade GIBS.
-  if(layerVis.sst && satDayOffset <= 0 && typeof syncSstOverlayMode === "function"){
-    syncSstOverlayMode();
-  } else if(layerVis.sst){
-    if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
-    crossfadeLayer("sst");
-  }
-  if(layerVis.chlor && typeof syncChlorOverlayMode === "function"){
-    syncChlorOverlayMode();
-    if(satDayOffset > 0) crossfadeLayer("chlor");
-  } else if(layerVis.chlor){
-    crossfadeLayer("chlor");
-  }
+  // Crossfade SST + chlorophyll to the current satDayOffset. Instead of removing
+  // the visible layer and showing blank while tiles load, we build the new-date
+  // layer at opacity 0 UNDER the current one, wait for its tiles, then fade the
+  // new one in and the old one out — so the user sees a smooth change, not a
+  // flash of nothing.
+  if(layerVis.sst)  crossfadeLayer("sst");
+  if(layerVis.chlor) crossfadeLayer("chlor");
   updateSatDateDisplay();
   updateOpacityControl();
   // Belt-and-suspenders: once the swap settles, make sure the live layers carry
@@ -8773,11 +8564,7 @@ function applyOceanOpacity(){
       sstForecastLayer._draw();
     } else if(sstLayer) sstLayer.setOpacity(oceanOpacity.sst);
   }
-  if(layerVis.chlor){
-    if(chlorMapLayer && MAP && MAP.hasLayer(chlorMapLayer) && typeof chlorMapLayer._draw === "function"){
-      chlorMapLayer._draw();
-    } else if(chlorLayer) chlorLayer.setOpacity(oceanOpacity.chlor);
-  }
+  if(layerVis.chlor && chlorLayer) chlorLayer.setOpacity(oceanOpacity.chlor);
 }
 // Slider handler. value is 0–100 (percent). Targets the active layer.
 function onOceanOpacityInput(pct){
@@ -8786,13 +8573,10 @@ function onOceanOpacityInput(pct){
   const v = Math.max(0, Math.min(1, (pct|0) / 100));
   oceanOpacity[key] = v;
   if(key === "sst"){
-    if(sstForecastLayer && MAP && MAP.hasLayer(sstForecastLayer) && typeof sstForecastLayer._draw === "function") sstForecastLayer._draw();
+    if(oceanOverlayForecastHour() > 0 && sstForecastLayer && typeof sstForecastLayer._draw === "function") sstForecastLayer._draw();
     else if(sstLayer) sstLayer.setOpacity(v);
   }
-  if(key === "chlor"){
-    if(chlorMapLayer && MAP && MAP.hasLayer(chlorMapLayer) && typeof chlorMapLayer._draw === "function") chlorMapLayer._draw();
-    else if(chlorLayer) chlorLayer.setOpacity(v);
-  }
+  if(key === "chlor" && chlorLayer) chlorLayer.setOpacity(v);
   try { localStorage.setItem("bwi_ocean_opacity", JSON.stringify(oceanOpacity)); } catch(e){}
   updateOpacityControl(true); // refresh readout/label without rebuilding position
 }
@@ -10358,11 +10142,10 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:14px;font-weight:700;color:#34d399;letter-spacing:.08em;margin-bottom:3px">CHLOROPHYLL</div>
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#0c1c5a 0%,#1246a0 14%,#1482be 28%,#19afaf 40%,#28c878 52%,#a0d22d 64%,#dcc328 76%,#e68c23 88%,#c8461e 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1a1a4d 0%,#2563a8 25%,#34d399 55%,#fbbf24 80%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
-          <span>0.01</span><span>0.08</span><span>0.18</span><span>0.45</span><span>1.5</span><span>3+</span>
+          <span>Low</span><span>Productive</span><span>High</span>
         </div>
-        <div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">mg/m³ · color edge ~0.08–0.3</div>
       </div>`);
   }
   if(layerVis.wind){
@@ -11390,10 +11173,7 @@ function applyEntitlementGating(){
         else if(k === "currents" && typeof drawCurrents === "function") drawCurrents();
         else if(k === "altimetry" && typeof drawAltimetry === "function") drawAltimetry();
         else if(k === "sst" && typeof MAP !== "undefined" && typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
-        else if(k === "chlor" && typeof MAP !== "undefined"){
-          if(typeof chlorLayer !== "undefined" && chlorLayer && MAP.hasLayer(chlorLayer)) MAP.removeLayer(chlorLayer);
-          if(typeof chlorMapLayer !== "undefined" && chlorMapLayer && MAP.hasLayer(chlorMapLayer)) MAP.removeLayer(chlorMapLayer);
-        }
+        else if(k === "chlor" && typeof MAP !== "undefined" && typeof chlorLayer !== "undefined" && chlorLayer && MAP.hasLayer(chlorLayer)) MAP.removeLayer(chlorLayer);
         else if(k === "radar"){
           if(typeof MAP !== "undefined" && typeof radarLayer !== "undefined" && radarLayer && MAP.hasLayer(radarLayer)) MAP.removeLayer(radarLayer);
           if(typeof stopRadarLoop === "function") stopRadarLoop();
