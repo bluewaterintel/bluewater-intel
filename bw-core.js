@@ -10148,14 +10148,15 @@ function updateOceanLegend(){
     const sstTitle = oceanOverlayForecastHour() > 0
       ? `SST FORECAST (+${oceanOverlayForecastHour()}h)`
       : "SST (°F)";
+    const sstTicks = phone ? [58,62,66,70,74,78,82,86] : [50,60,68,74,78,82,"86+"];
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:14px;font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle}</div>
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#082460 0%,#0e5aaa 18%,#28aac8 32%,#5ac878 44%,#dcd232 56%,#ebb028 68%,#eb7823 80%,#be281f 92%,#8c1432 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
-          <span>50°</span><span>60°</span><span>68°</span><span>74°</span><span>78°</span><span>82°</span><span>86°+</span>
+        <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#082460 0%,#0e5aaa 18%,#28aac8 32%,#5ac878 44%,#dcd232 56%,#ebb028 68%,#eb7823 80%,#be281f 92%,#8c1432 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:1px">
+          ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}°</span>`).join("")}
         </div>
-        ${oceanOverlayForecastHour() > 0 ? `<div style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">RTOFS model · ~9 km</div>` : ""}
+        ${oceanOverlayForecastHour() > 0 ? `<div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">RTOFS model · ~9 km</div>` : ""}
       </div>`);
   }
   if(layerVis.chlor){
@@ -10172,12 +10173,11 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         <div style="font-size:14px;font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:3px">WIND (kt)</div>
-        <div style="height:11px;border-radius:3px;background:${(window.BW_WIND && window.BW_WIND.legendGradient) ? window.BW_WIND.legendGradient(40) : 'linear-gradient(90deg,#2870d2,#82e178,#ebe650,#e46e19,#be1a26,#f05ab4)'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:${(window.BW_WIND && window.BW_WIND.legendGradient) ? window.BW_WIND.legendGradient(40) : 'linear-gradient(90deg,#2870d2,#82e178,#ebe650,#e46e19,#be1a26,#f05ab4)'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:2px">
           ${[0,5,10,15,20,25,30,35,"40+"].map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}</span>`).join("")}
         </div>
         <div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
-        ${detail(`<div style="font-size:12px;color:#7aa8c8;margin-top:4px;line-height:1.4"><b style="color:#bfe3f5">GFS/HRRR blend</b> · HRRR 3 km nearshore &lt;48 h · <b style="color:#bfe3f5">tap the map</b> for speed + gusts</div>`)}
       </div>`);
   }
   if(layerVis.currents){
@@ -10268,10 +10268,24 @@ function updateOceanLegend(){
   // they don't overlap; otherwise sit at the normal top inset.
   el.style.top = (layerVis.predict ? (typeof biteBannerHeightPx === "function" ? biteBannerHeightPx() + 10 : 70) : 10) + "px";
   if(phone){
+    el.style.left = "4px";
+    el.style.right = "46px";
+    el.style.transform = "none";
+    el.style.maxWidth = "none";
+    el.style.minWidth = "0";
+    el.style.width = "auto";
+    el.style.padding = "4px 6px";
     el.style.maxHeight = "none";
     el.style.overflowY = "visible";
     syncOceanLegendSheet();
   } else {
+    el.style.left = "";
+    el.style.right = "";
+    el.style.transform = "";
+    el.style.maxWidth = "";
+    el.style.minWidth = "";
+    el.style.width = "";
+    el.style.padding = "";
     // Cap height so the panel scrolls instead of covering bottom map controls.
     el.style.maxHeight = oceanLegendMaxHeightPx() + "px";
     el.style.overflowY = "auto";

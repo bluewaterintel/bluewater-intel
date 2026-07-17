@@ -461,26 +461,29 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     border-radius:18px 18px 0 0 !important;
     margin:0 !important;
   }
-  /* ── Ocean/weather legend — centered chip; zoom hidden on phones ── */
+  /* ── Ocean/weather legend — full width under header, clears right toolbar ── */
   #ocean-legend{
-    padding:5px 8px !important;
+    padding:4px 6px !important;
     min-width:0 !important;
     width:auto !important;
-    left:8px !important;
-    right:52px !important;
+    left:4px !important;
+    right:46px !important;
+    top:6px !important;
     transform:none !important;
     max-width:none !important;
     overflow:visible !important;
+    border-radius:9px !important;
   }
   #ocean-legend .oc-legend-status{
     white-space:nowrap;
     letter-spacing:.04em !important;
     font-size:10px !important;
+    margin-top:2px !important;
   }
   #ocean-legend .oc-legend-bar,
-  #ocean-legend [style*="height:11px"]{ height:8px !important; }
-  #ocean-legend-content > div > div:first-child{ font-size:11px !important; margin-bottom:2px !important; }
-  #ocean-legend-content span{ font-size:10px !important; }
+  #ocean-legend [style*="height:11px"]{ height:10px !important; }
+  #ocean-legend-content > div > div:first-child{ font-size:10px !important; margin-bottom:2px !important; letter-spacing:.06em !important; }
+  #ocean-legend-content span{ font-size:9px !important; }
   .map-time-pill{
     width:calc(100vw - 20px) !important;
     left:10px !important;right:10px !important;transform:none !important;
@@ -1208,12 +1211,13 @@ body.modal-open #brief-toggle{
   /* Ocean legend — full width between left edge and right toolbar */
   #ocean-legend{
     pointer-events:auto !important;
-    left:8px !important;
-    right:52px !important;
+    left:4px !important;
+    right:46px !important;
+    top:6px !important;
     transform:none !important;
     max-width:none !important;
     min-width:0 !important;
-    padding:5px 8px !important;
+    padding:4px 6px !important;
     max-height:none !important;
     overflow:visible !important;
     border-radius:9px;
@@ -1222,11 +1226,12 @@ body.modal-open #brief-toggle{
     white-space:nowrap;
     letter-spacing:.04em !important;
     font-size:10px !important;
+    margin-top:2px !important;
   }
   #ocean-legend .legend-detail{display:none !important}
-  #ocean-legend-content > div > div:first-child{font-size:11px !important;margin-bottom:2px !important}
-  #ocean-legend-content span{font-size:10px !important}
-  #ocean-legend .oc-legend-bar,#ocean-legend [style*="height:11px"]{height:8px !important}
+  #ocean-legend-content > div > div:first-child{font-size:10px !important;margin-bottom:2px !important;letter-spacing:.06em !important}
+  #ocean-legend-content span{font-size:9px !important}
+  #ocean-legend .oc-legend-bar,#ocean-legend [style*="height:11px"]{height:10px !important}
   #ocean-legend .ocean-legend-toggle{
     margin-top:5px !important;padding:5px 8px !important;font-size:10px !important;
     position:static !important;box-shadow:none !important;
@@ -2545,16 +2550,17 @@ body.modal-open #brief-toggle{
        behind the app header). Updated by updateOceanLegend(). -->
   <div id="ocean-legend" style="
     display:none;position:absolute;
-    top:10px;left:50%;transform:translateX(-50%);z-index:500;
+    top:6px;left:10px;right:46px;transform:none;z-index:500;
     background:rgba(10,22,40,.94);
     border:1px solid rgba(107,191,234,.3);
-    border-radius:12px;
-    padding:10px 14px;
+    border-radius:10px;
+    padding:8px 10px;
     font-family:'Segoe UI',Arial,sans-serif;
     color:#e8f4ff;font-size:13px;
     box-shadow:0 4px 14px rgba(0,0,0,.55);
-    max-width:min(520px, 94vw);
-    min-width:260px;
+    max-width:none;
+    min-width:0;
+    width:auto;
   ">
     <div id="ocean-legend-content"></div>
   </div>
