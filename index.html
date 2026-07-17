@@ -829,6 +829,10 @@ body.modal-open #brief-toggle{
 #map.ruler-mode .leaflet-popup-pane{
   pointer-events:none !important;
 }
+/* Bite-map #1/#2/#3 badges stay tappable for spot-to-spot measuring on phone. */
+#map.ruler-mode .leaflet-marker-pane .predict-badge{
+  pointer-events:auto !important;
+}
 /* Drop-waypoint tool ACTIVE state — teal to distinguish from the red ruler */
 #wpdrop-toggle.active{
   background:rgba(14,165,165,.9);
