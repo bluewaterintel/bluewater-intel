@@ -6895,42 +6895,27 @@ function getAltimetryField(lat, lng){
   return { slaM, ugos:u, vgos:v, geoSpeedKts, geoSetDeg };
 }
 
-// Color for SSH anomaly: cool cyan (depression) → soft neutral → coral/rose (bulge).
-// Tuned for phone overlays: avoid deep maroon + navy that smear into muddy orange
-// bands, keep mid-range airy so white contours stay crisp.
+// Color for SSH anomaly across −0.2 … +0.2 m: blue → green → yellow → red.
 function _altimetryColor(slaM){
   const rgba = _altimetryRGBA(slaM);
   if(!rgba) return null;
   return `rgba(${rgba[0]},${rgba[1]},${rgba[2]},${(rgba[3]/255).toFixed(2)})`;
 }
 // Same color ramp as _altimetryColor but returns [r,g,b,a0-255] for ImageData,
-// or null for near-flat / no-data cells (drawn transparent). Used by the
-// smooth-fill offscreen canvas so SSH renders as a continuous gradient instead
-// of blocky cells.
+// or null for no-data cells. Used by the smooth-fill offscreen canvas so SSH
+// renders as a continuous gradient instead of blocky cells.
 function _altimetryRGBA(slaM){
   if(!isFinite(slaM)) return null;
+  // Continuous scale matching the legend (−0.2 m … Flat … +0.2 m).
+  const t = Math.max(0, Math.min(1, (slaM + 0.2) / 0.4));
   const mag = Math.abs(slaM);
-  // Hide near-flat water so weak noise doesn't wash the chart.
-  if(mag < 0.02) return null;
-  // Full chroma by ~±0.18 m — Stream/eddy walls still pop without crushing dark.
-  const t = Math.min(1, mag / 0.18);
-  const alpha = Math.round((0.18 + 0.50 * Math.pow(t, 0.75)) * 255);
-  if(slaM > 0){
-    // Warm / anticyclonic — soft peach → coral → rose (no deep maroon)
-    const stops = [
-      [0.00, 255, 214, 170],
-      [0.35, 255, 168, 120],
-      [0.65, 244, 114, 108],
-      [1.00, 225,  70,  90],
-    ];
-    return _altiLerpStop(stops, t).concat([alpha]);
-  }
-  // Cold / cyclonic — sky cyan → azure → indigo (no near-black navy)
+  // Soften true flat water so the chart stays readable, but keep a hint of green.
+  const alpha = Math.round((0.20 + 0.48 * Math.min(1, Math.max(0.15, mag / 0.16))) * 255);
   const stops = [
-    [0.00, 150, 220, 235],
-    [0.35,  90, 180, 230],
-    [0.65,  70, 130, 210],
-    [1.00,  55,  90, 185],
+    [0.00,  30,  90, 220],  // blue  (−0.2 m)
+    [0.33,  36, 175, 105],  // green (near flat / cool side)
+    [0.66, 240, 205,  48],  // yellow
+    [1.00, 220,  48,  42],  // red   (+0.2 m)
   ];
   return _altiLerpStop(stops, t).concat([alpha]);
 }
@@ -8624,14 +8609,6 @@ function restackBottomControls(){
     }
   }
 
-  // Lift the scale bar to ride just above the tallest point of the stack (or to
-  // a sensible resting spot if nothing is showing). In layer-mode the CSS hides
-  // it entirely; this keeps the fallback position sane otherwise.
-  const scale = document.getElementById("map-scale-bar");
-  if(scale){
-    const scaleBottom = (canCollapse || shown.length > 0) ? (topOfStack + 6) : 30;
-    scale.style.bottom = scaleBottom + "px";
-  }
   const legend = document.getElementById("ocean-legend");
   if(legend && legend.style.display !== "none" && typeof oceanLegendMaxHeightPx === "function"){
     legend.style.maxHeight = oceanLegendMaxHeightPx() + "px";
@@ -10286,7 +10263,7 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         ${altiTitleRow}
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#375ab9 0%,#5ab4e6 22%,#96dceb 38%,rgba(120,130,150,0.28) 50%,#ffd0aa 62%,#f4726c 78%,#e1465a 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1e5adc 0%,#24b06a 33%,#f0cd30 66%,#dc302a 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>−0.2 m</span><span>Flat</span><span>+0.2 m</span>
         </div>
@@ -10417,7 +10394,10 @@ function updateBiteBanner(){
 }
 
 function updateScaleBar(){
+  // Distance scale bar removed from the map chrome.
   const el = document.getElementById("map-scale-bar");
+  if(el) el.style.display = "none";
+  return;
   if(!el || !MAP) return;
   // meters per pixel at the current map center latitude/zoom
   const center = MAP.getCenter();
@@ -14950,14 +14930,18 @@ function toggleNav(){
   const opening = m.style.display==='none';
   m.style.display = opening ? 'block' : 'none';
   // Toggle a body class so the map's floating UI (zoom buttons, right-side
-  // icon column, scale bar) can fade out via CSS while the menu is open.
+  // icon column) can fade out via CSS while the menu is open.
   // This keeps the visual focus on the menu and avoids overlap.
   document.body.classList.toggle('nav-open', opening);
   // Refresh the account section every time the menu opens so it reflects
   // any state changes (sign-in/out) since last open.
-  if(opening) renderAccountSection();
-  if(opening && typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
-  if(opening && typeof applyAdminNavVisibility === "function") applyAdminNavVisibility();
+  if(opening){
+    m.scrollLeft = 0;
+    m.scrollTop = 0;
+    renderAccountSection();
+    if(typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
+    if(typeof applyAdminNavVisibility === "function") applyAdminNavVisibility();
+  }
 }
 function closeNav(){
   document.getElementById('nav-menu').style.display='none';
