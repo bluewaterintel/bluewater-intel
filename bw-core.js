@@ -12883,6 +12883,7 @@ function briefHistoryPanelHtml(opts = {}){
 }
 
 function openBriefModal(){
+  if(typeof requirePaid === "function" && !requirePaid()) return;
   const modal = document.getElementById("brief-modal");
   const body = document.getElementById("brief-modal-body");
   const sub = document.getElementById("brief-modal-sub");
@@ -13046,6 +13047,7 @@ function recallBrief(id){
 }
 
 function renderBrief(){
+  if(typeof requirePaid === "function" && !requirePaid()) return;
   const portObj = (activePort && typeof PORTS !== "undefined") ? PORTS[activePort] : null;
   if(portObj && !briefRunZone && activeSpId && activeSpId !== "all"){
     briefRunZone = defaultBriefRunZone(activeSpId);
