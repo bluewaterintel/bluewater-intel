@@ -13579,9 +13579,11 @@ async function runBrief(){
   }
   try {
     let station = tide && tide.station;
-    if(!station && portObj && typeof bwFetchPortConditions === "function"){
-      const op = await bwFetchPortConditions(portObj.lat + 0.05, portObj.lng + 0.05);
-      station = op && op.sources ? op.sources.tide : null;
+    if(!station && portObj && typeof resolveTideStation === "function"){
+      station = await resolveTideStation(portObj.lat + 0.05, portObj.lng + 0.05, activePort);
+    }
+    if(!station && portObj && typeof nearestCoopsTideStation === "function"){
+      station = nearestCoopsTideStation(portObj.lat, portObj.lng, 120);
     }
     if(station && typeof fetchNextTideEvent === "function"){
       const next = await fetchNextTideEvent(station);
