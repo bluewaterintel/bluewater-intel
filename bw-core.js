@@ -8505,8 +8505,19 @@ function updateCurrentsAttribution(){
       _currentsAttribAdded = false;
     }
   }
-  if(typeof updateOceanLegend === "function") updateOceanLegend();
+  if(layerVis.currents && typeof updateCurrentsLegendMeta === "function") updateCurrentsLegendMeta();
   restackBottomControls();
+}
+
+function updateCurrentsLegendMeta(){
+  if(!layerVis.currents) return;
+  const content = document.getElementById("ocean-legend-content");
+  if(!content) return;
+  const meta = content.querySelector(".oc-currents-meta");
+  if(!meta) return;
+  const curTime = currentsLegendTimeLabel();
+  meta.textContent = compactOceanLegendStatus(curTime);
+  meta.style.color = CURRENT_STATUS === "unavailable" ? "#f8a5a5" : "#9ec5e8";
 }
 
 // ── BOTTOM CONTROL STACKING ──────────────────────────────────────────────────
@@ -10147,6 +10158,8 @@ function updateOceanLegend(){
   const parts = [];
   const gap = () => parts.length ? 'margin-top:6px' : '';
   const phone = (typeof isPhoneView === "function") && isPhoneView();
+  const legendTitlePx = phone ? "10px" : "14px";
+  const legendMetaPx = phone ? "10px" : "11px";
   _oceanLegendDetailHtml = "";
   // Verbose bullet explanations are collapsed by default so the panel doesn't
   // run down the middle of the map. On phones, detail opens in a bottom sheet.
@@ -10169,7 +10182,7 @@ function updateOceanLegend(){
     const sstTicks = phone ? [58,62,66,70,74,78,82,86] : [50,60,68,74,78,82,"86+"];
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:14px;font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle}</div>
+        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle}</div>
         <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#082460 0%,#0e5aaa 18%,#28aac8 32%,#5ac878 44%,#dcd232 56%,#ebb028 68%,#eb7823 80%,#be281f 92%,#8c1432 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:1px">
           ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${typeof v === "number" ? v + "°" : v}</span>`).join("")}
@@ -10179,7 +10192,7 @@ function updateOceanLegend(){
   if(layerVis.chlor){
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:14px;font-weight:700;color:#34d399;letter-spacing:.08em;margin-bottom:3px">CHLOROPHYLL</div>
+        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#34d399;letter-spacing:.08em;margin-bottom:3px">CHLOROPHYLL</div>
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1a1a4d 0%,#2563a8 25%,#34d399 55%,#fbbf24 80%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>Low</span><span>Productive</span><span>High</span>
@@ -10189,7 +10202,7 @@ function updateOceanLegend(){
   if(layerVis.wind){
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:14px;font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:3px">WIND (kt)</div>
+        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:3px">WIND (kt)</div>
         <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:${(window.BW_WIND && window.BW_WIND.legendGradient) ? window.BW_WIND.legendGradient(40) : 'linear-gradient(90deg,#2870d2,#82e178,#ebe650,#e46e19,#be1a26,#f05ab4)'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:2px">
           ${[0,5,10,15,20,25,30,35,"40+"].map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}</span>`).join("")}
@@ -10201,12 +10214,12 @@ function updateOceanLegend(){
     const curTimeColor = CURRENT_STATUS === "unavailable" ? "#f8a5a5" : "#9ec5e8";
     const curTitleRow = CURRENT_STATUS === "loading"
       ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
-          <div style="font-size:14px;font-weight:700;color:#2dd4bf;letter-spacing:.08em">CURRENT DRIFT (kt)</div>
+          <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#2dd4bf;letter-spacing:.08em">CURRENT DRIFT (kt)</div>
           <span class="alti-spinner" aria-hidden="true"></span>
         </div>`
       : `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">
-          <div style="font-size:14px;font-weight:700;color:#2dd4bf;letter-spacing:.08em;min-width:0">CURRENT DRIFT (kt)</div>
-          <div style="font-size:11px;font-weight:700;color:${curTimeColor};letter-spacing:.06em;white-space:nowrap;flex-shrink:0">${compactOceanLegendStatus(curTime)}</div>
+          <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#2dd4bf;letter-spacing:.08em;min-width:0">CURRENT DRIFT (kt)</div>
+          <div class="oc-currents-meta" style="font-size:${legendMetaPx};font-weight:700;color:${curTimeColor};letter-spacing:.06em;white-space:nowrap;flex-shrink:0">${compactOceanLegendStatus(curTime)}</div>
         </div>`;
     parts.push(`
       <div style="${gap()}">
@@ -10235,17 +10248,17 @@ function updateOceanLegend(){
     const altiDateUpper = String(altiDate).toUpperCase();
     const altiTitleRow = loading
       ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
-          <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em">FRONT CONVERGENCE (SSH)</div>
+          <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#e879f9;letter-spacing:.08em">FRONT CONVERGENCE (SSH)</div>
           <span class="alti-spinner" aria-hidden="true"></span>
         </div>`
       : (ALTIMETRY_STATUS==="unavailable"
         ? `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">
-            <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em">FRONT CONVERGENCE (SSH)</div>
-            <div style="font-size:10px;font-weight:700;color:#f8a5a5;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap">Unavailable</div>
+            <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#e879f9;letter-spacing:.08em">FRONT CONVERGENCE (SSH)</div>
+            <div style="font-size:${legendMetaPx};font-weight:700;color:#f8a5a5;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap">Unavailable</div>
           </div>`
         : `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">
-            <div style="font-size:14px;font-weight:700;color:#e879f9;letter-spacing:.08em;min-width:0">FRONT CONVERGENCE (SSH)</div>
-            <div style="font-size:11px;font-weight:700;color:#9ec5e8;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;flex-shrink:0">${altiDateUpper}</div>
+            <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#e879f9;letter-spacing:.08em;min-width:0">FRONT CONVERGENCE (SSH)</div>
+            <div style="font-size:${legendMetaPx};font-weight:700;color:#9ec5e8;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;flex-shrink:0">${altiDateUpper}</div>
           </div>`);
     const altiPort = (typeof activePort!=="undefined"&&activePort&&PORTS[activePort]) ? activePort.split(",")[0] : null;
     const altiRangeNm = altiBreakRadiusForActivePort();
@@ -10713,6 +10726,28 @@ function onMapClick(e){
 // explicit mode so a normal tap on the map stays a no-op and never fights the
 // heat-map hotspot explainer.
 let wpDropMode = false;
+let _wpDropPin = null;
+let _wpDropPinKeep = false;
+function wpClearDropPin(){
+  if(_wpDropPin && typeof MAP !== "undefined" && MAP){
+    try { MAP.removeLayer(_wpDropPin); } catch(e){}
+  }
+  _wpDropPin = null;
+  _wpDropPinKeep = false;
+}
+function wpPlaceDropPin(lat, lng){
+  wpClearDropPin();
+  if(typeof MAP === "undefined" || !MAP) return;
+  _wpDropPin = L.marker([lat, lng], {
+    icon: L.divIcon({
+      className: "wp-drop-pin",
+      html: `<div style="width:16px;height:16px;background:#ef4444;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,.55)"></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    }),
+    zIndexOffset: 950,
+  }).addTo(MAP);
+}
 function toggleWpDrop(){
   if(wpDropMode) wpDropDeactivate();
   else wpDropActivate();
@@ -10720,6 +10755,7 @@ function toggleWpDrop(){
 function wpDropActivate(){
   // Don't run two map-click tools at once — turn the ruler off if it's on.
   if(typeof rulerActive !== "undefined" && rulerActive && typeof rulerDeactivate === "function") rulerDeactivate();
+  if(typeof wpClearDropPin === "function") wpClearDropPin();
   wpDropMode = true;
   const btn = document.getElementById("wpdrop-toggle"); if(btn) btn.classList.add("active");
   const hint = document.getElementById("wpdrop-hint"); if(hint) hint.classList.add("active");
@@ -10751,6 +10787,8 @@ function bwiFormatLatLng(lat, lng){
 // the user save it (opens the waypoint editor prefilled) or pull a forecast.
 function wpShowDropPopup(lat, lng){
   if(typeof MAP === "undefined" || !MAP) return;
+  wpPlaceDropPin(lat, lng);
+  _wpDropPinKeep = false;
   const { dec, dms } = bwiFormatLatLng(lat, lng);
   let depthLine = "";
   try {
@@ -10777,16 +10815,20 @@ function wpShowDropPopup(lat, lng){
         padding:8px 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;
         margin-top:6px">6-Day Forecast</button>
     </div>`;
-  L.popup({ offset:[0,-4], className:"wp-fc-popup", maxWidth:280, closeButton:true })
+  const popup = L.popup({ offset:[0,-10], className:"wp-fc-popup", maxWidth:280, closeButton:true })
     .setLatLng([lat, lng])
-    .setContent(html)
-    .openOn(MAP);
+    .setContent(html);
+  popup.on("remove", () => {
+    if(!_wpDropPinKeep) wpClearDropPin();
+  });
+  popup.openOn(MAP);
 }
 
 // Open the waypoint editor prefilled with a tapped/dropped location so the user
 // can name it and save it into My Waypoints (persists locally + syncs to their
 // account via BW_AUTH, exactly like a manually-added waypoint).
 function wpCreateAt(lat, lng){
+  _wpDropPinKeep = true;
   if(typeof MAP !== "undefined" && MAP) MAP.closePopup();
   if(!WP_state.userPoints.length) WP_state.userPoints = wpLoadUser();
   let depth = "";
@@ -12573,11 +12615,29 @@ async function renderWX(lat,lng){
   }
   // Tide from REAL data only (NOAA CO-OPS via the ocean backend) — never synthetic.
   const _tideState = oceanData?.tide?.state || null;
-  const tide = {
+  let tide = {
     state: _tideState ? _tideState.charAt(0).toUpperCase() + _tideState.slice(1) : null,
     height: null, nextHigh: null, nextLow: null,
     station: oceanData?.sources?.tide || null,
   };
+  try {
+    let tideLat = lat, tideLng = lng;
+    if(!tide.station && typeof activePort !== "undefined" && activePort && typeof PORTS !== "undefined" && PORTS[activePort]){
+      const pp = PORTS[activePort];
+      tideLat = pp.lat + 0.05;
+      tideLng = pp.lng + 0.05;
+    }
+    if(typeof resolveTideStation === "function"){
+      const station = tide.station || await resolveTideStation(tideLat, tideLng);
+      if(station){
+        tide.station = station;
+        if(typeof fetchNextTideEvent === "function"){
+          const next = await fetchNextTideEvent(station);
+          tide = applyTideEventsToPanel(tide, next);
+        }
+      }
+    }
+  } catch(e){ /* tide enrichment is best-effort */ }
   const windDir = wx.windDir || "—";
   const lastUpdate = new Date();
 
@@ -14186,6 +14246,7 @@ function closePortDd(){
 
 function selectPort(name){
   activePort=name;
+  if(typeof _hdrTide !== "undefined") _hdrTide = { key: "", text: "", atMs: 0 };
   // NOTE: selecting a port from the dropdown is a SESSION-ONLY action — it does
   // NOT change the user's saved default. The default home port is set in
   // Settings (USER_PREFS.defaultPort) and is the only thing persisted to the
@@ -14389,6 +14450,31 @@ function bwFetchPortConditions(lat, lng){
   return BW_OCEAN.fetchOcean(lat, lng);
 }
 
+async function resolveTideStation(lat, lng){
+  const cached = _cachedTideStation(lat, lng);
+  if(cached) return cached;
+  try {
+    const o = await bwFetchPortConditions(lat, lng);
+    const station = o && o.sources ? o.sources.tide : null;
+    if(station) _cacheTideStation(lat, lng, station);
+    return station || null;
+  } catch(e){
+    return null;
+  }
+}
+
+function applyTideEventsToPanel(tide, next){
+  if(!next || !next.events || !next.events.length) return tide;
+  const nextH = next.events.find(e => e.type === "H");
+  const nextL = next.events.find(e => e.type === "L");
+  if(next.state){
+    tide.state = next.state.charAt(0).toUpperCase() + next.state.slice(1);
+  }
+  tide.nextHigh = nextH ? nextH.timeTxt : tide.nextHigh;
+  tide.nextLow = nextL ? nextL.timeTxt : tide.nextLow;
+  return tide;
+}
+
 // Tide for the header: shows the current STATE (Rising / Falling / Slack) plus
 // the next two tide events in CHRONOLOGICAL order, e.g.
 // "Falling · Low 1:37 AM → High 7:22 AM". This removes the old ambiguity where
@@ -14410,8 +14496,11 @@ async function updateHeaderTide(){
   const p = activePort ? PORTS[activePort] : null;
   if(!p){ cell.style.display = "none"; return; }
   cell.style.display = "";
-  if(_hdrTide.key === activePort && Date.now() - _hdrTide.atMs < 15 * 60 * 1000){
-    setTideText(_hdrTide.text || "—");
+  const cachedTide = (_hdrTide.key === activePort && _hdrTide.text && _hdrTide.text !== "—" && _hdrTide.text !== "…" && Date.now() - _hdrTide.atMs < 15 * 60 * 1000)
+    ? _hdrTide.text
+    : null;
+  if(cachedTide){
+    setTideText(cachedTide);
     requestAnimationFrame(syncHeaderHeightVar);
     return;
   }
@@ -14419,26 +14508,19 @@ async function updateHeaderTide(){
   const portKey = activePort;
   try {
     if(typeof BW_OCEAN === "undefined"){ setTideText("—"); requestAnimationFrame(syncHeaderHeightVar); return; }
-    const o = await bwFetchPortConditions(p.lat + 0.05, p.lng + 0.05);
-    if(activePort !== portKey) return;  // port changed while we were fetching
-    const station = o && o.sources ? o.sources.tide : null;
-    if(station) _cacheTideStation(p.lat + 0.05, p.lng + 0.05, station);
+    const sampleLat = p.lat + 0.05, sampleLng = p.lng + 0.05;
+    let station = await resolveTideStation(sampleLat, sampleLng);
+    if(activePort !== portKey) return;
+    if(!station){
+      station = await resolveTideStation(p.lat, p.lng);
+      if(activePort !== portKey) return;
+    }
     let text = "—";
     if(station){
       const next = await fetchNextTideEvent(station);
       if(activePort !== portKey) return;
       if(next && next.events && next.events.length){
-        // State prefix: Rising / Falling / Slack so it's instantly clear which
-        // way the water is moving right now.
-        const stateTxt = next.state === "rising"  ? "Rising"
-                       : next.state === "falling" ? "Falling"
-                       : next.state === "slack"   ? "Slack" : "";
-        // Next two events, in true chronological order (soonest first), each
-        // labeled High/Low so the sequence is unambiguous.
-        const seq = next.events.slice(0, 2)
-          .map(e => `${e.type === "H" ? "High" : "Low"} ${e.timeTxt}`)
-          .join(" → ");
-        text = stateTxt ? `${stateTxt} · ${seq}` : seq;
+        text = formatTideHeader(next) || "—";
       }
     }
     // If the live fetch produced nothing (offline/station gap) but we have a
@@ -14448,7 +14530,7 @@ async function updateHeaderTide(){
       if(cachedTide) text = cachedTide;
     }
     setTideText(text);
-    _hdrTide = { key: portKey, text, atMs: Date.now() };
+    if(text && text !== "—") _hdrTide = { key: portKey, text, atMs: Date.now() };
   } catch(e){
     const cachedTide = (typeof tripTideHeaderFor === "function") ? tripTideHeaderFor(portKey) : null;
     setTideText(cachedTide || "—");

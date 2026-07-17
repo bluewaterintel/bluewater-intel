@@ -1250,6 +1250,7 @@ function wpCloseEditor(){
   const m = document.getElementById("wp-editor-modal");
   if(m) m.remove();
   WP_state.editing = null;
+  if(typeof wpClearDropPin === "function") wpClearDropPin();
 }
 
 function wpSaveEditor(isNew){
@@ -1285,6 +1286,7 @@ function wpSaveEditor(isNew){
   wpSaveUser();
   if(window.BW_AUTH) window.BW_AUTH.saveWaypoint(updated).catch(e => console.error("waypoint sync", e));
   drawUserWaypoints();
+  if(typeof wpClearDropPin === "function") wpClearDropPin();
   wpCloseEditor();
   wpRender();
 }
@@ -1647,6 +1649,15 @@ async function fetchForecast(lat, lng){
 // header tide uses (bwFetchPortConditions → sources.tide). Returns [] on any gap.
 async function _fcFetchTideEvents(lat, lng, startMs, endMs){
   let station = (typeof _cachedTideStation === "function") ? _cachedTideStation(lat, lng) : null;
+  if(!station && typeof resolveTideStation === "function"){
+    station = await resolveTideStation(lat, lng);
+  }
+  if(!station && typeof activePort !== "undefined" && activePort && typeof PORTS !== "undefined" && PORTS[activePort]){
+    const p = PORTS[activePort];
+    if(typeof resolveTideStation === "function"){
+      station = await resolveTideStation(p.lat + 0.05, p.lng + 0.05);
+    }
+  }
   if(!station){
     if(typeof BW_OCEAN === "undefined" || (!BW_OCEAN.fetchConditions && !BW_OCEAN.fetchOcean)) return [];
     try {
