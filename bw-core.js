@@ -6246,7 +6246,7 @@ async function buildCurrentFieldForMap(){
   if(CURRENT_GRID && _curGridCoversView() && (Date.now() - CURRENT_GRID.fetchedAtMs) < 30*60*1000) return;
   const seq = ++_curFetchSeq;
   CURRENT_STATUS = "loading";
-  if(typeof updateCurrentsMetaDisplay === "function") updateCurrentsMetaDisplay();
+  if(typeof updateCurrentsAttribution === "function") updateCurrentsAttribution();
   try {
     // Fetch a padded box around the view so panning doesn't refetch constantly.
     const b = MAP.getBounds();
@@ -6274,12 +6274,12 @@ async function buildCurrentFieldForMap(){
       currentsLayer._drawShade();
     }
     if(typeof updateOceanLegend === "function") updateOceanLegend();
-    if(typeof updateCurrentsMetaDisplay === "function") updateCurrentsMetaDisplay();
+    if(typeof updateCurrentsAttribution === "function") updateCurrentsAttribution();
   } catch(e){
     if(seq !== _curFetchSeq) return;
     CURRENT_GRID = null;
     CURRENT_STATUS = "unavailable";
-    if(typeof updateCurrentsMetaDisplay === "function") updateCurrentsMetaDisplay();
+    if(typeof updateCurrentsAttribution === "function") updateCurrentsAttribution();
   }
 }
 
@@ -6568,7 +6568,7 @@ function drawCurrents(){
     if(currentsLayer && MAP && MAP.hasLayer(currentsLayer)) MAP.removeLayer(currentsLayer);
   }
   if(typeof updateOceanLegend === "function") updateOceanLegend();
-  if(typeof updateCurrentsMetaControlVisibility === "function") updateCurrentsMetaControlVisibility();
+  if(typeof updateCurrentsAttribution === "function") updateCurrentsAttribution();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -8233,7 +8233,7 @@ function toggleLayer(key){
   else if(key==="currents"){
     drawCurrents();
     updateForecastSliderVisibility();
-    if(typeof updateCurrentsMetaControlVisibility === "function") updateCurrentsMetaControlVisibility();
+    if(typeof updateCurrentsAttribution === "function") updateCurrentsAttribution();
     if(!layerVis.currents && FORECAST_HOUR_OFFSET > 0 && !layerVis.sst && !layerVis.predict) setForecastHour(0);
     else if(layerVis.currents && FORECAST_HOUR_OFFSET > 0 && typeof refreshOceanForecastLayers === "function") refreshOceanForecastLayers();
   }
@@ -8486,30 +8486,26 @@ function updateAltiDateControlVisibility(){
   restackBottomControls();
 }
 
-function updateCurrentsMetaDisplay(){
-  const el = document.getElementById("currents-meta-display");
-  if(!el) return;
-  if(CURRENT_STATUS === "loading"){
-    el.textContent = "Loading RTOFS…";
-    return;
-  }
-  if(CURRENT_STATUS === "unavailable"){
-    el.textContent = "Currents unavailable";
-    return;
-  }
-  if(CURRENT_STATUS === "ready"){
-    const t = currentsTimeLabel();
-    el.textContent = t ? `NOAA RTOFS · ${t}` : "NOAA RTOFS · surface drift";
-    return;
-  }
-  el.textContent = "NOAA RTOFS";
+function currentsLegendTimeLabel(){
+  if(CURRENT_STATUS === "loading") return "Loading…";
+  if(CURRENT_STATUS === "unavailable") return "Unavailable";
+  return currentsTimeLabel() || "—";
 }
-function updateCurrentsMetaControlVisibility(){
-  const box = document.getElementById("currents-meta-control");
-  if(!box) return;
-  const show = !!layerVis.currents;
-  box.style.display = show ? "block" : "none";
-  if(show) updateCurrentsMetaDisplay();
+const CURRENTS_ATTRIB_TEXT = "© NOAA RTOFS";
+let _currentsAttribAdded = false;
+function updateCurrentsAttribution(){
+  if(MAP && MAP.attributionControl){
+    const show = !!(layerVis.currents && CURRENT_STATUS !== "unavailable");
+    const ac = MAP.attributionControl;
+    if(show && !_currentsAttribAdded){
+      ac.addAttribution(CURRENTS_ATTRIB_TEXT);
+      _currentsAttribAdded = true;
+    } else if(!show && _currentsAttribAdded){
+      ac.removeAttribution(CURRENTS_ATTRIB_TEXT);
+      _currentsAttribAdded = false;
+    }
+  }
+  if(typeof updateOceanLegend === "function") updateOceanLegend();
   restackBottomControls();
 }
 
@@ -8523,7 +8519,7 @@ function updateCurrentsMetaControlVisibility(){
 // nearest the thumb-friendly bottom edge. Called by every visibility updater.
 // The distance scale bar is then lifted to sit just above the top of the stack
 // so it never overlaps the bars or the Leaflet attribution line.
-const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "currents-meta-control", "radar-loop-control", "wind-forecast-slider"];
+const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider"];
 const BOTTOM_STACK_GAP  = 8;    // px gap between stacked bars
 // Phase 2 mobile: when collapsed, the bottom control bars fold behind a single
 // "Controls ▴" chip so an active overlay owns the screen. Only meaningful on
@@ -10155,7 +10151,7 @@ function oceanLegendMaxHeightPx(){
   const topInset = layerVis.predict ? 70 : 10;
   const phone = isPhoneView();
   let bottomReserve = phone ? 28 : 12;
-  const stackIds = ["sat-date-control", "alti-date-control", "currents-meta-control", "radar-loop-control", "wind-forecast-slider"];
+  const stackIds = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider"];
   for(const id of stackIds){
     const el = document.getElementById(id);
     if(el && el.style.display && el.style.display !== "none"){
@@ -10229,9 +10225,20 @@ function updateOceanLegend(){
       </div>`);
   }
   if(layerVis.currents){
+    const curTime = currentsLegendTimeLabel();
+    const curTimeColor = CURRENT_STATUS === "unavailable" ? "#f8a5a5" : "#9ec5e8";
+    const curTitleRow = CURRENT_STATUS === "loading"
+      ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
+          <div style="font-size:14px;font-weight:700;color:#2dd4bf;letter-spacing:.08em">CURRENT DRIFT (kt)</div>
+          <span class="alti-spinner" aria-hidden="true"></span>
+        </div>`
+      : `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">
+          <div style="font-size:14px;font-weight:700;color:#2dd4bf;letter-spacing:.08em;min-width:0">CURRENT DRIFT (kt)</div>
+          <div style="font-size:11px;font-weight:700;color:${curTimeColor};letter-spacing:.06em;white-space:nowrap;flex-shrink:0">${compactOceanLegendStatus(curTime)}</div>
+        </div>`;
     parts.push(`
       <div style="${gap()}">
-        <div style="font-size:14px;font-weight:700;color:#2dd4bf;letter-spacing:.08em;margin-bottom:3px">CURRENT DRIFT (kt)</div>
+        ${curTitleRow}
         <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#93c5e0 0%,#38bdf8 18%,#2dd4bf 40%,#5eead4 62%,#fbbf24 88%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="position:relative;height:11px;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600">
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
