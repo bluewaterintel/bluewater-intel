@@ -1648,45 +1648,30 @@ async function fetchForecast(lat, lng){
 // as [{ type:"H"|"L", atMs }]. Reuses the same station-resolution path the
 // header tide uses (bwFetchPortConditions → sources.tide). Returns [] on any gap.
 async function _fcFetchTideEvents(lat, lng, startMs, endMs){
-  let station = (typeof _cachedTideStation === "function") ? _cachedTideStation(lat, lng) : null;
+  // Prefer home-port inlet tides for offshore pins (same as the header banner).
+  let tideLat = lat, tideLng = lng;
   const portHint = (typeof activePort !== "undefined") ? activePort : null;
+  if(portHint && typeof PORTS !== "undefined" && PORTS[portHint]){
+    const p = PORTS[portHint];
+    tideLat = p.lat;
+    tideLng = p.lng;
+  }
+  if(typeof fetchOpenWatersTideEvents === "function"){
+    const ow = await fetchOpenWatersTideEvents(tideLat, tideLng, startMs, endMs);
+    if(ow && ow.all && ow.all.length) return ow.all;
+  }
+  let station = (typeof _cachedTideStation === "function") ? _cachedTideStation(tideLat, tideLng) : null;
   if(!station && typeof resolveTideStation === "function"){
-    station = await resolveTideStation(lat, lng, portHint);
+    station = await resolveTideStation(tideLat, tideLng, portHint);
   }
   if(!station && typeof nearestCoopsTideStation === "function"){
-    station = nearestCoopsTideStation(lat, lng, 90);
-    if(!station && portHint && typeof PORTS !== "undefined" && PORTS[portHint]){
-      const p = PORTS[portHint];
-      station = nearestCoopsTideStation(p.lat, p.lng, 120);
-    }
-    if(station && typeof _cacheTideStation === "function") _cacheTideStation(lat, lng, station);
+    station = nearestCoopsTideStation(tideLat, tideLng, 120);
   }
-  if(!station){
-    if(typeof BW_OCEAN === "undefined" || (!BW_OCEAN.fetchConditions && !BW_OCEAN.fetchOcean)) return [];
-    try {
-      const o = await (typeof bwFetchPortConditions === "function"
-        ? bwFetchPortConditions(lat, lng)
-        : BW_OCEAN.fetchOcean(lat, lng));
-      station = o && o.sources ? o.sources.tide : null;
-      if(station && typeof _cacheTideStation === "function") _cacheTideStation(lat, lng, station);
-    } catch(e){ return []; }
+  if(station && typeof fetchCoopsHiloEvents === "function"){
+    const all = await fetchCoopsHiloEvents(station, startMs, endMs);
+    if(all && all.length) return all;
   }
-  if(!station) return [];
-  const pad = (n) => String(n).padStart(2, "0");
-  const fmt = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-  const url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
-    + "?product=predictions&interval=hilo&datum=MLLW&units=english&time_zone=gmt&format=json&application=bluewaterintel"
-    + `&station=${encodeURIComponent(station)}&begin_date=${encodeURIComponent(fmt(new Date(startMs)))}&end_date=${encodeURIComponent(fmt(new Date(endMs)))}`;
-  const r = await fetch(url, { signal: (typeof bwiFetchSignal === "function" ? bwiFetchSignal(8000) : undefined) });
-  if(!r.ok) return [];
-  const d = await r.json();
-  const preds = (d && d.predictions) ? d.predictions : [];
-  const out = [];
-  for(const pr of preds){
-    const atMs = Date.parse(pr.t.replace(" ", "T") + "Z");  // CO-OPS gmt
-    if(isFinite(atMs)) out.push({ type: pr.type, atMs });
-  }
-  return out;
+  return [];
 }
 
 function _fcSlotTimeLabel(iso){

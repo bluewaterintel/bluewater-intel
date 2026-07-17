@@ -1018,21 +1018,11 @@ function dtComputeGrid(speciesId){
 
 async function dtFetchTides(p){
   try{
-    const lat = p.lat + 0.05, lng = p.lng + 0.05;
-    let station = null;
-    if(typeof resolveTideStation === "function" && typeof activePort !== "undefined"){
-      station = await resolveTideStation(lat, lng, activePort);
-    } else if(typeof nearestCoopsTideStation === "function"){
-      station = nearestCoopsTideStation(p.lat, p.lng, 120);
-    }
-    if(!station && typeof BW_OCEAN !== "undefined" && BW_OCEAN.fetchOcean){
-      const o = await BW_OCEAN.fetchOcean(lat, lng);
-      station = o && o.sources ? o.sources.tide : null;
-    }
-    if(!station) return null;
-    const next = await fetchNextTideEvent(station);
+    const next = await fetchTideSchedule(p.lat, p.lng, {
+      portKey: (typeof activePort !== "undefined") ? activePort : null,
+    });
     if(!next) return null;
-    return { station, state: next.state, events: next.events, headerText: formatTideHeader(next) };
+    return { station: next.station || null, state: next.state, events: next.events, headerText: formatTideHeader(next) };
   }catch(e){ return null; }
 }
 
@@ -6905,9 +6895,9 @@ function getAltimetryField(lat, lng){
   return { slaM, ugos:u, vgos:v, geoSpeedKts, geoSetDeg };
 }
 
-// Color for SSH anomaly: blue (cold/cyclonic eddy) → transparent (neutral) → red (warm/anticyclonic)
-// Fishing-focused: most of the ramp sits in ±0.05–0.30 m where Gulf Stream edges
-// and eddy walls live — the old ×4 gain washed those into the same pale tint.
+// Color for SSH anomaly: cool cyan (depression) → soft neutral → coral/rose (bulge).
+// Tuned for phone overlays: avoid deep maroon + navy that smear into muddy orange
+// bands, keep mid-range airy so white contours stay crisp.
 function _altimetryColor(slaM){
   const rgba = _altimetryRGBA(slaM);
   if(!rgba) return null;
@@ -6920,28 +6910,27 @@ function _altimetryColor(slaM){
 function _altimetryRGBA(slaM){
   if(!isFinite(slaM)) return null;
   const mag = Math.abs(slaM);
-  // Hide only true flat water; show weak edges that still mark a break.
-  if(mag < 0.015) return null;
-  // Full chroma by ~±0.15 m so Stream/eddy walls saturate sooner (was 0.18 / 0.33).
-  const t = Math.min(1, mag / 0.15);
-  // Keep fill a notch under full so white edge contours stay readable on top.
-  const alpha = Math.round((0.22 + 0.58 * Math.pow(t, 0.7)) * 255);
+  // Hide near-flat water so weak noise doesn't wash the chart.
+  if(mag < 0.02) return null;
+  // Full chroma by ~±0.18 m — Stream/eddy walls still pop without crushing dark.
+  const t = Math.min(1, mag / 0.18);
+  const alpha = Math.round((0.18 + 0.50 * Math.pow(t, 0.75)) * 255);
   if(slaM > 0){
-    // Warm / anticyclonic — gold → orange → red → deep red
+    // Warm / anticyclonic — soft peach → coral → rose (no deep maroon)
     const stops = [
-      [0.00, 210, 160,  60],
-      [0.35, 235, 110,  40],
-      [0.65, 220,  55,  30],
-      [1.00, 160,  20,  40],
+      [0.00, 255, 214, 170],
+      [0.35, 255, 168, 120],
+      [0.65, 244, 114, 108],
+      [1.00, 225,  70,  90],
     ];
     return _altiLerpStop(stops, t).concat([alpha]);
   }
-  // Cold / cyclonic — cyan → blue → deep navy
+  // Cold / cyclonic — sky cyan → azure → indigo (no near-black navy)
   const stops = [
-    [0.00,  80, 180, 210],
-    [0.35,  40, 130, 220],
-    [0.65,  25,  80, 190],
-    [1.00,  15,  40, 140],
+    [0.00, 150, 220, 235],
+    [0.35,  90, 180, 230],
+    [0.65,  70, 130, 210],
+    [1.00,  55,  90, 185],
   ];
   return _altiLerpStop(stops, t).concat([alpha]);
 }
@@ -10297,7 +10286,7 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         ${altiTitleRow}
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#0f288c 0%,#2870dc 22%,#50b4d2 38%,rgba(70,70,90,0.35) 50%,#eb9e28 62%,#dc4620 78%,#a01428 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#375ab9 0%,#5ab4e6 22%,#96dceb 38%,rgba(120,130,150,0.28) 50%,#ffd0aa 62%,#f4726c 78%,#e1465a 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>−0.2 m</span><span>Flat</span><span>+0.2 m</span>
         </div>
@@ -12642,7 +12631,7 @@ async function renderWX(lat,lng){
     const nm = (typeof nmOffshore === "function") ? Math.round(nmOffshore(lat, lng)) : 0;
     wx = { buoy: "No live data", nm, waterTempF: null, airTempF: null, waveHt: null, wavePer: null, windKt: null, windDir: null, pressure: null };
   }
-  // Tide from REAL data only (NOAA CO-OPS via the ocean backend) — never synthetic.
+  // Tide from REAL data only — Open Waters (NOAA harmonics) / CO-OPS hi/lo.
   const _tideState = oceanData?.tide?.state || null;
   let tide = {
     state: _tideState ? _tideState.charAt(0).toUpperCase() + _tideState.slice(1) : null,
@@ -12651,20 +12640,17 @@ async function renderWX(lat,lng){
   };
   try {
     let tideLat = lat, tideLng = lng;
-    if(!tide.station && typeof activePort !== "undefined" && activePort && typeof PORTS !== "undefined" && PORTS[activePort]){
-      const pp = PORTS[activePort];
-      tideLat = pp.lat + 0.05;
-      tideLng = pp.lng + 0.05;
+    const portHint = (typeof activePort !== "undefined") ? activePort : null;
+    if(portHint && typeof PORTS !== "undefined" && PORTS[portHint]){
+      const pp = PORTS[portHint];
+      tideLat = pp.lat;
+      tideLng = pp.lng;
     }
-    if(typeof resolveTideStation === "function"){
-      const portHint = (typeof activePort !== "undefined") ? activePort : null;
-      const station = tide.station || await resolveTideStation(tideLat, tideLng, portHint);
-      if(station){
-        tide.station = station;
-        if(typeof fetchNextTideEvent === "function"){
-          const next = await fetchNextTideEvent(station);
-          tide = applyTideEventsToPanel(tide, next);
-        }
+    if(typeof fetchTideSchedule === "function"){
+      const next = await fetchTideSchedule(tideLat, tideLng, { portKey: portHint, station: tide.station });
+      if(next){
+        tide.station = next.station || tide.station;
+        tide = applyTideEventsToPanel(tide, next);
       }
     }
   } catch(e){ /* tide enrichment is best-effort */ }
@@ -13578,33 +13564,31 @@ async function runBrief(){
     } catch(e){ /* port tide is best-effort */ }
   }
   try {
-    let station = tide && tide.station;
-    if(!station && portObj && typeof resolveTideStation === "function"){
-      station = await resolveTideStation(portObj.lat + 0.05, portObj.lng + 0.05, activePort);
+    const tideLat = portObj ? portObj.lat : pinLL.lat;
+    const tideLng = portObj ? portObj.lng : pinLL.lng;
+    const next = (typeof fetchTideSchedule === "function")
+      ? await fetchTideSchedule(tideLat, tideLng, {
+          portKey: (typeof activePort !== "undefined") ? activePort : null,
+          station: tide && tide.station,
+        })
+      : null;
+    if(next && next.events && next.events.length){
+      const nextH = next.events.find(e => e.type === "H");
+      const nextL = next.events.find(e => e.type === "L");
+      tide = {
+        state: next.state || (tide && tide.state) || null,
+        nextHigh: nextH ? nextH.timeTxt : null,
+        nextLow: nextL ? nextL.timeTxt : null,
+        nextEvents: next.events.slice(0, 2).map(e => ({
+          type: e.type === "H" ? "High" : "Low",
+          time: e.timeTxt,
+        })),
+        headerText: (typeof formatTideHeader === "function") ? formatTideHeader(next) : null,
+        station: next.station || (tide && tide.station) || null,
+        atPort: true,
+      };
     }
-    if(!station && portObj && typeof nearestCoopsTideStation === "function"){
-      station = nearestCoopsTideStation(portObj.lat, portObj.lng, 120);
-    }
-    if(station && typeof fetchNextTideEvent === "function"){
-      const next = await fetchNextTideEvent(station);
-      if(next && next.events && next.events.length){
-        const nextH = next.events.find(e => e.type === "H");
-        const nextL = next.events.find(e => e.type === "L");
-        tide = {
-          state: next.state || (tide && tide.state) || null,
-          nextHigh: nextH ? nextH.timeTxt : null,
-          nextLow: nextL ? nextL.timeTxt : null,
-          nextEvents: next.events.slice(0, 2).map(e => ({
-            type: e.type === "H" ? "High" : "Low",
-            time: e.timeTxt,
-          })),
-          headerText: (typeof formatTideHeader === "function") ? formatTideHeader(next) : null,
-          station,
-          atPort: true,
-        };
-      }
-    }
-  } catch(e){ /* CO-OPS hi/lo enrichment is best-effort */ }
+  } catch(e){ /* tide hi/lo enrichment is best-effort */ }
 
   // Per-species bite score at each species' BEST cell across the port fishing
   // range (not one shared pin). White marlin N of the inlet and wahoo S must
@@ -14535,6 +14519,20 @@ function applyTideEventsToPanel(tide, next){
 // that station's hi/lo predictions directly (CO-OPS sends CORS *). Cached per-port
 // for 15 min; degrades gracefully.
 let _hdrTide = { key: "", text: "", atMs: 0 };
+function _tideHdrPersistKey(port){ return "bwi.hdrTide.v1:" + port; }
+function persistHeaderTide(port, text){
+  if(!port || !text || text === "—" || text === "…") return;
+  try { localStorage.setItem(_tideHdrPersistKey(port), JSON.stringify({ text, atMs: Date.now() })); } catch(e){}
+}
+function loadPersistedHeaderTide(port){
+  if(!port) return null;
+  try {
+    const o = JSON.parse(localStorage.getItem(_tideHdrPersistKey(port)) || "null");
+    if(o && o.text && Date.now() - o.atMs < 6 * 3600 * 1000) return o.text;
+  } catch(e){}
+  return null;
+}
+
 async function updateHeaderTide(){
   const cell = document.getElementById("hdr-tide-cell");
   const el   = document.getElementById("hdr-tide");
@@ -14556,90 +14554,45 @@ async function updateHeaderTide(){
     requestAnimationFrame(syncHeaderHeightVar);
     return;
   }
-  setTideText("…");
+  const stale = loadPersistedHeaderTide(activePort)
+    || ((typeof tripTideHeaderFor === "function") ? tripTideHeaderFor(activePort) : null);
+  setTideText(stale || "…");
   const portKey = activePort;
   try {
-    if(typeof BW_OCEAN === "undefined"){ setTideText("—"); requestAnimationFrame(syncHeaderHeightVar); return; }
-    const sampleLat = p.lat + 0.05, sampleLng = p.lng + 0.05;
-    let station = await resolveTideStation(sampleLat, sampleLng, portKey);
+    // Use the inlet coordinates (not an offshore offset) so Open Waters / CO-OPS
+    // snap to the harbor station captains actually leave from.
+    const next = await fetchTideSchedule(p.lat, p.lng, { portKey });
     if(activePort !== portKey) return;
-    if(!station){
-      station = await resolveTideStation(p.lat, p.lng, portKey);
-      if(activePort !== portKey) return;
-    }
-    let text = "—";
-    if(station){
-      const next = await fetchNextTideEvent(station);
-      if(activePort !== portKey) return;
-      if(next && next.events && next.events.length){
-        text = formatTideHeader(next) || "—";
-      }
-    }
-    // If the live fetch produced nothing (offline/station gap) but we have a
-    // saved trip for this port, fall back to its cached tide string.
-    if((!text || text === "—") && typeof tripTideHeaderFor === "function"){
-      const cachedTide = tripTideHeaderFor(portKey);
-      if(cachedTide) text = cachedTide;
-    }
+    let text = (next && next.events && next.events.length) ? (formatTideHeader(next) || "—") : "—";
+    if((!text || text === "—") && stale) text = stale;
     setTideText(text);
-    if(text && text !== "—") _hdrTide = { key: portKey, text, atMs: Date.now() };
+    if(text && text !== "—"){
+      _hdrTide = { key: portKey, text, atMs: Date.now() };
+      persistHeaderTide(portKey, text);
+    }
   } catch(e){
-    const cachedTide = (typeof tripTideHeaderFor === "function") ? tripTideHeaderFor(portKey) : null;
-    setTideText(cachedTide || "—");
-    if(cachedTide) _hdrTide = { key: portKey, text: cachedTide, atMs: Date.now() };
+    setTideText(stale || "—");
+    if(stale) _hdrTide = { key: portKey, text: stale, atMs: Date.now() };
   }
   requestAnimationFrame(syncHeaderHeightVar);
 }
 
-// Upcoming tide events for a CO-OPS station (hi/lo predictions), in
-// CHRONOLOGICAL order, plus the current tide STATE.
-//
-// Returns:
-//   { state: "rising" | "falling" | "slack" | null,
-//     events: [ { type: "H"|"L", timeTxt, atMs }, ... ] }  // soonest first
-//
-// State logic:
-//   • Next event is a High  → water is RISING toward it.
-//   • Next event is a Low    → water is FALLING toward it.
-//   • Within ~25 min of the previous OR next turn → SLACK (the tide is
-//     pausing at the top/bottom and barely moving).
-async function fetchNextTideEvent(station){
-  const pad = (n)=>String(n).padStart(2,"0");
-  const fmt = (d)=>`${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-  const now = Date.now();
-  const begin = new Date(now - 6 * 3600000), end = new Date(now + 48 * 3600000);
-  const url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
-    + "?product=predictions&interval=hilo&datum=MLLW&units=english&time_zone=gmt&format=json&application=bluewaterintel"
-    + `&station=${encodeURIComponent(station)}&begin_date=${encodeURIComponent(fmt(begin))}&end_date=${encodeURIComponent(fmt(end))}`;
-  const r = await fetch(url, { signal: bwiFetchSignal(8000) });
-  if(!r.ok) return null;
-  const d = await r.json();
-  const preds = (d && d.predictions) ? d.predictions : [];
-
-  // Parse all events to timestamps so we can split into past/future cleanly.
-  const all = [];
-  for(const pr of preds){
-    const atMs = Date.parse(pr.t.replace(" ", "T") + "Z");  // CO-OPS gmt
-    if(!isFinite(atMs)) continue;
-    all.push({ type: pr.type, atMs });
-  }
-  all.sort((a, b) => a.atMs - b.atMs);
-
-  const future = all.filter(e => e.atMs > now);
-  const past   = all.filter(e => e.atMs <= now);
+// Build rising/falling/slack + upcoming events from a sorted list of {type,atMs}.
+function tideScheduleFromEvents(all, nowMs){
+  const now = (nowMs != null) ? nowMs : Date.now();
+  const sorted = (all || []).filter(e => e && (e.type === "H" || e.type === "L") && isFinite(e.atMs))
+    .slice().sort((a, b) => a.atMs - b.atMs);
+  if(!sorted.length) return null;
+  const future = sorted.filter(e => e.atMs > now);
+  const past   = sorted.filter(e => e.atMs <= now);
   const prev   = past.length ? past[past.length - 1] : null;
   const nextEv = future.length ? future[0] : null;
-
-  // Derive state.
   let state = null;
   if(nextEv){
     state = nextEv.type === "H" ? "rising" : "falling";
     const SLACK_MS = 25 * 60 * 1000;
-    const nearNext = (nextEv.atMs - now) <= SLACK_MS;
-    const nearPrev = prev ? (now - prev.atMs) <= SLACK_MS : false;
-    if(nearNext || nearPrev) state = "slack";
+    if((nextEv.atMs - now) <= SLACK_MS || (prev && (now - prev.atMs) <= SLACK_MS)) state = "slack";
   }
-
   const events = future.slice(0, 4).map(e => ({
     type: e.type,
     atMs: e.atMs,
@@ -14647,8 +14600,112 @@ async function fetchNextTideEvent(station){
       ? formatTimeInTz(e.atMs, displayTimezone())
       : new Date(e.atMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
   }));
-
   return { state, events };
+}
+
+async function fetchJsonSafe(url, timeoutMs){
+  try {
+    const r = await fetch(url, { signal: bwiFetchSignal(timeoutMs || 10000) });
+    const text = await r.text();
+    if(!r.ok) return null;
+    try { return JSON.parse(text); } catch(e){ return null; }
+  } catch(e){ return null; }
+}
+
+// Primary tide source while NOAA CO-OPS datagetter is flaky: Open Waters runs
+// NOAA harmonic constituents locally and returns CORS-open extremes by lat/lng.
+async function fetchOpenWatersTideEvents(lat, lng, startMs, endMs){
+  if(lat == null || lng == null || !isFinite(lat) || !isFinite(lng)) return null;
+  const start = new Date(startMs).toISOString();
+  const end = new Date(endMs).toISOString();
+  const url = "https://api.openwaters.io/tides/extremes"
+    + `?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}`
+    + `&units=feet&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+  const d = await fetchJsonSafe(url, 12000);
+  if(!d || !Array.isArray(d.extremes) || !d.extremes.length) return null;
+  const all = [];
+  for(const ex of d.extremes){
+    const atMs = Date.parse(ex.time);
+    if(!isFinite(atMs)) continue;
+    const type = (ex.high || ex.label === "High") ? "H" : ((ex.low || ex.label === "Low") ? "L" : null);
+    if(!type) continue;
+    all.push({ type, atMs });
+  }
+  if(!all.length) return null;
+  const station = d.station && (d.station.id || d.station.source?.id)
+    ? String(d.station.id || d.station.source.id).replace(/^noaa\//, "")
+    : null;
+  return { all, station };
+}
+
+async function fetchCoopsHiloEvents(station, startMs, endMs){
+  if(!station) return null;
+  const pad = (n)=>String(n).padStart(2,"0");
+  const fmt = (d)=>`${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  const url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+    + "?product=predictions&interval=hilo&datum=MLLW&units=english&time_zone=gmt&format=json&application=bluewaterintel"
+    + `&station=${encodeURIComponent(station)}&begin_date=${encodeURIComponent(fmt(new Date(startMs)))}&end_date=${encodeURIComponent(fmt(new Date(endMs)))}`;
+  for(let attempt = 0; attempt < 2; attempt++){
+    const d = await fetchJsonSafe(url, 10000);
+    if(d && Array.isArray(d.predictions) && d.predictions.length){
+      const all = [];
+      for(const pr of d.predictions){
+        const atMs = Date.parse(String(pr.t).replace(" ", "T") + "Z");
+        if(isFinite(atMs)) all.push({ type: pr.type, atMs });
+      }
+      if(all.length) return all;
+    }
+    if(attempt === 0) await new Promise(r => setTimeout(r, 500));
+  }
+  return null;
+}
+
+// Location-first tide schedule for header / conditions / brief. Prefers Open
+// Waters (works when NOAA's public API is 5xx), then CO-OPS by station id.
+async function fetchTideSchedule(lat, lng, opts){
+  const o = opts || {};
+  const now = Date.now();
+  const startMs = o.startMs != null ? o.startMs : (now - 12 * 3600000);
+  const endMs = o.endMs != null ? o.endMs : (now + 48 * 3600000);
+  let station = o.station || null;
+  const ow = await fetchOpenWatersTideEvents(lat, lng, startMs, endMs);
+  if(ow && ow.all && ow.all.length){
+    if(ow.station){
+      station = ow.station;
+      _cacheTideStation(lat, lng, ow.station);
+    }
+    const sched = tideScheduleFromEvents(ow.all, now);
+    if(sched) return Object.assign(sched, { station, source: "openwaters" });
+  }
+  if(!station && typeof resolveTideStation === "function"){
+    station = await resolveTideStation(lat, lng, o.portKey || null);
+  }
+  if(!station && typeof nearestCoopsTideStation === "function"){
+    station = nearestCoopsTideStation(lat, lng, 120);
+  }
+  if(station){
+    const all = await fetchCoopsHiloEvents(station, startMs, endMs);
+    const sched = tideScheduleFromEvents(all, now);
+    if(sched) return Object.assign(sched, { station, source: "coops" });
+  }
+  return null;
+}
+
+// Upcoming tide events for a CO-OPS station (hi/lo predictions), in
+// CHRONOLOGICAL order, plus the current tide STATE. Prefer fetchTideSchedule
+// when a lat/lng is available — NOAA datagetter is often 502/504.
+//
+// Returns:
+//   { state: "rising" | "falling" | "slack" | null,
+//     events: [ { type: "H"|"L", timeTxt, atMs }, ... ] }  // soonest first
+async function fetchNextTideEvent(station, lat, lng){
+  if(lat != null && lng != null && isFinite(lat) && isFinite(lng)){
+    const sched = await fetchTideSchedule(lat, lng, { station });
+    if(sched) return sched;
+  }
+  const now = Date.now();
+  const all = await fetchCoopsHiloEvents(station, now - 6 * 3600000, now + 48 * 3600000);
+  return tideScheduleFromEvents(all, now);
 }
 
 // Turn the Bite Map on once the user has picked both required inputs.

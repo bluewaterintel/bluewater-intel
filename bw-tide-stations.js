@@ -18,8 +18,9 @@ const COOPS_REF_TIDE_STATIONS = [
   { id: "8518750", lat: 40.700, lng: -74.014 },   // The Battery, NY
   { id: "8534720", lat: 39.355, lng: -74.418 },   // Atlantic City, NJ
   { id: "8536110", lat: 38.967, lng: -74.960 },   // Cape May, NJ
-  { id: "8570283", lat: 38.328, lng: -75.091 },   // Ocean City, MD
-  { id: "8571892", lat: 38.317, lng: -75.628 },   // Ocean City Inlet
+  { id: "8570280", lat: 38.327, lng: -75.083 },   // Ocean City Fishing Pier, MD
+  { id: "8570283", lat: 38.328, lng: -75.091 },   // Ocean City Inlet, MD
+  { id: "8571892", lat: 38.317, lng: -75.628 },   // Ocean City (Isle of Wight Bay)
   { id: "8575512", lat: 37.607, lng: -75.691 },   // Chincoteague, VA
   { id: "8638610", lat: 36.966, lng: -76.113 },   // Sewells Point, VA
   { id: "8638909", lat: 37.032, lng: -76.458 },   // Jamestown, VA
