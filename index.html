@@ -380,11 +380,15 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   .nav-bar{width:20px;height:2.5px}
   .nav-label{display:none}
   #nav-menu{
-    width:calc(100vw - 16px) !important;
-    right:8px !important;
     left:8px !important;
+    right:8px !important;
+    width:auto !important;
+    max-width:none !important;
     max-height:calc(100dvh - var(--bw-hdr-h, 100px) - 12px) !important;
     top:calc(env(safe-area-inset-top, 0px) + var(--bw-hdr-h, 100px) + 4px) !important;
+    overflow-x:hidden !important;
+    overscroll-behavior-x:none;
+    touch-action:pan-y;
   }
 }
 
@@ -621,6 +625,10 @@ body.nav-open #ruler-readout{
   pointer-events:none;
   transition:opacity .15s ease-out;
 }
+body.nav-open{
+  overflow:hidden;
+  overscroll-behavior:none;
+}
 /* Block map pan/zoom while the ocean-legend detail sheet is open */
 body.ocean-legend-sheet-open .leaflet-container,
 body.ocean-legend-sheet-open .leaflet-pane,
@@ -650,25 +658,27 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
 /* ── AI Captain's Brief map tile (right icon column) ─────────────────────── */
 #brief-toggle{
   width:52px;height:52px;
-  background:linear-gradient(180deg,rgba(14,165,165,.95),rgba(6,120,120,.95));
-  border:1px solid rgba(94,234,212,.45);
+  background:#0d9488;
+  border:1px solid #5eead4;
   border-radius:12px;
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;
-  box-shadow:0 4px 16px rgba(14,165,165,.4);
+  box-shadow:0 4px 16px rgba(13,148,136,.55);
   user-select:none;
   transition:background .15s, transform .12s, box-shadow .15s;
   overflow:hidden;
+  opacity:1;
 }
 #brief-toggle:hover{
-  background:linear-gradient(180deg,rgba(20,184,184,.98),rgba(8,145,145,.98));
-  box-shadow:0 6px 20px rgba(14,165,165,.55);
+  background:#14b8a6;
+  box-shadow:0 6px 20px rgba(13,148,136,.65);
 }
 #brief-toggle:active{ transform:scale(.95); }
 #brief-toggle.is-setup{
-  background:linear-gradient(180deg,rgba(14,165,165,.55),rgba(6,120,120,.45));
-  border-color:rgba(94,234,212,.3);
-  box-shadow:0 4px 14px rgba(14,165,165,.22);
+  background:#0d9488;
+  border-color:#5eead4;
+  box-shadow:0 4px 16px rgba(13,148,136,.55);
+  opacity:1;
 }
 #brief-toggle.is-setup img{
   opacity:.92;
@@ -1190,7 +1200,7 @@ body.modal-open #brief-toggle{
   #layers-ctrl{right:6px;gap:6px}
   #brief-toggle{
     width:40px !important;height:40px !important;border-radius:10px;
-    box-shadow:0 3px 10px rgba(14,165,165,.32) !important;
+    box-shadow:0 3px 10px rgba(13,148,136,.5) !important;
   }
   #brief-toggle img{width:22px !important;height:22px !important;}
   #layers-toggle,#ruler-toggle,#wpdrop-toggle,#basemap-toggle,#settings-toggle,#catch-log-toggle{
@@ -1666,6 +1676,13 @@ body.modal-open #brief-toggle{
 .wp-active-tooltip.leaflet-tooltip::before{display:none}
 
 /* Nav menu items styled as buttons (no anchor href to avoid Claude app prompt) */
+#nav-menu{
+  overflow-x:hidden;
+  overscroll-behavior-x:none;
+  overscroll-behavior-y:contain;
+  touch-action:pan-y;
+  box-sizing:border-box;
+}
 #nav-menu button[type="button"]{
   background:transparent;border:none;cursor:pointer;display:flex;
   width:100%;padding:13px 18px;color:inherit;
@@ -1729,8 +1746,8 @@ body.modal-open #brief-toggle{
   font-size:17px;line-height:1;
 }
 .nav-row-body{min-width:0;flex:1}
-.nav-row-title{font-size:14px;font-weight:600;color:#f0f6ff;line-height:1.25}
-.nav-row-sub{font-size:11px;color:#93a4b8;margin-top:1px;line-height:1.3}
+.nav-row-title{font-size:14px;font-weight:600;color:#f0f6ff;line-height:1.25;overflow-wrap:anywhere}
+.nav-row-sub{font-size:11px;color:#93a4b8;margin-top:1px;line-height:1.3;overflow-wrap:anywhere}
 /* Trailing chevron */
 .nav-chevron{
   flex-shrink:0;opacity:.5;
@@ -2328,8 +2345,10 @@ body.modal-open #brief-toggle{
 
   </div>
 
-  <!-- ── NAV POPOUT (opens from MENU button) ── -->
-  <div id="nav-menu" style="
+</div>
+
+<!-- ── NAV POPOUT (opens from MENU button) — must sit outside #hdr so fixed positioning is viewport-anchored) ── -->
+<div id="nav-menu" style="
     display:none;
     position:fixed;
     top:70px;
@@ -2495,8 +2514,6 @@ body.modal-open #brief-toggle{
       MAINE TO SOUTHERN CALIFORNIA
     </div>
   </div>
-
-</div>
 
 <!-- MAP -->
 <div id="map">

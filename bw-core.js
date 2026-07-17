@@ -14499,6 +14499,7 @@ function navBack(closeFn){
   // chart never flashes between the two states. A one-tick guard prevents the
   // same click from bubbling to the document outside-click handler.
   _navBackGuard = true;
+  ensureNavMenuPortal();
   document.body.classList.add("nav-open");
   const m = document.getElementById("nav-menu");
   if(m) m.style.display = "block";
@@ -14684,7 +14685,15 @@ window.bwOnSignedIn = async function (user) {
 // ════════════════════════════════════════════════════════════════════════════
 // NAV MENU
 // ════════════════════════════════════════════════════════════════════════════
+function ensureNavMenuPortal(){
+  const m = document.getElementById("nav-menu");
+  // #hdr uses backdrop-filter, which creates a containing block and breaks
+  // position:fixed — keep the menu on document.body so it stays put on mobile.
+  if(m && m.parentElement !== document.body) document.body.appendChild(m);
+}
+
 function toggleNav(){
+  ensureNavMenuPortal();
   const m=document.getElementById('nav-menu');
   const opening = m.style.display==='none';
   m.style.display = opening ? 'block' : 'none';
@@ -14715,7 +14724,10 @@ document.addEventListener('click',e=>{
   }
 });
 
-window.addEventListener("load",initMap);
+window.addEventListener("load",()=>{
+  ensureNavMenuPortal();
+  initMap();
+});
 document.addEventListener("visibilitychange", () => {
   if(document.visibilityState !== "visible") return;
   if(typeof ensureFreshestSatDates === "function") ensureFreshestSatDates();
