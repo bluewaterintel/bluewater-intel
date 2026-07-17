@@ -5039,7 +5039,8 @@ function hotspotRankScore(cell){
 
 // Pick the top N hotspot badges with geographic separation so the pins represent
 // genuinely different areas. Shared by renderPrediction and topBriefHotspots so
-// the banner run plan and map badges always agree.
+// the banner run plan and map badges always agree. Badge numbers (#1, #2, #3)
+// always follow raw bite score — highest % is #1.
 function pickTopHotspotBadges(hotspots, limit){
   limit = limit || 3;
   if(!Array.isArray(hotspots) || !hotspots.length) return [];
@@ -5048,13 +5049,18 @@ function pickTopHotspotBadges(hotspots, limit){
     const d = (typeof cell.distNm === "number") ? cell.distNm : 20;
     return Math.min(13, Math.max(5, d * 0.18));
   };
-  const ranked = hotspots.slice().sort((a, b) => hotspotRankScore(b) - hotspotRankScore(a));
+  const ranked = hotspots.slice().sort((a, b) => {
+    const ds = (Number(b.score) || 0) - (Number(a.score) || 0);
+    if(Math.abs(ds) > 0.0001) return ds;
+    return hotspotRankScore(b) - hotspotRankScore(a);
+  });
   for(const cell of ranked){
     if(chosen.length >= limit) break;
     const minSep = sepFor(cell);
     const farEnough = chosen.every(c => nmBetween(c.lat, c.lng, cell.lat, cell.lng) >= minSep);
     if(farEnough) chosen.push(cell);
   }
+  chosen.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
   return chosen;
 }
 
@@ -7510,6 +7516,8 @@ function bindPredictInteractionHandlers(){
       MAP.closeTooltip(_predictTooltip);
       return;
     }
+    // Phone has no hover — sticky tooltips at the tap point looked like a low popup.
+    if(typeof isPhoneView === "function" && isPhoneView()){ MAP.closeTooltip(_predictTooltip); return; }
     if(!layerVis.predict || !_predictGrid || _predictZooming){ return; }
     _lastLL = e.latlng;
     if(_mmScheduled) return;
@@ -7546,6 +7554,7 @@ function bindPredictInteractionHandlers(){
     if(typeof rulerActive !== "undefined" && rulerActive){ return; }
     if(typeof wpDropMode !== "undefined" && wpDropMode){ return; }
     if(!layerVis.predict || !_predictGrid){ return; }
+    MAP.closeTooltip(_predictTooltip);
     const cell = nearestPredictCell(e.latlng);
     if(cell) showPredictionExplainer(cell, _predictSpecies);
   });
@@ -7749,8 +7758,8 @@ function renderPrediction(grid, species, final, heatGridOverride, gridStep, grid
       }),
       zIndexOffset: 500,
     });
-    badge.on('click', () => {
-      if(typeof rulerActive !== "undefined" && rulerActive) return;
+    badge.on('click', (e) => {
+      if(typeof rulerHandleMarkerClick === "function" && rulerHandleMarkerClick(e, cell.lat, cell.lng)) return;
       showPredictionExplainer(cell, species);
     });
     badge.addTo(MAP);
@@ -7824,12 +7833,8 @@ function showPredictionExplainer(cell, species){
 
   const div = document.createElement("div");
   div.id = "predict-explainer";
-  const panelTop = (typeof viewportPanelTopPx === "function") ? viewportPanelTopPx(8) : 128;
-  const panelBottom = 14;
-  div.style.top = `${panelTop}px`;
-  div.style.bottom = `${panelBottom}px`;
-  div.style.maxHeight = `calc(100dvh - ${panelTop + panelBottom}px)`;
   document.body.appendChild(div);
+  syncExplainerPosition();
 
   // Stop scroll events from bubbling to the map underneath
   const stopProp = e => e.stopPropagation();
@@ -7846,6 +7851,8 @@ function showPredictionExplainer(cell, species){
   renderExplainerMain();
   persistExplainerState();
   updateBriefFab();
+  // Re-measure after paint — phone header wraps to two rows once visible.
+  requestAnimationFrame(() => { syncExplainerPosition(); requestAnimationFrame(syncExplainerPosition); });
 }
 
 function renderExplainerMain(){
@@ -10318,13 +10325,7 @@ function updateBiteBanner(){
     }
   }
   updateWindBiteSyncHints();
-  const expl = document.getElementById("predict-explainer");
-  if(expl && typeof viewportPanelTopPx === "function"){
-    const top = viewportPanelTopPx(8);
-    const bottom = 14;
-    expl.style.top = top + "px";
-    expl.style.maxHeight = `calc(100dvh - ${top + bottom}px)`;
-  }
+  syncExplainerPosition();
 }
 
 function updateScaleBar(){
@@ -12139,6 +12140,7 @@ window.addEventListener("resize", () => {
   syncHeaderHeightVar();
   refreshWpLegendDisplay();
   restackBottomControls();
+  if(typeof syncExplainerPosition === "function") syncExplainerPosition();
   if(typeof isPhoneView === "function" && !isPhoneView()){
     if(typeof closeOceanLegendSheet === "function") closeOceanLegendSheet();
     document.querySelectorAll(".map-time-pill--open").forEach(p => {
@@ -12794,6 +12796,7 @@ function openBriefModal(){
     + (!hasBrief && !historyHtml ? `<p class="brief-empty">Generate a brief from the chart, or open one from your saved list above.</p>` : "");
   if(sub) sub.textContent = hasBrief ? briefModalSubtitle() : (briefHistoryLoad().length ? "Tap a saved brief below to reopen it" : briefModalSubtitle());
   modal.classList.add("open");
+  modal.scrollTop = 0;
   body.scrollTop = 0;
 }
 function openRecentBriefs(){
@@ -14267,11 +14270,29 @@ function syncHeaderHeightVar(){
   document.documentElement.style.setProperty("--bw-hdr-h", px + "px");
   return px;
 }
-// Viewport-fixed panel top: header + optional bite banner + gap.
+// Viewport-fixed panel top: app header + gap. The bite banner is a map overlay
+// (not layout chrome), so fixed panels must not offset by banner height.
 function viewportPanelTopPx(gap){
   const hdr = syncHeaderHeightVar();
-  const banner = (typeof biteBannerHeightPx === "function") ? biteBannerHeightPx() : ((typeof layerVis !== "undefined" && layerVis.predict) ? 56 : 0);
-  return hdr + banner + (gap != null ? gap : 8);
+  return hdr + (gap != null ? gap : 8);
+}
+
+// Pin the bite explainer under the header (top sheet on phone).
+function syncExplainerPosition(){
+  const expl = document.getElementById("predict-explainer");
+  if(!expl) return;
+  syncHeaderHeightVar();
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
+  const top = viewportPanelTopPx(phone ? 6 : 8);
+  const bottomPad = phone ? 12 : 14;
+  expl.style.top = `${top}px`;
+  if(phone){
+    expl.style.bottom = "auto";
+    expl.style.maxHeight = `calc(100dvh - ${top + bottomPad}px - env(safe-area-inset-bottom, 0px))`;
+  } else {
+    expl.style.bottom = `${bottomPad}px`;
+    expl.style.maxHeight = `calc(100dvh - ${top + bottomPad}px)`;
+  }
 }
 
 // Tide station cache — reused by the 6-day forecast so it doesn't need a full
