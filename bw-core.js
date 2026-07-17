@@ -338,10 +338,10 @@ const SAT_MAX_DAYS_BACK = 14;
 let SAT_FRESH_BACK = { sst: 1, chlor: 1 };
 let SAT_FRESH_DATE = { sst: null, chlor: null };
 // Per-layer display opacity for the ocean overlays, driven by the vertical
-// opacity slider on the right of the map. Defaults match the values the layers
-// were originally built with (SST .65, chlor .55). Persisted so a user's
+// opacity slider on the right of the map. Defaults: SST and chlor both at 55%
+// so structure lines stay readable without manual dimming. Persisted so a user's
 // preferred dim level survives navigation and reloads.
-const OCEAN_OPACITY_DEFAULT = { sst: 0.65, chlor: 0.55 };
+const OCEAN_OPACITY_DEFAULT = { sst: 0.55, chlor: 0.55 };
 let oceanOpacity = { ...OCEAN_OPACITY_DEFAULT };
 try {
   const saved = JSON.parse(localStorage.getItem("bwi_ocean_opacity") || "null");
@@ -8656,8 +8656,9 @@ function updateOpacityControl(valueOnly){
   const box = document.getElementById("ocean-opacity-control");
   if(!box) return;
   const key = activeOceanLayerKey();
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
   if(!valueOnly){
-    box.style.display = key ? "flex" : "none";
+    box.style.display = (key && !phone) ? "flex" : "none";
   }
   if(!key) return;
   const pct = Math.round(oceanOpacity[key] * 100);
@@ -14361,22 +14362,24 @@ function resetExplainerScrollTop(){
   requestAnimationFrame(() => { expl.scrollTop = 0; });
 }
 
-// Pin the bite explainer under the header (top sheet on phone).
+// Pin the bite explainer under the header on desktop; on phone the full-screen
+// backdrop covers the header so CSS anchors the sheet to the viewport top.
 function syncExplainerPosition(){
   const expl = document.getElementById("predict-explainer");
   if(!expl) return;
-  syncHeaderHeightVar();
   const phone = (typeof isPhoneView === "function") && isPhoneView();
-  const top = viewportPanelTopPx(phone ? 6 : 8);
-  const bottomPad = phone ? 12 : 14;
-  expl.style.top = `${top}px`;
   if(phone){
+    expl.style.top = "";
     expl.style.bottom = "auto";
-    expl.style.maxHeight = `calc(100dvh - ${top + bottomPad}px - env(safe-area-inset-bottom, 0px))`;
-  } else {
-    expl.style.bottom = `${bottomPad}px`;
-    expl.style.maxHeight = `calc(100dvh - ${top + bottomPad}px)`;
+    expl.style.maxHeight = "";
+    return;
   }
+  syncHeaderHeightVar();
+  const top = viewportPanelTopPx(8);
+  const bottomPad = 14;
+  expl.style.top = `${top}px`;
+  expl.style.bottom = `${bottomPad}px`;
+  expl.style.maxHeight = `calc(100dvh - ${top + bottomPad}px)`;
 }
 
 // Tide station cache — reused by the 6-day forecast so it doesn't need a full

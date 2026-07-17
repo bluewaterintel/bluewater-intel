@@ -62,6 +62,8 @@ body{
 
 :root{
   --bw-marlin-filter:brightness(0) saturate(100%) invert(94%) sepia(6%) saturate(140%) hue-rotate(192deg) brightness(112%) contrast(90%);
+  /* Solid map chrome — legends, bottom pills, scale bar (no map bleed-through). */
+  --bw-map-chrome-bg:#0a1628;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -715,7 +717,7 @@ body.modal-open #brief-toggle{
   align-items:center;
   gap:6px;
   padding:12px 8px 10px;
-  background:rgba(10,22,40,.92);
+  background:var(--bw-map-chrome-bg);
   border:1px solid rgba(255,255,255,.18);
   border-radius:12px;
   box-shadow:0 4px 14px rgba(0,0,0,.55);
@@ -758,8 +760,8 @@ body.modal-open #brief-toggle{
 .ocean-opacity-cap{font-size:11px;color:#9ec5e8;line-height:1;opacity:.8}
 
 @media (max-width:680px){
-  #ocean-opacity-control{right:64px;padding:10px 6px 8px}
-  #ocean-opacity-input{height:120px}
+  /* SST/chlor dimmer is desktop-only — fixed 55% opacity on phones. */
+  #ocean-opacity-control{display:none !important}
 }
 
 /* Leaflet popups need to render above the right-side icon column (z-index 600)
@@ -1059,7 +1061,7 @@ body.modal-open #brief-toggle{
 .map-time-pill{
   display:none;position:absolute;
   bottom:80px;left:50%;transform:translateX(-50%);z-index:500;
-  background:rgba(10,22,40,.94);
+  background:var(--bw-map-chrome-bg);
   border-radius:14px;
   padding:12px 18px 10px;
   font-family:'Segoe UI',Arial,sans-serif;
@@ -1200,7 +1202,7 @@ body.modal-open #brief-toggle{
 #mobile-controls-toggle{
   display:none;position:absolute;left:50%;bottom:34px;transform:translateX(-50%);
   z-index:501;
-  background:rgba(10,22,40,.94);border:1px solid rgba(107,191,234,.3);
+  background:var(--bw-map-chrome-bg);border:1px solid rgba(107,191,234,.3);
   color:#cfe5ff;font-family:'Segoe UI',Arial,sans-serif;font-weight:700;
   font-size:11px;letter-spacing:.06em;padding:6px 15px;border-radius:999px;
   box-shadow:0 4px 14px rgba(0,0,0,.5);cursor:pointer;
@@ -1233,7 +1235,6 @@ body.modal-open #brief-toggle{
   #layers-toggle svg,#ruler-toggle svg,#wpdrop-toggle svg,#basemap-toggle svg,#settings-toggle svg,#catch-log-toggle svg{
     width:20px !important;height:20px !important;
   }
-  #ocean-opacity-control{right:52px}
   /* Ocean legend — full width between left edge and right toolbar */
   #ocean-legend{
     pointer-events:auto !important;
@@ -1353,7 +1354,11 @@ body.modal-open #brief-toggle{
   z-index:500;
   font-family:Arial,sans-serif;
   pointer-events:none;
-  /* No bubble — a fine measuring line drawn directly on the map */
+  background:var(--bw-map-chrome-bg);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:8px;
+  padding:6px 8px 5px;
+  box-shadow:0 3px 12px rgba(0,0,0,.55);
 }
 .wp-radius-btn{
   background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.32);
@@ -2548,7 +2553,7 @@ body.modal-open #brief-toggle{
   <div id="bite-banner" style="
     display:none;position:absolute;
     top:8px;left:50%;transform:translateX(-50%);z-index:501;
-    background:rgba(10,22,40,.92);
+    background:var(--bw-map-chrome-bg);
     border:1px solid rgba(255,255,255,.18);
     border-radius:10px;
     padding:6px 12px 7px;
@@ -2577,7 +2582,7 @@ body.modal-open #brief-toggle{
   <div id="ocean-legend" style="
     display:none;position:absolute;
     top:6px;left:4px;right:4px;transform:none;z-index:500;
-    background:rgba(10,22,40,.94);
+    background:var(--bw-map-chrome-bg);
     border:1px solid rgba(107,191,234,.3);
     border-radius:10px;
     padding:8px 10px;
@@ -2700,6 +2705,14 @@ body.modal-open #brief-toggle{
     <span>4 h ago</span>
     <button id="radar-loop-btn" type="button" class="map-time-pill-play" onclick="toggleRadarLoop()">▶ Play storm loop</button>
     <span>Now →</span>
+  </div>
+</div>
+
+<!-- Distance scale bar — nautical miles; opaque chrome so map markers don't show through. -->
+<div id="map-scale-bar" aria-hidden="true">
+  <div id="scale-bar-track">
+    <div id="scale-bar-fill"></div>
+    <span id="scale-bar-label-nm">10 nm</span>
   </div>
 </div>
 
@@ -2842,8 +2855,8 @@ body.modal-open #brief-toggle{
      underneath; drag UP to bring it back to full strength. -->
 <div id="ocean-opacity-control" aria-label="Ocean layer opacity">
   <div id="ocean-opacity-label">SST</div>
-  <div id="ocean-opacity-readout">65%</div>
-  <input id="ocean-opacity-input" type="range" min="0" max="100" step="1" value="65"
+  <div id="ocean-opacity-readout">55%</div>
+  <input id="ocean-opacity-input" type="range" min="0" max="100" step="1" value="55"
     orient="vertical"
     aria-label="Adjust opacity of the active ocean layer"
     oninput="onOceanOpacityInput(this.value)">
@@ -4585,13 +4598,14 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
 #predict-explainer img,#predict-explainer svg,#predict-explainer table{max-width:100%}
 @media (max-width:680px){
   #predict-explainer{
-    left:8px !important;
-    right:8px !important;
+    left:0 !important;
+    right:0 !important;
     padding:14px 14px;
-    border-radius:10px;
-    top:calc(var(--bw-hdr-h, 64px) + env(safe-area-inset-top, 0px) + 6px) !important;
+    border-radius:0 0 12px 12px;
+    /* Full-screen backdrop covers the header — anchor to viewport top, not hdr offset. */
+    top:env(safe-area-inset-top, 0px) !important;
     bottom:auto !important;
-    max-height:min(78dvh, calc(100dvh - var(--bw-hdr-h, 64px) - env(safe-area-inset-top, 0px) - 18px)) !important;
+    max-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 8px) !important;
   }
   #brief-modal{
     align-items:flex-start;
