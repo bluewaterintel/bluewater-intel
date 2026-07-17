@@ -14632,9 +14632,13 @@ async function fetchOpenWatersTideEvents(lat, lng, startMs, endMs){
     all.push({ type, atMs });
   }
   if(!all.length) return null;
-  const station = d.station && (d.station.id || d.station.source?.id)
-    ? String(d.station.id || d.station.source.id).replace(/^noaa\//, "")
-    : null;
+  // Prefer a numeric NOAA station id when Open Waters snapped to CO-OPS harmonics.
+  let station = null;
+  const rawId = d.station && (d.station.source?.id || d.station.id);
+  if(rawId != null){
+    const s = String(rawId).replace(/^noaa\//i, "");
+    if(/^\d{7}$/.test(s)) station = s;
+  }
   return { all, station };
 }
 
