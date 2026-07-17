@@ -6895,29 +6895,40 @@ function getAltimetryField(lat, lng){
   return { slaM, ugos:u, vgos:v, geoSpeedKts, geoSetDeg };
 }
 
-// Color for SSH anomaly across −0.2 … +0.2 m: blue → green → yellow → red.
 function _altimetryColor(slaM){
   const rgba = _altimetryRGBA(slaM);
   if(!rgba) return null;
   return `rgba(${rgba[0]},${rgba[1]},${rgba[2]},${(rgba[3]/255).toFixed(2)})`;
 }
-// Same color ramp as _altimetryColor but returns [r,g,b,a0-255] for ImageData,
-// or null for no-data cells. Used by the smooth-fill offscreen canvas so SSH
-// renders as a continuous gradient instead of blocky cells.
+// Returns [r,g,b,a0-255] for ImageData, or null for near-flat / no-data cells
+// (drawn transparent). Diverging ramp: cold-core eddies (−SSH) deep blue→cyan,
+// warm-core eddies (+SSH) amber→hot red. Flat water stays transparent so the
+// chart underneath reads clean. _altimetryColor() is the CSS-string wrapper.
 function _altimetryRGBA(slaM){
   if(!isFinite(slaM)) return null;
-  // Continuous scale matching the legend (−0.2 m … Flat … +0.2 m).
-  const t = Math.max(0, Math.min(1, (slaM + 0.2) / 0.4));
-  const mag = Math.abs(slaM);
-  // Soften true flat water so the chart stays readable, but keep a hint of green.
-  const alpha = Math.round((0.20 + 0.48 * Math.min(1, Math.max(0.15, mag / 0.16))) * 255);
-  const stops = [
-    [0.00,  30,  90, 220],  // blue  (−0.2 m)
-    [0.33,  36, 175, 105],  // green (near flat / cool side)
-    [0.66, 240, 205,  48],  // yellow
-    [1.00, 220,  48,  42],  // red   (+0.2 m)
-  ];
-  return _altiLerpStop(stops, t).concat([alpha]);
+  const m = Math.abs(slaM);
+  // Fully transparent for genuinely flat water — keeps the field crisp.
+  if(m < 0.03) return null;
+  // 0..1 intensity, reaching full strength by ~0.22 m. Slight ease-out so
+  // moderate eddies already show strong, saturated color.
+  const t = Math.min(1, m * 4.2);
+  const eased = Math.pow(t, 0.78);
+  // Opacity floor keeps faint edges visible; ceiling beats the basemap so
+  // colors are vivid, not pastel (~0.34 → 0.86).
+  const alpha = Math.round((0.34 + 0.52 * eased) * 255);
+
+  if(slaM > 0){
+    // Warm / anticyclonic: amber → hot red as it strengthens.
+    const r = Math.round(255);
+    const g = Math.round(150 - 140 * eased);   // 150 (amber) → 10 (red)
+    const b = Math.round(70  - 55  * eased);    // 70  (amber) → 15
+    return [r, g, b, alpha];
+  }
+  // Cold / cyclonic: deep blue → bright cyan as it strengthens.
+  const r = Math.round(20  + 20  * eased);    // stays low
+  const g = Math.round(120 + 110 * eased);   // 120 → 230 (cyan)
+  const b = Math.round(230 + 25  * eased);   // 230 → 255
+  return [r, g, b, alpha];
 }
 function _altiLerpStop(stops, t){
   let i = 0;
@@ -7407,18 +7418,18 @@ const AltimetryLayer = L.Layer.extend({
         if(!any) continue;
         if(pass === "base"){
           ctx.shadowBlur=0;
-          ctx.strokeStyle=major?"rgba(255,255,255,0.32)":"rgba(255,255,255,0.14)";
-          ctx.lineWidth=major?1.05:0.7;
+          ctx.strokeStyle=major?"rgba(255,255,255,0.22)":"rgba(255,255,255,0.10)";
+          ctx.lineWidth=major?0.9:0.6;
           ctx.stroke();
         } else {
-          // Dark understroke + bright white so packed isolines read as a wall
-          // against both warm (red) and cold (blue) SSH fill.
+          // Dark understroke + white so packed isolines read as a wall against
+          // the bolder warm/cold fill — slightly softer so the field stays clean.
           ctx.shadowBlur=0;
-          ctx.strokeStyle="rgba(8,16,32,0.72)";
-          ctx.lineWidth=major?3.1:2.2;
+          ctx.strokeStyle="rgba(8,16,32,0.55)";
+          ctx.lineWidth=major?2.6:1.8;
           ctx.stroke();
-          ctx.strokeStyle=major?"rgba(255,255,255,0.95)":"rgba(255,255,255,0.78)";
-          ctx.lineWidth=major?2.35:1.55;
+          ctx.strokeStyle=major?"rgba(255,255,255,0.70)":"rgba(255,255,255,0.55)";
+          ctx.lineWidth=major?1.9:1.25;
           ctx.stroke();
         }
       }
@@ -8162,6 +8173,8 @@ function closeExplainer(){
 // Open a sub-panel inside the explainer (replaces main content with weather,
 // AI brief, or reports for the hotspot location)
 function openSubPanel(kind){
+  // AI Captain's Brief is paid-subscription only (not free, not trial).
+  if(kind === "brief" && typeof requirePaid === "function" && !requirePaid()) return;
   const div = document.getElementById("predict-explainer");
   if(!div || !_explainerState) return;
   const {cell, species} = _explainerState;
@@ -10263,7 +10276,7 @@ function updateOceanLegend(){
     parts.push(`
       <div style="${gap()}">
         ${altiTitleRow}
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1e5adc 0%,#24b06a 33%,#f0cd30 66%,#dc302a 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1e88ff 0%,#22d3ee 26%,#1b2233 50%,#ffa63a 74%,#ff2a1a 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>−0.2 m</span><span>Flat</span><span>+0.2 m</span>
         </div>
@@ -10272,8 +10285,8 @@ function updateOceanLegend(){
         <div style="margin-top:7px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
           <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${altiRangeNm}-nm fishing range are highlighted.</span>
           <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">↗</span><span><b style="color:#fde68a">Amber arrow</b> — 1-day drift for a <b>tracked</b> break (2–${ALTI_MAX_DRIFT_NM_PER_DAY} nm). No arrow = different feature or moved too far to link.</span>
-          <span style="justify-self:center;color:#f87171;font-size:13px;line-height:1">●</span><span><b style="color:#f8b4b4">Red — warm bulge</b> (Gulf Stream, warm-core eddy). Bait &amp; pelagics stack on the edges — not the center.</span>
-          <span style="justify-self:center;color:#60a5fa;font-size:13px;line-height:1">●</span><span><b style="color:#bcd6f8">Blue — cool depression</b> (cold-core eddy, upwelling). Nutrient-rich; good for bait and surface feeding.</span>
+          <span style="justify-self:center;color:#ff2a1a;font-size:13px;line-height:1">●</span><span><b style="color:#ffb4a8">Amber/red — warm bulge</b> (Gulf Stream, warm-core eddy). Bait &amp; pelagics stack on the edges — not the center.</span>
+          <span style="justify-self:center;color:#22d3ee;font-size:13px;line-height:1">●</span><span><b style="color:#a5f3fc">Blue/cyan — cool depression</b> (cold-core eddy, upwelling). Nutrient-rich; good for bait and surface feeding.</span>
           <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">〜</span><span><b style="color:#eef0f6">White contours — equal SSH.</b> Tightly-packed lines = a steep gradient = a temperature/current break.</span>
           <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">→</span><span><b style="color:#eef0f6">Arrows — geostrophic flow</b> (from the SSH slope, not a direct measurement). Shows eddy rotation; longer = stronger.</span>
         </div>
@@ -11203,7 +11216,7 @@ async function refreshEntitlement(){
         const st = p.subscription_status;
         const cpe = p.current_period_end ? new Date(p.current_period_end).getTime() : 0;
         if(p.is_owner){ premium = true; paid = true; admin = true; }              // owner: full access
-        else if(st === "active"){ premium = true; paid = true; }
+        else if(st === "active" || st === "lifetime"){ premium = true; paid = true; }
         else if(st === "trialing"){ premium = true; paid = false; }   // trial: app yes, brief no
         else if(cpe > Date.now() && st !== "canceled"){ premium = true; paid = true; } // grace period
       }
@@ -11227,6 +11240,7 @@ function requirePaid(){ if(BW_PAID) return true; if(typeof openPricing === "func
 // on. Free baseline (maps, ports, catches, personal/owned waypoints) stays.
 function applyEntitlementGating(){
   applyProMenuBadges();  // always refresh Pro badges (both free and premium)
+  if(typeof updateBriefFab === "function") updateBriefFab();
   if(BW_PREMIUM) return;
   // LORAN is a Pro layer — make sure a free user can't carry a "keep it on by
   // default" preference (e.g. set while subscribed, or from a synced blob) that
@@ -13982,7 +13996,16 @@ function updateBriefFab(){
   const btn = document.getElementById("brief-toggle");
   if(!btn) return;
 
-  btn.classList.remove("is-setup");
+  btn.classList.remove("is-setup", "is-locked");
+  // Paid subscription (or owner) only — free + trial see a locked FAB that
+  // opens the upgrade modal instead of the brief.
+  const paid = (typeof BW_PAID !== "undefined") && BW_PAID;
+  if(!paid){
+    btn.classList.add("is-locked");
+    btn.title = "AI Captain's Brief — subscription required";
+    btn.setAttribute("aria-label", btn.title);
+    return;
+  }
   if(!activePort || !activeSpId || activeSpId === "all"){
     btn.classList.add("is-setup");
   }
@@ -14022,6 +14045,9 @@ function briefBestCellForSpecies(sp, portObj){
 }
 
 function onBriefFabClick(){
+  // AI Captain's Brief is paid-only — block free and trial before any setup UI.
+  if(typeof requirePaid === "function" && !requirePaid()) return;
+
   if(!activePort){
     if(typeof togglePortDd === "function") togglePortDd();
     return;

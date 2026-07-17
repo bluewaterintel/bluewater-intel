@@ -475,16 +475,16 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     border-radius:18px 18px 0 0 !important;
     margin:0 !important;
   }
-  /* ── Ocean/weather legend — full width under header, clears right toolbar ── */
+  /* ── Ocean/weather legend — ~3/4 width under header (leaves map clear on right) ── */
   #ocean-legend{
     padding:4px 6px !important;
     min-width:0 !important;
-    width:auto !important;
+    width:75% !important;
     left:4px !important;
-    right:4px !important;
+    right:auto !important;
     top:6px !important;
     transform:none !important;
-    max-width:none !important;
+    max-width:75% !important;
     overflow:visible !important;
     border-radius:9px !important;
   }
@@ -685,6 +685,17 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
   box-shadow:0 6px 20px rgba(13,148,136,.65);
 }
 #brief-toggle:active{ transform:scale(.95); }
+/* Free / trial — visible but locked; tap opens upgrade (paid subscription only). */
+#brief-toggle.is-locked{
+  background:#0f3d3a;
+  border-color:rgba(94,234,212,.35);
+  box-shadow:0 2px 10px rgba(0,0,0,.4);
+  opacity:.55;
+}
+#brief-toggle.is-locked img{
+  opacity:.55;
+  filter:var(--bw-marlin-filter) grayscale(.35) drop-shadow(0 1px 2px rgba(4,47,46,.4));
+}
 #brief-toggle.is-setup{
   background:#0d9488;
   border-color:#5eead4;
@@ -1240,14 +1251,15 @@ body.modal-open #brief-toggle{
   #layers-toggle svg,#ruler-toggle svg,#wpdrop-toggle svg,#basemap-toggle svg,#settings-toggle svg,#catch-log-toggle svg{
     width:20px !important;height:20px !important;
   }
-  /* Ocean legend — full width between left edge and right toolbar */
+  /* Ocean legend — ~3/4 width from the left edge */
   #ocean-legend{
     pointer-events:auto !important;
     left:4px !important;
-    right:4px !important;
+    right:auto !important;
     top:6px !important;
     transform:none !important;
-    max-width:none !important;
+    width:75% !important;
+    max-width:75% !important;
     min-width:0 !important;
     padding:4px 6px !important;
     max-height:none !important;
@@ -2584,7 +2596,7 @@ body.modal-open #brief-toggle{
        behind the app header). Updated by updateOceanLegend(). -->
   <div id="ocean-legend" style="
     display:none;position:absolute;
-    top:6px;left:4px;right:4px;transform:none;z-index:500;
+    top:6px;left:4px;right:auto;transform:none;z-index:500;
     background:var(--bw-map-chrome-bg);
     border:1px solid rgba(107,191,234,.3);
     border-radius:10px;
@@ -2592,9 +2604,9 @@ body.modal-open #brief-toggle{
     font-family:'Segoe UI',Arial,sans-serif;
     color:#e8f4ff;font-size:13px;
     box-shadow:0 4px 14px rgba(0,0,0,.55);
-    max-width:none;
+    max-width:75%;
     min-width:0;
-    width:auto;
+    width:75%;
   ">
     <div id="ocean-legend-content"></div>
   </div>
@@ -3268,7 +3280,7 @@ body.modal-open #brief-toggle{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260717d"></script>
+<script src="bw-core.js?v=20260717e"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
