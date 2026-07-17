@@ -1708,8 +1708,8 @@ body.modal-open #brief-toggle{
 /* Nav menu items styled as buttons (no anchor href to avoid Claude app prompt) */
 #nav-menu button[type="button"]{
   background:transparent;border:none;cursor:pointer;display:flex;
-  width:100%;padding:13px 18px;color:inherit;
-  border-left:3px solid transparent;
+  width:100%;max-width:100%;padding:12px 14px;color:inherit;
+  box-sizing:border-box;
 }
 #nav-menu button[type="button"]:hover{
   background:rgba(107,191,234,.06);
@@ -3268,7 +3268,7 @@ body.modal-open #brief-toggle{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260717c"></script>
+<script src="bw-core.js?v=20260717d"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

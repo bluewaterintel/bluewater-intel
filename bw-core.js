@@ -10397,35 +10397,6 @@ function updateScaleBar(){
   // Distance scale bar removed from the map chrome.
   const el = document.getElementById("map-scale-bar");
   if(el) el.style.display = "none";
-  return;
-  if(!el || !MAP) return;
-  // meters per pixel at the current map center latitude/zoom
-  const center = MAP.getCenter();
-  const point1 = MAP.project(center, MAP.getZoom());
-  const point2 = L.point(point1.x + 100, point1.y);
-  const latLng2 = MAP.unproject(point2, MAP.getZoom());
-  const metersPer100px = center.distanceTo(latLng2);
-  // Convert to nautical miles per 100px (1 nm = 1852 m)
-  const nmPer100px = metersPer100px / 1852;
-  // Pick a "nice" round nm value (1-2-5 series) that fits within 100px
-  const niceValues = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
-  let chosenNm = niceValues[0];
-  for(const v of niceValues){
-    if(v <= nmPer100px) chosenNm = v;
-    else break;
-  }
-  // Compute actual pixel width for this distance
-  const pixelWidth = (chosenNm / nmPer100px) * 100;
-  // Format label
-  const fmtNm = chosenNm < 1 ? chosenNm.toFixed(1) : (chosenNm % 1 === 0 ? chosenNm.toFixed(0) : chosenNm.toFixed(1));
-  // Update DOM
-  const fill = document.getElementById("scale-bar-fill");
-  const lblNm = document.getElementById("scale-bar-label-nm");
-  if(fill) fill.style.width = pixelWidth + "px";
-  if(lblNm) lblNm.textContent = `${fmtNm} nm`;
-  // Track width matches the measuring line
-  const track = document.getElementById("scale-bar-track");
-  if(track) track.style.minWidth = pixelWidth + "px";
 }
 
 // ════════════════════════════════════════════════════════════════════════════
