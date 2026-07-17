@@ -6570,6 +6570,9 @@ function drawCurrents(){
   if(typeof updateOceanLegend === "function") updateOceanLegend();
   if(typeof updateCurrentsMetaControlVisibility === "function") updateCurrentsMetaControlVisibility();
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SST FORECAST OVERLAY — RTOFS/HYCOM model SST at +12/+24 h (not satellite MUR).
 // When FORECAST_HOUR_OFFSET > 0 the GIBS tile layer is hidden and this canvas
 // layer draws the same model field the bite score reads.
 // ═════════════════════════════════════════════════════════════════════════════
