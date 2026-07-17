@@ -1486,7 +1486,7 @@ body.modal-open #brief-toggle{
 }
 #brief-modal.open{display:flex}
 .brief-card{
-  width:min(680px,100%);margin:auto 0;
+  width:min(680px,100%);margin:0 auto;
   background:linear-gradient(180deg,#0e2036 0%,#0b1a2e 100%);
   border:1px solid rgba(125,211,252,.22);border-radius:18px;
   box-shadow:0 24px 70px rgba(0,0,0,.6);
@@ -4533,6 +4533,20 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
     right:8px !important;
     padding:14px 14px;
     border-radius:10px;
+    top:calc(var(--bw-hdr-h, 64px) + env(safe-area-inset-top, 0px) + 6px) !important;
+    bottom:auto !important;
+    max-height:min(78dvh, calc(100dvh - var(--bw-hdr-h, 64px) - env(safe-area-inset-top, 0px) - 18px)) !important;
+  }
+  #brief-modal{
+    align-items:flex-start;
+    justify-content:flex-start;
+    padding:max(6px, env(safe-area-inset-top)) 10px 16px;
+  }
+  #brief-modal .brief-card{
+    margin:0;
+    width:100%;
+    max-height:calc(100dvh - env(safe-area-inset-top, 0px) - 12px);
+    border-radius:14px;
   }
 }
 
