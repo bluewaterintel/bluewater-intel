@@ -10201,6 +10201,14 @@ function updateOceanLegend(){
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
         </div>
         <div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
+        ${detail(`
+        <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
+          <span style="justify-self:center;color:#94a3b8;font-size:13px;line-height:1">●</span><span><b style="color:#e2eaf2">Gray/faint</b> — barely moving (&lt;0.5 kt). Negligible drift.</span>
+          <span style="justify-self:center;color:#2dd4bf;font-size:13px;line-height:1">●</span><span><b style="color:#99f6e4">Teal</b> — solid current (0.5–2 kt). Note the direction; adjust your drift.</span>
+          <span style="justify-self:center;color:#67e8f9;font-size:13px;line-height:1">●</span><span><b style="color:#a5f3fc">Cyan</b> — strong current (2–3 kt). Edges concentrate bait &amp; fish.</span>
+          <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">●</span><span><b style="color:#fde68a">Amber</b> — Gulf Stream core (3+ kt). Fish the western edge, not the core.</span>
+        </div>
+        <div style="font-size:13px;color:#7aa8c8;margin-top:7px;line-height:1.45"><b style="color:#2dd4bf">Tip:</b> streaks show where the water is going (set). The edges between fast and slow water hold the most fish — same as a rip line.</div>`)}
       </div>`);
   }
   if(layerVis.altimetry){
