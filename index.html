@@ -60,6 +60,10 @@ body{
   background:#0a1628;color:#f0e8d0;
 }
 
+:root{
+  --bw-marlin-filter:brightness(0) saturate(100%) invert(94%) sepia(6%) saturate(140%) hue-rotate(192deg) brightness(112%) contrast(90%);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    HEADER — Modern professional design
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -93,9 +97,8 @@ body{
   height:60px;
   width:auto;
   display:block;
-  /* The logo PNG includes the wordmark, accent line, and marlin baked in.
-     Stored at 3× display density (180px PNG height → 60px CSS display) so
-     it stays crisp on retina screens. */
+  /* Platinum marlin accent — crisp on retina via 3× source PNG */
+  filter:var(--bw-marlin-filter);
 }
 
 /* Center controls zone */
@@ -467,7 +470,7 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     min-width:0 !important;
     width:auto !important;
     left:4px !important;
-    right:46px !important;
+    right:4px !important;
     top:6px !important;
     transform:none !important;
     max-width:none !important;
@@ -658,38 +661,40 @@ body.ocean-legend-sheet-open #ocean-legend-sheet{pointer-events:auto}
 /* ── AI Captain's Brief map tile (right icon column) ─────────────────────── */
 #brief-toggle{
   width:52px;height:52px;
-  background:linear-gradient(180deg,rgba(14,165,165,.95),rgba(6,120,120,.95));
-  border:1px solid rgba(94,234,212,.45);
+  background:#0d9488;
+  border:1px solid #5eead4;
   border-radius:12px;
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;
-  box-shadow:0 4px 16px rgba(14,165,165,.4);
+  box-shadow:0 4px 16px rgba(13,148,136,.55);
   user-select:none;
   transition:background .15s, transform .12s, box-shadow .15s;
   overflow:hidden;
+  opacity:1;
 }
 #brief-toggle:hover{
-  background:linear-gradient(180deg,rgba(20,184,184,.98),rgba(8,145,145,.98));
-  box-shadow:0 6px 20px rgba(14,165,165,.55);
+  background:#14b8a6;
+  box-shadow:0 6px 20px rgba(13,148,136,.65);
 }
 #brief-toggle:active{ transform:scale(.95); }
 #brief-toggle.is-setup{
-  background:linear-gradient(180deg,rgba(14,165,165,.55),rgba(6,120,120,.45));
-  border-color:rgba(94,234,212,.3);
-  box-shadow:0 4px 14px rgba(14,165,165,.22);
+  background:#0d9488;
+  border-color:#5eead4;
+  box-shadow:0 4px 16px rgba(13,148,136,.55);
+  opacity:1;
 }
 #brief-toggle.is-setup img{
-  opacity:.92;
-  filter:brightness(0) saturate(100%) invert(84%) sepia(48%) saturate(748%) hue-rotate(358deg) brightness(104%) contrast(101%) drop-shadow(0 1px 2px rgba(4,47,46,.45));
+  opacity:1;
+  filter:var(--bw-marlin-filter) drop-shadow(0 1px 2px rgba(4,47,46,.45));
 }
 #brief-toggle img{
   width:36px;height:36px;object-fit:contain;
-  /* Gold marlin — high contrast on teal, matches brand accent tones */
-  filter:brightness(0) saturate(100%) invert(84%) sepia(48%) saturate(748%) hue-rotate(358deg) brightness(104%) contrast(101%) drop-shadow(0 1px 3px rgba(4,47,46,.5));
+  /* Platinum marlin — high contrast on solid teal */
+  filter:var(--bw-marlin-filter) drop-shadow(0 1px 3px rgba(4,47,46,.5));
   pointer-events:none;
 }
 #brief-toggle:hover img{
-  filter:brightness(0) saturate(100%) invert(90%) sepia(52%) saturate(900%) hue-rotate(358deg) brightness(108%) contrast(101%) drop-shadow(0 2px 4px rgba(4,47,46,.65));
+  filter:var(--bw-marlin-filter) drop-shadow(0 2px 4px rgba(4,47,46,.65)) brightness(1.08);
 }
 body.modal-open #brief-toggle{
   opacity:0;
@@ -1198,7 +1203,10 @@ body.modal-open #brief-toggle{
   #layers-ctrl{right:6px;gap:6px}
   #brief-toggle{
     width:40px !important;height:40px !important;border-radius:10px;
-    box-shadow:0 3px 10px rgba(14,165,165,.32) !important;
+    background:#0d9488 !important;
+    border:1px solid #5eead4 !important;
+    box-shadow:0 3px 10px rgba(13,148,136,.5) !important;
+    opacity:1 !important;
   }
   #brief-toggle img{width:22px !important;height:22px !important;}
   #layers-toggle,#ruler-toggle,#wpdrop-toggle,#basemap-toggle,#settings-toggle,#catch-log-toggle{
@@ -1212,7 +1220,7 @@ body.modal-open #brief-toggle{
   #ocean-legend{
     pointer-events:auto !important;
     left:4px !important;
-    right:46px !important;
+    right:4px !important;
     top:6px !important;
     transform:none !important;
     max-width:none !important;
@@ -2550,7 +2558,7 @@ body.modal-open #brief-toggle{
        behind the app header). Updated by updateOceanLegend(). -->
   <div id="ocean-legend" style="
     display:none;position:absolute;
-    top:6px;left:10px;right:46px;transform:none;z-index:500;
+    top:6px;left:4px;right:4px;transform:none;z-index:500;
     background:rgba(10,22,40,.94);
     border:1px solid rgba(107,191,234,.3);
     border-radius:10px;

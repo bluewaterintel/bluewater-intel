@@ -6306,17 +6306,29 @@ function _currentFlowColor(kts){
 function currentsTimeLabel(){
   const ms = CURRENT_GRID && CURRENT_GRID.observedAtMs;
   if(!ms || !isFinite(ms)) return "";
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
   try {
     return new Date(ms).toLocaleString("en-US", {
       month: "short", day: "numeric", hour: "numeric", hour12: true,
+      ...(phone ? { minute: undefined } : {}),
     });
   } catch(e){ return ""; }
+}
+function compactOceanLegendStatus(text){
+  if(!text) return "";
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
+  let s = String(text);
+  if(phone){
+    s = s.replace(/^NOAA RTOFS\b/i, "RTOFS");
+    s = s.replace(/\s+(AM|PM)\b/gi, "\u00A0$1");
+  }
+  return s;
 }
 function currentStatusLabel(){
   if(CURRENT_STATUS === "loading") return "Loading RTOFS…";
   if(CURRENT_STATUS === "ready"){
     const t = currentsTimeLabel();
-    return t ? `NOAA RTOFS · ${t}` : "NOAA RTOFS · surface drift";
+    return compactOceanLegendStatus(t ? `NOAA RTOFS · ${t}` : "NOAA RTOFS · surface drift");
   }
   if(CURRENT_STATUS === "unavailable") return "Currents unavailable";
   return "";
@@ -10154,7 +10166,7 @@ function updateOceanLegend(){
         <div style="font-size:14px;font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle}</div>
         <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#082460 0%,#0e5aaa 18%,#28aac8 32%,#5ac878 44%,#dcd232 56%,#ebb028 68%,#eb7823 80%,#be281f 92%,#8c1432 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:1px">
-          ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}°</span>`).join("")}
+          ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${typeof v === "number" ? v + "°" : v}</span>`).join("")}
         </div>
         ${oceanOverlayForecastHour() > 0 ? `<div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">RTOFS model · ~9 km</div>` : ""}
       </div>`);
@@ -10177,7 +10189,7 @@ function updateOceanLegend(){
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:2px">
           ${[0,5,10,15,20,25,30,35,"40+"].map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}</span>`).join("")}
         </div>
-        <div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${windStatusLabel()}</div>
+        <div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${compactOceanLegendStatus(windStatusLabel())}</div>
       </div>`);
   }
   if(layerVis.currents){
@@ -10189,14 +10201,6 @@ function updateOceanLegend(){
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
         </div>
         <div class="oc-legend-status" style="font-size:12px;color:#9ec5e8;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${currentStatusLabel()}</div>
-        ${detail(`
-        <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
-          <span style="justify-self:center;color:#94a3b8;font-size:13px;line-height:1">●</span><span><b style="color:#e2eaf2">Gray/faint</b> — barely moving (&lt;0.5 kt). Negligible drift.</span>
-          <span style="justify-self:center;color:#2dd4bf;font-size:13px;line-height:1">●</span><span><b style="color:#99f6e4">Teal</b> — solid current (0.5–2 kt). Note the direction; adjust your drift.</span>
-          <span style="justify-self:center;color:#67e8f9;font-size:13px;line-height:1">●</span><span><b style="color:#a5f3fc">Cyan</b> — strong current (2–3 kt). Edges concentrate bait &amp; fish.</span>
-          <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">●</span><span><b style="color:#fde68a">Amber</b> — Gulf Stream core (3+ kt). Fish the western edge, not the core.</span>
-        </div>
-        <div style="font-size:13px;color:#7aa8c8;margin-top:7px;line-height:1.45"><b style="color:#2dd4bf">Tip:</b> streaks show where the water is going (set). The edges between fast and slow water hold the most fish — same as a rip line.</div>`)}
       </div>`);
   }
   if(layerVis.altimetry){
@@ -10266,10 +10270,10 @@ function updateOceanLegend(){
   el.style.display = "block";
   // If the bite-score banner is also showing at the top, push this panel down so
   // they don't overlap; otherwise sit at the normal top inset.
-  el.style.top = (layerVis.predict ? (typeof biteBannerHeightPx === "function" ? biteBannerHeightPx() + 10 : 70) : 10) + "px";
+  el.style.top = (layerVis.predict ? (typeof biteBannerHeightPx === "function" ? biteBannerHeightPx() + 10 : 70) : (phone ? 6 : 10)) + "px";
   if(phone){
     el.style.left = "4px";
-    el.style.right = "46px";
+    el.style.right = "4px";
     el.style.transform = "none";
     el.style.maxWidth = "none";
     el.style.minWidth = "0";
