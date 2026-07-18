@@ -106,7 +106,10 @@ const PREDICT_SPECIES_PREFS = {
   // shelf edge. Two bands: ride-along on Gulf Stream (deep) + shelf
   // weed-line patches (shallower).
   mahi:         {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"edge",    depthBands:[[30,150],[200,1000]], breakPref:"any"},
-  cobia:        {tempIdeal:[68,78], tempWorking:[64,82], chlorPref:"high",    salinityPref:"high", depthBands:[[2,40]],     breakPref:"stable", warmAdapted:true },
+  // Cobia: classic Mid-Atlantic/Gulf boat fishery in ~11–130 ft (encyclopedia
+  // "cruising rays and turtles in 10-50 ft"). Floor raised from 2 m (~6.5 ft)
+  // so skinny bay/shoal cells can't outrank Light Tower / CBBT structure.
+  cobia:        {tempIdeal:[68,78], tempWorking:[64,82], chlorPref:"high",    salinityPref:"high", depthBands:[[3.4,40]],   breakPref:"stable", warmAdapted:true },
   redfish:      {tempIdeal:[62,78], tempWorking:[58,84], chlorPref:"high",    depthBands:[[1,15]],     breakPref:"stable"},
   flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable", demersal:true },
   blackseabass: {tempIdeal:[58,72], tempWorking:[52,76], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable", demersal:true },
