@@ -6531,8 +6531,8 @@ const CurrentParticleLayer = L.Layer.extend({
       const cur = getCurrentField(ll.lat, ll.lng);
       if(!cur){ Object.assign(p, this._spawn(size)); p.age = 0; continue; }
       if(cur.driftKts < CALM_KT){ continue; }
-      // 0.5–1.0 px/frame — color quantifies speed; motion shows direction only.
-      const stepPx = Math.min(1.0, Math.max(0.5, 0.5 + cur.driftKts * 0.12));
+      // 0.3–0.8 px/frame — color quantifies speed; motion shows direction only.
+      const stepPx = Math.min(0.8, Math.max(0.3, 0.3 + cur.driftKts * 0.12));
       const mag = Math.hypot(cur.u, cur.v) || 1;
       const ux = cur.u / mag, uy = -cur.v / mag;   // unit flow vector (screen space)
       const nx = p.x + ux * stepPx;
@@ -10138,7 +10138,7 @@ function toggleOceanLegendDetail(){
 }
 function oceanLegendMaxHeightPx(){
   const mapH = (MAP && MAP.getSize) ? MAP.getSize().y : (window.innerHeight || 600);
-  const topInset = layerVis.predict ? 70 : 10;
+  const topInset = layerVis.predict ? 70 : (phone ? 10 : 14);
   const phone = isPhoneView();
   let bottomReserve = phone ? 28 : 12;
   const stackIds = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider"];
@@ -10321,12 +10321,12 @@ function updateOceanLegend(){
   el.style.display = "block";
   // If the bite-score banner is also showing at the top, push this panel down so
   // they don't overlap; otherwise sit at the normal top inset.
-  el.style.top = (layerVis.predict ? (typeof biteBannerHeightPx === "function" ? biteBannerHeightPx() + 10 : 70) : (phone ? 6 : 10)) + "px";
-  // Keep the top scale bubble centered — 1/3 map width on desktop, 3/4 on phone.
+  el.style.top = (layerVis.predict ? (typeof biteBannerHeightPx === "function" ? biteBannerHeightPx() + 10 : 70) : (phone ? 6 : 14)) + "px";
+  // Keep the top scale bubble centered — ~1/3 map width on desktop (inset from edges), 3/4 on phone.
   el.style.left = "50%";
   el.style.right = "auto";
   el.style.transform = "translateX(-50%)";
-  const legendWidth = phone ? "75%" : "33.333%";
+  const legendWidth = phone ? "75%" : "calc(33.333% - 28px)";
   el.style.width = legendWidth;
   el.style.maxWidth = legendWidth;
   el.style.minWidth = "0";
@@ -10334,9 +10334,11 @@ function updateOceanLegend(){
     el.style.padding = "4px 6px";
     el.style.maxHeight = "none";
     el.style.overflowY = "visible";
+    el.style.overflowX = "";
     syncOceanLegendSheet();
   } else {
-    el.style.padding = "";
+    el.style.padding = "8px 16px";
+    el.style.overflowX = "visible";
     // Cap height so the panel scrolls instead of covering bottom map controls.
     el.style.maxHeight = oceanLegendMaxHeightPx() + "px";
     el.style.overflowY = "auto";
@@ -10374,7 +10376,7 @@ function updateBiteBanner(){
   b.style.left = "50%";
   b.style.right = "auto";
   b.style.transform = "translateX(-50%)";
-  const bannerWidth = phone ? "75%" : "33.333%";
+  const bannerWidth = phone ? "75%" : "calc(33.333% - 28px)";
   b.style.width = bannerWidth;
   b.style.maxWidth = bannerWidth;
   b.style.minWidth = "0";
