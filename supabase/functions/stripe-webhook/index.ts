@@ -20,6 +20,12 @@
 import Stripe from "npm:stripe@16";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { esc, ownerEmailShell, sendOwnerEmail } from "../_shared/email.ts";
+import {
+  cardFingerprintFromSubscription,
+  normalizeEmail,
+  recordTrialConsumed,
+  trialAlreadyConsumed,
+} from "../_shared/trial.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20" });
 const WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET") ?? "";
@@ -119,9 +125,76 @@ Deno.serve(async (req) => {
         const s = event.data.object as Stripe.Checkout.Session;
         if (s.mode === "subscription" && s.subscription) {
           const sub = await stripe.subscriptions.retrieve(typeof s.subscription === "string" ? s.subscription : s.subscription.id);
-          await applySubscription(sub);
-          // Tell the owner a new subscriber just signed up (best-effort).
-          await notifyOwnerNewSubscriber(s, sub);
+          const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;
+          const userId = (sub.metadata?.user_id) || (await userIdForCustomer(customerId));
+          const email = normalizeEmail(
+            s.customer_details?.email
+              ?? (typeof s.customer === "object" ? (s.customer as Stripe.Customer)?.email : null)
+              ?? null,
+          );
+
+          // One free trial per email/card. If a new email reuses a card that
+          // already consumed a trial, cancel immediately and leave them on Free.
+          // Paid (non-trial) checkouts are never canceled here.
+          if (sub.status === "trialing") {
+            const fingerprint = await cardFingerprintFromSubscription(stripe, sub);
+            const cardUsed = fingerprint
+              ? await trialAlreadyConsumed(admin, { fingerprint })
+              : false;
+            // Same email retrying is blocked at checkout; here we catch card reuse
+            // across different emails. If the fingerprint row is for THIS email,
+            // trialAlreadyConsumed(email) would also be true — still cancel only
+            // when the card was already tied to a prior trial (any email).
+            if (cardUsed) {
+              const { data: prior } = await admin
+                .from("trial_consumed")
+                .select("email_normalized")
+                .eq("card_fingerprint", fingerprint!)
+                .limit(1)
+                .maybeSingle();
+              const priorEmail = prior?.email_normalized as string | undefined;
+              if (priorEmail && email && priorEmail !== email) {
+                console.warn("trial card reuse blocked", { email, priorEmail, sub: sub.id });
+                try { await stripe.subscriptions.cancel(sub.id); } catch (e) {
+                  console.error("cancel reused-trial sub failed", (e as Error)?.message);
+                }
+                if (userId) {
+                  await admin.from("profiles").upsert({
+                    id: userId,
+                    stripe_customer_id: customerId ?? undefined,
+                    subscription_status: "canceled",
+                    updated_at: new Date().toISOString(),
+                  }, { onConflict: "id" });
+                }
+                // Record this email too so they can't keep hopping addresses.
+                if (email) {
+                  await recordTrialConsumed(admin, {
+                    email,
+                    userId,
+                    customerId,
+                    fingerprint,
+                    source: "stripe_trial_card_reuse",
+                  });
+                }
+                break;
+              }
+            }
+
+            await applySubscription(sub);
+            if (email) {
+              await recordTrialConsumed(admin, {
+                email,
+                userId,
+                customerId,
+                fingerprint,
+                source: "stripe_trial",
+              });
+            }
+            await notifyOwnerNewSubscriber(s, sub);
+          } else {
+            await applySubscription(sub);
+            await notifyOwnerNewSubscriber(s, sub);
+          }
         }
         break;
       }

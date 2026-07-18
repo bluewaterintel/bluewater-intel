@@ -285,14 +285,18 @@
     try { location.reload(); } catch(e){}
   };
   window.bwCheckout = async function(kind, opts){
-    const msg = document.getElementById("pricing-msg");
+    const msg = document.getElementById("pricing-msg") || document.getElementById("plan-gate-msg");
     try {
       const body = { kind, ...(opts||{}) };
       const res = await fetch(`${fnBase()}/stripe-checkout`, { method:"POST", headers: await authHeaders(), body: JSON.stringify(body) });
-      const j = await res.json();
+      const j = await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(j.error || `Checkout failed (${res.status})`);
       if(j.url) window.location.href = j.url;
-    } catch(e){ if(msg){ msg.textContent = e.message || "Could not start checkout."; msg.style.display="block"; } }
+    } catch(e){
+      const text = e.message || "Could not start checkout.";
+      if(msg){ msg.textContent = text; msg.style.display="block"; msg.style.color = "#fca5a5"; }
+      else if(typeof showToast === "function") showToast(text, "error");
+    }
   };
   window.bwManageBilling = async function(){
     const msg = document.getElementById("pricing-msg");
