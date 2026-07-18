@@ -48,6 +48,9 @@ function isMissingStripeCustomer(err: unknown): boolean {
 }
 
 async function deleteUserData(admin: ReturnType<typeof createClient>, userId: string): Promise<void> {
+  // Intentionally omits trial_consumed — that registry must survive deletion so
+  // a user cannot delete + re-signup for another free trial. Canceling to Free
+  // or choosing Free at signup never touches trial_consumed either.
   const tables = [
   { table: "user_waypoints", column: "user_id" },
   { table: "user_catches", column: "user_id" },

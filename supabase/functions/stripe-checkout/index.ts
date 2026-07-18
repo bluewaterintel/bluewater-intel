@@ -10,12 +10,22 @@
 // can map customer → user. Entitlements are written by stripe-webhook, never
 // trusted from the client.
 //
+// Trial abuse: trial:true is refused when trial_consumed (or Stripe history)
+// shows this email already used a 7-day trial. Paid checkout (no trial) and
+// Free-tier use are unaffected.
+//
 // SECRETS: STRIPE_SECRET_KEY, APP_URL, ALLOWED_ORIGINS,
-//   STRIPE_PRICE_MONTHLY, STRIPE_PRICE_ANNUAL, SUPABASE_URL, SUPABASE_ANON_KEY (auto).
+//   STRIPE_PRICE_MONTHLY, STRIPE_PRICE_ANNUAL, SUPABASE_URL, SUPABASE_ANON_KEY,
+//   SUPABASE_SERVICE_ROLE_KEY (auto).
 // ============================================================================
 
 import Stripe from "npm:stripe@16";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  emailHadStripeTrial,
+  normalizeEmail,
+  trialAlreadyConsumed,
+} from "../_shared/trial.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20" });
 const STRIPE_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
@@ -73,6 +83,29 @@ Deno.serve(async (req) => {
   const price = interval === "year" ? PRICES.annual : PRICES.monthly;
   const mode: "subscription" | "payment" = "subscription";
   if (!price) return json({ error: "Price not configured for this product." }, 503);
+
+  // One free trial per email. Paid Monthly/Annual checkout skips this entirely
+  // so former trial/paid users can still subscribe — and canceling to Free never
+  // touches this path.
+  if (trial) {
+    const email = normalizeEmail(user.email);
+    if (!email) {
+      return json({ error: "A verified email is required to start a free trial.", code: "trial_email_required" }, 400);
+    }
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+    const used = await trialAlreadyConsumed(admin, { email })
+      || await emailHadStripeTrial(stripe, email);
+    if (used) {
+      return json({
+        error: "You've already used your free trial. Choose Monthly or Annual to subscribe — or continue on Free.",
+        code: "trial_used",
+      }, 403);
+    }
+  }
 
   try {
     // Reuse the customer if we already created one; otherwise create + persist it.
