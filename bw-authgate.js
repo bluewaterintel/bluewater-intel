@@ -78,6 +78,9 @@
     }
     if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
     hideGate();
+    if(typeof maybeShowFirstLoginOnboarding === "function"){
+      try { await maybeShowFirstLoginOnboarding(user); } catch(e){}
+    }
   }
 
   function wireAuth(){

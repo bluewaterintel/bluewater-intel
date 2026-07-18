@@ -10138,8 +10138,8 @@ function toggleOceanLegendDetail(){
 }
 function oceanLegendMaxHeightPx(){
   const mapH = (MAP && MAP.getSize) ? MAP.getSize().y : (window.innerHeight || 600);
+  const phone = (typeof isPhoneView === "function") ? isPhoneView() : (window.innerWidth <= 680);
   const topInset = layerVis.predict ? 70 : (phone ? 10 : 14);
-  const phone = isPhoneView();
   let bottomReserve = phone ? 28 : 12;
   const stackIds = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider"];
   for(const id of stackIds){
@@ -13941,9 +13941,8 @@ function dismissEmptyState(){
 function updateEmptyState(){
   const el = document.getElementById("empty-state");
   if(!el) return;
-  // Respect the user's explicit dismissal — once they've X'd out of the
-  // prompt, never re-show it this session. If they still want to pick a
-  // port or species, the dropdowns at the top are always available.
+  // Home-port / target-species prompts were removed — first-login onboarding
+  // covers that. Keep only the out-of-range warning when both are set.
   if(emptyStateDismissed){
     el.style.display = "none";
     return;
@@ -13951,28 +13950,7 @@ function updateEmptyState(){
   const iconEl  = document.getElementById("empty-state-icon");
   const titleEl = document.getElementById("empty-state-title");
   const textEl  = document.getElementById("empty-state-text");
-  // Sequential prompts: port first (you can't fish without knowing where
-  // you're leaving from), then species. Each state has its own icon, title,
-  // and body so the visual matches what's being asked.
-  if(!activePort){
-    el.style.display = "block";
-    if(iconEl)  iconEl.textContent  = "⚓";
-    if(titleEl){
-      titleEl.textContent = "CHOOSE YOUR HOME PORT";
-      titleEl.style.color = "#7dd3fc";
-    }
-    textEl.innerHTML =
-      "Start by picking your <b>Home Port</b> above<br>so we can find fish within range of you.";
-  } else if(!activeSpId){
-    el.style.display = "block";
-    if(iconEl)  iconEl.textContent  = "🎯";
-    if(titleEl){
-      titleEl.textContent = "CHOOSE YOUR TARGET";
-      titleEl.style.color = "#7dd3fc";
-    }
-    textEl.innerHTML =
-      "Now pick your <b>Target Species</b> above<br>to see where they should be biting today.";
-  } else if(isPortOutOfSpeciesRange(activePort, activeSpId)){
+  if(activePort && activeSpId && isPortOutOfSpeciesRange(activePort, activeSpId)){
     // The port sits outside the species' geographic range — even a 90nm run
     // from this port won't reach the species' habitat. Tell the user why
     // they're seeing no heat instead of leaving them confused.
@@ -13984,11 +13962,153 @@ function updateEmptyState(){
       titleEl.textContent = "OUTSIDE SPECIES RANGE";
       titleEl.style.color = "#fbbf24";
     }
-    textEl.innerHTML =
-      `<b>${sp ? sp.name : activeSpId}</b> aren't typically caught from <b>${portShort}</b>.<br>` +
-      `Try a port within the species' range, or pick a different target.`;
+    if(textEl){
+      textEl.innerHTML =
+        `<b>${sp ? sp.name : activeSpId}</b> aren't typically caught from <b>${portShort}</b>.<br>` +
+        `Try a port within the species' range, or pick a different target.`;
+    }
   } else {
     el.style.display = "none";
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// FIRST-LOGIN ONBOARDING — click-through tour shown once per account
+// ════════════════════════════════════════════════════════════════════════════
+const ONBOARD_STORAGE_PREFIX = "bw_onboard_v1_";
+let _onboardStep = 0;
+let _onboardUserId = "";
+
+const ONBOARD_STEPS = [
+  {
+    kicker: "Step 1 of 4",
+    title: "Choose your home port",
+    body: `
+      <p>Tap <b>Home Port</b> in the top bar and pick the inlet or harbor you fish from.</p>
+      <p>The map centers on your area and shows how far offshore is within range. Predictions, waypoints, and tides all key off this choice.</p>
+    `
+  },
+  {
+    kicker: "Step 2 of 4",
+    title: "Choose your target species",
+    body: `
+      <p>Tap <b>Target Species</b> next to Home Port and pick what you're after.</p>
+      <p>Each species has its own temperature, depth, and structure preferences — the Bite Map lights up where conditions look best for that fish today.</p>
+    `
+  },
+  {
+    kicker: "Step 3 of 4",
+    title: "Map tiles &amp; AI Captain's Brief",
+    body: `
+      <p>Open the <b>Layers</b> icon (right side) to toggle map overlays:</p>
+      <ul class="onboard-list">
+        <li><b>Bite Map</b> — color forecast for your target species</li>
+        <li><b>Sea Surface Temp</b> — warm/cold water &amp; temp breaks</li>
+        <li><b>Chlorophyll</b> — water color / bait productivity</li>
+        <li><b>Wind</b> — live wind streaks &amp; speed</li>
+        <li><b>Ocean Currents</b> — set &amp; drift (Gulf Stream edges)</li>
+        <li><b>Front Convergence (SSH)</b> — eddies &amp; sharp breaks</li>
+        <li><b>Weather Radar</b> — live precipitation</li>
+      </ul>
+      <p>The teal <b>AI Captain's Brief</b> button (right column) writes a run plan for your top spots — paid subscription feature.</p>
+    `
+  },
+  {
+    kicker: "Step 4 of 4",
+    title: "What's in the menu",
+    body: `
+      <p>Tap <b>Menu</b> (top right) anytime:</p>
+      <ul class="onboard-list">
+        <li><b>Map &amp; Data</b> — Offshore Chart, Fishing Reports</li>
+        <li><b>My Tools</b> — My Catches, AI Catch Measure, Virtual Tackle Box, Captain's Briefs, Download My Trip, Waypoints &amp; Structure</li>
+        <li><b>Reference</b> — Regulations, Terminal Tackle, Fish Encyclopedia, full Tutorial, Help &amp; Contact, Legal</li>
+      </ul>
+      <p>You're set — pick a port and species, then explore the layers.</p>
+    `
+  }
+];
+
+function onboardStorageKey(userId){
+  return ONBOARD_STORAGE_PREFIX + (userId || "anon");
+}
+function hasCompletedOnboarding(userId){
+  try { return localStorage.getItem(onboardStorageKey(userId)) === "1"; } catch(e){ return false; }
+}
+function markOnboardingComplete(userId){
+  try { localStorage.setItem(onboardStorageKey(userId || _onboardUserId), "1"); } catch(e){}
+}
+async function maybeShowFirstLoginOnboarding(user){
+  if(!user || !user.id) return;
+  if(hasCompletedOnboarding(user.id)) return;
+  // Don't stack on top of plan picker / password recovery.
+  const planGate = document.getElementById("plan-gate");
+  if(planGate && planGate.style.display && planGate.style.display !== "none") return;
+  const recovery = document.getElementById("password-recovery-page");
+  if(recovery && recovery.style.display && recovery.style.display !== "none") return;
+  try {
+    if(typeof window.needsPlanOnboarding === "function" && await window.needsPlanOnboarding()) return;
+  } catch(e){}
+  // Returning captains who already have port + species configured skip the tour
+  // (still mark complete so we don't re-check forever).
+  if(activePort && activeSpId && activeSpId !== "all"){
+    markOnboardingComplete(user.id);
+    return;
+  }
+  // Defer slightly so the auth gate / plan UI can finish closing.
+  setTimeout(() => openFirstLoginOnboarding(user.id), 450);
+}
+function openFirstLoginOnboarding(userId){
+  const overlay = document.getElementById("onboard-overlay");
+  if(!overlay) return;
+  if(hasCompletedOnboarding(userId)) return;
+  _onboardUserId = userId || "";
+  _onboardStep = 0;
+  overlay.style.display = "flex";
+  document.body.style.overflow = "hidden";
+  renderOnboardingStep();
+}
+function closeFirstLoginOnboarding(completed){
+  const overlay = document.getElementById("onboard-overlay");
+  if(overlay) overlay.style.display = "none";
+  document.body.style.overflow = "";
+  if(completed !== false) markOnboardingComplete(_onboardUserId);
+}
+function onboardPrev(){
+  if(_onboardStep <= 0) return;
+  _onboardStep--;
+  renderOnboardingStep();
+}
+function onboardNext(){
+  if(_onboardStep >= ONBOARD_STEPS.length - 1){
+    closeFirstLoginOnboarding(true);
+    return;
+  }
+  _onboardStep++;
+  renderOnboardingStep();
+}
+function renderOnboardingStep(){
+  const step = ONBOARD_STEPS[_onboardStep];
+  if(!step) return;
+  const kicker = document.getElementById("onboard-kicker");
+  const title = document.getElementById("onboard-title");
+  const body = document.getElementById("onboard-body");
+  const dots = document.getElementById("onboard-dots");
+  const prev = document.getElementById("onboard-prev");
+  const next = document.getElementById("onboard-next");
+  if(kicker) kicker.textContent = step.kicker;
+  if(title) title.innerHTML = step.title;
+  if(body) body.innerHTML = step.body;
+  if(dots){
+    dots.innerHTML = ONBOARD_STEPS.map((_, i) =>
+      `<span class="onboard-dot${i === _onboardStep ? " active" : ""}"></span>`
+    ).join("");
+  }
+  if(prev){
+    prev.disabled = _onboardStep === 0;
+    prev.style.opacity = _onboardStep === 0 ? "0.35" : "1";
+  }
+  if(next){
+    next.textContent = _onboardStep >= ONBOARD_STEPS.length - 1 ? "Get started" : "Next";
   }
 }
 

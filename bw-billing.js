@@ -272,6 +272,11 @@
     const auth = document.getElementById("bw-auth-gate"); if(auth) auth.style.display = "none";
     if(typeof hideGate === "function"){ try { hideGate(); } catch(e){} }
     if(typeof window.markPlanSelected === "function") window.markPlanSelected();
+    // After first plan choice, show the one-time click-through tour if needed.
+    try {
+      const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+      if(u && typeof maybeShowFirstLoginOnboarding === "function") maybeShowFirstLoginOnboarding(u);
+    } catch(e){}
   };
   window.bwSignOutFromPlanGate = async function(){
     try { if(window.BW_AUTH && window.BW_AUTH.signOut) await window.BW_AUTH.signOut(); } catch(e){}
