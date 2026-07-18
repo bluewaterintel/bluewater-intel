@@ -2384,10 +2384,16 @@ function depthAtFromGrid(g, lat, lng){
     const v = g.depth[i * g.nLng + j];
     return (typeof v === "number" && isFinite(v)) ? v : null;
   };
-  // Bilinear sample among the four surrounding cells. Skip missing cells so a
-  // NaN neighbor doesn't zero out a valid water sample. Prefer water (> 0)
-  // when blending with land (0) so nearshore structure isn't snapped to a
-  // shoal/land cell by nearest-neighbor rounding.
+  // Nearest cell owns land/water classification. Preferring water neighbors in
+  // bilinear used to bleed positive depth inland (Norfolk/#1 cobia hotspot on
+  // land next to CBBT). If the nearest CUDEM/ETOPO cell is land (0), stay land.
+  const iN = Math.max(0, Math.min(g.nLat - 1, Math.round(fi)));
+  const jN = Math.max(0, Math.min(g.nLng - 1, Math.round(fj)));
+  const nearest = cell(iN, jN);
+  if(nearest === 0) return 0;
+
+  // In/near water: bilinear among finite cells (including 0) so nearshore depth
+  // can shoal naturally. Missing (NaN) cells are skipped.
   const i0 = Math.floor(fi), j0 = Math.floor(fj);
   const i1 = i0 + 1, j1 = j0 + 1;
   const ty = fi - i0, tx = fj - j0;
@@ -2397,18 +2403,13 @@ function depthAtFromGrid(g, lat, lng){
     { v: cell(i1, j0), w: ty * (1 - tx) },
     { v: cell(i1, j1), w: ty * tx },
   ];
-  let wSum = 0, dSum = 0, waterW = 0, waterD = 0;
+  let wSum = 0, dSum = 0;
   for(const c of corners){
     if(c.v == null || c.w <= 0) continue;
     wSum += c.w; dSum += c.w * c.v;
-    if(c.v > 0){ waterW += c.w; waterD += c.w * c.v; }
   }
-  if(waterW > 0) return waterD / waterW;
   if(wSum > 0) return dSum / wSum;
-  // Fallback: nearest cell if we're somehow outside the bilinear window.
-  const i = Math.max(0, Math.min(g.nLat - 1, Math.round(fi)));
-  const j = Math.max(0, Math.min(g.nLng - 1, Math.round(fj)));
-  return cell(i, j);
+  return nearest;
 }
 
 async function buildBathyGrid(latMin, latMax, lngMin, lngMax){
@@ -2637,14 +2638,16 @@ function knownStructureDepthM(lat, lng, maxNm = 1.5){
 // Depth used by the prediction engine: prefer bite-map bathy, then map-wide grid,
 // then the shelf model. No synthetic shallow placeholder — buildPredictInputs
 // finishes before the grid scores, so a fake 15 m reading can't flash on the map.
-// Near curated structure pins, override a grid sample that snapped too shallow.
+// Near curated structure pins, override a grid sample that snapped too shallow —
+// but never invent water depth on land (that put #1 cobia on Norfolk).
 function predictDepth(lat, lng){
   const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
+  if(real != null && real <= 0) return real;
   const known = knownStructureDepthM(lat, lng);
   if(known != null){
-    // Use curated depth when the grid is missing/land, or clearly shoaled relative
-    // to the known pin (grid < ~65% of curated → e.g. 20 ft vs 45 ft at the tower).
-    if(real == null || real <= 0 || real < known * 0.65) return known;
+    // Use curated depth when the grid is missing, or clearly shoaled relative to
+    // the known pin (grid < ~65% of curated → e.g. 20 ft vs 45 ft at the tower).
+    if(real == null || real < known * 0.65) return known;
   }
   if(real != null) return real;
   return seaDepth(lat, lng);
