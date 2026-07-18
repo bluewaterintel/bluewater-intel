@@ -1485,8 +1485,8 @@ function bwiWeatherIcon(code, precip){
 }
 
 function showForecast(lat, lng, name){
-  // The 6-day forecast is a premium feature (trial or subscription).
-  if(!requirePremium()) return;
+  // Free: ports + major fishing areas. Trial/subscription: any location.
+  if(!requireForecastAccess(lat, lng)) return;
   // Build (or reuse) the modal shell.
   let modal = document.getElementById("forecast-modal");
   if(!modal){
