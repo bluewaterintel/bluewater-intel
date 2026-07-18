@@ -5267,17 +5267,22 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
   .fcw-air-chip{font-size:13px;padding:2px 6px}
 }
 @media (max-width:680px){
-  /* Use nearly the full phone width so the tide column fits without sideways scroll. */
+  /* Anchor to top of viewport (not a bottom sheet) so the brief sits under the
+     status bar / URL chrome with no dead gap above the header row. */
   .fc-modal{
-    align-items:flex-end;
+    align-items:flex-start;
+    justify-content:flex-start;
     padding:0;
+    padding-top:env(safe-area-inset-top,0px);
     padding-bottom:env(safe-area-inset-bottom,0px);
   }
-  .fc-modal .fc-dialog{
+  .fc-modal .fc-dialog,
+  .fc-modal .modal-dialog.fc-dialog{
     max-width:100% !important;
     width:100% !important;
-    max-height:92dvh;
-    border-radius:18px 18px 0 0;
+    max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+    border-radius:0 0 18px 18px !important;
+    margin:0 !important;
   }
   .fc-body{padding:12px 8px 16px}
   .fc-fresh{flex-wrap:wrap;gap:6px}
