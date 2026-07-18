@@ -204,7 +204,7 @@
           actionsHtml = `<span style="${badgeStyle}">${planLabel}</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
         } else if(st === "trialing"){
           planLabel = "7 Day Trial";
-          planDetail = "Full app · all waypoints (AI brief excluded)";
+          planDetail = "Full app · all waypoints · 1 free AI Captain's Brief for the trial";
           actionsHtml = `<span style="${badgeStyle}">7 Day Trial</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
         } else if(paid){
           planLabel = "Pro";
@@ -317,7 +317,7 @@
         isOwner = !!(p && p.is_owner);
         if(isOwner){ tier="Owner"; detail="Full access · unlimited"; }
         else if(st==="active"){ tier="Pro"; detail="Full app · all waypoints · 2 AI briefs/day"; }
-        else if(st==="trialing"){ tier="7 Day Trial"; detail="Full app · all waypoints (AI brief excluded)"; }
+        else if(st==="trialing"){ tier="7 Day Trial"; detail="Full app · all waypoints · 1 free AI brief"; }
       }
     } catch(e){ /* show free */ }
     const badgeStyle = "font-family:inherit;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.45);color:#86efac;font-size:11px;font-weight:700;padding:7px 12px;border-radius:7px;white-space:nowrap;text-align:center";

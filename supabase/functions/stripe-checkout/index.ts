@@ -22,6 +22,8 @@ const STRIPE_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const IS_LIVE = STRIPE_KEY.startsWith("sk_live_");
 const PRO_CHECKOUT_BLURB =
   "Bluewater Intel Pro — full app access: Bite Map, all charted waypoints, ocean & wind layers, fishing reports, and up to 2 AI Captain's Briefs per day.";
+const TRIAL_CHECKOUT_BLURB =
+  "Bluewater Intel Pro — 7-day free trial: full app access (Bite Map, charted waypoints, ocean & wind layers, fishing reports) plus 1 AI Captain's Brief for the trial. After 7 days, $12.99/mo unless you cancel first.";
 const APP_URL = (Deno.env.get("APP_URL") ?? "").replace(/\/$/, "");
 const PRICES = {
   monthly: Deno.env.get("STRIPE_PRICE_MONTHLY") ?? "",
@@ -99,7 +101,7 @@ Deno.serve(async (req) => {
       ...(kind === "subscription"
         ? {
             custom_text: {
-              submit: { message: PRO_CHECKOUT_BLURB },
+              submit: { message: trial ? TRIAL_CHECKOUT_BLURB : PRO_CHECKOUT_BLURB },
             },
           }
         : {}),

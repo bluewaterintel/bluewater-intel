@@ -7961,7 +7961,7 @@ function renderExplainerMain(){
     if(aligned) _explainerState.cell = aligned;
   }
   const {cell, species} = _explainerState;
-  const savedBriefCount = BW_PAID ? briefHistoryLoad().length : 0;
+  const savedBriefCount = briefViewAllowed() ? briefHistoryLoad().length : 0;
 
   const factorBars = cell.factors.map(f => {
     // Bar reflects this factor's OWN strength here (0–100%), so a "peak" season
@@ -8237,8 +8237,8 @@ function closeExplainer(){
 // Open a sub-panel inside the explainer (replaces main content with weather,
 // AI brief, or reports for the hotspot location)
 function openSubPanel(kind){
-  // AI Captain's Brief is paid-subscription only (not free, not trial).
-  if(kind === "brief" && typeof requirePaid === "function" && !requirePaid()) return;
+  // AI Captain's Brief: free = none; trial = 1 total; paid = 2/day.
+  if(kind === "brief" && typeof requireBriefView === "function" && !requireBriefView()) return;
   const div = document.getElementById("predict-explainer");
   if(!div || !_explainerState) return;
   const {cell, species} = _explainerState;
@@ -11249,16 +11249,62 @@ const BW_OWNER_EMAILS = ["rnovakwvu@gmail.com", "natalienovakm@gmail.com"];
 // BW_PREMIUM = app features (heat map, ocean/wind layers, full forecast access,
 //   charted waypoints, etc.) — granted to a 7-day trial, active subscription,
 //   or owner. Free users still get 6-day forecasts at ports & major fishing areas.
-// BW_PAID    = the AI Captain's Brief — active subscription / owner
-//   only (the trial does NOT include the brief).
+// BW_PAID    = full AI Captain's Brief access (active subscription / owner) — 2/day.
+// BW_TRIALING = on a 7-day Stripe trial (app features + 1 brief for the trial).
+// BW_BRIEF_REMAINING / BW_BRIEF_LIMIT — from brief_allowance() RPC (0 for free).
 let BW_PREMIUM = false;
 let BW_PAID = false;
+let BW_TRIALING = false;
+let BW_BRIEF_REMAINING = 0;
+let BW_BRIEF_LIMIT = 0;
 let BW_ADMIN = false;
 // Premium-gated map layers (everything outside the free baseline).
 const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "altimetry", "radar", "ramps", "loran", "waypoints", "platforms"];
 
+async function refreshBriefAllowance(){
+  BW_TRIALING = false;
+  BW_BRIEF_REMAINING = 0;
+  BW_BRIEF_LIMIT = 0;
+  try {
+    const u = (window.BW_AUTH && window.BW_AUTH.getUser) ? window.BW_AUTH.getUser() : null;
+    if(!u || !window.BW_AUTH || !window.BW_AUTH._sb) return;
+    const { data, error } = await window.BW_AUTH._sb.rpc("brief_allowance");
+    if(error || !data) return;
+    if(data.tier === "trial"){
+      BW_TRIALING = true;
+      BW_BRIEF_REMAINING = Number(data.remaining) || 0;
+      BW_BRIEF_LIMIT = Number(data.limit) || 1;
+    } else if(data.tier === "paid"){
+      BW_BRIEF_REMAINING = Number(data.remaining) || 0;
+      BW_BRIEF_LIMIT = Number(data.limit) || 2;
+    }
+  } catch(e){ /* quota UI falls back to paid/trial flags */ }
+}
+window.refreshBriefAllowance = refreshBriefAllowance;
+
+function briefViewAllowed(){
+  if(BW_PAID) return true;
+  if(BW_TRIALING) return true;
+  return false;
+}
+function briefGenerateAllowed(){
+  if(BW_PAID) return true;
+  if(BW_TRIALING && BW_BRIEF_REMAINING > 0) return true;
+  return false;
+}
+function requireBriefView(){
+  if(briefViewAllowed()) return true;
+  if(typeof openPricing === "function") openPricing();
+  return false;
+}
+function requireBriefGenerate(){
+  if(briefGenerateAllowed()) return true;
+  if(typeof openPricing === "function") openPricing();
+  return false;
+}
+
 async function refreshEntitlement(){
-  let premium = false, paid = false, admin = false;
+  let premium = false, paid = false, trialing = false, admin = false;
   try {
     const u = (window.BW_AUTH && window.BW_AUTH.getUser) ? window.BW_AUTH.getUser() : null;
     const email = (u && u.email) ? u.email.toLowerCase() : "";
@@ -11272,17 +11318,19 @@ async function refreshEntitlement(){
         const cpe = p.current_period_end ? new Date(p.current_period_end).getTime() : 0;
         if(p.is_owner){ premium = true; paid = true; admin = true; }              // owner: full access
         else if(st === "active" || st === "lifetime"){ premium = true; paid = true; }
-        else if(st === "trialing"){ premium = true; paid = false; }   // trial: app yes, brief no
+        else if(st === "trialing"){ premium = true; paid = false; trialing = true; }
         else if(cpe > Date.now() && st !== "canceled"){ premium = true; paid = true; } // grace period
       }
       if(!admin && email && BW_OWNER_EMAILS.includes(email)) admin = true;
     }
-  } catch(e){ premium = false; paid = false; admin = false; }
-  BW_PREMIUM = premium; BW_PAID = paid; BW_ADMIN = admin;
+  } catch(e){ premium = false; paid = false; trialing = false; admin = false; }
+  BW_PREMIUM = premium; BW_PAID = paid; BW_TRIALING = trialing; BW_ADMIN = admin;
+  await refreshBriefAllowance();
   applyAdminNavVisibility();
   applyEntitlementGating();
   if(typeof drawWaypoints === "function" && layerVis.waypoints) drawWaypoints();
   if(typeof renderNavPlan === "function") renderNavPlan();
+  if(typeof updateBriefFab === "function") updateBriefFab();
 }
 window.refreshEntitlement = refreshEntitlement;
 
@@ -11681,8 +11729,8 @@ async function adminRunHealthCheck(){
 
 // Show/hide the PRO badge and locked styling on Pro menu rows based on
 // entitlement. Free users see a yellow "PRO" tag on Fishing Reports and
-// Waypoints; Pro users see them normally. Paid-only rows (brief recall) use
-// BW_PAID so trial users stay locked out of the AI brief features.
+// Waypoints; Pro users see them normally. Paid-only rows (brief recall) unlock
+// for trial users too; free stays locked.
 function applyNavRowLock(row, entitled){
   let badge = row.querySelector(".pro-badge");
   if(!entitled){
@@ -11704,12 +11752,12 @@ function applyProMenuBadges(){
     applyNavRowLock(row, BW_PREMIUM);
   });
   document.querySelectorAll('.nav-row[data-paid="1"]').forEach(row => {
-    applyNavRowLock(row, BW_PAID);
+    applyNavRowLock(row, briefViewAllowed());
   });
   const settingsBriefBtn = document.getElementById("settings-recent-briefs-btn");
   if(settingsBriefBtn){
     let badge = settingsBriefBtn.querySelector(".pro-badge");
-    if(!BW_PAID){
+    if(!briefViewAllowed()){
       settingsBriefBtn.classList.add("pro-locked");
       settingsBriefBtn.style.opacity = ".45";
       if(!badge){
@@ -12938,7 +12986,7 @@ function briefHistoryPanelHtml(opts = {}){
 }
 
 function openBriefModal(){
-  if(typeof requirePaid === "function" && !requirePaid()) return;
+  if(typeof requireBriefView === "function" && !requireBriefView()) return;
   const modal = document.getElementById("brief-modal");
   const body = document.getElementById("brief-modal-body");
   const sub = document.getElementById("brief-modal-sub");
@@ -12954,7 +13002,7 @@ function openBriefModal(){
   body.scrollTop = 0;
 }
 function openRecentBriefs(){
-  if(!requirePaid()) return;
+  if(!requireBriefView()) return;
   const settings = document.getElementById("settings-modal");
   if(settings && settings.classList.contains("open") && typeof toggleSettingsPanel === "function"){
     toggleSettingsPanel();
@@ -12962,7 +13010,7 @@ function openRecentBriefs(){
   openRecentBriefsModal();
 }
 function openRecentBriefsModal(){
-  if(!requirePaid()) return;
+  if(!requireBriefView()) return;
   const modal = document.getElementById("brief-modal");
   const body = document.getElementById("brief-modal-body");
   const sub = document.getElementById("brief-modal-sub");
@@ -13102,7 +13150,7 @@ function recallBrief(id){
 }
 
 function renderBrief(){
-  if(typeof requirePaid === "function" && !requirePaid()) return;
+  if(typeof requireBriefView === "function" && !requireBriefView()) return;
   const portObj = (activePort && typeof PORTS !== "undefined") ? PORTS[activePort] : null;
   if(portObj && !briefRunZone && activeSpId && activeSpId !== "all"){
     briefRunZone = defaultBriefRunZone(activeSpId);
@@ -13185,6 +13233,12 @@ function renderBrief(){
   const speciesNote = !allowed.length
     ? `<p style="color:#9ec5e8;font-size:12px;margin-bottom:8px">Select a home port and fishing zone to see species for your area.</p>`
     : "";
+  const canGenerate = briefGenerateAllowed();
+  const trialBriefNote = (BW_TRIALING && !BW_PAID)
+    ? (canGenerate
+      ? `<p style="color:#99f6e4;font-size:11px;margin:0 0 10px;line-height:1.45">7-day trial includes <b>1 free AI Captain's Brief</b> for the whole trial.</p>`
+      : `<p style="color:#f0a868;font-size:11px;margin:0 0 10px;line-height:1.45">Your trial brief is used. Subscribe for up to <b>2 AI Captain's Briefs per day</b>.</p>`)
+    : "";
   pbody(`
     ${departCard}
     ${!hasPin && !showZonePicker ? `<p style="color:#9ec5e8;font-size:12px;margin-bottom:12px;line-height:1.5">Tap the chart to drop a weather pin first.</p>` : ""}
@@ -13197,8 +13251,9 @@ function renderBrief(){
     ${speciesNote}
     ${speciesCapNote}
     ${autoPreviewHtml}
+    ${trialBriefNote}
     <div class="sp-pills">${speciesPills || `<span style="font-size:12px;color:#9ec5e8">No species for this zone yet.</span>`}${allowed.length ? recPill : ""}</div>
-    <button id="brief-btn" ${!hasPin||aiLoading?"disabled":""} onclick="runBrief()">
+    <button id="brief-btn" ${!hasPin||aiLoading||!canGenerate?"disabled":""} onclick="runBrief()">
       ${aiLoading?"GENERATING BRIEF...":"GENERATE AI CAPTAIN'S BRIEF"}</button>
     ${(briefLooksSuccessful(aiCOA) && !aiLoading)?`<button type="button" class="brief-view-btn" onclick="openBriefModal()">View your Captain's Brief ↗</button>`:""}
     ${(aiCOA && !aiLoading && !briefLooksSuccessful(aiCOA))?`<p style="margin-top:10px;font-size:12px;color:#f0a0a0;line-height:1.45">${String(aiCOA).replace(/</g,"&lt;")}</p>`:""}
@@ -13379,9 +13434,7 @@ function openCaptainsBrief(){
 
 async function runBrief(){
   if(!pinLL||aiLoading)return;
-  // AI Captain's Brief is a PAID feature (active subscription / owner)
-  // — not included in the 7-day trial. The server also enforces this + 2/day.
-  if(!requirePaid()) return;
+  if(!requireBriefGenerate()) return;
 
   const allowed = briefSpeciesForSpot();
   let autoPickMeta = null;
@@ -13902,7 +13955,10 @@ async function runBrief(){
       aiCOA = msg;
     }
   }
-  aiLoading=false;renderBrief();
+  aiLoading=false;
+  if(typeof refreshBriefAllowance === "function") await refreshBriefAllowance();
+  if(typeof updateBriefFab === "function") updateBriefFab();
+  renderBrief();
   // Pop the finished brief up front-and-center so the captain sees it
   // immediately instead of scrolling the side panel.
   if(briefOk) openBriefModal();
@@ -14216,12 +14272,15 @@ function updateBriefFab(){
   if(!btn) return;
 
   btn.classList.remove("is-setup", "is-locked");
-  // Paid subscription (or owner) only — free + trial see a locked FAB that
-  // opens the upgrade modal instead of the brief.
-  const paid = (typeof BW_PAID !== "undefined") && BW_PAID;
-  if(!paid){
+  if(!briefViewAllowed()){
     btn.classList.add("is-locked");
-    btn.title = "AI Captain's Brief — subscription required";
+    btn.title = "AI Captain's Brief — Pro subscription required";
+    btn.setAttribute("aria-label", btn.title);
+    return;
+  }
+  if(!briefGenerateAllowed()){
+    btn.classList.add("is-locked");
+    btn.title = "Trial brief used — subscribe for up to 2 AI briefs per day";
     btn.setAttribute("aria-label", btn.title);
     return;
   }
@@ -14321,8 +14380,13 @@ function briefBestCellForSpecies(sp, portObj){
 }
 
 function onBriefFabClick(){
-  // AI Captain's Brief is paid-only — block free and trial before any setup UI.
-  if(typeof requirePaid === "function" && !requirePaid()) return;
+  if(typeof requireBriefView === "function" && !requireBriefView()) return;
+  if(!briefGenerateAllowed()){
+    if(typeof showToast === "function"){
+      showToast("Your 1 free trial brief is used — subscribe for up to 2 briefs per day.", "info");
+    } else if(typeof openPricing === "function") openPricing();
+    return;
+  }
 
   if(!activePort){
     if(typeof togglePortDd === "function") togglePortDd();
@@ -14997,7 +15061,7 @@ function navOpenFromMenu(openFn){
   // If this is a Pro feature and the user isn't entitled, show the upgrade
   // modal rather than the feature.
   const fnName = (openFn && openFn.name) ? openFn.name : "";
-  if(PAID_MENU_FNS.includes(fnName) && !BW_PAID){
+  if(PAID_MENU_FNS.includes(fnName) && !briefViewAllowed()){
     if(typeof openPricing === "function") openPricing();
     return;
   }

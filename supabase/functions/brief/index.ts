@@ -147,7 +147,9 @@ Deno.serve(async (req) => {
     if (!gate || !gate.allowed) {
       const reason = gate?.reason;
       const msg = reason === "premium"
-        ? "The AI Captain's Brief is a premium feature. Subscribe to unlock up to 2 briefs per day."
+        ? "The AI Captain's Brief requires a Pro subscription. Start a 7-day trial for 1 free brief, or subscribe for up to 2 briefs per day."
+        : reason === "trial_limit"
+        ? "You've used your 1 free AI Captain's Brief for this trial. Subscribe to unlock up to 2 briefs per day."
         : "You've used both AI Captain's Briefs for today — they reset tomorrow.";
       return new Response(JSON.stringify({ error: msg, reason: reason || "limit" }), { status: 402, headers: { ...cors, "Content-Type": "application/json" } });
     }
