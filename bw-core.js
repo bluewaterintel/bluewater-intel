@@ -7862,7 +7862,11 @@ function showPredictionExplainer(cell, species){
   // AFTER calling here (a normal map tap must never inherit a stale run plan).
   _briefRunPlanSpots = null;
 
-  _explainerState = {cell, species};
+  // Prefer the Bite Map's scored cell so the explainer % matches badge #1.
+  const aligned = (typeof alignCellWithBiteMap === "function")
+    ? alignCellWithBiteMap(cell)
+    : cell;
+  _explainerState = {cell: aligned || cell, species};
 
   const backdrop = document.createElement("div");
   backdrop.id = "predict-explainer-backdrop";
@@ -7901,6 +7905,12 @@ function showPredictionExplainer(cell, species){
 function renderExplainerMain(){
   const div = document.getElementById("predict-explainer");
   if(!div || !_explainerState) return;
+  // Keep the open explainer locked to the Bite Map cell so Back-from-brief
+  // never shows a different % than badge #1 for the same pin.
+  if(_explainerState.cell && typeof alignCellWithBiteMap === "function"){
+    const aligned = alignCellWithBiteMap(_explainerState.cell);
+    if(aligned) _explainerState.cell = aligned;
+  }
   const {cell, species} = _explainerState;
   const savedBriefCount = BW_PAID ? briefHistoryLoad().length : 0;
 
@@ -8075,10 +8085,16 @@ function setForecastHour(hours){
   if(_explainerState && _explainerState.cell && _explainerState.species){
     const c = _explainerState.cell;
     const sp = _explainerState.species;
-    if(typeof scoreCell === "function"){
+    // Prefer the regenerated Bite Map cell at this pin so the explainer stays
+    // locked to the same % the heat map / badges show after a forecast change.
+    const mapped = (typeof nearestBiteMapCell === "function")
+      ? nearestBiteMapCell(c.lat, c.lng, 3.5)
+      : null;
+    if(mapped){
+      _explainerState.cell = Object.assign({}, mapped);
+    } else if(typeof scoreCell === "function"){
       const fresh = scoreCell(c.lat, c.lng, sp.id);
       if(fresh){
-        // Keep the original lat/lng + distance, update the score/factors/conditions
         _explainerState.cell = Object.assign({}, c, fresh, {
           lat: c.lat, lng: c.lng, distNm: c.distNm
         });
@@ -13079,7 +13095,7 @@ function renderBrief(){
       : (atCap && !on) ? "opacity:.35;pointer-events:none" : "";
     return `<button class="sp-pill" style="border-color:${on?sp.color:"rgba(255,255,255,.16)"};background:${on?sp.color+"22":"rgba(255,255,255,.04)"};color:${on?sp.color:"#cfe5ff"};${dim}" ${disabled} onclick="toggleBriefSp('${sp.id}')">${sp.name}</button>`;
   }).join("");
-  const recPill = `<button type="button" class="sp-pill" style="border-color:${recOn?recColor:"rgba(94,234,212,.35)"};background:${recOn?"rgba(14,165,165,.22)":"rgba(255,255,255,.04)"};color:${recOn?recColor:"#9ec5e8"};font-weight:800" onclick="setBriefAutoPick(true)">✦ Bluewater Recommendation</button>`;
+  const recPill = `<button type="button" class="sp-pill" style="border-color:${recOn?recColor:"rgba(94,234,212,.35)"};background:${recOn?"rgba(14,165,165,.22)":"rgba(255,255,255,.04)"};color:${recOn?recColor:"#9ec5e8"};font-weight:800" onclick="toggleBriefAutoPick()">✦ Bluewater Recommendation</button>`;
   const autoPreviewHtml = recOn && autoPreview.picks.length
     ? `<p style="color:#99f6e4;font-size:12px;margin:0 0 10px;line-height:1.45"><b>Targeting:</b> ${autoPreview.picks.map(p => `${p.name} (${p.scorePct}/100${p.inSeason ? "" : ", off-season"})`).join(" · ")}</p>`
     : (recOn && pinLL
@@ -13181,8 +13197,16 @@ function setBriefAutoPick(on){
     if(preview.picks[0] && preview.picks[0].lat != null){
       pinLL = { lat: preview.picks[0].lat, lng: preview.picks[0].lng };
     }
+  } else if(!briefSp.length && typeof activeSpId !== "undefined" &&
+            activeSpId && activeSpId !== "all"){
+    // Returning to manual mode — preselect the header target so pills aren't empty.
+    briefSp = [activeSpId];
   }
   renderBrief();
+}
+// Tap again to deselect Bluewater Recommendation and pick species manually.
+function toggleBriefAutoPick(){
+  setBriefAutoPick(!briefAutoPick);
 }
 function structureNear(lat, lng, maxNm = 40, limit = 4){
   if(typeof CANYONS === "undefined") return [];
@@ -13277,19 +13301,22 @@ function briefSpotSummary(spotLL, spIds, portObj, rank){
   try { if(typeof realDepthAt === "function"){ const m = realDepthAt(spotLL.lat, spotLL.lng); if(m != null) depthFt = Math.round(m * 3.281); } } catch(e){}
   const bite = [];
   try {
-    if(typeof scoreCell === "function"){
-      for(const id of spIds){
-        const r = scoreCell(spotLL.lat, spotLL.lng, id);
-        if(r) bite.push({
-          species: (typeof SPECIES !== "undefined" && SPECIES.find(s=>s.id===id)?.name) || id,
-          score: r.score != null ? Math.round(r.score*100) : null,
-          confidence: r.confidence != null ? Math.round(r.confidence*100) : null,
-          topFactor: r.topFactor || null,
-          inSeason: r.inSeason !== false,
-          sstF: r.sst != null ? Math.round(r.sst*10)/10 : null,
-          thermalBreakFper10nm: (r.tBreak != null && r.tBreak > 0) ? Math.round(r.tBreak*10)/10 : null,
-        });
-      }
+    for(const id of spIds){
+      // Prefer the Bite Map's scored cell so run-plan % matches map badges.
+      let r = (id === activeSpId && typeof nearestBiteMapCell === "function")
+        ? nearestBiteMapCell(spotLL.lat, spotLL.lng, 2.5)
+        : null;
+      if(!r && typeof scoreCell === "function") r = scoreCell(spotLL.lat, spotLL.lng, id);
+      if(r) bite.push({
+        species: (typeof SPECIES !== "undefined" && SPECIES.find(s=>s.id===id)?.name) || id,
+        score: r.score != null ? Math.round(r.score*100) : null,
+        // scoreCell already returns confidence as 0–100.
+        confidence: r.confidence != null ? Math.round(r.confidence) : null,
+        topFactor: r.topFactor || null,
+        inSeason: r.inSeason !== false,
+        sstF: r.sst != null ? Math.round(r.sst*10)/10 : null,
+        thermalBreakFper10nm: (r.tBreak != null && r.tBreak > 0) ? Math.round(r.tBreak*10)/10 : null,
+      });
     }
   } catch(e){}
   return {
@@ -13580,27 +13607,58 @@ async function runBrief(){
         if(!locations.length) locations.push({ lat: pinLL.lat, lng: pinLL.lng });
         for(const id of sp.slice(0, BRIEF_MAX_SPECIES)){
           let best = null;
-          for(const pt of locations){
-            const r = scoreCell(pt.lat, pt.lng, id);
-            if(!r || r.outOfRange) continue;
-            const score = Number.isFinite(r.score) ? r.score : 0;
-            if(!best || score > best._score){
+          // Active Bite Map species: use the map's own top/nearest cell so the
+          // brief % cannot disagree with badge #1 for the same water.
+          if(id === activeSpId){
+            const atPin = (typeof nearestBiteMapCell === "function")
+              ? nearestBiteMapCell(pinLL.lat, pinLL.lng, 2.5)
+              : null;
+            const top = (typeof topBiteMapCellForActiveSpecies === "function")
+              ? topBiteMapCellForActiveSpecies()
+              : null;
+            const mapped = atPin || top;
+            if(mapped && mapped.score != null){
               best = {
-                _score: score,
+                _score: Number(mapped.score) || 0,
                 speciesId: id,
                 species: SPECIES.find(s=>s.id===id)?.name || id,
-                score: Math.round(score * 100),
-                topFactor: r.topFactor || null,
-                topFactors: Array.isArray(r.topFactors) ? r.topFactors : null,
-                confidence: r.confidence != null ? Math.round(r.confidence*100) : null,
-                inSeason: r.inSeason !== false,
-                outOfRange: r.outOfRange === true,
-                seasonStrength: r.seasonStrength != null ? r.seasonStrength : null,
-                sstF: r.sst != null ? Math.round(r.sst*10)/10 : null,
-                thermalBreakFper10nm: r.tBreak != null && r.tBreak > 0 ? Math.round(r.tBreak*10)/10 : null,
-                scoredAtLat: pt.lat,
-                scoredAtLng: pt.lng,
+                score: Math.round((Number(mapped.score) || 0) * 100),
+                topFactor: mapped.topFactor || null,
+                topFactors: Array.isArray(mapped.topFactors) ? mapped.topFactors : null,
+                confidence: mapped.confidence != null ? Math.round(mapped.confidence) : null,
+                inSeason: mapped.inSeason !== false,
+                outOfRange: mapped.outOfRange === true,
+                seasonStrength: mapped.seasonStrength != null ? mapped.seasonStrength : null,
+                sstF: mapped.sst != null ? Math.round(mapped.sst*10)/10 : null,
+                thermalBreakFper10nm: mapped.tBreak != null && mapped.tBreak > 0 ? Math.round(mapped.tBreak*10)/10 : null,
+                scoredAtLat: mapped.lat,
+                scoredAtLng: mapped.lng,
               };
+            }
+          }
+          if(!best){
+            for(const pt of locations){
+              const r = scoreCell(pt.lat, pt.lng, id);
+              if(!r || r.outOfRange) continue;
+              const score = Number.isFinite(r.score) ? r.score : 0;
+              if(!best || score > best._score){
+                best = {
+                  _score: score,
+                  speciesId: id,
+                  species: SPECIES.find(s=>s.id===id)?.name || id,
+                  score: Math.round(score * 100),
+                  topFactor: r.topFactor || null,
+                  topFactors: Array.isArray(r.topFactors) ? r.topFactors : null,
+                  confidence: r.confidence != null ? Math.round(r.confidence) : null,
+                  inSeason: r.inSeason !== false,
+                  outOfRange: r.outOfRange === true,
+                  seasonStrength: r.seasonStrength != null ? r.seasonStrength : null,
+                  sstF: r.sst != null ? Math.round(r.sst*10)/10 : null,
+                  thermalBreakFper10nm: r.tBreak != null && r.tBreak > 0 ? Math.round(r.tBreak*10)/10 : null,
+                  scoredAtLat: pt.lat,
+                  scoredAtLng: pt.lng,
+                };
+              }
             }
           }
           if(best){
@@ -14145,7 +14203,52 @@ function updateBriefFab(){
   btn.setAttribute("aria-label", btn.title);
 }
 
+// Nearest already-scored Bite Map cell (hotspot/badge/heat) for a lat/lng.
+// Used so the AI brief / explainer never invent a different % than the map.
+function nearestBiteMapCell(lat, lng, maxNm){
+  if(lat == null || lng == null || typeof nmBetween !== "function") return null;
+  const max = (maxNm != null) ? maxNm : 2.5;
+  if(!_predictResultCache || _predictResultCache.key !== predictResultCacheKey()) return null;
+  const pools = [];
+  if(Array.isArray(_predictResultCache.badges)) pools.push(..._predictResultCache.badges);
+  if(Array.isArray(_predictResultCache.hotspots)) pools.push(..._predictResultCache.hotspots);
+  if(Array.isArray(_predictResultCache.heatGrid)) pools.push(..._predictResultCache.heatGrid);
+  if(Array.isArray(_predictGrid)) pools.push(..._predictGrid);
+  let best = null, bestD = Infinity;
+  for(const c of pools){
+    if(!c || c.lat == null || c.lng == null || c.score == null) continue;
+    const d = nmBetween(lat, lng, c.lat, c.lng);
+    if(d < bestD){ bestD = d; best = c; }
+  }
+  return (best && bestD <= max) ? best : null;
+}
+function alignCellWithBiteMap(cell){
+  if(!cell || cell.lat == null || cell.lng == null) return cell;
+  const mapped = nearestBiteMapCell(cell.lat, cell.lng, 2.5);
+  if(!mapped) return cell;
+  // Adopt the map cell wholesale so score, factors, confidence, and distNm match.
+  return Object.assign({}, mapped);
+}
+function topBiteMapCellForActiveSpecies(){
+  if(!_predictResultCache || _predictResultCache.key !== predictResultCacheKey()) return null;
+  const badges = Array.isArray(_predictResultCache.badges) ? _predictResultCache.badges : [];
+  if(badges.length){
+    return badges.slice().sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))[0] || null;
+  }
+  const hs = Array.isArray(_predictResultCache.hotspots) ? _predictResultCache.hotspots : [];
+  if(hs.length){
+    return hs.slice().sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))[0] || null;
+  }
+  return null;
+}
+
 function briefBestCellForSpecies(sp, portObj){
+  // Prefer the live Bite Map's #1 cell so the brief/explainer never disagree
+  // with the badge the captain is looking at.
+  if(sp && typeof activeSpId !== "undefined" && activeSpId === sp.id){
+    const top = topBiteMapCellForActiveSpecies();
+    if(top) return Object.assign({}, top);
+  }
   const zone = briefRunZone || defaultBriefRunZone(sp.id);
   const zonePin = briefPinForZone(portObj, zone);
   const zoneNm = BRIEF_ZONE_NM[zone] || 12;
@@ -14153,6 +14256,16 @@ function briefBestCellForSpecies(sp, portObj){
   let bestScore = -1;
   const locations = briefPickScoreLocations(zonePin.lat, zonePin.lng);
   for(const pt of locations){
+    // Reuse a nearby Bite Map cell when available instead of re-scoring.
+    const mapped = nearestBiteMapCell(pt.lat, pt.lng, 2.5);
+    if(mapped){
+      const s = Number.isFinite(mapped.score) ? mapped.score : 0;
+      if(s > bestScore){
+        bestScore = s;
+        best = Object.assign({}, mapped);
+      }
+      continue;
+    }
     if(typeof scoreCell !== "function") break;
     const scored = scoreCell(pt.lat, pt.lng, sp.id);
     if(!scored || scored.outOfRange) continue;
@@ -14166,6 +14279,8 @@ function briefBestCellForSpecies(sp, portObj){
     }
   }
   if(bestScore < 0 && typeof scoreCell === "function"){
+    const mapped = nearestBiteMapCell(zonePin.lat, zonePin.lng, 2.5);
+    if(mapped) return Object.assign({}, mapped);
     const scored = scoreCell(zonePin.lat, zonePin.lng, sp.id);
     if(scored) best = Object.assign({}, scored, { lat: zonePin.lat, lng: zonePin.lng, distNm: zoneNm });
   }
