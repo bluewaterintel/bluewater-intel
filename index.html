@@ -5264,6 +5264,32 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
   .fcw-big{font-size:15px}
   .fcw-air-chip{font-size:13px;padding:2px 6px}
 }
+@media (max-width:680px){
+  /* Use nearly the full phone width so the tide column fits without sideways scroll. */
+  .fc-modal{
+    align-items:flex-end;
+    padding:0;
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  .fc-modal .fc-dialog{
+    max-width:100% !important;
+    width:100% !important;
+    max-height:92dvh;
+    border-radius:18px 18px 0 0;
+  }
+  .fc-body{padding:12px 8px 16px}
+  .fc-fresh{flex-wrap:wrap;gap:6px}
+  .fc-fresh .fc-fresh-src{margin-left:0;width:100%}
+  .fcw-table{overflow-x:visible}
+  .fcw-head,.fcw-row{
+    min-width:0;
+    grid-template-columns:34px minmax(50px,1.05fr) minmax(32px,.5fr) minmax(54px,.85fr) minmax(46px,.8fr) minmax(64px,1.05fr);
+    padding-left:2px;
+    padding-right:4px;
+  }
+  .fcw-rows .fcw-row{padding-right:6px}
+  .fcw-c-tide{padding-right:4px}
+}
 </style>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
