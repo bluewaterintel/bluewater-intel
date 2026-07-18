@@ -205,7 +205,7 @@
         } else if(st === "trialing"){
           planLabel = "7 Day Trial";
           planDetail = "Full app · all waypoints · 1 free AI Captain's Brief for the trial";
-          actionsHtml = `<span style="${badgeStyle}">7 Day Trial</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
+          actionsHtml = `<span style="${badgeStyle}">7 Day Trial</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Upgrade/Cancel</button>`;
         } else if(paid){
           planLabel = "Pro";
           planDetail = "Full app — Bite Map, ocean & weather layers, all waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.";
@@ -331,6 +331,7 @@
       actionHtml = `<span style="${badgeStyle}">7 Day Trial</span>`;
     }
     const showManage = !isOwner && (st==="active" || st==="trialing");
+    const manageLabel = st==="trialing" ? "Upgrade/Cancel" : "Manage";
     el.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(7,17,33,.5);border:1px solid rgba(107,191,234,.18);border-radius:9px;padding:8px 10px">
         <div style="min-width:0">
@@ -340,7 +341,7 @@
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
           ${actionHtml}
-          ${showManage?`<button type="button" onclick="bwManageBilling()" style="font-family:inherit;background:transparent;border:1px solid rgba(107,191,234,.35);color:#6bbfea;font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;cursor:pointer">Manage</button>`:""}
+          ${showManage?`<button type="button" onclick="bwManageBilling()" style="font-family:inherit;background:transparent;border:1px solid rgba(107,191,234,.35);color:#6bbfea;font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;cursor:pointer">${manageLabel}</button>`:""}
         </div>
       </div>`;
   };
