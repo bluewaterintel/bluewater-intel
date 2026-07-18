@@ -4677,8 +4677,10 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
 }
 #predict-explainer{
   position:fixed;z-index:1100;
-  left:max(10px, calc((100vw - min(360px, calc(100vw - 20px))) / 2));
-  right:max(10px, calc((100vw - min(360px, calc(100vw - 20px))) / 2));
+  /* Desktop: wide enough for Bite Score + Confidence + full lat/lon. Phone
+     (@media max-width:680px below) still goes edge-to-edge — do not change that. */
+  left:max(10px, calc((100vw - min(460px, calc(100vw - 20px))) / 2));
+  right:max(10px, calc((100vw - min(460px, calc(100vw - 20px))) / 2));
   width:auto;max-width:none;
   transform:none !important;
   margin:0;
