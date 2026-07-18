@@ -5120,6 +5120,55 @@ function withinHomeRadius(lat, lng){
   return nmBetween(p.lat, p.lng, lat, lng) <= HOME_PORT_RADIUS_NM;
 }
 
+// The 15 closest named structures (canyons, wrecks, reefs, etc.) to the active
+// or saved home port — the same set shown by the Major Fishing Areas layer.
+function nearestMajorFishingAreas(){
+  if(typeof CANYONS === "undefined" || !CANYONS.length) return [];
+  let refName = null;
+  if(typeof activePort !== "undefined" && activePort && PORTS[activePort]) refName = activePort;
+  else if(typeof USER_PREFS !== "undefined" && USER_PREFS.defaultPort && PORTS[USER_PREFS.defaultPort]) refName = USER_PREFS.defaultPort;
+  if(!refName) return [];
+  const refPort = PORTS[refName];
+  if(!refPort) return [];
+  const structures = [];
+  for(const c of CANYONS){
+    if(c.polygon || c.type === "closure") continue;
+    const d = nmBetween(refPort.lat, refPort.lng, c.lat, c.lng);
+    if(d <= HOME_PORT_RADIUS_NM) structures.push({ c, d });
+  }
+  structures.sort((a, b) => a.d - b.d);
+  return structures.slice(0, 15).map(x => x.c);
+}
+
+// Free accounts can open the 6-day forecast at ports and major fishing areas;
+// trial/subscription unlock it everywhere (any waypoint, dropped pin, etc.).
+function forecastAccessAllowed(lat, lng){
+  if(typeof BW_PREMIUM !== "undefined" && BW_PREMIUM) return true;
+  if(!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  const tolNm = 0.75;
+  if(typeof PORTS !== "undefined"){
+    for(const p of Object.values(PORTS)){
+      if(p && Number.isFinite(p.lat) && Number.isFinite(p.lng) &&
+         nmBetween(p.lat, p.lng, lat, lng) <= tolNm) return true;
+    }
+  }
+  for(const c of nearestMajorFishingAreas()){
+    if(Number.isFinite(c.lat) && nmBetween(c.lat, c.lng, lat, lng) <= tolNm) return true;
+  }
+  if(typeof WP_PUBLIC !== "undefined" && Array.isArray(WP_PUBLIC)){
+    for(const p of WP_PUBLIC){
+      if(Number.isFinite(p.lat) && Number.isFinite(p.lng) &&
+         nmBetween(p.lat, p.lng, lat, lng) <= tolNm) return true;
+    }
+  }
+  return false;
+}
+function requireForecastAccess(lat, lng){
+  if(forecastAccessAllowed(lat, lng)) return true;
+  if(typeof openPricing === "function") openPricing();
+  return false;
+}
+
 // ── ASYNC, CHUNKED GRID COMPUTATION (perf) ───────────────────────────────────
 // Scoring the full ~9,000-cell grid synchronously froze the UI for 1-3s on
 // species select. This version computes the grid one band of latitude rows per
@@ -10937,25 +10986,8 @@ function drawCanyons(){
   // active port selected this session, or a saved default home port. We do
   // NOT use the universal fallback here, so a fresh startup with no selection
   // shows a clean map until the user picks a port.
-  let refName = null;
-  if(typeof activePort !== "undefined" && activePort && PORTS[activePort]){
-    refName = activePort;
-  } else if(typeof USER_PREFS !== "undefined" && USER_PREFS.defaultPort && PORTS[USER_PREFS.defaultPort]){
-    refName = USER_PREFS.defaultPort;
-  }
-  if(!refName) return;  // no real port context yet — keep the map clean
-  const refPort = PORTS[refName];
-
-  // Candidate structures: point features (exclude closure polygons) within
-  // the fishable radius of the reference port — single distance pass.
-  const structures = [];
-  for(const c of CANYONS){
-    if(c.polygon || c.type === "closure") continue;
-    const d = nmBetween(refPort.lat, refPort.lng, c.lat, c.lng);
-    if(d <= HOME_PORT_RADIUS_NM) structures.push({c, d});
-  }
-  structures.sort((a, b) => a.d - b.d);
-  const nearest = structures.slice(0, 15).map(x => x.c);
+  const nearest = nearestMajorFishingAreas();
+  if(!nearest.length) return;
 
   nearest.forEach(c=>{
     const type = c.type || "canyon";
@@ -11214,8 +11246,9 @@ const WP_TYPE_STYLE = {
 // owners get the full set for their port radius via pack_waypoints_within RPC.
 // Free users see none (only their personal waypoints).
 const BW_OWNER_EMAILS = ["rnovakwvu@gmail.com", "natalienovakm@gmail.com"];
-// BW_PREMIUM = app features (heat map, ocean/wind layers, forecast, etc.) —
-//   granted to a 7-day trial, active subscription, or owner.
+// BW_PREMIUM = app features (heat map, ocean/wind layers, full forecast access,
+//   charted waypoints, etc.) — granted to a 7-day trial, active subscription,
+//   or owner. Free users still get 6-day forecasts at ports & major fishing areas.
 // BW_PAID    = the AI Captain's Brief — active subscription / owner
 //   only (the trial does NOT include the brief).
 let BW_PREMIUM = false;
