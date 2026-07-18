@@ -3120,15 +3120,15 @@ function scoreCell(lat, lng, speciesId){
   // with multiple bands) get full credit in any of their preferred zones.
   let depthScore = 0;
   const bands = prefs.depthBands || [[0, 2000]];
-  // HARD SHALLOW FLOOR: regardless of species, water shallower than ~1.5 m
-  // (~5 ft) is not a place we recommend a fishing hotspot — it's tidal flat /
-  // skinny water you'd run aground in, and a pin there (like the 3 ft cobia
-  // spot) is never right. Inshore species that genuinely use very skinny water
-  // (redfish tailing flats) can be exempted later via a prefs flag, but the
-  // current species set is all boat-fished, so a 5 ft floor is safe and kills
-  // the nonsensical flats hotspots at the source.
-  const MIN_FISHABLE_DEPTH_M = 1.5;
+  // HARD SHALLOW FLOOR (meters):
+  //   • Nearshore / offshore → 11 ft. Boat-fished targets (cobia, kings, etc.)
+  //     should never pin a "best spot" in skinny bay/shoal water (~6 ft) just
+  //     because temp/season look good. Below this depth the cell is excluded.
+  //   • Inshore → 5 ft. Redfish/trout/flats fish can work thinner water; those
+  //     cells stay scoreable but get depthScore = 0 below the floor.
+  const MIN_FISHABLE_DEPTH_M = speciesCat === "inshore" ? 1.5 : (11 / 3.28084);
   if(depth != null && depth >= 0 && depth < MIN_FISHABLE_DEPTH_M){
+    if(speciesCat !== "inshore") return null;
     depthScore = 0;
   } else {
   for(const [bMin, bMax] of bands){
