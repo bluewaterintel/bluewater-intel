@@ -7910,11 +7910,10 @@ function renderExplainerMain(){
     // total — factors are already ordered by that, biggest driver first.)
     const q = (typeof f.quality === "number") ? f.quality : (f.score / 0.30);
     const w = Math.min(100, Math.max(0, Math.round(q * 100)));
-    const wtPct = f.weight > 0 ? Math.round(f.weight * 100) : 0;
     return `
       <div style="margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;margin-bottom:3px">
-          <span style="color:#cfe5ff;font-weight:600;white-space:nowrap;flex-shrink:0">${f.name}<span style="color:#6b8bab;font-size:10px;font-weight:600;margin-left:5px">${wtPct}%</span></span>
+          <span style="color:#cfe5ff;font-weight:600;white-space:nowrap;flex-shrink:0">${f.name}</span>
           <span style="color:#9ec5e8;font-weight:600;text-align:right;white-space:nowrap">${f.raw}</span>
         </div>
         <div style="height:5px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden">
