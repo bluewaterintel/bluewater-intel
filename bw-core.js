@@ -2379,10 +2379,36 @@ function depthAtFromGrid(g, lat, lng){
   const fi = (lat - g.minLat) / g.step;
   const fj = (lng - g.minLng) / g.step;
   if(fi < -0.5 || fj < -0.5 || fi > g.nLat - 0.5 || fj > g.nLng - 0.5) return null;
+  const cell = (i, j) => {
+    if(i < 0 || j < 0 || i >= g.nLat || j >= g.nLng) return null;
+    const v = g.depth[i * g.nLng + j];
+    return (typeof v === "number" && isFinite(v)) ? v : null;
+  };
+  // Bilinear sample among the four surrounding cells. Skip missing cells so a
+  // NaN neighbor doesn't zero out a valid water sample. Prefer water (> 0)
+  // when blending with land (0) so nearshore structure isn't snapped to a
+  // shoal/land cell by nearest-neighbor rounding.
+  const i0 = Math.floor(fi), j0 = Math.floor(fj);
+  const i1 = i0 + 1, j1 = j0 + 1;
+  const ty = fi - i0, tx = fj - j0;
+  const corners = [
+    { v: cell(i0, j0), w: (1 - ty) * (1 - tx) },
+    { v: cell(i0, j1), w: (1 - ty) * tx },
+    { v: cell(i1, j0), w: ty * (1 - tx) },
+    { v: cell(i1, j1), w: ty * tx },
+  ];
+  let wSum = 0, dSum = 0, waterW = 0, waterD = 0;
+  for(const c of corners){
+    if(c.v == null || c.w <= 0) continue;
+    wSum += c.w; dSum += c.w * c.v;
+    if(c.v > 0){ waterW += c.w; waterD += c.w * c.v; }
+  }
+  if(waterW > 0) return waterD / waterW;
+  if(wSum > 0) return dSum / wSum;
+  // Fallback: nearest cell if we're somehow outside the bilinear window.
   const i = Math.max(0, Math.min(g.nLat - 1, Math.round(fi)));
   const j = Math.max(0, Math.min(g.nLng - 1, Math.round(fj)));
-  const v = g.depth[i * g.nLng + j];
-  return (typeof v === "number" && isFinite(v)) ? v : null;
+  return cell(i, j);
 }
 
 async function buildBathyGrid(latMin, latMax, lngMin, lngMax){
@@ -2574,11 +2600,52 @@ function realDepthAt(lat, lng){
   return depthAtFromGrid(BATHY_GRID, lat, lng);
 }
 
+// Parse curated waypoint depth strings ("40-50ft", "50ft", "15 m") → meters.
+function parseWaypointDepthMeters(depthStr){
+  if(!depthStr || typeof depthStr !== "string") return null;
+  const m = depthStr.match(/(\d+(?:\.\d+)?)\s*(?:-\s*(\d+(?:\.\d+)?))?\s*(ft|m)?/i);
+  if(!m) return null;
+  const a = parseFloat(m[1]);
+  const b = m[2] != null ? parseFloat(m[2]) : a;
+  if(!isFinite(a) || !isFinite(b)) return null;
+  const mid = (a + b) / 2;
+  const unit = (m[3] || "ft").toLowerCase();
+  return unit === "m" ? mid : mid / 3.28084;
+}
+
+// Curated depth (meters) from a nearby charted public waypoint. Coarse CUDEM/
+// ETOPO grids often snap bay-mouth hotspots onto adjacent shoals (e.g. Chesapeake
+// Light Tower reading ~20 ft instead of the real ~40–50 ft). When the cell is
+// within ~1.5 nm of a known pin with depth metadata, that pin is authoritative.
+function knownStructureDepthM(lat, lng, maxNm = 1.5){
+  if(typeof WP_PUBLIC === "undefined" || !Array.isArray(WP_PUBLIC)) return null;
+  let bestM = null, bestNm = maxNm;
+  for(const w of WP_PUBLIC){
+    if(w == null || w.lat == null || w.lng == null || !w.depth) continue;
+    const nm = (typeof nmBetween === "function")
+      ? nmBetween(lat, lng, w.lat, w.lng)
+      : Math.hypot((w.lat - lat) * 60, (w.lng - lng) * 60 * Math.cos(lat * Math.PI / 180));
+    if(nm > bestNm) continue;
+    const m = parseWaypointDepthMeters(w.depth);
+    if(m == null || m <= 0) continue;
+    bestNm = nm;
+    bestM = m;
+  }
+  return bestM;
+}
+
 // Depth used by the prediction engine: prefer bite-map bathy, then map-wide grid,
 // then the shelf model. No synthetic shallow placeholder — buildPredictInputs
 // finishes before the grid scores, so a fake 15 m reading can't flash on the map.
+// Near curated structure pins, override a grid sample that snapped too shallow.
 function predictDepth(lat, lng){
   const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
+  const known = knownStructureDepthM(lat, lng);
+  if(known != null){
+    // Use curated depth when the grid is missing/land, or clearly shoaled relative
+    // to the known pin (grid < ~65% of curated → e.g. 20 ft vs 45 ft at the tower).
+    if(real == null || real <= 0 || real < known * 0.65) return known;
+  }
   if(real != null) return real;
   return seaDepth(lat, lng);
 }
@@ -8050,9 +8117,9 @@ function renderExplainerMain(){
         <div style="font-size:9px;color:#9ec5e8;letter-spacing:.08em;text-transform:uppercase;margin-top:3px;font-weight:700">Confidence</div>
         <div style="font-size:9.5px;color:#7a9ec0;margin-top:2px;font-style:italic">how sure</div>
       </div>
-      <div style="flex:1;font-size:11.5px;color:#9ec5e8;line-height:1.5;text-align:right;padding-top:2px">
-        ${cell.lat.toFixed(3)}°N ${Math.abs(cell.lng).toFixed(3)}°W
-        ${cell.distNm != null ? `<br><span style="color:#7dd3fc">⛵ ${cell.distNm}nm from ${activePort ? activePort.split(",")[0] : "port"}</span>` : ""}
+      <div style="flex:1;min-width:0;font-size:11.5px;color:#9ec5e8;line-height:1.5;text-align:right;padding-top:2px">
+        <div style="white-space:nowrap">${cell.lat.toFixed(3)}°N ${Math.abs(cell.lng).toFixed(3)}°W</div>
+        ${cell.distNm != null ? `<div style="color:#7dd3fc;white-space:nowrap">⛵ ${cell.distNm}nm from ${activePort ? activePort.split(",")[0] : "port"}</div>` : ""}
       </div>
     </div>
 
