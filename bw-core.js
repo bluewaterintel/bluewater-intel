@@ -10368,6 +10368,13 @@ function updateBiteBanner(){
   const b = document.getElementById("bite-banner");
   if(!b) return;
   b.style.display = layerVis.predict ? "block" : "none";
+  // Match other top map legends — ~3/4 width, centered.
+  b.style.left = "50%";
+  b.style.right = "auto";
+  b.style.transform = "translateX(-50%)";
+  b.style.width = "75%";
+  b.style.maxWidth = "75%";
+  b.style.minWidth = "0";
   if(!layerVis.predict) b.classList.remove("bite-fc-open");
   const fcToggleLbl = document.getElementById("bite-fc-toggle-label");
   if(fcToggleLbl){

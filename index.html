@@ -1303,11 +1303,12 @@ body.modal-open #brief-toggle{
   /* Bite score banner — slim strip; forecast collapses to save map space */
   #bite-banner{
     top:4px !important;
-    left:6px !important;
-    right:6px !important;
-    width:auto !important;
-    max-width:none !important;
-    transform:none !important;
+    left:50% !important;
+    right:auto !important;
+    width:75% !important;
+    max-width:75% !important;
+    min-width:0 !important;
+    transform:translateX(-50%) !important;
     padding:4px 8px 5px !important;
     border-radius:8px !important;
   }
@@ -2572,7 +2573,7 @@ body.modal-open #brief-toggle{
        hot=good heat overlay. Built/toggled by updateBiteBanner(). -->
   <div id="bite-banner" style="
     display:none;position:absolute;
-    top:8px;left:50%;transform:translateX(-50%);z-index:501;
+    top:8px;left:50%;right:auto;transform:translateX(-50%);z-index:501;
     background:var(--bw-map-chrome-bg);
     border:1px solid rgba(255,255,255,.18);
     border-radius:10px;
@@ -2581,7 +2582,9 @@ body.modal-open #brief-toggle{
     color:#e8f4ff;
     box-shadow:0 3px 12px rgba(0,0,0,.5);
     pointer-events:auto;
-    width:min(440px, 92vw);
+    width:75%;
+    max-width:75%;
+    min-width:0;
   ">
     <div class="bite-banner-hdr" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;pointer-events:none">
       <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#fb923c">BITE SCORE</span>
@@ -3285,7 +3288,7 @@ body.modal-open #brief-toggle{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260718a"></script>
+<script src="bw-core.js?v=20260718b"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
