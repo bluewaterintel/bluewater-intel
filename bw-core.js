@@ -10322,12 +10322,13 @@ function updateOceanLegend(){
   // If the bite-score banner is also showing at the top, push this panel down so
   // they don't overlap; otherwise sit at the normal top inset.
   el.style.top = (layerVis.predict ? (typeof biteBannerHeightPx === "function" ? biteBannerHeightPx() + 10 : 70) : (phone ? 6 : 10)) + "px";
-  // Keep the top scale bubble centered at ~3/4 map width on all viewports.
+  // Keep the top scale bubble centered — 1/3 map width on desktop, 3/4 on phone.
   el.style.left = "50%";
   el.style.right = "auto";
   el.style.transform = "translateX(-50%)";
-  el.style.width = "75%";
-  el.style.maxWidth = "75%";
+  const legendWidth = phone ? "75%" : "33.333%";
+  el.style.width = legendWidth;
+  el.style.maxWidth = legendWidth;
   el.style.minWidth = "0";
   if(phone){
     el.style.padding = "4px 6px";
@@ -10368,12 +10369,14 @@ function updateBiteBanner(){
   const b = document.getElementById("bite-banner");
   if(!b) return;
   b.style.display = layerVis.predict ? "block" : "none";
-  // Match other top map legends — ~3/4 width, centered.
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
+  // Match other top map legends — 1/3 width on desktop, 3/4 on phone.
   b.style.left = "50%";
   b.style.right = "auto";
   b.style.transform = "translateX(-50%)";
-  b.style.width = "75%";
-  b.style.maxWidth = "75%";
+  const bannerWidth = phone ? "75%" : "33.333%";
+  b.style.width = bannerWidth;
+  b.style.maxWidth = bannerWidth;
   b.style.minWidth = "0";
   if(!layerVis.predict) b.classList.remove("bite-fc-open");
   const fcToggleLbl = document.getElementById("bite-fc-toggle-label");
