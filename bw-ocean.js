@@ -214,8 +214,12 @@
     predictInputsInflight.clear();
   }
 
-  async function fetchPredictInputs(latMin, latMax, lngMin, lngMax, maxPoints, forecastHour = 0) {
+  async function fetchPredictInputs(latMin, latMax, lngMin, lngMax, maxPoints, forecastHour = 0, opts = {}) {
     const hours = normalizeOceanHours(forecastHour);
+    const timeoutMs = (opts && opts.timeoutMs != null) ? Number(opts.timeoutMs) : 50000;
+    // Default retries: 0 — stacked retries + fallback were letting Bite Map spin
+    // for 2–3 minutes. Callers that want a second try pass retries:1 with budget.
+    const retries = (opts && opts.retries != null) ? Number(opts.retries) : 0;
     const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)},${maxPoints || 90},${hours}`;
     const hit = predictInputsCache.get(k);
     if (hit) return hit;
@@ -236,8 +240,8 @@
         if (hours > 0) params.set("hours", String(hours));
         const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
           headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-          signal: fetchTimeout(50000),
-        });
+          signal: fetchTimeout(Math.max(3000, timeoutMs)),
+        }, Math.max(0, retries));
         if (!res.ok) return null;
         const data = await res.json();
         // Keep the payload when bathy/SST grids are present even if the wind field

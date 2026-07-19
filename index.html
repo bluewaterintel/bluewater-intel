@@ -14,9 +14,9 @@
 <script src="bw-config.js"></script>
 <script src="bw-data-source.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="bw-auth.js"></script>
+<script src="bw-auth.js?v=20260719a"></script>
 <script src="bw-freshness.js"></script>
-<script src="bw-ocean.js?v=20260719i"></script>
+<script src="bw-ocean.js?v=20260719j"></script>
 <script src="bw-wind.js?v=20260712c"></script>
 <script src="bw-breaks.js?v=20260708"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -1210,16 +1210,20 @@ body.modal-open #brief-toggle{
 .map-time-pill--info .map-time-pill-footer{display:none !important}
 #predict-loading{
   position:absolute;z-index:600;left:50%;transform:translateX(-50%);
+  max-width:min(340px,calc(100% - 24px));
   background:var(--bw-map-chrome-bg);border:1px solid rgba(125,211,252,.35);
   color:#e8f4ff;font:600 12px 'Segoe UI',Arial,sans-serif;
   padding:8px 14px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,.5);
   display:flex;align-items:center;gap:8px;pointer-events:none;
 }
-#predict-loading .bw-load-spin{
+#predict-loading .bw-load-msg{line-height:1.35;text-align:left}
+#predict-loading .bw-load-spin,
+#brief-btn .bw-load-spin{
   width:14px;height:14px;min-width:14px;min-height:14px;flex:0 0 14px;
   border-radius:50%;border:2px solid rgba(125,211,252,.3);border-top-color:#7dd3fc;
   box-sizing:border-box;animation:bwspin .8s linear infinite;
 }
+#brief-btn .bw-load-spin{border-color:rgba(94,234,212,.3);border-top-color:#5eead4}
 @keyframes bwspin{to{transform:rotate(360deg)}}
 .map-time-pill--green{border:1px solid rgba(34,197,94,.40)}
 .map-time-pill--green .map-time-pill-title{color:#4ade80}
@@ -1657,6 +1661,7 @@ body.modal-open #brief-toggle{
   width:100%;padding:13px 22px;border:1px solid rgba(94,234,212,.5);border-radius:11px;
   font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
   cursor:pointer;margin-bottom:12px;transition:all .18s;font-family:inherit;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
 }
 #brief-btn:not([disabled]){
   background:linear-gradient(180deg,rgba(14,165,165,.45),rgba(6,120,120,.3));
@@ -1667,6 +1672,12 @@ body.modal-open #brief-toggle{
   border-color:rgba(94,234,212,.8);transform:translateY(-1px);
 }
 #brief-btn[disabled]{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12);color:#6b8bab;cursor:not-allowed}
+#brief-btn.brief-btn--loading{
+  background:rgba(14,165,165,.18);border-color:rgba(94,234,212,.35);color:#99f6e4;cursor:wait;
+}
+.brief-load-status{
+  margin:-4px 0 12px;padding:0 2px;font-size:12px;line-height:1.4;color:#9ec5e8;text-align:center;
+}
 #brief-out{padding:14px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.2);border-radius:12px;font-size:13px;line-height:1.6}
 .bout-hdr{font-size:10px;color:#5eead4;letter-spacing:.09em;margin-bottom:8px;font-weight:700}
 
@@ -3453,7 +3464,7 @@ body.modal-open #brief-toggle{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260719p"></script>
+<script src="bw-core.js?v=20260719q"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
