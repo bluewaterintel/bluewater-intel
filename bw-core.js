@@ -338,10 +338,10 @@ const SAT_MAX_DAYS_BACK = 14;
 let SAT_FRESH_BACK = { sst: 1, chlor: 1 };
 let SAT_FRESH_DATE = { sst: null, chlor: null };
 // Per-layer display opacity for the ocean overlays, driven by the vertical
-// opacity slider on the right of the map. Defaults: SST and chlor both at 55%
-// so structure lines stay readable without manual dimming. Persisted so a user's
-// preferred dim level survives navigation and reloads.
-const OCEAN_OPACITY_DEFAULT = { sst: 0.55, chlor: 0.55 };
+// opacity slider on the right of the map. Defaults keep structure readable
+// underneath while stopping the basemap from washing SST/chlor into pastel haze.
+// Persisted so a user's preferred dim level survives navigation and reloads.
+const OCEAN_OPACITY_DEFAULT = { sst: 0.82, chlor: 0.70 };
 let oceanOpacity = { ...OCEAN_OPACITY_DEFAULT };
 try {
   const saved = JSON.parse(localStorage.getItem("bwi_ocean_opacity") || "null");
@@ -502,9 +502,11 @@ async function initMap(){
     const scoped = document.createElement("style");
     scoped.textContent =
       '.ocean-overlays-smooth img.leaflet-tile { image-rendering:auto !important; image-rendering:smooth !important; }' +
-      // Blur the whole tile CONTAINER per layer so seams between tiles smooth too.
-      '.sst-smooth   { filter: blur(1px) contrast(1.45) saturate(1.35); }' +   // fallback GIBS — sharpen warm fronts
-      '.chlor-smooth { filter: blur(2px); }';    // 1km VIIRS chlor
+      // Minimal blur (just enough to hide tile-grid seams) + a saturation/contrast
+      // boost so fronts read as bold color transitions, not haze. The old 1–2px
+      // blur over-softened real thermal fronts into a foggy look.
+      '.sst-smooth   { filter: blur(0.5px) saturate(1.25) contrast(1.08); }' +
+      '.chlor-smooth { filter: blur(0.5px) saturate(1.2)  contrast(1.05); }';
     document.head.appendChild(scoped);
   })();
   // Stamp each ocean-overlay tile inline as it loads — inline styles win over
@@ -6805,7 +6807,7 @@ function _sstForecastRGBA(tempF){
     Math.round(a[1] + (b[1] - a[1]) * f),
     Math.round(a[2] + (b[2] - a[2]) * f),
     Math.round(a[3] + (b[3] - a[3]) * f),
-    220,
+    245,
   ];
 }
 
@@ -6866,36 +6868,18 @@ function _sstFcBuildSmallCanvas(g){
   const range = computeSstDisplayRangeFromGrid(g);
   _sstColorLo = range.lo;
   _sstColorHi = range.hi;
-  // 2–3× supersample + nearest screen blit = sharper fronts than blurring a
-  // coarse grid up to the viewport (the old path looked cloudy).
-  const scale = (g.step <= 0.025) ? 2 : 3;
-  const w = g.nLng * scale, h = g.nLat * scale;
+  // Nearest-neighbor cell paint (no bilinear) — bilinear supersample was
+  // reintroducing the same soft/hazy wash the CSS blur caused on GIBS tiles.
   const filled = _sstFcFillGaps(g.val, g.nLat, g.nLng);
   const c = document.createElement("canvas");
-  c.width = w; c.height = h;
+  c.width = g.nLng; c.height = g.nLat;
   const cx = c.getContext("2d");
-  const img = cx.createImageData(w, h);
-  for(let y = 0; y < h; y++){
-    const i0 = (h - 1 - y) / scale;
-    const i = Math.min(g.nLat - 1, Math.max(0, Math.floor(i0)));
-    const i1 = Math.min(g.nLat - 1, i + 1);
-    const fi = i0 - i;
-    for(let x = 0; x < w; x++){
-      const j0 = x / scale;
-      const j = Math.min(g.nLng - 1, Math.max(0, Math.floor(j0)));
-      const j1 = Math.min(g.nLng - 1, j + 1);
-      const fj = j0 - j;
-      const v00 = filled[i * g.nLng + j], v10 = filled[i1 * g.nLng + j];
-      const v01 = filled[i * g.nLng + j1], v11 = filled[i1 * g.nLng + j1];
-      // Bilinear only across valid neighbors — keeps breaks crisp, skips land.
-      let v = NaN, sw = 0, acc = 0;
-      const add = (vv, wgt) => { if(isFinite(vv)){ acc += vv * wgt; sw += wgt; } };
-      add(v00, (1 - fi) * (1 - fj));
-      add(v10, fi * (1 - fj));
-      add(v01, (1 - fi) * fj);
-      add(v11, fi * fj);
-      if(sw > 0.25) v = acc / sw;
-      const o = (y * w + x) * 4;
+  const img = cx.createImageData(g.nLng, g.nLat);
+  for(let i = 0; i < g.nLat; i++){
+    for(let j = 0; j < g.nLng; j++){
+      const v = filled[i * g.nLng + j];
+      const y = g.nLat - 1 - i;
+      const o = (y * g.nLng + j) * 4;
       const rgba = _sstForecastRGBA(v);
       if(!rgba){ img.data[o + 3] = 0; continue; }
       img.data[o] = rgba[0]; img.data[o + 1] = rgba[1]; img.data[o + 2] = rgba[2]; img.data[o + 3] = rgba[3];
@@ -7009,7 +6993,7 @@ const SstForecastLayer = L.Layer.extend({
     // Nearest-neighbor blit — bilinear here was softening every front into haze.
     const prev = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
-    ctx.globalAlpha = oceanOpacity.sst || 0.75;
+    ctx.globalAlpha = (typeof oceanOpacity.sst === "number") ? oceanOpacity.sst : OCEAN_OPACITY_DEFAULT.sst;
     ctx.drawImage(this._small, pTL.x, pTL.y, pBR.x - pTL.x, pBR.y - pTL.y);
     ctx.globalAlpha = 1;
     ctx.imageSmoothingEnabled = prev;
