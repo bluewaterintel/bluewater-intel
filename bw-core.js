@@ -3926,9 +3926,12 @@ function mainlandCoastLng(lat){
   if(lat > 34.65) return -76.75;  // Mainland near Morehead City (actual mainland)
   if(lat > 34.50) return -76.85;  // Mainland Bogue area
   if(lat > 34.2) return -77.80;   // Wilmington area mainland
-  if(lat > 33.7) return -78.10;
-  if(lat > 33.2) return -78.65;
-  if(lat > 32.7) return -79.40;   // Charleston
+  // SC Long Bay / Myrtle — sit on/west of the Atlantic beach (MAIN_COAST).
+  // Prior -78.10 / -78.65 values sat in open ocean and truncating LORAN /
+  // land-mask consumers short of the shore by ~5–17 nm.
+  if(lat > 33.7) return -78.35;
+  if(lat > 33.2) return -79.05;
+  if(lat > 32.7) return -79.50;   // Charleston
   if(lat > 32.0) return -80.50;   // Savannah
   if(lat > 31.0) return -81.20;
   if(lat > 30.4) return -81.45;   // Jacksonville
@@ -3973,44 +3976,46 @@ function barrierCoastLng(lat){
   // Outer Banks → Oak Island: Atlantic oceanfront only (east face of the
   // barrier / beach). Values must sit on the beach, not west into Pamlico /
   // Core / Bogue sounds — LORAN keepPt uses this as the shore cut.
+  // Values must sit on or slightly WEST of MAIN_COAST oceanfront. Sitting east
+  // invents a wall in open water and stops LORAN lines short of the beach.
   if(lat >= 36.0 && lat <= 36.55){
-    return -75.70;  // Currituck Banks / Corolla oceanfront
+    return -75.82;  // Currituck Banks / Corolla (MAIN ~-75.72…-75.85)
   }
   if(lat >= 35.70 && lat < 36.0){
-    return -75.48;  // Nags Head / Bodie Island
+    return -75.58;  // Nags Head / Bodie Island (MAIN ~-75.50…-75.72)
   }
   if(lat >= 35.40 && lat < 35.70){
-    return -75.46;  // Rodanthe / Waves / Salvo
+    return -75.48;  // Rodanthe / Waves / Salvo
   }
   if(lat >= 35.20 && lat < 35.40){
-    return -75.52;  // Buxton / Cape Hatteras tip (~-75.53)
+    return -75.54;  // Buxton / Cape Hatteras tip
   }
   if(lat >= 35.05 && lat < 35.20){
-    return -75.58;  // Hatteras village / Frisco ocean side
+    return -75.60;  // Hatteras village / Frisco ocean side
   }
   if(lat >= 34.95 && lat < 35.05){
-    return -75.92;  // Ocracoke Island Atlantic (~-75.9); was -75.75 into sound
+    return -75.95;  // Ocracoke Island Atlantic
   }
   if(lat >= 34.85 && lat < 34.95){
-    return -76.15;  // Portsmouth / north Core Banks
+    return -76.18;  // Portsmouth / north Core Banks
   }
   if(lat >= 34.70 && lat < 34.85){
-    return -76.35;  // Core Banks
+    return -76.38;  // Core Banks
   }
   if(lat >= 34.58 && lat < 34.70){
-    return -76.55;  // Cape Lookout / Shackleford
+    return -76.58;  // Cape Lookout / Shackleford
   }
   if(lat >= 34.40 && lat < 34.58){
-    return -76.75;  // Bogue Banks / Emerald Isle oceanfront
+    return -76.78;  // Bogue Banks / Emerald Isle oceanfront
   }
   if(lat >= 34.20 && lat < 34.40){
-    return -77.40;  // Topsail / Surf City Atlantic
+    return -77.45;  // Topsail / Surf City Atlantic
   }
   if(lat >= 33.95 && lat < 34.20){
-    return -77.88;  // Wrightsville / Carolina Beach / Oak Island oceanfront
+    return -77.92;  // Wrightsville / Carolina Beach / Oak Island oceanfront
   }
   if(lat >= 33.80 && lat < 33.95){
-    return -78.08;  // Holden / Ocean Isle
+    return -78.22;  // Holden / Ocean Isle (was -78.08 — truncated 45200 short)
   }
   // Default: no significant barrier island offset
   return mainlandCoastLng(lat);
@@ -9487,22 +9492,22 @@ function traceLoranLine(tdValue, bounds, step, chain){
   // ── COASTLINE CLIP ──
   // The marching-squares grid spans the full useBounds rectangle, which
   // reaches well inland. LORAN-C TD lines only make sense over open Atlantic
-  // water, so we trim land + bay/sound west of the barrier/Atlantic shore.
-  // Where a line crosses into land we split it (never bridge a peninsula).
+  // water, so we trim land + bay/sound. Where a line crosses into land we
+  // split it (never bridge a peninsula).
   //
-  // keep = east of Atlantic barrier (tiny inland buffer) AND not on a land
-  // polygon. The polygon check stops Eastern Shore VA/MD farmland from
-  // counting as ocean when barrierCoastLng is slightly west of the beach.
-  // OBX: no inland buffer — a 0.04° western slop was painting into Pamlico.
+  // Shore cut = land polygon (isOnLand). Coarse barrier/mainland longitudes
+  // used to act as an eastward wall in open ocean (SC Long Bay 45225–45500,
+  // Currituck 9960-Y) and stopped lines ~5–17 nm short of the beach. Keep the
+  // OBX barrier only as a sound guard west of the oceanfront.
   const keepPt = p => {
     const lat = p[0], lng = p[1];
-    const barrier = barrierCoastLng(lat);
-    const obx = lat >= 33.80 && lat <= 36.55;
-    const coastMin = obx ? barrier : (barrier - 0.02);
-    if(lng < coastMin) return false;
-    // Explicit Pamlico / Core / Bogue sound reject (west of Atlantic barrier).
-    if(obx && lng < barrier) return false;
     if(typeof isOnLand === "function" && isOnLand(lat, lng)) return false;
+    // Pamlico / Core / Bogue: reject west of Atlantic barrier so a slightly
+    // east-of-beach land poly can't count sound water as ocean.
+    if(lat >= 33.80 && lat <= 36.55){
+      const barrier = barrierCoastLng(lat);
+      if(lng < barrier) return false;
+    }
     return true;
   };
 
