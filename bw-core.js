@@ -3964,23 +3964,47 @@ function barrierCoastLng(lat){
   if(lat > 36.85 && lat <= 37.05){
     return -75.88;  // Cape Charles / Fisherman Island tip
   }
+  // Outer Banks → Oak Island: Atlantic oceanfront only (east face of the
+  // barrier / beach). Values must sit on the beach, not west into Pamlico /
+  // Core / Bogue sounds — LORAN keepPt uses this as the shore cut.
   if(lat >= 36.0 && lat <= 36.55){
-    return -75.65;  // Currituck Banks (north OBX)
+    return -75.70;  // Currituck Banks / Corolla oceanfront
   }
-  if(lat >= 35.55 && lat < 36.0){
-    return -75.45;  // Nags Head / Bodie Island
+  if(lat >= 35.70 && lat < 36.0){
+    return -75.48;  // Nags Head / Bodie Island
   }
-  if(lat >= 35.20 && lat < 35.55){
-    return -75.45;  // Hatteras Island (curves east)
+  if(lat >= 35.40 && lat < 35.70){
+    return -75.46;  // Rodanthe / Waves / Salvo
   }
-  if(lat >= 34.95 && lat < 35.20){
-    return -75.75;  // Ocracoke
+  if(lat >= 35.20 && lat < 35.40){
+    return -75.52;  // Buxton / Cape Hatteras tip (~-75.53)
   }
-  if(lat >= 34.65 && lat < 34.95){
-    return -76.30;  // Core Banks → Cape Lookout
+  if(lat >= 35.05 && lat < 35.20){
+    return -75.58;  // Hatteras village / Frisco ocean side
   }
-  if(lat >= 34.55 && lat < 34.65){
-    return -76.60;  // Bogue Banks / Shackleford
+  if(lat >= 34.95 && lat < 35.05){
+    return -75.92;  // Ocracoke Island Atlantic (~-75.9); was -75.75 into sound
+  }
+  if(lat >= 34.85 && lat < 34.95){
+    return -76.15;  // Portsmouth / north Core Banks
+  }
+  if(lat >= 34.70 && lat < 34.85){
+    return -76.35;  // Core Banks
+  }
+  if(lat >= 34.58 && lat < 34.70){
+    return -76.55;  // Cape Lookout / Shackleford
+  }
+  if(lat >= 34.40 && lat < 34.58){
+    return -76.75;  // Bogue Banks / Emerald Isle oceanfront
+  }
+  if(lat >= 34.20 && lat < 34.40){
+    return -77.40;  // Topsail / Surf City Atlantic
+  }
+  if(lat >= 33.95 && lat < 34.20){
+    return -77.88;  // Wrightsville / Carolina Beach / Oak Island oceanfront
+  }
+  if(lat >= 33.80 && lat < 33.95){
+    return -78.08;  // Holden / Ocean Isle
   }
   // Default: no significant barrier island offset
   return mainlandCoastLng(lat);
@@ -4072,11 +4096,12 @@ const MAIN_COAST = [
   [37.10, -75.95], [37.00, -75.95], [36.92, -75.97], [36.85, -75.95],
   // ── VA Beach coastline (oceanfront) ──
   [36.80, -75.95], [36.70, -75.92],
-  // ── NC Outer Banks coast (barrier islands trace, south to Cape Lookout) ──
-  [36.55, -75.85], [36.10, -75.70], [35.85, -75.50], [35.55, -75.45],
-  [35.25, -75.45], [35.05, -75.55], [34.80, -76.30], [34.65, -76.55],
-  // ── NC south coast (Cape Lookout south to SC) ──
-  [34.55, -76.80], [34.35, -77.30], [34.00, -77.85], [33.85, -78.00],
+  // ── NC Outer Banks Atlantic oceanfront (keep Pamlico / Core west = land) ──
+  [36.55, -75.85], [36.10, -75.72], [35.85, -75.50], [35.55, -75.47],
+  [35.35, -75.48], [35.22, -75.53], [35.10, -75.58], [35.00, -75.90],
+  [34.90, -76.10], [34.80, -76.35], [34.65, -76.55],
+  // ── NC south coast (Cape Lookout → Oak Island oceanfront) ──
+  [34.55, -76.75], [34.40, -77.20], [34.20, -77.45], [34.00, -77.88], [33.85, -78.05],
   // ── SC coast ──
   [33.70, -78.45], [33.50, -78.95], [33.20, -79.20], [32.80, -79.55],
   [32.50, -80.00],
@@ -6718,34 +6743,69 @@ let SST_FORECAST_GRID = null;
 let sstForecastLayer = null;
 let _sstFcFetchSeq = 0;
 
+// Adaptive SST display range (°F). GIBS MUR tiles bake a global ~0–32°C
+// palette, so summer Mid-Atlantic water (all ~78–86°F) looks uniformly red.
+// Canvas SST stretches the local viewport (P5–P95) across the full rainbow so
+// 1–2°F breaks read like Rutgers coolers. Updated whenever the SST grid paints.
+let _sstColorLo = 74;
+let _sstColorHi = 88;
+
+function computeSstDisplayRangeFromGrid(g){
+  if(!g || !g.val) return {lo: 74, hi: 88};
+  const vals = [];
+  for(let i = 0; i < g.val.length; i++){
+    const v = g.val[i];
+    if(typeof v === "number" && isFinite(v) && v > 28 && v < 100) vals.push(v);
+  }
+  if(vals.length < 30) return {lo: 74, hi: 88};
+  vals.sort((a, b) => a - b);
+  const at = q => vals[Math.min(vals.length - 1, Math.max(0, Math.round(q * (vals.length - 1))))];
+  let lo = at(0.05), hi = at(0.95);
+  const MIN_SPAN = 6;   // avoid posterizing a flat field
+  const MAX_SPAN = 18;  // keep contrast when a cold eddy enters the box
+  if(hi - lo < MIN_SPAN){
+    const mid = (lo + hi) / 2;
+    lo = mid - MIN_SPAN / 2;
+    hi = mid + MIN_SPAN / 2;
+  }
+  if(hi - lo > MAX_SPAN){
+    const mid = (lo + hi) / 2;
+    lo = mid - MAX_SPAN / 2;
+    hi = mid + MAX_SPAN / 2;
+  }
+  lo = Math.floor(lo * 2) / 2;
+  hi = Math.ceil(hi * 2) / 2;
+  if(hi <= lo) hi = lo + MIN_SPAN;
+  return {lo, hi};
+}
+
 function _sstForecastRGBA(tempF){
   if(!isFinite(tempF)) return null;
-  // Fishing-focused ramp: spend most of the color budget in the warm band
-  // where 1–2°F fronts matter (summer Mid-Atlantic / Gulf Stream edge). The old
-  // 40–84°F GIBS-style ramp compressed 78–84°F into nearly identical oranges.
-  const t = Math.max(50, Math.min(88, tempF));
+  // Map the adaptive local range across a Rutgers-style cool→hot rainbow so
+  // subtle 1–2°F fronts get the full color budget (not a slice of 0–32°C).
+  const lo = _sstColorLo, hi = _sstColorHi;
+  const u = Math.max(0, Math.min(1, (tempF - lo) / Math.max(0.001, hi - lo)));
   const stops = [
-    [50,  8,  36,  96],   // deep blue — cool
-    [60, 14,  90, 170],   // blue
-    [68, 40, 170, 200],   // cyan
-    [72, 90, 200, 120],   // green
-    [74, 160, 210, 70],   // yellow-green
-    [76, 220, 210, 50],   // yellow
-    [78, 235, 170, 40],   // gold
-    [80, 235, 120, 35],   // orange
-    [82, 220,  70, 30],   // red-orange
-    [84, 190,  40, 35],   // red
-    [88, 140,  20, 50],   // deep red — hottest
+    [0.00,  8,  36,  96],   // deep blue — cool end of local range
+    [0.12, 14,  90, 170],   // blue
+    [0.24, 40, 170, 200],   // cyan
+    [0.36, 90, 200, 120],   // green
+    [0.48, 160, 210,  70],  // yellow-green
+    [0.58, 220, 210,  50],  // yellow
+    [0.68, 235, 170,  40],  // gold
+    [0.78, 235, 120,  35],  // orange
+    [0.88, 220,  70,  30],  // red-orange
+    [1.00, 140,  20,  50],  // deep red — warm end
   ];
   let i = 0;
-  while(i < stops.length - 2 && t > stops[i + 1][0]) i++;
+  while(i < stops.length - 2 && u > stops[i + 1][0]) i++;
   const a = stops[i], b = stops[i + 1];
-  const f = (t - a[0]) / Math.max(0.001, b[0] - a[0]);
+  const f = (u - a[0]) / Math.max(0.001, b[0] - a[0]);
   return [
     Math.round(a[1] + (b[1] - a[1]) * f),
     Math.round(a[2] + (b[2] - a[2]) * f),
     Math.round(a[3] + (b[3] - a[3]) * f),
-    215,
+    220,
   ];
 }
 
@@ -6777,6 +6837,9 @@ function applySstForecastGrid(data){
 }
 
 function _sstFcBuildSmallCanvas(g){
+  const range = computeSstDisplayRangeFromGrid(g);
+  _sstColorLo = range.lo;
+  _sstColorHi = range.hi;
   const c = document.createElement("canvas");
   c.width = g.nLng; c.height = g.nLat;
   const cx = c.getContext("2d");
@@ -6818,7 +6881,9 @@ const SstForecastLayer = L.Layer.extend({
     L.DomUtil.setPosition(this._canvas, tl);
     this._canvas.width = size.x; this._canvas.height = size.y;
     this._draw();
-    if(!SST_FORECAST_GRID) this._requestData();
+    // Refetch on pan/zoom so the adaptive local scale tracks the viewport
+    // (Rutgers-style contrast for whatever water is on screen).
+    this._requestData();
   },
   _requestData: function(){
     if(!layerVis.sst || !MAP || typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchSstGrid) return;
@@ -6837,11 +6902,12 @@ const SstForecastLayer = L.Layer.extend({
       if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
       if((typeof oceanOverlayForecastHour === "function" ? oceanOverlayForecastHour() : 0) !== hours) return;
       applySstForecastGrid(data);
-      // Model forecast only — observed SST stays on GIBS tiles (brighter, matches
-      // what captains see on first load; swapping to canvas looked dim/muted).
-      if(hours > 0 && typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
+      // Canvas SST (observed + forecast) with adaptive local scale. Hide GIBS
+      // so the global 0–32°C palette doesn't wash out summer Mid-Atlantic breaks.
+      if(typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
       updateSatDateDisplay();
       if(typeof updateOceanLegend === "function") updateOceanLegend();
+      this._smallFor = null; // rebuild palette for the new local range
       this._draw();
     });
   },
@@ -6869,21 +6935,13 @@ const SstForecastLayer = L.Layer.extend({
 
 function syncSstOverlayMode(){
   if(!MAP) return;
-  const hours = (typeof oceanOverlayForecastHour === "function") ? oceanOverlayForecastHour() : 0;
-  // Observed SST → GIBS MUR tiles (bright on load). Canvas palette only for +12/+24h
-  // model forecast where satellite tiles aren't available.
-  if(layerVis.sst && hours > 0){
+  // Canvas SST for observed AND forecast: adaptive local P5–P95 stretch so
+  // 1–2°F breaks stay visible (GIBS global scale makes NC summer look flat red).
+  if(layerVis.sst){
     if(!sstForecastLayer) sstForecastLayer = new SstForecastLayer();
     if(!MAP.hasLayer(sstForecastLayer)) sstForecastLayer.addTo(MAP);
     else sstForecastLayer.refresh();
     if(sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
-  } else if(layerVis.sst){
-    if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
-    SST_FORECAST_GRID = null;
-    if(sstLayer && !MAP.hasLayer(sstLayer)){
-      sstLayer.setOpacity(oceanOpacity.sst);
-      sstLayer.addTo(MAP);
-    } else if(sstLayer) sstLayer.setOpacity(oceanOpacity.sst);
   } else {
     if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
     SST_FORECAST_GRID = null;
@@ -9089,6 +9147,8 @@ const LORAN_CHAINS = {
     useBounds: {south: 33.70, north: 38.85, west: -78.55, east: -73.20},
     tdMin: 39000, tdMax: 42650, step: 50,
     labelStep: 100,
+    // Tight exclude — default 0.45° stubbed 39xxx lines short of Oak Island.
+    stationExcludeDeg: 0.18,
   },
   // Southeast US Chain - 7980-Z (Malone FL master, Carolina Beach NC secondary)
   // Land-to-sea (shore → offshore) hyperbolas on Grease Chart AC002. Do NOT
@@ -9253,11 +9313,28 @@ function traceLoranLine(tdValue, bounds, step, chain){
   // keep = east of Atlantic barrier (tiny inland buffer) AND not on a land
   // polygon. The polygon check stops Eastern Shore VA/MD farmland from
   // counting as ocean when barrierCoastLng is slightly west of the beach.
-  const COAST_BUFFER = 0.04;  // ~2 nm — enough to touch the beach, not farms
+  // OBX: no inland buffer — a 0.04° western slop was painting into Pamlico.
   const keepPt = p => {
-    if(p[1] < (barrierCoastLng(p[0]) - COAST_BUFFER)) return false;
-    if(typeof isOnLand === "function" && isOnLand(p[0], p[1])) return false;
+    const lat = p[0], lng = p[1];
+    const barrier = barrierCoastLng(lat);
+    const obx = lat >= 33.80 && lat <= 36.55;
+    const coastMin = obx ? barrier : (barrier - 0.02);
+    if(lng < coastMin) return false;
+    // Explicit Pamlico / Core / Bogue sound reject (west of Atlantic barrier).
+    if(obx && lng < barrier) return false;
+    if(typeof isOnLand === "function" && isOnLand(lat, lng)) return false;
     return true;
+  };
+
+  // When a segment crosses keep→reject, snap the cut to the boundary so lines
+  // meet the beach instead of stopping a grid-cell offshore.
+  const snapEdge = (keep, drop) => {
+    let a = keep, b = drop;
+    for(let i = 0; i < 8; i++){
+      const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      if(keepPt(m)) a = m; else b = m;
+    }
+    return a;
   };
 
   const clipped = [];
@@ -9269,10 +9346,17 @@ function traceLoranLine(tdValue, bounds, step, chain){
     };
     for(let i = 0; i < poly.length; i++){
       const pt = poly[i];
-      if(keepPt(pt)){
+      const ok = keepPt(pt);
+      if(ok){
+        if(!current.length && i > 0 && !keepPt(poly[i - 1])){
+          current.push(snapEdge(pt, poly[i - 1]));
+        }
         current.push(pt);
       } else {
-        flush();
+        if(current.length){
+          current.push(snapEdge(current[current.length - 1], pt));
+          flush();
+        }
       }
     }
     flush();
@@ -10507,13 +10591,20 @@ function updateOceanLegend(){
     const sstTitle = oceanOverlayForecastHour() > 0
       ? `SST FORECAST (+${oceanOverlayForecastHour()}h)`
       : "SST (°F)";
-    const sstTicks = phone ? [58,62,66,70,74,78,82,86] : [50,60,68,74,78,82,"86+"];
+    // Legend ticks follow the adaptive local stretch (not the old global 50–86).
+    const lo = (typeof _sstColorLo === "number") ? _sstColorLo : 74;
+    const hi = (typeof _sstColorHi === "number") ? _sstColorHi : 88;
+    const nTicks = phone ? 5 : 7;
+    const sstTicks = [];
+    for(let i = 0; i < nTicks; i++){
+      sstTicks.push(Math.round(lo + (hi - lo) * i / (nTicks - 1)));
+    }
     parts.push(`
       <div style="${gap()}">
-        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle}</div>
-        <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#082460 0%,#0e5aaa 18%,#28aac8 32%,#5ac878 44%,#dcd232 56%,#ebb028 68%,#eb7823 80%,#be281f 92%,#8c1432 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle} <span style="font-weight:500;letter-spacing:0;color:#9ec5e8;text-transform:none">local</span></div>
+        <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#082460 0%,#0e5aaa 12%,#28aac8 24%,#5ac878 36%,#dcd232 50%,#ebb028 62%,#eb7823 74%,#be281f 88%,#8c1432 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:1px">
-          ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${typeof v === "number" ? v + "°" : v}</span>`).join("")}
+          ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}°</span>`).join("")}
         </div>
       </div>`);
   }
