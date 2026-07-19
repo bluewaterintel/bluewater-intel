@@ -3940,9 +3940,30 @@ function mainlandCoastLng(lat){
 function barrierCoastLng(lat){
   // Most of the East Coast: mainland IS the eastern coast (no barrier islands).
   // Only OBX/Delmarva have significant barrier island chains.
-  // Delmarva (VA/MD coast): mainland coast already at the eastern edge of
-  //   the peninsula at -75.x, so barrierLng = mainlandLng essentially.
+  // Delmarva: use the ATLANTIC shore of the peninsula (Assateague / barrier
+  //   beaches), NOT mainlandCoastLng — that sits ~0.2–0.5° west and would
+  //   treat Eastern Shore farmland as "ocean", letting LORAN lines paint
+  //   inland across Accomack / Worcester.
   // Outer Banks (NC): barrier islands sit 10-25nm east of mainland.
+  // Delmarva Atlantic barrier (south → north)
+  if(lat > 38.55 && lat <= 39.20){
+    return -74.98;  // Fenwick Island / southern DE beaches
+  }
+  if(lat > 38.20 && lat <= 38.55){
+    return -75.08;  // Ocean City MD
+  }
+  if(lat > 37.85 && lat <= 38.20){
+    return -75.18;  // Assateague Island
+  }
+  if(lat > 37.45 && lat <= 37.85){
+    return -75.48;  // Accomack VA Atlantic beaches
+  }
+  if(lat > 37.05 && lat <= 37.45){
+    return -75.58;  // Northampton VA Atlantic shore
+  }
+  if(lat > 36.85 && lat <= 37.05){
+    return -75.88;  // Cape Charles / Fisherman Island tip
+  }
   if(lat >= 36.0 && lat <= 36.55){
     return -75.65;  // Currituck Banks (north OBX)
   }
@@ -9061,9 +9082,10 @@ const LORAN_CHAINS = {
     secondary: {lat: 34.0626, lng: -77.9128},   // Carolina Beach NC
     offset: 42237.7,
     // Coast-parallel Y-rate lines from VA/MD through Hatteras to Oak Island
-    // (Grease Chart AC001: 42600→39000). Not the AC002 land-to-sea set.
-    useBounds: {south: 33.70, north: 38.6, west: -78.55, east: -74.0},
-    tdMin: 39000, tdMax: 42600, step: 50,
+    // (Grease Chart AC001: 42600→39000). East/north cover Baltimore (~42300)
+    // and Wilmington Canyon (~42530) — former east:-74.0 cut those short.
+    useBounds: {south: 33.70, north: 38.85, west: -78.55, east: -73.20},
+    tdMin: 39000, tdMax: 42650, step: 50,
     labelStep: 100,
   },
   // Southeast US Chain - 7980-Z (Malone FL master, Carolina Beach NC secondary)
@@ -9215,21 +9237,19 @@ function traceLoranLine(tdValue, bounds, step, chain){
 
   // ── COASTLINE CLIP ──
   // The marching-squares grid spans the full useBounds rectangle, which
-  // reaches well inland. LORAN-C TD lines only make sense over open water, so
-  // we trim the deep-inland portion of every polyline. Where a line crosses
-  // into land we split it so we never bridge across a peninsula.
+  // reaches well inland. LORAN-C TD lines only make sense over open Atlantic
+  // water, so we trim land + bay/sound west of the barrier/Atlantic shore.
+  // Where a line crosses into land we split it (never bridge a peninsula).
   //
-  // IMPORTANT: we keep the line's REAL grid points and never synthesize a
-  // point on the coastline. (A forced shore endpoint produced long
-  // near-horizontal artifacts, because LORAN hyperbolas can run nearly
-  // parallel to the shore.) To guarantee there is never a visible gap of open
-  // water between the shore and where a line starts, we push the cut line a
-  // fixed buffer INLAND: any point within COAST_BUFFER degrees west of the
-  // coastline still counts as "keep". This makes lines slightly overshoot
-  // onto land near the coast, which is the desired tradeoff — overshooting a
-  // little beats leaving a gap over the water.
-  const COAST_BUFFER = 0.12;  // ~6 nm of allowed inland overshoot
-  const keepPt = p => p[1] >= (barrierCoastLng(p[0]) - COAST_BUFFER);
+  // keep = east of Atlantic barrier (tiny inland buffer) AND not on a land
+  // polygon. The polygon check stops Eastern Shore VA/MD farmland from
+  // counting as ocean when barrierCoastLng is slightly west of the beach.
+  const COAST_BUFFER = 0.04;  // ~2 nm — enough to touch the beach, not farms
+  const keepPt = p => {
+    if(p[1] < (barrierCoastLng(p[0]) - COAST_BUFFER)) return false;
+    if(typeof isOnLand === "function" && isOnLand(p[0], p[1])) return false;
+    return true;
+  };
 
   const clipped = [];
   for(const poly of polylines){
