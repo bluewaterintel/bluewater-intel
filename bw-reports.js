@@ -25,16 +25,8 @@ function closeTutorial(){
 function openMyCatches(){
   document.getElementById("catches-overlay").style.display = "block";
   document.body.style.overflow = "hidden";
-  // Populate species filter from SPECIES (one-time, since species list is static)
-  const filterSp = document.getElementById("catches-filter-species");
-  if(filterSp && filterSp.options.length <= 1){
-    SPECIES.filter(s => s.id !== "all").forEach(s => {
-      const opt = document.createElement("option");
-      opt.value = s.id;
-      opt.textContent = s.name;
-      filterSp.appendChild(opt);
-    });
-  }
+  if(typeof catchRenderSpeciesFilterChips === "function") catchRenderSpeciesFilterChips();
+  if(typeof catchRenderColorFilterChips === "function") catchRenderColorFilterChips();
   renderMyCatches();
 }
 
@@ -65,7 +57,7 @@ function renderMyCatches(){
     document.getElementById("catches-filters").style.display = "none";
     return;
   }
-  document.getElementById("catches-filters").style.display = "flex";
+  document.getElementById("catches-filters").style.display = "block";
 
   const stats = catchStats();
   const biggestText = stats.biggest && stats.biggest.weight
@@ -73,7 +65,6 @@ function renderMyCatches(){
     : "—";
   const speciesCount = Object.keys(stats.bySpecies).length;
 
-  const filterSpValForStats = document.getElementById("catches-filter-species").value;
   statsEl.innerHTML = `
     <div style="display:flex;gap:14px;flex-wrap:wrap">
       ${statCard("Total Catches", stats.total)}
@@ -91,10 +82,25 @@ function renderMyCatches(){
     </div>
     <div id="catch-analytics-output"></div>`;
 
-  // Filtered list
-  const filterSpVal = document.getElementById("catches-filter-species").value;
+  const dateFromEl = document.getElementById("catches-filter-date-from");
+  const dateToEl = document.getElementById("catches-filter-date-to");
+  const tackleEl = document.getElementById("catches-filter-tackle");
+  if(dateFromEl) CATCH_FILTER.dateFrom = dateFromEl.value || "";
+  if(dateToEl) CATCH_FILTER.dateTo = dateToEl.value || "";
+  if(tackleEl) CATCH_FILTER.tackle = tackleEl.value || "all";
+  if(typeof catchRenderSpeciesFilterChips === "function") catchRenderSpeciesFilterChips();
+  if(typeof catchRenderColorFilterChips === "function") catchRenderColorFilterChips();
+
   const sortVal = document.getElementById("catches-sort").value;
-  const filtered = catchList({species: filterSpVal, sortBy: sortVal});
+  const speciesIds = CATCH_FILTER.species.size ? Array.from(CATCH_FILTER.species) : null;
+  const filtered = catchList({
+    speciesIds,
+    lureColors: CATCH_FILTER.colors.size ? Array.from(CATCH_FILTER.colors) : null,
+    dateFrom: CATCH_FILTER.dateFrom,
+    dateTo: CATCH_FILTER.dateTo,
+    tackleType: CATCH_FILTER.tackle,
+    sortBy: sortVal,
+  });
 
   if(filtered.length === 0){
     listEl.innerHTML = `<div style="text-align:center;color:#9ca3af;font-size:13px;padding:24px 0">No catches match this filter.</div>`;
@@ -109,8 +115,13 @@ function runCatchAnalytics(){
   const out = document.getElementById("catch-analytics-output");
   const btn = document.getElementById("run-analytics-btn");
   if(!out) return;
-  const sp = document.getElementById("catches-filter-species").value;
-  out.innerHTML = renderCatchInsights(sp);
+  const sp = CATCH_FILTER.species.size === 1 ? Array.from(CATCH_FILTER.species)[0]
+    : (CATCH_FILTER.species.size === 0 ? "all" : null);
+  if(CATCH_FILTER.species.size > 1){
+    out.innerHTML = `<div style="margin-top:16px;font-size:12px;color:#9ec5e8;line-height:1.5">Select a single species filter to run species-specific analytics, or clear species filters for all-species patterns.</div>`;
+    return;
+  }
+  out.innerHTML = renderCatchInsights(sp || "all");
   out.scrollIntoView({behavior:"smooth", block:"nearest"});
   if(btn) btn.textContent = "📈 Refresh Analytics";
 }
@@ -178,9 +189,15 @@ function renderCatchCard(c){
   const dateStr = date.toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"});
   const timeStr = date.toLocaleTimeString(undefined, {hour:"numeric", minute:"2-digit"});
   const sizeBits = [];
-  if(c.weight) sizeBits.push(`${c.weight}lb`);
-  if(c.length) sizeBits.push(`${c.length}"`);
+  if(c.weightUnknown) sizeBits.push("Weight unknown");
+  else if(c.weight) sizeBits.push(`${c.weight}lb`);
+  if(c.lengthUnknown) sizeBits.push("Length unknown");
+  else if(c.length) sizeBits.push(`${c.length}"`);
   const sizeText = sizeBits.join(" · ");
+  const tackleBits = [];
+  if(c.tackleType === "bait") tackleBits.push("Bait");
+  else if(c.tackleType === "artificial") tackleBits.push("Artificial");
+  if(c.lureColor) tackleBits.push(typeof catchLureColorLabel === "function" ? catchLureColorLabel(c.lureColor) : c.lureColor);
   const cond = c.conditions || {};
   const condBits = [];
   if(cond.sst != null)    condBits.push(`<span style="color:#fbbf24">SST ${cond.sst}°</span>`);
@@ -196,7 +213,8 @@ function renderCatchCard(c){
           ${sizeText ? `<span class="catch-card-size" style="font-size:12px;color:#f0f6ff;font-weight:600">${sizeText}</span>` : ""}
           ${c.shared ? `<span style="font-size:8px;font-weight:700;color:#fbbf24;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);padding:1px 6px;border-radius:6px">SHARED</span>` : ""}
         </div>
-        <div class="catch-card-meta" style="font-size:10px;color:#9ca3af;margin-top:2px">${dateStr} · ${timeStr}${c.port ? " · " + c.port.split(",")[0] : ""}</div>
+        <div class="catch-card-meta" style="font-size:10px;color:#9ca3af;margin-top:2px">${dateStr} · ${timeStr}${c.port ? " · " + (c.locationMode === "port" ? c.port.split(",")[0] + " (port)" : c.port.split(",")[0]) : ""}</div>
+        ${tackleBits.length ? `<div class="catch-card-meta" style="font-size:10px;color:#9ec5e8;margin-top:2px">${tackleBits.join(" · ")}</div>` : ""}
         ${c.notes ? `<div class="catch-card-notes" style="font-size:12px;color:#cfe5ff;line-height:1.45;margin-top:6px">${escapeHtml(c.notes)}</div>` : ""}
         ${condBits.length ? `<div class="catch-card-cond" style="font-size:10px;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">${condBits.join("")}</div>` : ""}
         <div style="display:flex;gap:8px;margin-top:8px">
