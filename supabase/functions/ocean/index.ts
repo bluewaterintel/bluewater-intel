@@ -1861,19 +1861,29 @@ export const handler = async (req: Request): Promise<Response> => {
     const maxPoints = Math.max(20, Math.min(120, Math.round(num(u.searchParams.get("maxPoints")) ?? 90)));
     const forecastHour = normalizeOceanForecastHour(num(u.searchParams.get("hours")) ?? 0);
     const useOceanForecast = forecastHour > 0;
-    // Altimetry (SSH) feeds the scorer's front fusion but ERDDAP can be slow on a
-    // cold cache; bound its wait so it never stalls the bite map. Empty on timeout
-    // → the client's front factors stay SST-only that pass (cache warms for next).
-    const altiSoft: Promise<AltimetryGrid> = useOceanForecast
-      ? fetchRtofsModelAltimetryGrid(latMin, latMax, lngMin, lngMax, forecastHour)
+    // Altimetry (SSH) feeds the scorer's front fusion. ERDDAP can be slow on a
+    // cold cache, so we bound the wait — but NOT so aggressively that a common
+    // cold-start returns empty fronts. An empty SSH payload makes offshore
+    // edge-seeking bite maps (yellowfin, etc.) score ~SST-only; the next warm
+    // request then jumps ~10 pts and relocates hotspots. Client budget is 50s.
+    type AltiSoftResult = { grid: AltimetryGrid; status: "ok" | "timeout" | "empty" };
+    const altiNone: AltimetryGrid = { stepDeg: ALTIMETRY_STEP, observedAtMs: null, rows: [] };
+    const altiSoft: Promise<AltiSoftResult> = useOceanForecast
+      ? fetchRtofsModelAltimetryGrid(latMin, latMax, lngMin, lngMax, forecastHour).then((grid) => ({
+        grid,
+        status: (grid?.rows?.length ? "ok" : "empty") as "ok" | "empty",
+      }))
       : Promise.race([
-        fetchAltimetryGrid(latMin, latMax, lngMin, lngMax),
-        new Promise<AltimetryGrid>((res) =>
-          setTimeout(() => res({ stepDeg: ALTIMETRY_STEP, observedAtMs: null, rows: [] }), 6000)),
+        fetchAltimetryGrid(latMin, latMax, lngMin, lngMax).then((grid): AltiSoftResult => ({
+          grid,
+          status: grid.rows.length ? "ok" : "empty",
+        })),
+        new Promise<AltiSoftResult>((res) =>
+          setTimeout(() => res({ grid: altiNone, status: "timeout" }), 20000)),
       ]);
     // Grids in parallel (each ONE upstream box request). Bathy also tells us which
     // field points are water so we don't fetch buoy/tide over land.
-    const [bathy, chlor, sstGrid, buoyTemps, currentGrid, altimetry] = await Promise.all([
+    const [bathy, chlor, sstGrid, buoyTemps, currentGrid, altiResult] = await Promise.all([
       fetchBathyRows(latMin, latMax, lngMin, lngMax),
       fetchChlorRows(latMin, latMax, lngMin, lngMax),
       useOceanForecast
@@ -1883,6 +1893,8 @@ export const handler = async (req: Request): Promise<Response> => {
       fetchCurrentGrid(latMin, latMax, lngMin, lngMax, forecastHour),
       altiSoft,
     ]);
+    const altimetry = altiResult.grid;
+    const altimetryStatus = altiResult.status;
     // Correct the high-res SST grid with the nearest live buoy per cell (distance/
     // freshness weighted). Buoys are prefetched once and shared, so this adds no
     // upstream requests. Row shape stays [lat,lng,°F,observedAtMs] for the client.
@@ -1921,11 +1933,19 @@ export const handler = async (req: Request): Promise<Response> => {
       const cur = sampleCurrentFromGrid(currentGrid, pt[0], pt[1]);
       return { la: pt[0], ln: pt[1], p: { ...p, current: cur } };
     });
+    // Never let CDN/browser sticky-cache an incomplete front payload — that is
+    // what made Oregon Inlet yellowfin oscillate between high-60s (SST-only)
+    // and high-70s (SSH-fused) across two runs a few minutes apart.
+    const frontsComplete = altimetryStatus === "ok" && Array.isArray(altimetry?.rows) && altimetry.rows.length > 0;
+    const cacheControl = frontsComplete
+      ? "public, max-age=1800"
+      : "private, no-store";
     return new Response(JSON.stringify({
       bathy, chlor, sst, field, fieldStepNm, forecastHour, current: currentGrid, altimetry,
+      altimetryStatus,
       oceanForecast: useOceanForecast,
     }), {
-      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
+      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": cacheControl },
     });
   }
 
