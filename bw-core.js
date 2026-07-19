@@ -2807,6 +2807,10 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
     PREDICT_ALTI_GRID = (data.altimetry && typeof buildAltiGrid === "function") ? buildAltiGrid(data.altimetry) : null;
     PREDICT_CUR_GRID  = (data.current  && typeof buildCurGrid  === "function") ? buildCurGrid(data.current)   : null;
     LAST_PREDICT_INPUTS = { bbox: { latMin, latMax, lngMin, lngMax }, data, fcHour, atMs: Date.now() };
+    // Cold ERDDAP can soft-timeout SSH on the first pass. Score with what we
+    // have now, then quietly upgrade once fronts arrive so yellowfin/etc don't
+    // stick on an SST-only field until the user manually re-runs.
+    schedulePredictFrontsUpgrade(latMin, latMax, lngMin, lngMax, fcHour, data);
     return;
   }
   // Partial payload — still apply any grids we got (especially bathy for depth).
@@ -5136,13 +5140,22 @@ function heatDisplayIntensity(score){
   return Math.max(PREDICT_HEAT_SCORE_MIN, Math.pow(s, 0.60));
 }
 
+// Ocean-front fingerprint so SST-only vs SSH-fused grids never share a result
+// cache entry (that was one path for high-60s → high-70s flips after a refresh).
+function predictOceanFingerprint(){
+  const altiN = (typeof PREDICT_ALTI_GRID !== "undefined" && PREDICT_ALTI_GRID &&
+    Array.isArray(PREDICT_ALTI_GRID.rows)) ? PREDICT_ALTI_GRID.rows.length : 0;
+  const curOk = (typeof PREDICT_CUR_GRID !== "undefined" && PREDICT_CUR_GRID) ? 1 : 0;
+  return `a${altiN}:c${curOk}`;
+}
+
 // Cache key for the scored bite-map grid. Includes a lightweight reports
 // signature so a fresh SOCIAL feed invalidates stale hotspot rankings.
 function predictResultCacheKey(){
   const reportSig = (typeof SOCIAL !== "undefined" && SOCIAL.length)
     ? `${SOCIAL.length}:${SOCIAL[0]?.hoursAgo ?? ""}:${SOCIAL[0]?.id ?? ""}`
     : "0";
-  return `${activePort || ""}:${activeSpId || ""}:${FORECAST_HOUR_OFFSET || 0}:${reportSig}`;
+  return `${activePort || ""}:${activeSpId || ""}:${FORECAST_HOUR_OFFSET || 0}:${reportSig}:${predictOceanFingerprint()}`;
 }
 function invalidatePredictCache(){ _predictResultCache = null; }
 
@@ -5154,6 +5167,18 @@ function hotspotRankScore(cell){
   const season = Number.isFinite(cell.seasonStrength) ? cell.seasonStrength : (inSeason ? 0.75 : 0.2);
   const seasonWt = inSeason ? (0.35 + 0.65 * season) : 0.12;
   return score * (0.45 + 0.55 * conf) * seasonWt;
+}
+
+// Deterministic hotspot ordering — lat/lng break near-ties so badge pins don't
+// shuffle when scores are within a fraction of a point.
+function cmpHotspotStable(a, b){
+  const ds = (Number(b.score) || 0) - (Number(a.score) || 0);
+  if(Math.abs(ds) > 1e-9) return ds;
+  const dr = hotspotRankScore(b) - hotspotRankScore(a);
+  if(Math.abs(dr) > 1e-9) return dr;
+  const dLat = (Number(a.lat) || 0) - (Number(b.lat) || 0);
+  if(Math.abs(dLat) > 1e-9) return dLat;
+  return (Number(a.lng) || 0) - (Number(b.lng) || 0);
 }
 
 // Pick the top N hotspot badges with geographic separation so the pins represent
@@ -5168,19 +5193,59 @@ function pickTopHotspotBadges(hotspots, limit){
     const d = (typeof cell.distNm === "number") ? cell.distNm : 20;
     return Math.min(13, Math.max(5, d * 0.18));
   };
-  const ranked = hotspots.slice().sort((a, b) => {
-    const ds = (Number(b.score) || 0) - (Number(a.score) || 0);
-    if(Math.abs(ds) > 0.0001) return ds;
-    return hotspotRankScore(b) - hotspotRankScore(a);
-  });
+  const ranked = hotspots.slice().sort(cmpHotspotStable);
   for(const cell of ranked){
     if(chosen.length >= limit) break;
     const minSep = sepFor(cell);
     const farEnough = chosen.every(c => nmBetween(c.lat, c.lng, cell.lat, cell.lng) >= minSep);
     if(farEnough) chosen.push(cell);
   }
-  chosen.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+  chosen.sort(cmpHotspotStable);
   return chosen;
+}
+
+// One-shot background upgrade when predictinputs returned without SSH fronts.
+let _predictFrontsUpgradeTimer = null;
+let _predictFrontsUpgradeKey = "";
+function schedulePredictFrontsUpgrade(latMin, latMax, lngMin, lngMax, fcHour, data){
+  if(fcHour) return; // model-forecast path uses RTOFS SSH, not ERDDAP soft-timeout
+  const frontsOk = (typeof BW_OCEAN !== "undefined" && typeof BW_OCEAN.predictInputsFrontsOk === "function")
+    ? BW_OCEAN.predictInputsFrontsOk(data)
+    : (Array.isArray(data?.altimetry?.rows) && data.altimetry.rows.length > 0);
+  if(frontsOk) return;
+  const key = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)},${fcHour || 0}`;
+  if(_predictFrontsUpgradeKey === key && _predictFrontsUpgradeTimer) return;
+  _predictFrontsUpgradeKey = key;
+  if(_predictFrontsUpgradeTimer) clearTimeout(_predictFrontsUpgradeTimer);
+  _predictFrontsUpgradeTimer = setTimeout(async () => {
+    _predictFrontsUpgradeTimer = null;
+    try {
+      if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchPredictInputs) return;
+      if(typeof BW_OCEAN.clearPredictInputsCache === "function") BW_OCEAN.clearPredictInputsCache();
+      const retry = await BW_OCEAN.fetchPredictInputs(latMin, latMax, lngMin, lngMax, 90, fcHour || 0);
+      const retryOk = (typeof BW_OCEAN.predictInputsFrontsOk === "function")
+        ? BW_OCEAN.predictInputsFrontsOk(retry)
+        : (Array.isArray(retry?.altimetry?.rows) && retry.altimetry.rows.length > 0);
+      if(!retryOk) return;
+      const prevN = Array.isArray(data?.altimetry?.rows) ? data.altimetry.rows.length : 0;
+      const nextN = retry.altimetry.rows.length;
+      if(nextN <= prevN) return;
+      applyPredictBathyData(retry.bathy);
+      if(!BATHY_GRID && retry.bathy) applyBathyData(retry.bathy);
+      applyChlorData(retry.chlor);
+      applySstData(retry.sst);
+      applyOceanField(retry.field, retry.fieldStepNm);
+      PREDICT_ALTI_GRID = (retry.altimetry && typeof buildAltiGrid === "function") ? buildAltiGrid(retry.altimetry) : null;
+      PREDICT_CUR_GRID  = (retry.current  && typeof buildCurGrid  === "function") ? buildCurGrid(retry.current)   : null;
+      LAST_PREDICT_INPUTS = { bbox: { latMin, latMax, lngMin, lngMax }, data: retry, fcHour: fcHour || 0, atMs: Date.now() };
+      invalidatePredictCache();
+      if(typeof layerVis !== "undefined" && layerVis.predict &&
+         typeof activeSpId !== "undefined" && activeSpId && activeSpId !== "all" &&
+         typeof drawPrediction === "function"){
+        drawPrediction();
+      }
+    } catch(e){ /* quiet — first paint already shown */ }
+  }, 3500);
 }
 
 // Great-circle distance in nautical miles between two lat/lng points.
@@ -5433,7 +5498,7 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
         requestAnimationFrame(step_frame);
       } else {
         // Grid finished → begin the chunked hotspot refinement phase.
-        refineList = hotspotGrid.slice().sort((a,b)=>hotspotRankScore(b)-hotspotRankScore(a));
+        refineList = hotspotGrid.slice().sort(cmpHotspotStable);
         refineIdx = 0;
         phase = "refine";
         requestAnimationFrame(step_frame);
@@ -5451,8 +5516,8 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
       requestAnimationFrame(step_frame);
     } else {
       onDone && onDone({
-        heatGrid: heatGrid.sort((a,b)=>b.score-a.score),
-        hotspots: refineList.sort((a,b)=>hotspotRankScore(b)-hotspotRankScore(a)),
+        heatGrid: heatGrid.sort(cmpHotspotStable),
+        hotspots: refineList.sort(cmpHotspotStable),
         gridStep: step,
         gridOriginLat: latMin,
         gridOriginLng: lngMin,

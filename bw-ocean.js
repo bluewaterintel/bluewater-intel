@@ -200,38 +200,69 @@
     return sstRows > 0 && windPts > 0;
   }
 
+  function predictInputsFrontsOk(data) {
+    if (!data) return false;
+    if (data.altimetryStatus === "ok") return true;
+    if (data.altimetryStatus === "timeout" || data.altimetryStatus === "empty") return false;
+    return Array.isArray(data.altimetry?.rows) && data.altimetry.rows.length > 0;
+  }
+
   const predictInputsCache = new Map();
-  function clearPredictInputsCache() { predictInputsCache.clear(); }
+  const predictInputsInflight = new Map();
+  function clearPredictInputsCache() {
+    predictInputsCache.clear();
+    predictInputsInflight.clear();
+  }
 
   async function fetchPredictInputs(latMin, latMax, lngMin, lngMax, maxPoints, forecastHour = 0) {
     const hours = normalizeOceanHours(forecastHour);
     const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)},${maxPoints || 90},${hours}`;
     const hit = predictInputsCache.get(k);
     if (hit) return hit;
-    try {
-      const params = new URLSearchParams({
-        mode: "predictinputs",
-        latMin: String(latMin), latMax: String(latMax),
-        lngMin: String(lngMin), lngMax: String(lngMax),
-        maxPoints: String(maxPoints || 90),
-      });
-      if (hours > 0) params.set("hours", String(hours));
-      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
-        headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: fetchTimeout(50000),
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      // Keep the payload when bathy/SST grids are present even if the wind field
-      // is thin — buildPredictInputs applies partial data instead of depth-only scoring.
-      const hasBathy = Array.isArray(data?.bathy?.rows) && data.bathy.rows.length > 0;
-      const hasSst = Array.isArray(data?.sst?.rows) && data.sst.rows.filter((r) => r && r[2] != null).length > 0;
-      if (!predictInputsUsable(data) && !hasBathy && !hasSst) return null;
-      predictInputsCache.set(k, data);
-      return data;
-    } catch (e) {
-      return null;
-    }
+    // Deduplicate concurrent callers (port+species both kick drawPrediction) so
+    // two in-flight requests can't race and leave whichever finished last —
+    // often one with empty SSH and one with full fronts — as the sticky cache.
+    const pending = predictInputsInflight.get(k);
+    if (pending) return pending;
+
+    const req = (async () => {
+      try {
+        const params = new URLSearchParams({
+          mode: "predictinputs",
+          latMin: String(latMin), latMax: String(latMax),
+          lngMin: String(lngMin), lngMax: String(lngMax),
+          maxPoints: String(maxPoints || 90),
+        });
+        if (hours > 0) params.set("hours", String(hours));
+        const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+          headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
+          signal: fetchTimeout(50000),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        // Keep the payload when bathy/SST grids are present even if the wind field
+        // is thin — buildPredictInputs applies partial data instead of depth-only scoring.
+        const hasBathy = Array.isArray(data?.bathy?.rows) && data.bathy.rows.length > 0;
+        const hasSst = Array.isArray(data?.sst?.rows) && data.sst.rows.filter((r) => r && r[2] != null).length > 0;
+        if (!predictInputsUsable(data) && !hasBathy && !hasSst) return null;
+        predictInputsCache.set(k, data);
+        // Incomplete SSH fronts must not sticky-cache for the whole session —
+        // expire quickly so a follow-up run (or auto-upgrade) can pick up the
+        // warmed ERDDAP response instead of replaying SST-only scores.
+        if (!predictInputsFrontsOk(data)) {
+          setTimeout(() => {
+            if (predictInputsCache.get(k) === data) predictInputsCache.delete(k);
+          }, 5000);
+        }
+        return data;
+      } catch (e) {
+        return null;
+      } finally {
+        predictInputsInflight.delete(k);
+      }
+    })();
+    predictInputsInflight.set(k, req);
+    return req;
   }
 
   const windGridCache = new Map();
@@ -356,6 +387,7 @@
 
   root.BW_OCEAN = {
     fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs, clearPredictInputsCache,
+    predictInputsFrontsOk,
     fetchWindGrid, fetchCurrentGrid, fetchAltimetryGrid, fetchSstGrid,
     // After deploying the ocean edge function, pass { mode: "conditions" } for
     // fast header / tide-station resolution (~3–8 s vs 25 s+ full assembly).
