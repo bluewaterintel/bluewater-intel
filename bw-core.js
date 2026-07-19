@@ -6868,18 +6868,35 @@ function _sstFcBuildSmallCanvas(g){
   const range = computeSstDisplayRangeFromGrid(g);
   _sstColorLo = range.lo;
   _sstColorHi = range.hi;
-  // Nearest-neighbor cell paint (no bilinear) — bilinear supersample was
-  // reintroducing the same soft/hazy wash the CSS blur caused on GIBS tiles.
+  // Bilinear-interpolate TEMPERATURE into a denser grid, then colorize.
+  // That restores smooth fronts (no digital squares) without the CSS blur haze.
+  const scale = (g.step <= 0.025) ? 3 : 4;
+  const w = g.nLng * scale, h = g.nLat * scale;
   const filled = _sstFcFillGaps(g.val, g.nLat, g.nLng);
   const c = document.createElement("canvas");
-  c.width = g.nLng; c.height = g.nLat;
+  c.width = w; c.height = h;
   const cx = c.getContext("2d");
-  const img = cx.createImageData(g.nLng, g.nLat);
-  for(let i = 0; i < g.nLat; i++){
-    for(let j = 0; j < g.nLng; j++){
-      const v = filled[i * g.nLng + j];
-      const y = g.nLat - 1 - i;
-      const o = (y * g.nLng + j) * 4;
+  const img = cx.createImageData(w, h);
+  for(let y = 0; y < h; y++){
+    const i0 = (h - 1 - y) / scale;
+    const i = Math.min(g.nLat - 1, Math.max(0, Math.floor(i0)));
+    const i1 = Math.min(g.nLat - 1, i + 1);
+    const fi = i0 - i;
+    for(let x = 0; x < w; x++){
+      const j0 = x / scale;
+      const j = Math.min(g.nLng - 1, Math.max(0, Math.floor(j0)));
+      const j1 = Math.min(g.nLng - 1, j + 1);
+      const fj = j0 - j;
+      const v00 = filled[i * g.nLng + j], v10 = filled[i1 * g.nLng + j];
+      const v01 = filled[i * g.nLng + j1], v11 = filled[i1 * g.nLng + j1];
+      let v = NaN, sw = 0, acc = 0;
+      const add = (vv, wgt) => { if(isFinite(vv)){ acc += vv * wgt; sw += wgt; } };
+      add(v00, (1 - fi) * (1 - fj));
+      add(v10, fi * (1 - fj));
+      add(v01, (1 - fi) * fj);
+      add(v11, fi * fj);
+      if(sw > 0.25) v = acc / sw;
+      const o = (y * w + x) * 4;
       const rgba = _sstForecastRGBA(v);
       if(!rgba){ img.data[o + 3] = 0; continue; }
       img.data[o] = rgba[0]; img.data[o + 1] = rgba[1]; img.data[o + 2] = rgba[2]; img.data[o + 3] = rgba[3];
@@ -6901,9 +6918,8 @@ const SstForecastLayer = L.Layer.extend({
     this._map = map;
     this._canvas = L.DomUtil.create("canvas", "leaflet-sst-forecast-layer");
     this._canvas.style.pointerEvents = "none";
-    // Crisp upscale — browser bilinear was the main "cloudy" look.
-    this._canvas.style.imageRendering = "pixelated";
-    this._canvas.style.imageRendering = "crisp-edges";
+    // Smooth upscale (paired with temp bilinear in _sstFcBuildSmallCanvas).
+    this._canvas.style.imageRendering = "auto";
     const pane = map.getPane("ocean-overlays") || map.getPanes().overlayPane;
     pane.appendChild(this._canvas);
     map.on("move", this._onMove, this);
@@ -6990,9 +7006,11 @@ const SstForecastLayer = L.Layer.extend({
     const west = g.bounds.w - g.step * 0.5, east = g.bounds.e + g.step * 0.5;
     const pTL = this._map.latLngToContainerPoint([north, west]);
     const pBR = this._map.latLngToContainerPoint([south, east]);
-    // Nearest-neighbor blit — bilinear here was softening every front into haze.
+    // Smooth blit of the already-supersampled field — keeps opacity bold while
+    // removing the blocky digital squares from nearest-neighbor cells.
     const prev = ctx.imageSmoothingEnabled;
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    if("imageSmoothingQuality" in ctx) ctx.imageSmoothingQuality = "high";
     ctx.globalAlpha = (typeof oceanOpacity.sst === "number") ? oceanOpacity.sst : OCEAN_OPACITY_DEFAULT.sst;
     ctx.drawImage(this._small, pTL.x, pTL.y, pBR.x - pTL.x, pBR.y - pTL.y);
     ctx.globalAlpha = 1;
