@@ -243,15 +243,34 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   async function callBrief(payload) {
     const { data: { session } } = await client.auth.getSession();
     if (!session) throw new Error("Sign in required.");
-    const res = await fetch(`${cfg.supabaseUrl}/functions/v1/brief`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-        apikey: cfg.supabaseAnonKey,
-      },
-      body: JSON.stringify(payload),
-    });
+    // Client ceiling under the server's 90s Anthropic abort — don't leave the
+    // UI spinning indefinitely if the edge function hangs before responding.
+    let signal;
+    if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+      signal = AbortSignal.timeout(75000);
+    } else {
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(), 75000);
+      signal = ctrl.signal;
+    }
+    let res;
+    try {
+      res = await fetch(`${cfg.supabaseUrl}/functions/v1/brief`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: cfg.supabaseAnonKey,
+        },
+        body: JSON.stringify(payload),
+        signal,
+      });
+    } catch (e) {
+      if (e && (e.name === "AbortError" || e.name === "TimeoutError")) {
+        throw new Error("The brief timed out generating. Please try again.");
+      }
+      throw e;
+    }
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
       throw new Error(e.error || `Brief failed (${res.status})`);

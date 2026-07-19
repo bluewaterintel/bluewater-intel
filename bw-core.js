@@ -351,6 +351,30 @@ try {
   }
 } catch(e){}
 let briefSp=[], briefAutoPick=false, aiCOA="", aiLoading=false, briefDayOffset=0;  // briefDayOffset: 0=today,1=tomorrow,...
+let briefLoadMsg = "";
+let _briefLoadTimers = [];
+const BRIEF_LOAD_STAGES = [
+  { at: 0, msg: "Running AI Captain's Brief… this can take up to 60 seconds." },
+  { at: 20000, msg: "Still analyzing conditions…" },
+  { at: 45000, msg: "Writing your brief…" },
+];
+function clearBriefLoadStages(){
+  _briefLoadTimers.forEach(t => clearTimeout(t));
+  _briefLoadTimers = [];
+}
+function setBriefLoadMsg(msg){
+  briefLoadMsg = msg;
+  const el = document.querySelector(".brief-load-status");
+  if(el) el.textContent = msg;
+}
+function startBriefLoadStages(){
+  clearBriefLoadStages();
+  setBriefLoadMsg(BRIEF_LOAD_STAGES[0].msg);
+  for(const s of BRIEF_LOAD_STAGES){
+    if(s.at <= 0) continue;
+    _briefLoadTimers.push(setTimeout(() => setBriefLoadMsg(s.msg), s.at));
+  }
+}
 let briefRunZone=null;  // inshore | nearshore | offshore — where the captain plans to fish
 const BRIEF_ZONE_NM = { inshore: 3, nearshore: 12, offshore: 35 };
 const BRIEF_MAX_SPECIES = 3;  // hard cap — keeps brief tokens + captain focus tight
@@ -2770,13 +2794,21 @@ function applyOceanField(samples, spacingNm){
   };
 }
 
+// Hard client ceiling for Bite Map ocean fetch. Stacked retries + per-point
+// fallback previously let cold runs spin for 2–3 minutes with no feedback.
+const PREDICT_INPUTS_BUDGET_MS = 70000;
+let _predictLoadError = null;
+
 // ── ONE-REQUEST prediction inputs ────────────────────────────────────────────
 // Fetch bathymetry grid + chlorophyll composite + per-point ocean field in a
 // single combined call. Falls back to the separate builders if the combined
-// endpoint is unavailable, so behavior is preserved either way.
+// endpoint is unavailable — but only while wall-clock budget remains.
 async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
   let data = null;
   const fcHour = (typeof FORECAST_HOUR_OFFSET !== "undefined") ? (FORECAST_HOUR_OFFSET || 0) : 0;
+  const t0 = Date.now();
+  const leftMs = () => Math.max(0, PREDICT_INPUTS_BUDGET_MS - (Date.now() - t0));
+  let hitBudget = false;
   const predictUsable = (payload) => {
     if(!payload || !Array.isArray(payload.field) || !payload.field.length) return false;
     const sstRows = Array.isArray(payload.sst?.rows) ? payload.sst.rows.filter(r => r && r[2] != null).length : 0;
@@ -2784,14 +2816,27 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
     return sstRows > 0 && windPts > 0;
   };
   if(typeof BW_OCEAN !== "undefined" && BW_OCEAN.fetchPredictInputs){
-    try { data = await BW_OCEAN.fetchPredictInputs(latMin, latMax, lngMin, lngMax, 90, fcHour); }
-    catch(e){ data = null; }
-    // One immediate retry — cold edge starts / mobile blips were caching hollow
-    // responses and leaving the bite map on depth-only scoring.
-    if(!predictUsable(data)){
+    const firstBudget = Math.min(50000, leftMs());
+    if(firstBudget >= 5000){
+      try {
+        data = await BW_OCEAN.fetchPredictInputs(latMin, latMax, lngMin, lngMax, 90, fcHour, {
+          timeoutMs: firstBudget, retries: 0,
+        });
+      } catch(e){ data = null; }
+    } else {
+      hitBudget = true;
+    }
+    // One short retry only when the first pass was hollow AND enough budget
+    // remains — never stack another full 50s wait.
+    if(!predictUsable(data) && leftMs() >= 15000){
       if(typeof BW_OCEAN.clearPredictInputsCache === "function") BW_OCEAN.clearPredictInputsCache();
-      try { data = await BW_OCEAN.fetchPredictInputs(latMin, latMax, lngMin, lngMax, 90, fcHour); }
-      catch(e){ data = null; }
+      try {
+        data = await BW_OCEAN.fetchPredictInputs(latMin, latMax, lngMin, lngMax, 90, fcHour, {
+          timeoutMs: Math.min(20000, leftMs()), retries: 0,
+        });
+      } catch(e){ data = null; }
+    } else if(!predictUsable(data) && leftMs() < 15000){
+      hitBudget = true;
     }
   }
   if(!predictUsable(data) && typeof tripPredictInputsCovering === "function"){
@@ -2823,14 +2868,34 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
     if(data.sst?.rows?.length) applySstData(data.sst);
     if(Array.isArray(data.field) && data.field.length) applyOceanField(data.field, data.fieldStepNm);
   }
-  console.warn("buildPredictInputs: combined endpoint unavailable — falling back to per-point fetch");
-  await Promise.all([
-    buildBathyGrid(latMin, latMax, lngMin, lngMax),
-    buildChlorGrid(latMin, latMax, lngMin, lngMax),
-    buildOceanField(latMin, latMax, lngMin, lngMax, { maxPoints: 90 }),
-  ]);
-  // Fallback path only populated BATHY_GRID — mirror it for bite scoring too.
-  if(!PREDICT_BATHY_GRID && BATHY_GRID) PREDICT_BATHY_GRID = BATHY_GRID;
+  // Per-point fallback can take minutes. Only attempt it when we have remaining
+  // budget and no usable field yet — then race it against what's left.
+  const fallbackBudget = leftMs();
+  const hasPartialField = Array.isArray(data?.field) && data.field.length > 0;
+  if(fallbackBudget >= 12000 && !hasPartialField){
+    console.warn("buildPredictInputs: combined endpoint unavailable — falling back (budget " + Math.round(fallbackBudget/1000) + "s)");
+    try {
+      await Promise.race([
+        Promise.all([
+          buildBathyGrid(latMin, latMax, lngMin, lngMax),
+          buildChlorGrid(latMin, latMax, lngMin, lngMax),
+          buildOceanField(latMin, latMax, lngMin, lngMax, { maxPoints: 90 }),
+        ]),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("predict-budget")), fallbackBudget)),
+      ]);
+    } catch(e){
+      if(e && e.message === "predict-budget") hitBudget = true;
+      else console.warn("buildPredictInputs fallback", e);
+    }
+    // Fallback path only populated BATHY_GRID — mirror it for bite scoring too.
+    if(!PREDICT_BATHY_GRID && BATHY_GRID) PREDICT_BATHY_GRID = BATHY_GRID;
+  } else if(!hasPartialField){
+    hitBudget = true;
+    console.warn("buildPredictInputs: skipping per-point fallback (budget exhausted)");
+  }
+  if(hitBudget && !predictUsable(data) && !hasPartialField){
+    _predictLoadError = "Ocean data timed out — tap Bite Map again to retry.";
+  }
 }
 
 function nearestSample(lat, lng){
@@ -8038,16 +8103,39 @@ function hideWindReadout(){ if(_windReadoutEl) _windReadoutEl.style.display = "n
 // must not silently turn it back on. This is the "uncheck = hard stop" contract.
 let _predictUserOff = false;
 
-// On-map loading indicator shown while the heat map computes (it fetches real
-// bathymetry + ocean data, which can take a few seconds).
+// On-map loading indicator while Bite Map fetches ocean data + scores.
+// Staged copy so a 20–40s cold run doesn't feel hung.
 let _predictLoadingEl = null;
+let _predictLoadTimers = [];
+const PREDICT_LOAD_STAGES = [
+  { at: 0, msg: "Analyzing ocean data… this can take up to 30 seconds." },
+  { at: 12000, msg: "Still working — pulling bathymetry and fronts…" },
+  { at: 25000, msg: "Almost done — scoring hotspots…" },
+];
+function clearPredictLoadStages(){
+  _predictLoadTimers.forEach(t => clearTimeout(t));
+  _predictLoadTimers = [];
+}
+function setPredictLoadingMsg(msg){
+  if(!_predictLoadingEl) return;
+  const span = _predictLoadingEl.querySelector(".bw-load-msg");
+  if(span) span.textContent = msg;
+}
 function showPredictLoading(){
   if(!MAP) return;
+  _predictLoadError = null;
   if(!_predictLoadingEl){
     _predictLoadingEl = document.createElement("div");
     _predictLoadingEl.id = "predict-loading";
-    _predictLoadingEl.innerHTML = '<span class="bw-load-spin" aria-hidden="true"></span><span>Loading bathymetry &amp; ocean data…</span>';
     MAP.getContainer().appendChild(_predictLoadingEl);
+  }
+  _predictLoadingEl.innerHTML =
+    '<span class="bw-load-spin" aria-hidden="true"></span>' +
+    '<span class="bw-load-msg">' + PREDICT_LOAD_STAGES[0].msg + '</span>';
+  clearPredictLoadStages();
+  for(const s of PREDICT_LOAD_STAGES){
+    if(s.at <= 0) continue;
+    _predictLoadTimers.push(setTimeout(() => setPredictLoadingMsg(s.msg), s.at));
   }
   syncPredictLoadingPosition();
   _predictLoadingEl.style.display = "flex";
@@ -8057,7 +8145,16 @@ function syncPredictLoadingPosition(){
   const top = (typeof viewportPanelTopPx === "function") ? viewportPanelTopPx(8) : 64;
   _predictLoadingEl.style.top = top + "px";
 }
-function hidePredictLoading(){ if(_predictLoadingEl) _predictLoadingEl.style.display = "none"; }
+function hidePredictLoading(){
+  clearPredictLoadStages();
+  if(_predictLoadingEl) _predictLoadingEl.style.display = "none";
+}
+function flushPredictLoadError(){
+  if(!_predictLoadError) return;
+  const msg = _predictLoadError;
+  _predictLoadError = null;
+  if(typeof showToast === "function") showToast(msg, "warning");
+}
 
 // ── DRAW PREDICTION LAYER ────────────────────────────────────────────────────
 // Renders a TRUE canvas-based heat map. No third-party plugins, no circles.
@@ -8117,12 +8214,18 @@ function drawPrediction(){
       hidePredictLoading();
       // HARD STOP: ignore any result from a run the user has since cancelled
       // (heat map unchecked) or superseded (species/port changed).
-      if(gen !== _predictGen || !layerVis.predict){ return; }
+      if(gen !== _predictGen || !layerVis.predict){ _predictLoadError = null; return; }
       const heatGrid = Array.isArray(full) ? full : (full && full.heatGrid) || [];
       const hotspots = Array.isArray(full) ? full : (full && full.hotspots) || [];
       const gridStep = (full && full.gridStep) || 0.25;
       const gridOrigin = full ? { lat: full.gridOriginLat, lng: full.gridOriginLng } : null;
-      if(!heatGrid.length){ _predictGrid = null; updateForecastSliderVisibility(); return; }
+      if(!heatGrid.length){
+        _predictGrid = null;
+        updateForecastSliderVisibility();
+        flushPredictLoadError();
+        return;
+      }
+      flushPredictLoadError();
       const badges = pickTopHotspotBadges(hotspots, 3);
       _predictResultCache = {
         key: predictResultCacheKey(),
@@ -13810,8 +13913,11 @@ function renderBrief(){
     ${autoPreviewHtml}
     ${trialBriefNote}
     <div class="sp-pills">${speciesPills || `<span style="font-size:12px;color:#9ec5e8">No species for this zone yet.</span>`}${allowed.length ? recPill : ""}</div>
-    <button id="brief-btn" ${!hasPin||aiLoading||!canGenerate?"disabled":""} onclick="runBrief()">
-      ${aiLoading?"GENERATING BRIEF...":"GENERATE AI CAPTAIN'S BRIEF"}</button>
+    <button id="brief-btn" class="${aiLoading?"brief-btn--loading":""}" ${!hasPin||aiLoading||!canGenerate?"disabled":""} onclick="runBrief()">
+      ${aiLoading
+        ? `<span class="bw-load-spin" aria-hidden="true"></span><span>Generating Brief…</span>`
+        : "GENERATE AI CAPTAIN'S BRIEF"}</button>
+    ${aiLoading?`<p class="brief-load-status" aria-live="polite">${briefLoadMsg || BRIEF_LOAD_STAGES[0].msg}</p>`:""}
     ${(briefLooksSuccessful(aiCOA) && !aiLoading)?`<button type="button" class="brief-view-btn" onclick="openBriefModal()">View your Captain's Brief ↗</button>`:""}
     ${(aiCOA && !aiLoading && !briefLooksSuccessful(aiCOA))?`<p style="margin-top:10px;font-size:12px;color:#f0a0a0;line-height:1.45">${String(aiCOA).replace(/</g,"&lt;")}</p>`:""}
     ${recentFooter}
@@ -14025,7 +14131,9 @@ async function runBrief(){
     }
   }
 
-  aiLoading=true;aiCOA="";renderBrief();
+  aiLoading=true;aiCOA="";
+  startBriefLoadStages();
+  renderBrief();
 
   const speciesNames = sp.map(id => SPECIES.find(s=>s.id===id)?.name).filter(Boolean);
   const port = activePort || null;
@@ -14513,6 +14621,8 @@ async function runBrief(){
     }
   }
   aiLoading=false;
+  clearBriefLoadStages();
+  briefLoadMsg = "";
   if(typeof refreshBriefAllowance === "function") await refreshBriefAllowance();
   if(typeof updateBriefFab === "function") updateBriefFab();
   renderBrief();
