@@ -709,6 +709,30 @@ function wpStatsBar(list, label, extra){
   `;
 }
 
+function wpSameLocation(a, b){
+  return Math.abs(Number(a.lat) - Number(b.lat)) < 0.00015 &&
+         Math.abs(Number(a.lng) - Number(b.lng)) < 0.00015;
+}
+
+function wpIsSavedToMine(p){
+  return WP_state.userPoints.some(u => wpSameLocation(u, p));
+}
+
+function wpSaveStarSVG(filled){
+  const fill = filled ? "currentColor" : "none";
+  return `<svg viewBox="0 0 24 24" width="15" height="15" fill="${fill}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.9 6.2 6.8.9-5 4.7 1.3 6.7L12 17.8 5.9 20.5 7.2 13.8 2.2 9.1l6.8-.9z"/></svg>`;
+}
+
+function wpSetSaveBtnSaved(btn){
+  if(!btn) return;
+  btn.classList.add("on");
+  btn.title = "Saved to My Waypoints";
+  btn.setAttribute("aria-label", "Saved to My Waypoints");
+  btn.innerHTML = wpSaveStarSVG(true) + `<span>Saved</span>`;
+  btn.onclick = null;
+  btn.style.cursor = "default";
+}
+
 function wpCardHTML(p, isUser){
   // For private user points the meaningful type is sourceType (the structure
   // kind they picked); fall back to the raw type for public POIs.
@@ -716,6 +740,7 @@ function wpCardHTML(p, isUser){
   const t = wpType(iconKey);
   const latStr = p.lat.toFixed(4) + "°N";
   const lngStr = Math.abs(p.lng).toFixed(4) + "°W";
+  const saved = !isUser && wpIsSavedToMine(p);
   return `
     <div class="wp-card" onclick="wpFlyTo(${p.lat},${p.lng},'${(p.name || '').replace(/'/g,"\\\\'")}','${p.type}',${JSON.stringify(p.sourceType||'').replace(/"/g,'&quot;')})">
       <div class="wp-card-icon" style="background:${t.color}22;border-color:${t.color}55;color:${t.color}">${wpTypeIconHTML(iconKey)}</div>
@@ -749,9 +774,9 @@ function wpCardHTML(p, isUser){
             <span>Delete</span>
           </button>
         ` : `
-          <button class="wp-action-btn save" onclick="wpCopyToMine(${JSON.stringify(p).replace(/"/g,'&quot;')})" title="Save to My Waypoints" aria-label="Save to My Waypoints">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.9 6.2 6.8.9-5 4.7 1.3 6.7L12 17.8 5.9 20.5 7.2 13.8 2.2 9.1l6.8-.9z"/></svg>
-            <span>Save</span>
+          <button class="wp-action-btn save${saved ? " on" : ""}" ${saved ? "" : `onclick="wpCopyToMine(${JSON.stringify(p).replace(/"/g,'&quot;')}, event)"`} title="${saved ? "Saved to My Waypoints" : "Save to My Waypoints"}" aria-label="${saved ? "Saved to My Waypoints" : "Save to My Waypoints"}"${saved ? ' style="cursor:default"' : ""}>
+            ${wpSaveStarSVG(saved)}
+            <span>${saved ? "Saved" : "Save"}</span>
           </button>
         `}
       </div>
@@ -813,8 +838,8 @@ function wpRenderPublic(){
       ${shown.length === 0 ? `
         <div class="wp-empty">
           <div class="wp-empty-icon">🔍</div>
-          <div style="font-size:14px;color:#9ec5e8;margin-bottom:6px">${displayPort ? "No waypoints within range of " + displayPort : "Select a home port on the map"}</div>
-          <div style="font-size:11px">${displayPort ? "Try clearing your filters or choosing another port." : ""}</div>
+          <div class="wp-empty-title" style="font-size:14px;color:#9ec5e8;margin-bottom:6px">${displayPort ? "No waypoints within range of " + displayPort : "Select a home port on the map"}</div>
+          <div class="wp-empty-sub" style="font-size:11px">${displayPort ? "Try clearing your filters or choosing another port." : ""}</div>
         </div>
       ` : shown.map(p => wpCardHTML(p, false)).join("")}
     </div>
@@ -885,13 +910,13 @@ function wpRenderMine(){
       ${WP_state.userPoints.length === 0 ? `
         <div class="wp-empty">
           <div class="wp-empty-icon">⭐</div>
-          <div style="font-size:14px;color:#9ec5e8;margin-bottom:6px">No personal waypoints yet</div>
-          <div style="font-size:11px;line-height:1.6">Tap <b>+ Add Waypoint</b> to enter one manually, or use the <b>Import</b> tab to load a GPX file.<br>You can also tap the Save button on any public POI to copy it here.</div>
+          <div class="wp-empty-title" style="font-size:14px;color:#9ec5e8;margin-bottom:6px">No personal waypoints yet</div>
+          <div class="wp-empty-sub" style="font-size:11px;line-height:1.6">Tap <b>+ Add Waypoint</b> to enter one manually, or use the <b>Import</b> tab to load a GPX file.<br>You can also tap the Save button on any public POI to copy it here.</div>
         </div>
       ` : list.length === 0 ? `
         <div class="wp-empty">
           <div class="wp-empty-icon">🔍</div>
-          <div style="font-size:14px;color:#9ec5e8">No waypoints match your filters</div>
+          <div class="wp-empty-title" style="font-size:14px;color:#9ec5e8">No waypoints match your filters</div>
         </div>
       ` : list.map(p => wpCardHTML(p, true)).join("")}
     </div>
@@ -1163,7 +1188,12 @@ function wpDismissActiveMarker(){
   _wpActiveMarker = null;
 }
 
-function wpCopyToMine(p){
+function wpCopyToMine(p, ev){
+  if(wpIsSavedToMine(p)){
+    if(ev && ev.currentTarget) wpSetSaveBtnSaved(ev.currentTarget);
+    showToast(`"${p.name}" is already in My Waypoints.`, "info");
+    return;
+  }
   const newPoint = {
     ...p,
     id: "u-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
@@ -1176,6 +1206,7 @@ function wpCopyToMine(p){
   wpSaveUser();
   if(window.BW_AUTH) window.BW_AUTH.saveWaypoint(newPoint).catch(e => console.error("waypoint sync", e));
   drawUserWaypoints();
+  if(ev && ev.currentTarget) wpSetSaveBtnSaved(ev.currentTarget);
   showToast(`"${p.name}" saved to your waypoints and shown on the map.`, "success");
 }
 

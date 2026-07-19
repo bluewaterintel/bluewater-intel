@@ -585,6 +585,24 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   #catches-overlay .catch-card-delete{ font-size:13px !important; padding:6px 12px !important; }
   #catches-overlay .catch-empty-title{ font-size:18px !important; }
   #catches-overlay .catch-empty-sub{ font-size:14px !important; }
+
+  /* Waypoints & Structure — match My Catches desktop sizing. */
+  #wp-overlay .wp-page-title{ font-size:22px !important; }
+  #wp-overlay .wp-page-sub{ font-size:13px !important; }
+  #wp-overlay .wp-tab{ font-size:14px !important; padding:16px 14px !important; }
+  #wp-overlay .wp-search{ font-size:14px !important; padding:10px 14px !important; }
+  #wp-overlay .wp-filter{ font-size:14px !important; padding:10px 14px !important; }
+  #wp-overlay .wp-btn{ font-size:14px !important; padding:10px 16px !important; }
+  #wp-overlay .wp-stats-bar{ font-size:13px !important; }
+  #wp-overlay .wp-stats-bar b{ font-size:15px !important; }
+  #wp-overlay .wp-card-name{ font-size:17px !important; }
+  #wp-overlay .wp-card-meta{ font-size:13px !important; }
+  #wp-overlay .wp-card-coord{ font-size:12px !important; }
+  #wp-overlay .wp-action-btn{ font-size:13px !important; padding:6px 12px !important; }
+  #wp-overlay .wp-info-box{ font-size:14px !important; }
+  #wp-overlay .wp-source-label{ font-size:12px !important; }
+  #wp-overlay .wp-empty-title{ font-size:18px !important; }
+  #wp-overlay .wp-empty-sub{ font-size:14px !important; }
 }
 
 @media (max-width:680px){
@@ -4944,8 +4962,8 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
       display:flex;align-items:center;justify-content:center;cursor:pointer;
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
-      <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📍 Waypoints &amp; Structure</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Waypoints · GPX Import/Export · Private Storage</div>
+      <div class="wp-page-title" style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📍 Waypoints &amp; Structure</div>
+      <div class="wp-page-sub" style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Waypoints · GPX Import/Export · Private Storage</div>
     </div>
   </div>
 
@@ -5020,6 +5038,8 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
 .wp-action-btn.danger:hover{background:rgba(220,38,38,.28);border-color:rgba(248,113,113,.7);color:#fecaca}
 .wp-action-btn.save{background:rgba(245,158,11,.14);border-color:rgba(251,191,36,.45);color:#fcd34d}
 .wp-action-btn.save:hover{background:rgba(245,158,11,.26);border-color:rgba(251,191,36,.7);color:#fde68a}
+.wp-action-btn.save.on{background:rgba(245,158,11,.38);border-color:rgba(251,191,36,.85);color:#fde68a}
+.wp-action-btn.save.on:hover{background:rgba(245,158,11,.38);border-color:rgba(251,191,36,.85);color:#fde68a}
 /* Show-on-map toggle: muted teal when off, solid green "on" state when the
    waypoint is currently drawn on the map. */
 .wp-action-btn.map{background:rgba(45,212,191,.12);border-color:rgba(45,212,191,.4);color:#5eead4}
@@ -5209,7 +5229,7 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
 }
 </style>
 
-<script src="bw-waypoints-ui.js?v=20260719e"></script>
+<script src="bw-waypoints-ui.js?v=20260719f"></script>
 
 <style>
 /* ── 6-DAY FORECAST MODAL ─────────────────────────────────────────────────── */
