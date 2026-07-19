@@ -1913,7 +1913,9 @@ function biteForecastTimeLabel(){
 }
 
 function windBiteTimesMisaligned(){
-  return !!layerVis.predict && WIND_FORECAST_HOUR !== FORECAST_HOUR_OFFSET;
+  // Only warn when BOTH overlays are on — Wind's slider defaults to Current, so
+  // Bite Map +24h alone used to flash a false "Times differ" with Wind off.
+  return !!layerVis.predict && !!layerVis.wind && WIND_FORECAST_HOUR !== FORECAST_HOUR_OFFSET;
 }
 
 function windBiteTimeMismatchHtml(){
