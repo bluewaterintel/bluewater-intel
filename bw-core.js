@@ -240,12 +240,15 @@ const REGIONS = [
   { id: "mid_atlantic", label: "Mid-Atlantic" },
   { id: "southeast",    label: "Southeast" },
   { id: "gulf",         label: "Gulf" },
+  { id: "socal",        label: "Southern California" },
 ];
 const REGION_LABELS = Object.fromEntries(REGIONS.map(r => [r.id, r.label]));
 
-// Coarse US East + Gulf region from coordinates (defaults the post region).
+// Coarse US fishing region from coordinates (defaults the post region).
 function regionFor(lat, lng){
   if(lat == null || lng == null || !isFinite(lat) || !isFinite(lng)) return null;
+  // Southern California — San Diego through Santa Barbara Channel
+  if(lng <= -117.0 && lat >= 32.0 && lat <= 35.5) return "socal";
   if(lng < -81.5 && lat < 31) return "gulf";     // FL Gulf coast, AL, MS, LA, TX
   if(lat >= 40.5) return "new_england";           // ~NY/CT through ME
   if(lat >= 36.5) return "mid_atlantic";          // NJ, DE, MD, VA
