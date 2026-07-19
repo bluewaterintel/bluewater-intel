@@ -318,9 +318,11 @@
   }
 
   const sstGridCache = new Map();
-  async function fetchSstGrid(latMin, latMax, lngMin, lngMax, hours = 0) {
+  async function fetchSstGrid(latMin, latMax, lngMin, lngMax, hours = 0, stepDeg = null) {
     const fh = normalizeOceanHours(hours);
-    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${fh}`;
+    const stepKey = (typeof stepDeg === "number" && isFinite(stepDeg))
+      ? stepDeg.toFixed(3) : "auto";
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${fh}:${stepKey}`;
     const hit = sstGridCache.get(k);
     if (hit && Date.now() - hit.atMs < 2 * 60 * 60 * 1000) return hit.data;
     try {
@@ -330,6 +332,9 @@
         lngMin: String(lngMin), lngMax: String(lngMax),
         hours: String(fh),
       });
+      if (typeof stepDeg === "number" && isFinite(stepDeg)) {
+        params.set("stepDeg", String(stepDeg));
+      }
       const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
         signal: fetchTimeout(30000),
@@ -338,6 +343,11 @@
       const data = await res.json();
       if (!data || !Array.isArray(data.rows) || !data.rows.length) return null;
       sstGridCache.set(k, { data, atMs: Date.now() });
+      // Cap cache size so dense zoomed grids don't grow forever.
+      if (sstGridCache.size > 24) {
+        const oldest = sstGridCache.keys().next().value;
+        if (oldest != null) sstGridCache.delete(oldest);
+      }
       return data;
     } catch (e) {
       return null;
