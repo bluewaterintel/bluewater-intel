@@ -1992,6 +1992,12 @@ body.modal-open #brief-toggle{
 .loran-label{
   background:transparent !important;
   border:none !important;
+  box-shadow:none !important;
+}
+/* In-line gap labels rotate with the hyperbola; keep the icon box from clipping. */
+.loran-label > div{
+  display:inline-block;
+  transform-origin:center center;
 }
 
 /* TUTORIAL OVERLAY — step-by-step usage guide */
@@ -3064,7 +3070,7 @@ body.modal-open #brief-toggle{
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="LORAN-C Y/Z-rate TD lines (9960-Y for NC→MD, 7980-Z for SC/GA). Matches BLACK diagonal lines on NOAA Grease Charts.">
+    <label class="layer-row" title="LORAN-C Y-rate TD lines (9960-Y from MD→VA→Hatteras→Oak Island; 7980-Z further south in SC/GA). Matches Grease Chart parallel lines.">
       <input type="checkbox" id="chk-loran" onchange="toggleLayer('loran')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:transparent;border:1px dashed #15803d;border-radius:0"></span>
