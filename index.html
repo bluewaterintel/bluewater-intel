@@ -628,6 +628,8 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   #waypoint-control .wp-radius-btn{ font-size:13px !important; padding:8px 0 !important; min-width:0 !important; flex:1 1 0 !important; }
   .nav-row-title{ font-size:16px !important; }
   .nav-row-sub{ font-size:13px !important; }
+  #catches-overlay .catches-title{ font-size:20px !important; }
+  #catches-overlay .catches-log-btn{ font-size:14px !important; padding:10px 16px !important; }
 }
 
 /* Very narrow phones — smaller marlin mark, tighter spacing */
@@ -1272,6 +1274,7 @@ body.modal-open #brief-toggle{
   flex:1;min-width:120px;background:rgba(255,255,255,.05);border:1px solid rgba(107,191,234,.25);
   color:#f0f6ff;padding:8px 10px;border-radius:8px;font-size:12px;font-family:inherit;
 }
+.overlay-page-sub{font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .map-time-pill--green{border:1px solid rgba(34,197,94,.40)}
 .map-time-pill--green .map-time-pill-title{color:#4ade80}
 .map-time-pill--green .map-time-pill-display{color:#bbf7d0}
@@ -3473,7 +3476,7 @@ body.modal-open #brief-toggle{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260719s"></script>
+<script src="bw-core.js?v=20260719t"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
@@ -3500,7 +3503,7 @@ body.modal-open #brief-toggle{
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📖 Fish Encyclopedia</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Maine to Southern California · How-To Guides</div>
+      <div class="overlay-page-sub">Maine to Southern California · How-To Guides</div>
     </div>
   </div>
 
@@ -3654,7 +3657,7 @@ body.modal-open #brief-toggle{
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📏 AI Catch Measure</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Works Offline · Camera + Reference</div>
+      <div class="overlay-page-sub">Works Offline · Camera + Reference</div>
     </div>
     <div id="cm-online-pill" style="
       font-size:9px;font-weight:700;letter-spacing:.08em;
@@ -3813,7 +3816,7 @@ body.modal-open #brief-toggle{
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🎣 Virtual Tackle Box</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Smart Recommendations · Works Offline</div>
+      <div class="overlay-page-sub">Smart Recommendations · Works Offline</div>
     </div>
   </div>
 
@@ -3967,7 +3970,7 @@ body.modal-open #brief-toggle{
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📖 Tutorial</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">How to use Bluewater Intel</div>
+      <div class="overlay-page-sub">How to use Bluewater Intel</div>
     </div>
   </div>
 
@@ -4238,7 +4241,7 @@ body.modal-open #brief-toggle{
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div class="catches-title" style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🎣 My Catches</div>
-      <div class="catches-sub" style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Personal Log · Auto-filled Conditions</div>
+      <div class="catches-sub overlay-page-sub">Personal Log · Auto-filled Conditions</div>
     </div>
     <button class="catches-log-btn" onclick="openLogCatch()" style="
       background:#2979b5;border:none;color:#fff;
@@ -4312,7 +4315,7 @@ body.modal-open #brief-toggle{
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⚖️ Fishing Regulations</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Official Sources · Always Verify</div>
+      <div class="overlay-page-sub">Official Sources · Always Verify</div>
     </div>
   </div>
 
@@ -4352,7 +4355,7 @@ body.modal-open #brief-toggle{
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div style="font-size:17px;font-weight:800;color:#f0f6ff">🛡 User Admin</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500">Profiles · subscriptions · access</div>
+      <div class="overlay-page-sub">Profiles · subscriptions · access</div>
     </div>
   </div>
 
@@ -4415,7 +4418,7 @@ body.modal-open #brief-toggle{
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⚖️ Legal &amp; Privacy</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Terms of Use · Privacy Policy</div>
+      <div class="overlay-page-sub">Terms of Use · Privacy Policy</div>
     </div>
   </div>
 
@@ -4465,7 +4468,7 @@ body.modal-open #brief-toggle{
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📰 Fishing Reports</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Community forum · post &amp; read by region</div>
+      <div class="overlay-page-sub">Community forum · post &amp; read by region</div>
     </div>
     <div id="rp-status-pill" style="
       font-size:9px;font-weight:700;letter-spacing:.08em;
@@ -4530,12 +4533,12 @@ body.modal-open #brief-toggle{
       <input id="rp-post-useloc" type="checkbox" style="width:15px;height:15px"/>
       <span>Include approximate location (helps the Bite Map) — uses current map center</span>
     </label>
-    <div id="rp-post-loc-note" style="font-size:10px;color:#6bbfea;margin:-2px 0 8px">Your exact spot is never published — coordinates are rounded to ~6 nm.</div>
+    <div id="rp-post-loc-note" class="rp-post-fine" style="color:#6bbfea;margin:-2px 0 8px">Your exact spot is never published — coordinates are rounded to ~6 nm.</div>
 
     <label class="rp-post-label">Report</label>
     <textarea id="rp-post-body" class="rp-post-input" rows="4" maxlength="2000" placeholder="What's biting? Conditions, technique, what worked…"></textarea>
 
-    <div style="font-size:10px;color:#9ec5e8;margin:2px 0 12px;line-height:1.5">Posts are public to the community under an anonymous handle. No name or email is shown.</div>
+    <div class="rp-post-fine" style="margin:2px 0 12px">Posts are public to the community under an anonymous handle. No name or email is shown.</div>
 
     <div style="display:flex;gap:8px">
       <button type="button" onclick="rpClosePost()" style="flex:1;background:transparent;border:1px solid rgba(107,191,234,.3);color:#cfe5ff;padding:11px;border-radius:9px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
@@ -4554,6 +4557,7 @@ body.modal-open #brief-toggle{
 .rp-filter option{background:#0f2444;color:#f0f6ff}
 .rp-filter:focus{border-color:rgba(107,191,234,.5)}
 
+.rp-post-fine{font-size:10px;color:#9ec5e8;line-height:1.5}
 .rp-post-label{display:block;font-size:11px;font-weight:600;color:#9ec5e8;margin:10px 0 4px}
 .rp-post-input{width:100%;box-sizing:border-box;background:#0a1628;border:1px solid rgba(107,191,234,.28);color:#f0f6ff;padding:10px 12px;border-radius:9px;font-size:14px;font-family:inherit;outline:none}
 .rp-post-input:focus{border-color:rgba(107,191,234,.55)}
@@ -4602,11 +4606,54 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 }
 @media (max-width:680px){
   #rp-list{padding:12px}
-  .rp-filter{min-width:110px;font-size:11px}
+  .rp-filter{min-width:110px;font-size:14px;padding:10px 12px}
+  .rp-region-tab{font-size:13px;padding:8px 14px}
+  .rp-post-label{font-size:13px}
+  .rp-post-input{font-size:16px;padding:12px 14px}
+  #rp-post-overlay .rp-post-fine{font-size:13px !important;line-height:1.45 !important}
+  #rp-post-overlay #rp-post-loc-note{font-size:12px !important}
+  #rp-post-overlay button{font-size:15px !important;padding:12px !important}
+  #rp-stats{font-size:13px !important}
+  .rp-area{font-size:13px}
+  .rp-time{font-size:12px}
+  .rp-snippet{font-size:15px}
+  .rp-sp-pill{font-size:11px;padding:3px 8px}
+  .rp-handle{font-size:11px}
+  #rp-empty div:last-child{font-size:13px !important}
+}
+
+/* Phone readability — menu overlay pages (Reports, Catches, Regulations, etc.) */
+@media (max-width:680px){
+  .overlay-page-sub{font-size:12.5px !important}
+  #catches-overlay .catch-filter-label{font-size:12px !important}
+  #catches-overlay .catch-chip{font-size:13px !important;padding:7px 12px !important}
+  #catches-overlay .catch-filter-date{font-size:14px !important;padding:10px 12px !important}
+  #catches-overlay .rp-filter{font-size:14px !important;padding:10px 12px !important}
+  #catches-overlay .catches-sub{font-size:12.5px !important}
+  #catches-overlay .catch-card-meta{font-size:12px !important}
+  #catches-overlay .catch-card-cond{font-size:11px !important}
+  #catches-overlay .catch-card-notes{font-size:14px !important}
+  #catches-overlay .catch-card-delete{font-size:13px !important;padding:7px 12px !important}
+  #catches-overlay .catch-stat-label{font-size:11px !important}
+  #regs-overlay [style*="font-size:10px"],
+  #legal-overlay [style*="font-size:10px"],
+  #kn-overlay [style*="font-size:10px"],
+  #enc-overlay [style*="font-size:10px"],
+  #tut-overlay [style*="font-size:10px"],
+  #wp-overlay .wp-page-sub{font-size:12.5px !important}
+  #kn-overlay .kn-tab{font-size:14px !important;padding:14px 16px !important}
+  .catch-field-hint{font-size:12px !important}
+  .catch-unknown-row{font-size:13px !important}
+  .catch-loc-mode-btn{font-size:13px !important;padding:10px 12px !important}
+  .catch-modal-body .pref-select,
+  .catch-modal-body textarea{font-size:16px !important}
+  #rp-overlay .overlay-page-sub{font-size:12.5px !important}
+  #rp-search{font-size:16px !important;padding:12px 14px !important}
+  #rp-overlay button[onclick="rpOpenPost()"]{font-size:14px !important;padding:0 18px !important}
 }
 </style>
 
-<script src="bw-reports.js?v=20260719f"></script>
+<script src="bw-reports.js?v=20260719g"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TERMINAL TACKLE — Knots, Crimps, Connections
@@ -4632,7 +4679,7 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🪢 Terminal Tackle</div>
-      <div style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Knots · Crimps · Connections</div>
+      <div class="overlay-page-sub">Knots · Crimps · Connections</div>
     </div>
   </div>
 
@@ -5004,7 +5051,7 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div class="wp-page-title" style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📍 Waypoints &amp; Structure</div>
-      <div class="wp-page-sub" style="font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Waypoints · GPX Import/Export · Private Storage</div>
+      <div class="wp-page-sub overlay-page-sub">Waypoints · GPX Import/Export · Private Storage</div>
     </div>
   </div>
 

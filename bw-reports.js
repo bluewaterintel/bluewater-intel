@@ -641,7 +641,7 @@ function closeReports(){
   document.body.style.overflow = "";
 }
 function rpPopulateFilters(){
-  // Region tabs (All + the four coverage regions)
+  // Region tabs (All + coverage regions)
   const tabs = document.getElementById("rp-region-tabs");
   if(tabs){
     const all = [{id:"all",label:"All Regions"}].concat(REGIONS);
