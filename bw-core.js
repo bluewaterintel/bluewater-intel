@@ -9043,8 +9043,10 @@ function updateRadarLoopControlVisibility(){
 // Carolinas without overlapping line confusion.
 //
 // ── CALIBRATION ──
-//   9960-Y: anchored at Norfolk Canyon = 41550 (the "550 line")
-//   7980-Y: uses published Jupiter Y emission delay of 45102.04 µs
+//   9960-Y: anchored at Norfolk Canyon = 41550 (the "550 line"); Grease Chart
+//           AC001 places ~40000 near Hatteras and ~39000 at Oak Island —
+//           same offset reproduces those TDs when useBounds extends south.
+//   7980-Z: empirical offset for SC/GA waters south of Oak Island
 // ════════════════════════════════════════════════════════════════════════════
 
 const LORAN_CHAINS = {
@@ -9054,18 +9056,20 @@ const LORAN_CHAINS = {
     master:    {lat: 42.7142, lng: -76.8253},   // Seneca NY
     secondary: {lat: 34.0626, lng: -77.9128},   // Carolina Beach NC
     offset: 42237.7,
-    // Region where this chain produces useful (non-degenerate) lines:
-    // north of Cape Fear, where Carolina Beach Y secondary spread is good.
-    useBounds: {south: 34.5, north: 38.6, west: -77.0, east: -74.0},
-    // 50-µs increments. TD values 40000-42600 across this region.
-    tdMin: 40000, tdMax: 42600, step: 50,
+    // Parallel-to-coast Y-rate lines from VA/MD down through Hatteras to the
+    // Oak Island / Cape Fear grounds (matches Grease Chart AC001: 42600→39000).
+    // Coast clip still trims inland; station-exclusion skips the Carolina Beach
+    // singularity. Do not draw the perpendicular 26xxx/27xxx set here.
+    useBounds: {south: 33.70, north: 38.6, west: -78.55, east: -74.0},
+    // 50-µs increments. South of the 40000 (Hatteras) line continues to ~39000
+    // at Oak Island; north still covers Norfolk Canyon (~41550).
+    tdMin: 39000, tdMax: 42600, step: 50,
   },
   // Southeast US Chain - 7980 (Z-rate, Carolina Beach NC secondary)
   // NOTE: Carolina Beach is dual-rated — it's the Y secondary for chain 9960
   // AND the Z secondary for chain 7980 (same physical tower, different
-  // coding delay). The 7980-Z hyperbolas run perpendicular to the 9960-Y
-  // hyperbolas through this same point — giving captains a useful coordinate
-  // pair to triangulate in SC/GA waters.
+  // coding delay). Kept south of the AC001 / Oak Island 9960-Y fill so the
+  // parallel Y-rate lines aren't overprinted by Z-rate TDs in that band.
   se7980Z: {
     label: "7980-Z",
     master:    {lat: 30.9941, lng: -85.1691},   // Malone FL
@@ -9075,9 +9079,8 @@ const LORAN_CHAINS = {
     // authoritative chart anchor we can't pin this more precisely; values
     // may differ from printed charts by ~100-1000 µs.
     offset: 50735,
-    // Region where this chain produces useful (non-degenerate) lines:
-    // south of Cape Fear in SC/GA waters.
-    useBounds: {south: 32.0, north: 34.5, west: -79.7, east: -77.3},
+    // SC/GA waters south of Oak Island (9960-Y owns Cape Lookout→Cape Fear).
+    useBounds: {south: 32.0, north: 33.70, west: -79.7, east: -77.3},
     // 50-µs increments. TD values 46000-51000 across SC/GA waters.
     tdMin: 46000, tdMax: 51000, step: 50,
   },
@@ -9250,6 +9253,59 @@ function traceLoranLine(tdValue, bounds, step, chain){
 
 let loranLayer = null;
 
+// Split a polyline at its midpoint with a short gap for an in-line TD label
+// (Grease Chart style — number sits in a break in the line, not a boxed badge).
+// Returns { a, b, labelLatLng, angleDeg } or null if the line is too short.
+function loranGapLabelSplit(poly){
+  if(!poly || poly.length < 4) return null;
+  let total = 0;
+  const segLen = [];
+  for(let i = 1; i < poly.length; i++){
+    const dLat = poly[i][0] - poly[i-1][0];
+    const dLng = (poly[i][1] - poly[i-1][1]) * Math.cos(poly[i][0] * Math.PI / 180);
+    const d = Math.hypot(dLat, dLng);
+    segLen.push(d);
+    total += d;
+  }
+  if(total < 0.08) return null; // ~5 nm minimum before labeling
+  const midTarget = total * 0.5;
+  // Gap half-length in degrees (~0.035° ≈ 2 nm) so the five-digit TD fits.
+  const gapHalf = 0.035;
+  let acc = 0, midI = 1;
+  for(let i = 0; i < segLen.length; i++){
+    if(acc + segLen[i] >= midTarget){ midI = i + 1; break; }
+    acc += segLen[i];
+  }
+  midI = Math.max(2, Math.min(poly.length - 2, midI));
+  const mid = poly[midI];
+  const prev = poly[Math.max(0, midI - 1)];
+  const next = poly[Math.min(poly.length - 1, midI + 1)];
+  let ang = Math.atan2(next[0] - prev[0], next[1] - prev[1]) * 180 / Math.PI;
+  // Keep text roughly upright (readable left→right along the coast-parallel line).
+  if(ang > 90) ang -= 180;
+  if(ang < -90) ang += 180;
+
+  // Walk outward from mid until cumulative distance ≥ gapHalf each side.
+  let aEnd = midI, bStart = midI;
+  let dA = 0, dB = 0;
+  while(aEnd > 1 && dA < gapHalf){
+    const dLat = poly[aEnd][0] - poly[aEnd-1][0];
+    const dLng = (poly[aEnd][1] - poly[aEnd-1][1]) * Math.cos(poly[aEnd][0] * Math.PI / 180);
+    dA += Math.hypot(dLat, dLng);
+    aEnd--;
+  }
+  while(bStart < poly.length - 2 && dB < gapHalf){
+    const dLat = poly[bStart+1][0] - poly[bStart][0];
+    const dLng = (poly[bStart+1][1] - poly[bStart][1]) * Math.cos(poly[bStart][0] * Math.PI / 180);
+    dB += Math.hypot(dLat, dLng);
+    bStart++;
+  }
+  const a = poly.slice(0, aEnd + 1);
+  const b = poly.slice(bStart);
+  if(a.length < 2 || b.length < 2) return null;
+  return { a, b, labelLatLng: mid, angleDeg: ang };
+}
+
 function drawLoranLines(){
   if(loranLayer){
     MAP.removeLayer(loranLayer);
@@ -9262,20 +9318,15 @@ function drawLoranLines(){
 
   const featureGroup = L.featureGroup();
   // Major lines (every 100µs) — slightly thicker and more opaque
-  // Dark green chosen to stand out cleanly against blue ocean water and
-  // distinguish from the predict-heat green (which is brighter/teal).
   const majorStyle = {color: "#f97316", weight: 2.5, opacity: 0.95, dashArray: "6 4", interactive: false};
   // Half-lines (50µs increments) — thinner and dimmer for visual hierarchy
   const halfStyle  = {color: "#f97316", weight: 1.6, opacity: 0.65, dashArray: "3 5", interactive: false};
-  // Badge style for labels. CRITICAL: pointer-events:none lets touches pass
-  // through to the map underneath — without this, the label divs intercept
-  // touch-start events and block map panning when a finger lands on a label.
-  const badgeStyle = "background:rgba(60,28,6,.95);color:#fdba74;padding:3px 9px;border-radius:5px;font-size:13px;font-weight:700;font-family:monospace;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.6);border:1px solid rgba(253,186,116,.6);pointer-events:none";
+  // In-line gap label (no box). pointer-events:none so touches pan the map.
+  const gapLabelStyle = "color:#fdba74;font-size:12px;font-weight:800;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;text-shadow:0 0 3px #060e1a,0 1px 2px #060e1a,-1px 0 2px #060e1a,1px 0 2px #060e1a;white-space:nowrap;pointer-events:none;line-height:1";
 
   // Iterate over every chain defined in LORAN_CHAINS. Each chain only draws
-  // within its useBounds rectangle. Where chains' useBounds overlap (a small
-  // band near Cape Fear NC), users see both — which matches the printed
-  // Grease Charts that overprint both 9960 and 7980 lines in that area.
+  // within its useBounds rectangle. 9960-Y owns Hatteras→Oak Island; 7980-Z
+  // starts south of that band so the AC001 parallel lines stay unambiguous.
   Object.values(LORAN_CHAINS).forEach(chain => {
     const tdValues = [];
     for(let td = chain.tdMin; td <= chain.tdMax; td += chain.step){
@@ -9287,41 +9338,43 @@ function drawLoranLines(){
       // array of [lat,lng] points along the same connected hyperbola arc).
       const polylines = traceLoranLine(td, chain.useBounds, step, chain);
       const style = (td % 100 === 0) ? majorStyle : halfStyle;
-      polylines.forEach(poly => {
-        // Convert to Leaflet's expected format and add as ONE polyline (not
-        // one polyline per segment — that was the perf killer).
-        L.polyline(poly, style).addTo(featureGroup);
-      });
-      // Label only MAJOR lines (every 100µs). Half-lines (50µs) still render
-      // as polylines for visual interpolation but don't get badges.
-      if(polylines.length > 0 && td % 100 === 0){
-        // Find the EASTERNMOST point across ALL polylines for this TD value.
-        // Highest longitude = furthest east = furthest out into the open
-        // ocean (away from the coastline). This keeps labels out over water
-        // so users don't have to scroll west to read them.
-        let labelPt = null;
-        let maxLng = -Infinity;
-        for(const poly of polylines){
-          for(const pt of poly){
-            if(pt[1] > maxLng){
-              maxLng = pt[1];
-              labelPt = pt;
-            }
+      const isMajor = (td % 100 === 0);
+
+      // Prefer labeling the longest water arc for this TD (Grease Chart style).
+      let labelPolyIdx = -1, labelPolyLen = 0;
+      if(isMajor){
+        polylines.forEach((poly, idx) => {
+          let len = 0;
+          for(let i = 1; i < poly.length; i++){
+            const dLat = poly[i][0] - poly[i-1][0];
+            const dLng = (poly[i][1] - poly[i-1][1]) * Math.cos(poly[i][0] * Math.PI / 180);
+            len += Math.hypot(dLat, dLng);
+          }
+          if(len > labelPolyLen){ labelPolyLen = len; labelPolyIdx = idx; }
+        });
+      }
+
+      polylines.forEach((poly, idx) => {
+        if(isMajor && idx === labelPolyIdx){
+          const split = loranGapLabelSplit(poly);
+          if(split){
+            L.polyline(split.a, style).addTo(featureGroup);
+            L.polyline(split.b, style).addTo(featureGroup);
+            L.marker(split.labelLatLng, {
+              icon: L.divIcon({
+                className: "loran-label",
+                html: `<div style="${gapLabelStyle};transform:rotate(${(-split.angleDeg).toFixed(1)}deg)">${td}</div>`,
+                iconSize: [56, 16],
+                iconAnchor: [28, 8],
+              }),
+              interactive: false,
+              keyboard: false,
+            }).addTo(featureGroup);
+            return;
           }
         }
-        if(labelPt){
-          L.marker(labelPt, {
-            icon: L.divIcon({
-              className: "loran-label",
-              html: `<div style="${badgeStyle}">${td}</div>`,
-              iconSize: [60, 20],
-              iconAnchor: [30, 10],
-            }),
-            interactive: false,
-            keyboard: false,
-          }).addTo(featureGroup);
-        }
-      }
+        L.polyline(poly, style).addTo(featureGroup);
+      });
     });
   });
 
