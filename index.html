@@ -464,11 +464,11 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     z-index:99999 !important;
   }
   /* Centered modals → bottom sheets for thumb reach */
-  #layers-modal,#basemap-modal,#settings-modal{
+  #layers-modal,#basemap-modal,#settings-modal,#catch-modal{
     align-items:flex-end !important;
     padding:0 !important;
   }
-  #layers-body,.modal-dialog{
+  #layers-body,.modal-dialog,#catch-modal-dialog{
     max-width:100% !important;
     width:100% !important;
     max-height:88dvh !important;
@@ -995,7 +995,7 @@ body.modal-open #brief-toggle{
 }
 #layers-modal.open, #basemap-modal.open, #settings-modal.open{display:flex}
 @media (max-width:680px){
-  #layers-modal,#basemap-modal,#settings-modal{
+  #layers-modal,#basemap-modal,#settings-modal,#catch-modal{
     align-items:flex-end;
     padding:0;
     padding-bottom:env(safe-area-inset-bottom,0px);
@@ -1225,6 +1225,53 @@ body.modal-open #brief-toggle{
 }
 #brief-btn .bw-load-spin{border-color:rgba(94,234,212,.3);border-top-color:#5eead4}
 @keyframes bwspin{to{transform:rotate(360deg)}}
+#catch-modal{
+  display:none;position:fixed;inset:0;z-index:10001;
+  background:rgba(0,0,0,.65);
+  justify-content:center;align-items:flex-start;
+  padding:60px 12px 20px;overflow:hidden;
+}
+#catch-modal-dialog{
+  max-width:480px;width:100%;background:#0f2444;color:#e8f4ff;
+  border:1px solid rgba(107,191,234,.25);border-radius:14px;
+  box-shadow:0 12px 48px rgba(0,0,0,.7);
+  font-family:'Segoe UI',Arial,sans-serif;
+}
+.catch-modal-body{
+  padding:16px 18px;display:flex;flex-direction:column;gap:14px;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  flex:1 1 auto;min-height:0;
+}
+.catch-modal-footer{
+  padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px));
+  border-top:1px solid rgba(107,191,234,.18);
+  display:flex;gap:8px;flex-shrink:0;background:#0f2444;
+}
+.catch-modal-footer button{flex:1;padding:12px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.catch-modal-footer .catch-save-btn{flex:2;background:#2979b5;border:none;color:#fff;font-weight:700}
+.catch-modal-footer .catch-cancel-btn{background:transparent;border:1px solid rgba(107,191,234,.3);color:#cfe5ff}
+.catch-field-hint{font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.35}
+.catch-unknown-row{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:11px;color:#9ec5e8;cursor:pointer}
+.catch-unknown-row input{width:14px;height:14px;cursor:pointer}
+.catch-loc-mode{display:flex;gap:6px;margin-bottom:8px}
+.catch-loc-mode-btn{
+  flex:1;padding:8px 10px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;
+  background:rgba(41,121,181,.12);border:1px solid rgba(41,121,181,.28);color:#9ec5e8;
+}
+.catch-loc-mode-btn.active{background:rgba(41,121,181,.28);border-color:rgba(125,211,252,.45);color:#e8f4ff}
+.catch-chip-row{display:flex;flex-wrap:wrap;gap:6px}
+.catch-chip{
+  padding:6px 10px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;
+  background:rgba(255,255,255,.04);border:1px solid rgba(107,191,234,.22);color:#9ec5e8;
+}
+.catch-chip.active{background:rgba(41,121,181,.28);border-color:rgba(125,211,252,.45);color:#f0f6ff}
+.catch-filter-section{width:100%;margin-bottom:4px}
+.catch-filter-label{font-size:10px;font-weight:700;color:#6bbfea;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.catch-filter-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.catch-filter-date{
+  flex:1;min-width:120px;background:rgba(255,255,255,.05);border:1px solid rgba(107,191,234,.25);
+  color:#f0f6ff;padding:8px 10px;border-radius:8px;font-size:12px;font-family:inherit;
+}
 .map-time-pill--green{border:1px solid rgba(34,197,94,.40)}
 .map-time-pill--green .map-time-pill-title{color:#4ade80}
 .map-time-pill--green .map-time-pill-display{color:#bbf7d0}
@@ -3236,83 +3283,49 @@ body.modal-open #brief-toggle{
      User-facing form for entering a new catch entry. Mobile-first layout.
      Conditions section auto-fills from real ocean data when location changes.
      ═══════════════════════════════════════════════════════════════════════ -->
-<div id="catch-modal" onclick="if(event.target===this)closeLogCatch()" style="
-  display:none;position:fixed;inset:0;z-index:10001;
-  background:rgba(0,0,0,.65);
-  justify-content:center;align-items:flex-start;
-  padding:60px 12px 20px;overflow-y:auto;-webkit-overflow-scrolling:touch;
-">
-  <div id="catch-modal-dialog" class="modal-dialog" style="
-    max-width:480px;width:100%;background:#0f2444;color:#e8f4ff;
-    border:1px solid rgba(107,191,234,.25);border-radius:14px;
-    box-shadow:0 12px 48px rgba(0,0,0,.7);
-    font-family:'Segoe UI',Arial,sans-serif;
-  " role="dialog" aria-label="Log a catch">
-    <div class="modal-header" style="
-      padding:14px 18px;border-bottom:1px solid rgba(107,191,234,.18);
-      display:flex;justify-content:space-between;align-items:center;
-    ">
+<div id="catch-modal" onclick="if(event.target===this)closeLogCatch()" role="dialog" aria-label="Log a catch">
+  <div id="catch-modal-dialog" class="modal-dialog">
+    <div class="modal-header">
       <span style="font-size:15px;font-weight:700;color:#f0f6ff">🎣 Log a Catch</span>
-      <button type="button" onclick="closeLogCatch()" aria-label="Close" style="
-        background:transparent;border:none;color:#7dd3fc;font-size:20px;font-weight:700;
-        cursor:pointer;padding:4px 10px;border-radius:6px;font-family:inherit;
-      ">✕</button>
+      <button type="button" onclick="closeLogCatch()" aria-label="Close" class="layers-close-btn">✕</button>
     </div>
-    <div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px">
+    <div class="catch-modal-body">
 
-      <!-- Species -->
       <div>
         <label style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px">Species</label>
-        <select id="catch-species" style="
-          width:100%;background:rgba(255,255,255,.05);
-          border:1px solid rgba(107,191,234,.25);color:#f0f6ff;
-          padding:10px 12px;border-radius:8px;font-size:14px;
-          font-family:inherit;outline:none;
-        "></select>
+        <select id="catch-species" class="pref-select" style="margin-top:0"></select>
       </div>
 
-      <!-- Length + Weight side by side -->
       <div style="display:flex;gap:10px">
         <div style="flex:1">
           <label style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px">Length (in)</label>
-          <input id="catch-length" type="number" inputmode="decimal" step="0.5" placeholder="42" style="
-            width:100%;background:rgba(255,255,255,.05);
-            border:1px solid rgba(107,191,234,.25);color:#f0f6ff;
-            padding:10px 12px;border-radius:8px;font-size:14px;
-            font-family:inherit;outline:none;box-sizing:border-box;
-          "/>
+          <input id="catch-length" type="number" inputmode="decimal" step="0.5" placeholder="42" class="pref-select" style="margin-top:0;padding:10px 12px"/>
+          <label class="catch-unknown-row"><input id="catch-length-unknown" type="checkbox" onchange="catchToggleUnknown('length', this.checked)"> Unknown</label>
         </div>
         <div style="flex:1">
           <label style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px">Weight (lb)</label>
-          <input id="catch-weight" type="number" inputmode="decimal" step="0.5" placeholder="28" style="
-            width:100%;background:rgba(255,255,255,.05);
-            border:1px solid rgba(107,191,234,.25);color:#f0f6ff;
-            padding:10px 12px;border-radius:8px;font-size:14px;
-            font-family:inherit;outline:none;box-sizing:border-box;
-          "/>
+          <input id="catch-weight" type="number" inputmode="decimal" step="0.5" placeholder="28" class="pref-select" style="margin-top:0;padding:10px 12px"/>
+          <label class="catch-unknown-row"><input id="catch-weight-unknown" type="checkbox" onchange="catchToggleUnknown('weight', this.checked)"> Unknown</label>
         </div>
       </div>
 
-      <!-- Date/Time -->
       <div>
         <label style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px">When</label>
-        <input id="catch-datetime" type="datetime-local" style="
-          width:100%;background:rgba(255,255,255,.05);
-          border:1px solid rgba(107,191,234,.25);color:#f0f6ff;
-          padding:10px 12px;border-radius:8px;font-size:14px;
-          font-family:inherit;outline:none;box-sizing:border-box;
-        "/>
+        <input id="catch-datetime" type="datetime-local" class="pref-select" style="margin-top:0;padding:10px 12px"/>
       </div>
 
-      <!-- Location -->
       <div>
         <label style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px">Where</label>
+        <div class="catch-loc-mode">
+          <button type="button" id="catch-loc-exact-btn" class="catch-loc-mode-btn active" onclick="catchSetLocationMode('exact')">Exact spot</button>
+          <button type="button" id="catch-loc-port-btn" class="catch-loc-mode-btn" onclick="catchSetLocationMode('port')">Port / general area</button>
+        </div>
         <div id="catch-location-display" style="
           background:rgba(255,255,255,.04);border:1px solid rgba(107,191,234,.18);
           color:#cfe5ff;padding:9px 12px;border-radius:8px;font-size:12px;
           margin-bottom:6px;font-family:'SF Mono',Menlo,monospace;
         ">Tap a location below to set it</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <div id="catch-exact-loc-btns" style="display:flex;gap:6px;flex-wrap:wrap">
           <button type="button" onclick="catchLocPickOnMap()" style="
             flex:1;min-width:120px;background:rgba(41,121,181,.18);
             border:1px solid rgba(41,121,181,.4);color:#7dd3fc;
@@ -3326,29 +3339,36 @@ body.modal-open #brief-toggle{
             cursor:pointer;font-family:inherit;
           ">🛰 Use my GPS</button>
         </div>
+        <div id="catch-port-loc-wrap" style="display:none">
+          <select id="catch-port-select" class="pref-select" style="margin-top:0" onchange="catchPortSelected(this.value)"></select>
+          <div class="catch-field-hint">Use when you know the port but not the exact coordinates.</div>
+        </div>
       </div>
 
-      <!-- Notes -->
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px">Tackle (optional)</label>
+        <div class="catch-filter-row" style="margin-bottom:8px">
+          <select id="catch-tackle-type" class="rp-filter" style="flex:1;min-width:120px">
+            <option value="">— Not specified —</option>
+            <option value="bait">Live / cut bait</option>
+            <option value="artificial">Artificial lure</option>
+          </select>
+        </div>
+        <div class="catch-filter-label" style="margin-top:2px">Lure color</div>
+        <div id="catch-lure-colors" class="catch-chip-row"></div>
+      </div>
+
       <div>
         <label style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px">Notes (optional)</label>
-        <textarea id="catch-notes" rows="2" placeholder="Live mullet, 30ft depth, drift…" style="
-          width:100%;background:rgba(255,255,255,.05);
-          border:1px solid rgba(107,191,234,.25);color:#f0f6ff;
-          padding:10px 12px;border-radius:8px;font-size:13px;
-          font-family:inherit;outline:none;resize:vertical;box-sizing:border-box;
-        "></textarea>
+        <textarea id="catch-notes" rows="2" placeholder="Live mullet, 30ft depth, drift…" class="pref-select" style="margin-top:0;padding:10px 12px;resize:vertical;height:auto"></textarea>
       </div>
 
-      <!-- Photo -->
       <div>
         <label style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px">Photo (optional)</label>
-        <input id="catch-photo" type="file" accept="image/*" onchange="catchPhotoPreview(this.files[0])" style="
-          width:100%;font-size:12px;color:#cfe5ff;font-family:inherit;
-        "/>
+        <input id="catch-photo" type="file" accept="image/*" onchange="catchPhotoPreview(this.files[0])" style="width:100%;font-size:12px;color:#cfe5ff;font-family:inherit"/>
         <div id="catch-photo-preview" style="margin-top:8px"></div>
       </div>
 
-      <!-- Auto-filled conditions preview -->
       <div id="catch-conditions-preview" style="
         background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);
         border-radius:8px;padding:9px 12px;font-size:11px;color:#a7f3d0;
@@ -3358,7 +3378,6 @@ body.modal-open #brief-toggle{
         <div id="catch-conditions-text"></div>
       </div>
 
-      <!-- Share toggle -->
       <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;cursor:pointer">
         <input id="catch-share" type="checkbox" style="width:16px;height:16px;cursor:pointer">
         <div style="flex:1">
@@ -3366,20 +3385,10 @@ body.modal-open #brief-toggle{
           <div style="font-size:10px;color:#9ca3af;margin-top:1px">Helps other anglers — no personal info shared</div>
         </div>
       </label>
-
-      <!-- Action buttons -->
-      <div style="display:flex;gap:8px;margin-top:4px">
-        <button type="button" onclick="closeLogCatch()" style="
-          flex:1;background:transparent;border:1px solid rgba(107,191,234,.3);
-          color:#cfe5ff;padding:11px 14px;border-radius:8px;
-          font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
-        ">Cancel</button>
-        <button type="button" onclick="saveCatchFromForm()" style="
-          flex:2;background:#2979b5;border:none;color:#fff;
-          padding:11px 14px;border-radius:8px;
-          font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;
-        ">💾 Save Catch</button>
-      </div>
+    </div>
+    <div class="catch-modal-footer">
+      <button type="button" class="catch-cancel-btn" onclick="closeLogCatch()">Cancel</button>
+      <button type="button" class="catch-save-btn" onclick="saveCatchFromForm()">💾 Save Catch</button>
     </div>
   </div>
 </div>
@@ -3464,7 +3473,7 @@ body.modal-open #brief-toggle{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260719r"></script>
+<script src="bw-core.js?v=20260719s"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
@@ -4242,15 +4251,36 @@ body.modal-open #brief-toggle{
   <div id="catches-stats" style="padding:18px 20px;border-bottom:1px solid rgba(107,191,234,.08)"></div>
 
   <!-- Filters -->
-  <div id="catches-filters" style="padding:14px 20px;border-bottom:1px solid rgba(107,191,234,.08);background:rgba(0,0,0,.18);display:flex;gap:8px;flex-wrap:wrap">
-    <select class="rp-filter" id="catches-filter-species" onchange="renderMyCatches()">
-      <option value="all">All Species</option>
-    </select>
-    <select class="rp-filter" id="catches-sort" onchange="renderMyCatches()">
-      <option value="date">Newest first</option>
-      <option value="weight">Heaviest first</option>
-      <option value="species">By species</option>
-    </select>
+  <div id="catches-filters" style="padding:14px 20px;border-bottom:1px solid rgba(107,191,234,.08);background:rgba(0,0,0,.18)">
+    <div class="catch-filter-section">
+      <div class="catch-filter-label">Species <span id="catches-filter-species-count" style="color:#9ec5e8;font-weight:600"></span></div>
+      <div id="catches-filter-species" class="catch-chip-row"></div>
+    </div>
+    <div class="catch-filter-section">
+      <div class="catch-filter-label">Date range</div>
+      <div class="catch-filter-row">
+        <input id="catches-filter-date-from" type="date" class="catch-filter-date" onchange="renderMyCatches()" aria-label="From date">
+        <input id="catches-filter-date-to" type="date" class="catch-filter-date" onchange="renderMyCatches()" aria-label="To date">
+        <button type="button" class="catch-chip" onclick="catchClearDateFilter()">Clear dates</button>
+      </div>
+    </div>
+    <div class="catch-filter-section">
+      <div class="catch-filter-label">Lure color</div>
+      <div id="catches-filter-colors" class="catch-chip-row"></div>
+    </div>
+    <div class="catch-filter-row">
+      <select class="rp-filter" id="catches-filter-tackle" onchange="renderMyCatches()" style="flex:1;min-width:140px">
+        <option value="all">All tackle</option>
+        <option value="bait">Live / cut bait</option>
+        <option value="artificial">Artificial lure</option>
+      </select>
+      <select class="rp-filter" id="catches-sort" onchange="renderMyCatches()" style="flex:1;min-width:140px">
+        <option value="date">Newest first</option>
+        <option value="weight">Heaviest first</option>
+        <option value="species">By species</option>
+      </select>
+      <button type="button" class="catch-chip" onclick="catchClearAllFilters()">Clear filters</button>
+    </div>
   </div>
 
   <!-- List -->
@@ -4576,7 +4606,7 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 }
 </style>
 
-<script src="bw-reports.js?v=20260719e"></script>
+<script src="bw-reports.js?v=20260719f"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TERMINAL TACKLE — Knots, Crimps, Connections

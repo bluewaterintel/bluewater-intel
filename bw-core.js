@@ -9838,7 +9838,10 @@ function toggleSettingsPanel(){
 // "Pick on map", "Use my GPS", or the default map-center seed on open.
 let _catchPendingLat = null;
 let _catchPendingLng = null;
-let _catchPendingPhoto = null;  // base64 data URI after downscale
+let _catchPendingPhoto = null;
+let _catchLocationMode = "exact"; // exact | port
+let _catchPortName = null;
+let _catchFormLureColor = "";  // base64 data URI after downscale
 // Map-pick mode: hide the log form, let the user tap the chart, then reopen.
 let catchPickMode = false;
 let _catchPickFromCatches = false;
@@ -9850,7 +9853,6 @@ function openLogCatch(){
   if(sel && sel.options.length <= 1){
     sel.innerHTML = "";
     const real = SPECIES.filter(s => s.id !== "all");
-    // Optional: pre-select the user's active target species if there is one
     real.forEach(s => {
       const opt = document.createElement("option");
       opt.value = s.id;
@@ -9859,18 +9861,24 @@ function openLogCatch(){
     });
     if(activeSpId && activeSpId !== "all") sel.value = activeSpId;
   }
-  // Default datetime to now (local time, sliced to YYYY-MM-DDTHH:MM)
   const dt = document.getElementById("catch-datetime");
   if(dt){
     const now = new Date();
     const tzOffset = now.getTimezoneOffset() * 60000;
     dt.value = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
   }
-  // Clear other fields
   ["catch-length","catch-weight","catch-notes"].forEach(id => {
     const el = document.getElementById(id);
-    if(el) el.value = "";
+    if(el){ el.value = ""; el.disabled = false; }
   });
+  ["catch-length-unknown","catch-weight-unknown"].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.checked = false;
+  });
+  const tackle = document.getElementById("catch-tackle-type");
+  if(tackle) tackle.value = "";
+  _catchFormLureColor = "";
+  catchInitLureColorChips("catch-lure-colors", "", "catchPickFormLureColor");
   const photoIn = document.getElementById("catch-photo");
   if(photoIn) photoIn.value = "";
   const photoPrev = document.getElementById("catch-photo-preview");
@@ -9880,18 +9888,70 @@ function openLogCatch(){
   _catchPendingLat = null;
   _catchPendingLng = null;
   _catchPendingPhoto = null;
-  // Default location to map center so the form is usable immediately
+  _catchPortName = (typeof activePort !== "undefined" && activePort) ? activePort : null;
+  catchPopulatePortSelect(document.getElementById("catch-port-select"), _catchPortName);
+  catchSetLocationMode("exact");
   if(MAP){
     const c = MAP.getCenter();
     _catchPendingLat = c.lat;
     _catchPendingLng = c.lng;
     catchUpdateLocationDisplay();
   }
-  document.getElementById("catch-modal").style.display = "flex";
+  const modal = document.getElementById("catch-modal");
+  if(modal) modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
 }
 
 function closeLogCatch(){
-  document.getElementById("catch-modal").style.display = "none";
+  const modal = document.getElementById("catch-modal");
+  if(modal) modal.style.display = "none";
+  const catchesEl = document.getElementById("catches-overlay");
+  if(!catchesEl || catchesEl.style.display !== "block") document.body.style.overflow = "";
+}
+
+function catchToggleUnknown(field, on){
+  const input = document.getElementById(field === "length" ? "catch-length" : "catch-weight");
+  if(!input) return;
+  input.disabled = !!on;
+  if(on) input.value = "";
+}
+
+function catchSetLocationMode(mode){
+  _catchLocationMode = mode === "port" ? "port" : "exact";
+  const exactBtn = document.getElementById("catch-loc-exact-btn");
+  const portBtn = document.getElementById("catch-loc-port-btn");
+  const exactBtns = document.getElementById("catch-exact-loc-btns");
+  const portWrap = document.getElementById("catch-port-loc-wrap");
+  if(exactBtn) exactBtn.classList.toggle("active", _catchLocationMode === "exact");
+  if(portBtn) portBtn.classList.toggle("active", _catchLocationMode === "port");
+  if(exactBtns) exactBtns.style.display = _catchLocationMode === "exact" ? "flex" : "none";
+  if(portWrap) portWrap.style.display = _catchLocationMode === "port" ? "block" : "none";
+  if(_catchLocationMode === "port"){
+    const sel = document.getElementById("catch-port-select");
+    if(sel && sel.value) catchPortSelected(sel.value);
+    else if(_catchPortName) catchPortSelected(_catchPortName);
+    else catchUpdateLocationDisplay();
+  } else {
+    catchUpdateLocationDisplay();
+  }
+}
+
+function catchPortSelected(portName){
+  _catchPortName = portName || null;
+  if(!portName || typeof PORTS === "undefined" || !PORTS[portName]){
+    _catchPendingLat = null;
+    _catchPendingLng = null;
+    catchUpdateLocationDisplay();
+    return;
+  }
+  _catchPendingLat = PORTS[portName].lat;
+  _catchPendingLng = PORTS[portName].lng;
+  catchUpdateLocationDisplay();
+}
+
+function catchPickFormLureColor(id){
+  _catchFormLureColor = id || "";
+  catchInitLureColorChips("catch-lure-colors", _catchFormLureColor, "catchPickFormLureColor");
 }
 
 // Legacy alias — older callers / bookmarks may still invoke map-center.
@@ -9976,6 +10036,7 @@ function catchPickResumeForm(){
 function catchPickAt(lat, lng){
   _catchPendingLat = lat;
   _catchPendingLng = lng;
+  catchSetLocationMode("exact");
   catchPickPlacePin(lat, lng);
   catchPickDeactivate();
   catchPickResumeForm();
@@ -10006,6 +10067,7 @@ function catchLocFromDevice(){
     showToast("Your browser doesn't support GPS location.", "warning");
     return;
   }
+  catchSetLocationMode("exact");
   navigator.geolocation.getCurrentPosition(
     pos => {
       _catchPendingLat = pos.coords.latitude;
@@ -10030,6 +10092,16 @@ function catchLocFromDevice(){
 function catchUpdateLocationDisplay(){
   const el = document.getElementById("catch-location-display");
   if(!el) return;
+  if(_catchLocationMode === "port"){
+    if(!_catchPortName){
+      el.textContent = "Select a port for a general area location";
+      document.getElementById("catch-conditions-preview").style.display = "none";
+      return;
+    }
+    el.innerHTML = `<span style="color:#f0f6ff">${_catchPortName}</span> <span style="color:#9ca3af">· general area (port)</span>`;
+    if(_catchPendingLat != null && _catchPendingLng != null) catchShowConditionsPreview(_catchPendingLat, _catchPendingLng);
+    return;
+  }
   if(_catchPendingLat == null || _catchPendingLng == null){
     el.textContent = "Tap a location below to set it";
     document.getElementById("catch-conditions-preview").style.display = "none";
@@ -10039,7 +10111,10 @@ function catchUpdateLocationDisplay(){
   const nearest = (typeof nearestPortTo === "function") ? nearestPortTo(lat, lng) : null;
   el.innerHTML = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°` +
     (nearest ? ` <span style="color:#9ca3af">· near ${nearest.split(",")[0]}</span>` : "");
-  // Auto-fill conditions preview
+  catchShowConditionsPreview(lat, lng);
+}
+
+function catchShowConditionsPreview(lat, lng){
   const cond = catchAutoFillConditions(lat, lng);
   const parts = [];
   if(cond.sst != null)         parts.push(`SST <b>${cond.sst}°F</b>`);
@@ -10049,10 +10124,10 @@ function catchUpdateLocationDisplay(){
   if(cond.windDir != null)     parts.push(`Wind <b>${cond.windDir}°</b>`);
   const previewEl = document.getElementById("catch-conditions-preview");
   const textEl = document.getElementById("catch-conditions-text");
-  if(parts.length){
+  if(parts.length && previewEl && textEl){
     textEl.innerHTML = parts.join(" · ");
     previewEl.style.display = "block";
-  } else {
+  } else if(previewEl){
     previewEl.style.display = "none";
   }
 }
@@ -10079,26 +10154,43 @@ async function catchPhotoPreview(file){
 function saveCatchFromForm(){
   const species = document.getElementById("catch-species").value;
   if(!species){ showToast("Please select a species.", "warning"); return; }
-  if(_catchPendingLat == null || _catchPendingLng == null){
+  if(_catchLocationMode === "port"){
+    if(!_catchPortName || typeof PORTS === "undefined" || !PORTS[_catchPortName]){
+      showToast("Please select a port for the general area.", "warning");
+      return;
+    }
+  } else if(_catchPendingLat == null || _catchPendingLng == null){
     showToast("Please set a location for the catch (pick on map or use GPS).", "warning");
     return;
   }
   const dtVal = document.getElementById("catch-datetime").value;
   const timestamp = dtVal ? new Date(dtVal).toISOString() : new Date().toISOString();
-  const lenVal = parseFloat(document.getElementById("catch-length").value);
-  const wtVal = parseFloat(document.getElementById("catch-weight").value);
+  const lenUnknown = document.getElementById("catch-length-unknown")?.checked;
+  const wtUnknown = document.getElementById("catch-weight-unknown")?.checked;
+  const lenVal = lenUnknown ? null : parseFloat(document.getElementById("catch-length").value);
+  const wtVal = wtUnknown ? null : parseFloat(document.getElementById("catch-weight").value);
   const notes = document.getElementById("catch-notes").value.trim();
   const shared = document.getElementById("catch-share").checked;
+  const tackleType = document.getElementById("catch-tackle-type")?.value || null;
+  const portName = _catchLocationMode === "port" ? _catchPortName : null;
+  const lat = _catchPendingLat;
+  const lng = _catchPendingLng;
   catchAdd({
     species,
-    lat: _catchPendingLat,
-    lng: _catchPendingLng,
+    lat,
+    lng,
     timestamp,
-    length: isNaN(lenVal) ? null : lenVal,
-    weight: isNaN(wtVal) ? null : wtVal,
+    length: (lenUnknown || isNaN(lenVal)) ? null : lenVal,
+    weight: (wtUnknown || isNaN(wtVal)) ? null : wtVal,
+    lengthUnknown: !!lenUnknown,
+    weightUnknown: !!wtUnknown,
     notes,
     photo: _catchPendingPhoto,
     shared,
+    locationMode: _catchLocationMode,
+    port: portName || undefined,
+    tackleType,
+    lureColor: _catchFormLureColor || null,
   });
   // Refresh map pins and reports feed (the latter only matters if shared)
   if(typeof drawCatchPins === "function") drawCatchPins();
@@ -10436,6 +10528,111 @@ function refreshSettingsModal(){
 // ════════════════════════════════════════════════════════════════════════════
 const USER_CATCHES = [];
 
+const CATCH_LURE_COLORS = [
+  { id: "green", label: "Green" },
+  { id: "blue", label: "Blue" },
+  { id: "blue-white", label: "Blue/White" },
+  { id: "pink", label: "Pink" },
+  { id: "purple", label: "Purple" },
+  { id: "red", label: "Red" },
+  { id: "orange", label: "Orange" },
+  { id: "yellow", label: "Yellow" },
+  { id: "white", label: "White" },
+  { id: "black", label: "Black" },
+  { id: "rainbow", label: "Rainbow" },
+  { id: "chartreuse", label: "Chartreuse" },
+  { id: "silver", label: "Silver" },
+  { id: "gold", label: "Gold" },
+];
+
+// My Catches filter state (session-scoped).
+const CATCH_FILTER = {
+  species: new Set(),
+  colors: new Set(),
+  dateFrom: "",
+  dateTo: "",
+  tackle: "all",
+};
+
+function catchLureColorLabel(id){
+  const hit = CATCH_LURE_COLORS.find(c => c.id === id);
+  return hit ? hit.label : id;
+}
+
+function catchInitLureColorChips(containerId, selectedId, onPick){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  el.innerHTML = CATCH_LURE_COLORS.map(c => {
+    const active = selectedId === c.id ? " active" : "";
+    return `<button type="button" class="catch-chip${active}" data-color="${c.id}" onclick="${onPick}('${c.id}')">${c.label}</button>`;
+  }).join("") + `<button type="button" class="catch-chip${!selectedId ? " active" : ""}" data-color="" onclick="${onPick}('')">None</button>`;
+}
+
+function catchToggleFilterSpecies(id){
+  if(CATCH_FILTER.species.has(id)) CATCH_FILTER.species.delete(id);
+  else CATCH_FILTER.species.add(id);
+  renderMyCatches();
+}
+
+function catchToggleFilterColor(id){
+  if(CATCH_FILTER.colors.has(id)) CATCH_FILTER.colors.delete(id);
+  else CATCH_FILTER.colors.add(id);
+  renderMyCatches();
+}
+
+function catchClearDateFilter(){
+  CATCH_FILTER.dateFrom = "";
+  CATCH_FILTER.dateTo = "";
+  const from = document.getElementById("catches-filter-date-from");
+  const to = document.getElementById("catches-filter-date-to");
+  if(from) from.value = "";
+  if(to) to.value = "";
+  renderMyCatches();
+}
+
+function catchClearAllFilters(){
+  CATCH_FILTER.species.clear();
+  CATCH_FILTER.colors.clear();
+  CATCH_FILTER.dateFrom = "";
+  CATCH_FILTER.dateTo = "";
+  CATCH_FILTER.tackle = "all";
+  catchClearDateFilter();
+  const tackle = document.getElementById("catches-filter-tackle");
+  if(tackle) tackle.value = "all";
+  renderMyCatches();
+}
+
+function catchPopulatePortSelect(selectEl, selectedPort){
+  if(!selectEl || typeof PORTS === "undefined") return;
+  selectEl.innerHTML = `<option value="">— Select port —</option>` +
+    Object.keys(PORTS).sort().map(name => `<option value="${name.replace(/"/g, "&quot;")}">${name}</option>`).join("");
+  if(selectedPort && PORTS[selectedPort]) selectEl.value = selectedPort;
+}
+
+function catchRenderSpeciesFilterChips(){
+  const wrap = document.getElementById("catches-filter-species");
+  const countEl = document.getElementById("catches-filter-species-count");
+  if(!wrap) return;
+  wrap.innerHTML = SPECIES.filter(s => s.id !== "all").map(s => {
+    const active = CATCH_FILTER.species.has(s.id) ? " active" : "";
+    return `<button type="button" class="catch-chip${active}" onclick="catchToggleFilterSpecies('${s.id}')">${s.name}</button>`;
+  }).join("");
+  if(countEl){
+    countEl.textContent = CATCH_FILTER.species.size
+      ? `(${CATCH_FILTER.species.size} selected)`
+      : "(all)";
+  }
+}
+
+function catchRenderColorFilterChips(){
+  const wrap = document.getElementById("catches-filter-colors");
+  if(!wrap) return;
+  wrap.innerHTML = CATCH_LURE_COLORS.map(c => {
+    const active = CATCH_FILTER.colors.has(c.id) ? " active" : "";
+    return `<button type="button" class="catch-chip${active}" onclick="catchToggleFilterColor('${c.id}')">${c.label}</button>`;
+  }).join("");
+}
+
 // Generate a unique id for a new catch
 function catchNewId(){
   return "c_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
@@ -10498,18 +10695,27 @@ function catchAutoFillConditions(lat, lng /*, timestamp */){
 
 // Add a new catch. Returns the new entry's id.
 function catchAdd(data){
+  const portName = data.port
+    || (data.lat != null && data.lng != null ? nearestPortTo(data.lat, data.lng) : null);
   const entry = {
     id: catchNewId(),
     timestamp: data.timestamp || new Date().toISOString(),
     species: data.species,
     lat: data.lat,
     lng: data.lng,
-    port: data.port || nearestPortTo(data.lat, data.lng),
+    port: portName,
+    locationMode: data.locationMode || "exact",
     length: data.length || null,
     weight: data.weight || null,
+    lengthUnknown: !!data.lengthUnknown,
+    weightUnknown: !!data.weightUnknown,
+    tackleType: data.tackleType || null,
+    lureColor: data.lureColor || null,
     notes: data.notes || "",
     photo: data.photo || null,
-    conditions: data.conditions || catchAutoFillConditions(data.lat, data.lng, data.timestamp),
+    conditions: data.conditions || (data.lat != null && data.lng != null
+      ? catchAutoFillConditions(data.lat, data.lng, data.timestamp)
+      : {}),
     shared: !!data.shared,
   };
   USER_CATCHES.unshift(entry);  // newest first
@@ -10566,10 +10772,22 @@ function catchGet(id){
   return USER_CATCHES.find(c => c.id === id) || null;
 }
 
-function catchList({species, port, sortBy} = {}){
+function catchList(opts = {}){
   let list = USER_CATCHES.slice();
-  if(species && species !== "all") list = list.filter(c => c.species === species);
-  if(port && port !== "all")       list = list.filter(c => c.port === port);
+  const speciesIds = opts.speciesIds || (opts.species && opts.species !== "all" ? [opts.species] : null);
+  if(speciesIds && speciesIds.length) list = list.filter(c => speciesIds.includes(c.species));
+  if(opts.port && opts.port !== "all") list = list.filter(c => c.port === opts.port);
+  if(opts.tackleType && opts.tackleType !== "all") list = list.filter(c => c.tackleType === opts.tackleType);
+  if(opts.lureColors && opts.lureColors.length) list = list.filter(c => c.lureColor && opts.lureColors.includes(c.lureColor));
+  if(opts.dateFrom){
+    const fromMs = new Date(opts.dateFrom + "T00:00:00").getTime();
+    list = list.filter(c => new Date(c.timestamp).getTime() >= fromMs);
+  }
+  if(opts.dateTo){
+    const toMs = new Date(opts.dateTo + "T23:59:59.999").getTime();
+    list = list.filter(c => new Date(c.timestamp).getTime() <= toMs);
+  }
+  const sortBy = opts.sortBy || "date";
   if(sortBy === "weight")          list.sort((a, b) => (b.weight || 0) - (a.weight || 0));
   else if(sortBy === "species")    list.sort((a, b) => (a.species || "").localeCompare(b.species || ""));
   else                             list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
