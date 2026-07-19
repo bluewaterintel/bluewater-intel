@@ -9046,7 +9046,11 @@ function updateRadarLoopControlVisibility(){
 //   9960-Y: anchored at Norfolk Canyon = 41550 (the "550 line"); Grease Chart
 //           AC001 places ~40000 near Hatteras and ~39000 at Oak Island —
 //           same offset reproduces those TDs when useBounds extends south.
-//   7980-Z: empirical offset for SC/GA waters south of Oak Island
+//           Isolines run roughly coast-parallel (NE–SW) in NC/VA waters.
+//   7980-Z: Grease Chart AC002 (Cape Fear→Cape Romain) land-to-sea (NW–SE)
+//           lines 45075…45550. Carolina Beach is the Z secondary. Raw ASF-free
+//           geometry is too steep near that station, so TD = geom*scale+offset
+//           is fitted to AC002 anchors (Oak Island≈45200, Cape Romain≈45550).
 // ════════════════════════════════════════════════════════════════════════════
 
 const LORAN_CHAINS = {
@@ -9056,33 +9060,26 @@ const LORAN_CHAINS = {
     master:    {lat: 42.7142, lng: -76.8253},   // Seneca NY
     secondary: {lat: 34.0626, lng: -77.9128},   // Carolina Beach NC
     offset: 42237.7,
-    // Parallel-to-coast Y-rate lines from VA/MD down through Hatteras to the
-    // Oak Island / Cape Fear grounds (matches Grease Chart AC001: 42600→39000).
-    // Coast clip still trims inland; station-exclusion skips the Carolina Beach
-    // singularity. Do not draw the perpendicular 26xxx/27xxx set here.
+    // Coast-parallel Y-rate lines from VA/MD through Hatteras to Oak Island
+    // (Grease Chart AC001: 42600→39000). Not the AC002 land-to-sea set.
     useBounds: {south: 33.70, north: 38.6, west: -78.55, east: -74.0},
-    // 50-µs increments. South of the 40000 (Hatteras) line continues to ~39000
-    // at Oak Island; north still covers Norfolk Canyon (~41550).
     tdMin: 39000, tdMax: 42600, step: 50,
+    labelStep: 100,
   },
-  // Southeast US Chain - 7980 (Z-rate, Carolina Beach NC secondary)
-  // NOTE: Carolina Beach is dual-rated — it's the Y secondary for chain 9960
-  // AND the Z secondary for chain 7980 (same physical tower, different
-  // coding delay). Kept south of the AC001 / Oak Island 9960-Y fill so the
-  // parallel Y-rate lines aren't overprinted by Z-rate TDs in that band.
+  // Southeast US Chain - 7980-Z (Malone FL master, Carolina Beach NC secondary)
+  // Land-to-sea (shore → offshore) hyperbolas on Grease Chart AC002. Do NOT
+  // draw the coast-parallel 27xxx set from that chart — only this 45xxx family.
   se7980Z: {
     label: "7980-Z",
-    master:    {lat: 30.9941, lng: -85.1691},   // Malone FL
+    master:    {lat: 30.99414, lng: -85.16915}, // Malone FL
     secondary: {lat: 34.0626, lng: -77.9128},   // Carolina Beach NC
-    // Offset is an empirical estimate that puts values in the captain-
-    // vocabulary range for SC waters (~49000-51000 µs). Without an
-    // authoritative chart anchor we can't pin this more precisely; values
-    // may differ from printed charts by ~100-1000 µs.
-    offset: 50735,
-    // SC/GA waters south of Oak Island (9960-Y owns Cape Lookout→Cape Fear).
-    useBounds: {south: 32.0, north: 33.70, west: -79.7, east: -77.3},
-    // 50-µs increments. TD values 46000-51000 across SC/GA waters.
-    tdMin: 46000, tdMax: 51000, step: 50,
+    scale: 0.401127,
+    offset: 46135.87,
+    // Cape Fear / Oak Island through Myrtle Beach to Cape Romain.
+    useBounds: {south: 32.55, north: 34.15, west: -80.05, east: -77.15},
+    // AC002 prints every 25 µs (45075, 45100, … 45550).
+    tdMin: 45050, tdMax: 45600, step: 25,
+    labelStep: 25,
   },
 };
 
@@ -9103,7 +9100,10 @@ function loranTD(lat, lng, chain){
   const dM = loranDistMeters(lat, lng, chain.master.lat, chain.master.lng);
   const dS = loranDistMeters(lat, lng, chain.secondary.lat, chain.secondary.lng);
   const geom = (dS - dM) / LORAN_C_SPEED_M_PER_US;
-  return geom + chain.offset;
+  // Optional scale compresses geometry to match printed Grease Chart TDs where
+  // ASF-free hyperbolas run too steep near a secondary (7980-Z / AC002).
+  const scale = (typeof chain.scale === "number" && isFinite(chain.scale)) ? chain.scale : 1;
+  return geom * scale + chain.offset;
 }
 
 // Marching-squares contour tracer for a specific chain
@@ -9333,12 +9333,13 @@ function drawLoranLines(){
       tdValues.push(td);
     }
 
+    const labelStep = chain.labelStep || 100;
     tdValues.forEach(td => {
       // traceLoranLine now returns an array of polylines (each one is an
       // array of [lat,lng] points along the same connected hyperbola arc).
       const polylines = traceLoranLine(td, chain.useBounds, step, chain);
-      const style = (td % 100 === 0) ? majorStyle : halfStyle;
-      const isMajor = (td % 100 === 0);
+      const isMajor = (td % labelStep === 0);
+      const style = isMajor ? majorStyle : halfStyle;
 
       // Prefer labeling the longest water arc for this TD (Grease Chart style).
       let labelPolyIdx = -1, labelPolyLen = 0;
