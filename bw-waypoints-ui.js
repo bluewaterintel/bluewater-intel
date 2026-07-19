@@ -316,21 +316,26 @@ const WP_PUBLIC = [
 // SVG glyph everywhere (see WRECK_SVG / wpTypeIconHTML) instead of an emoji,
 // because the SVG hull reads more clearly than the ⚓ emoji.
 //
-// NOTE: there is exactly ONE "Bump / Lump" entry (keyed `bump`). The old build
-// had both `bump` and `lump` keys with identical names, which made the dropdown
-// list "Bump / Lump" twice. `lump` is kept ONLY as a lookup alias below (not in
-// this iterated object) so any legacy stored value still resolves.
+// NOTE: there is exactly ONE "Hump" entry (keyed `bump`). The old build had
+// both `bump` and `lump` keys with identical names, which made the dropdown
+// list the same type twice. `lump` is kept ONLY as a lookup alias below (not
+// in this iterated object) so any legacy stored value still resolves.
+// Colors match WP_TYPE_STYLE (map legend / charted markers) so list cards and
+// personal pins never disagree with what's drawn on the chart.
 const WP_TYPES = {
-  wreck:  {name:"Wreck",            icon:"⚓", color:"#a855f7", svg:"wreck"},
-  reef:   {name:"Natural Reef",     icon:"🪸", color:"#f59e0b"},
-  ar:     {name:"Artificial Reef",  icon:"🏗️", color:"#dc2626"},
-  canyon: {name:"Canyon",           icon:"🌊", color:"#2979b5"},
-  ledge:  {name:"Ledge / Hard Bottom", icon:"📐", color:"#16a34a"},
-  bump:   {name:"Bump / Lump",      icon:"⛰️", color:"#6b7280"},
-  shoal:  {name:"Shoal",            icon:"🌊", color:"#0ea5a5"},
-  rock:   {name:"Rock Pile",        icon:"🪨", color:"#8a8f98"},
-  tower:  {name:"Tower / Platform", icon:"🗼", color:"#0d6ea8"},
-  private:{name:"Private",          icon:"⭐", color:"#f59e0b"},
+  wreck:    {name:"Wreck",               icon:"⚓", color:"#ef4444"},
+  reef:     {name:"Reef",                icon:"🪸", color:"#22c55e"},
+  ar:       {name:"Structure",           icon:"🏗️", color:"#a855f7"},
+  canyon:   {name:"Canyon",              icon:"🌊", color:"#6366f1"},
+  ledge:    {name:"Ledge",               icon:"📐", color:"#f59e0b"},
+  bump:     {name:"Hump",                icon:"⛰️", color:"#eab308"},
+  hole:     {name:"Hole",                icon:"⭕", color:"#2dd4bf"},
+  shoal:    {name:"Shoal",               icon:"🌊", color:"#0ea5a5"},
+  rock:     {name:"Rock",                icon:"🪨", color:"#8a8f98"},
+  tower:    {name:"Tower",               icon:"🗼", color:"#fb7185"},
+  platform: {name:"Platform",            icon:"🛢️", color:"#f97316"},
+  rig:      {name:"Rig",                 icon:"⛽", color:"#14b8a6"},
+  private:  {name:"Private",             icon:"⭐", color:"#f59e0b"},
 };
 // Lookup aliases — NOT iterated for the dropdown, so they don't create
 // duplicate rows. They just let WP_TYPES[alias] resolve to a real entry.
@@ -343,16 +348,19 @@ function wpType(key){ return WP_TYPES[key] || WP_TYPES[WP_TYPE_ALIASES[key]] || 
 // symbol for a given type — so a user-entered "Ledge" looks exactly like a
 // dataset "Ledge" instead of one emoji + one SVG for the same thing.
 const WP_TYPE_TO_STRUCTURE = {
-  wreck:  "wreck",
-  reef:   "reef",
-  ar:     "structure",   // artificial reef → generic structure frame
-  canyon: "canyon",
-  ledge:  "ledge",
-  bump:   "lump",        // bump/lump → mound
-  shoal:  "shoal",
-  rock:   "rock",
-  tower:  "tower",
-  private:"structure",   // generic personal pin fallback
+  wreck:    "wreck",
+  reef:     "reef",
+  ar:       "structure",
+  canyon:   "canyon",
+  ledge:    "ledge",
+  bump:     "hump",
+  hole:     "hole",
+  shoal:    "shoal",
+  rock:     "rock",
+  tower:    "tower",
+  platform: "platform",
+  rig:      "platform",   // same deck-on-legs glyph as map platforms
+  private:  "structure",
 };
 
 // Render the shared SVG for a personal-waypoint type, recolored via currentColor
@@ -396,7 +404,7 @@ var WP_state = {
 // the right icon/color/pill and respond to the panel's type filter.
 const WP_CODE_TO_PANEL_TYPE = {
   wk:"wreck", rf:"reef", st:"ar", ld:"ledge", rk:"rock",
-  hl:"ledge", hp:"bump", cy:"canyon", tw:"tower", pf:"tower", rg:"tower",
+  hl:"hole", hp:"bump", cy:"canyon", tw:"tower", pf:"platform", rg:"rig",
 };
 const WP_CHARTED_MAX = 800;  // cap rendered charted cards (thousands are possible)
 let _wpFetchSeq = 0;
@@ -549,10 +557,32 @@ function wpSwitchTab(tab){
 // ════════════════════════════════════════════════════════════════════════════
 function wpRender(){
   const root = document.getElementById("wp-content");
+  if(!root) return;
+  // Full innerHTML rebuild destroys the search <input>; restore focus + caret
+  // so typing another letter doesn't require re-clicking the box each time.
+  const prev = document.activeElement;
+  const wasSearch = !!(prev && prev.classList && prev.classList.contains("wp-search"));
+  const selStart = wasSearch ? prev.selectionStart : null;
+  const selEnd = wasSearch ? prev.selectionEnd : null;
+  if(wasSearch) WP_state.search = prev.value;
+
   if(WP_state.tab === "public")      root.innerHTML = wpRenderPublic();
   else if(WP_state.tab === "mine")   root.innerHTML = wpRenderMine();
   else if(WP_state.tab === "import"){ root.innerHTML = wpRenderImport(); mceInitControls(); }
   else                                root.innerHTML = wpRenderAbout();
+
+  if(wasSearch){
+    const input = root.querySelector(".wp-search");
+    if(input){
+      input.focus();
+      try {
+        const len = input.value.length;
+        const a = selStart == null ? len : Math.min(selStart, len);
+        const b = selEnd == null ? len : Math.min(selEnd, len);
+        input.setSelectionRange(a, b);
+      } catch(e){}
+    }
+  }
 }
 
 // Populate the port dropdown + range slider and refresh the live count for the

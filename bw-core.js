@@ -7726,6 +7726,7 @@ function bindPredictInteractionHandlers(){
   MAP.on('click', (e) => {
     if(typeof rulerActive !== "undefined" && rulerActive){ return; }
     if(typeof wpDropMode !== "undefined" && wpDropMode){ return; }
+    if(typeof catchPickMode !== "undefined" && catchPickMode){ return; }
     if(!layerVis.predict || !_predictGrid){ return; }
     MAP.closeTooltip(_predictTooltip);
     const cell = nearestPredictCell(e.latlng);
@@ -9434,11 +9435,15 @@ function toggleSettingsPanel(){
 // Form state lives in the DOM during the modal session — no separate JS state.
 // ════════════════════════════════════════════════════════════════════════════
 
-// Working location for the catch being entered. Populated by the
-// "Use map center" or "Use my GPS" buttons.
+// Working location for the catch being entered. Populated by
+// "Pick on map", "Use my GPS", or the default map-center seed on open.
 let _catchPendingLat = null;
 let _catchPendingLng = null;
 let _catchPendingPhoto = null;  // base64 data URI after downscale
+// Map-pick mode: hide the log form, let the user tap the chart, then reopen.
+let catchPickMode = false;
+let _catchPickFromCatches = false;
+let _catchPickPin = null;
 
 function openLogCatch(){
   // Populate species dropdown from SPECIES (excluding the "all" pseudo-entry)
@@ -9490,13 +9495,112 @@ function closeLogCatch(){
   document.getElementById("catch-modal").style.display = "none";
 }
 
+// Legacy alias — older callers / bookmarks may still invoke map-center.
 function catchLocFromMapCenter(){
-  if(!MAP) return;
-  const c = MAP.getCenter();
-  _catchPendingLat = c.lat;
-  _catchPendingLng = c.lng;
+  catchLocPickOnMap();
+}
+
+// Hide the log form (and My Catches if it was open), arm map-pick mode, then
+// wait for a tap. Form field values stay in the DOM so nothing is lost.
+function catchLocPickOnMap(){
+  if(!MAP){
+    showToast("Map isn't ready yet — try again in a moment.", "warning");
+    return;
+  }
+  if(typeof rulerActive !== "undefined" && rulerActive && typeof rulerDeactivate === "function"){
+    rulerDeactivate();
+  }
+  if(typeof wpDropMode !== "undefined" && wpDropMode && typeof wpDropDeactivate === "function"){
+    wpDropDeactivate();
+  }
+  const catchesEl = document.getElementById("catches-overlay");
+  _catchPickFromCatches = !!(catchesEl && catchesEl.style.display === "block");
+  closeLogCatch();
+  if(_catchPickFromCatches){
+    catchesEl.style.display = "none";
+    document.body.style.overflow = "";
+  }
+  if(typeof closeNav === "function") closeNav();
+  catchPickActivate();
+  showToast("Tap the map to set your catch location.", "info");
+}
+
+function catchPickActivate(){
+  catchPickMode = true;
+  const hint = document.getElementById("catchpick-hint");
+  if(hint) hint.classList.add("active");
+  if(MAP && MAP.getContainer) MAP.getContainer().style.cursor = "crosshair";
+}
+
+function catchPickDeactivate(){
+  catchPickMode = false;
+  const hint = document.getElementById("catchpick-hint");
+  if(hint) hint.classList.remove("active");
+  if(MAP && MAP.getContainer) MAP.getContainer().style.cursor = "";
+}
+
+function catchPickClearPin(){
+  if(_catchPickPin && typeof MAP !== "undefined" && MAP){
+    try { MAP.removeLayer(_catchPickPin); } catch(e){}
+  }
+  _catchPickPin = null;
+}
+
+function catchPickPlacePin(lat, lng){
+  catchPickClearPin();
+  if(typeof MAP === "undefined" || !MAP) return;
+  _catchPickPin = L.marker([lat, lng], {
+    icon: L.divIcon({
+      className: "catch-pick-pin",
+      html: `<div style="width:16px;height:16px;background:#22c55e;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,.55)"></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    }),
+    zIndexOffset: 960,
+  }).addTo(MAP);
+}
+
+function catchPickResumeForm(){
+  if(_catchPickFromCatches){
+    const catchesEl = document.getElementById("catches-overlay");
+    if(catchesEl){
+      catchesEl.style.display = "block";
+      document.body.style.overflow = "hidden";
+    }
+  }
+  _catchPickFromCatches = false;
+  const modal = document.getElementById("catch-modal");
+  if(modal) modal.style.display = "flex";
   catchUpdateLocationDisplay();
 }
+
+function catchPickAt(lat, lng){
+  _catchPendingLat = lat;
+  _catchPendingLng = lng;
+  catchPickPlacePin(lat, lng);
+  catchPickDeactivate();
+  catchPickResumeForm();
+}
+
+function catchPickCancel(){
+  if(!catchPickMode) return;
+  catchPickDeactivate();
+  catchPickResumeForm();
+}
+
+// Another map tool took over — leave the log form closed (user can reopen it).
+function catchPickDisarm(){
+  if(!catchPickMode) return;
+  catchPickDeactivate();
+  _catchPickFromCatches = false;
+}
+
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape" && typeof catchPickMode !== "undefined" && catchPickMode){
+    e.preventDefault();
+    catchPickCancel();
+  }
+});
 
 function catchLocFromDevice(){
   if(!navigator.geolocation){
@@ -9577,7 +9681,7 @@ function saveCatchFromForm(){
   const species = document.getElementById("catch-species").value;
   if(!species){ showToast("Please select a species.", "warning"); return; }
   if(_catchPendingLat == null || _catchPendingLng == null){
-    showToast("Please set a location for the catch (use map center or GPS).", "warning");
+    showToast("Please set a location for the catch (pick on map or use GPS).", "warning");
     return;
   }
   const dtVal = document.getElementById("catch-datetime").value;
@@ -10691,8 +10795,9 @@ function bindRulerMarkerClick(layer, lat, lng){
 }
 
 function rulerActivate(){
-  // Only one map-click tool at a time — disarm the drop-waypoint tool if on.
+  // Only one map-click tool at a time — disarm drop-waypoint / catch-pick if on.
   if(typeof wpDropMode !== "undefined" && wpDropMode && typeof wpDropDeactivate === "function") wpDropDeactivate();
+  if(typeof catchPickMode !== "undefined" && catchPickMode && typeof catchPickDisarm === "function") catchPickDisarm();
   rulerActive = true;
   if(typeof MAP !== "undefined" && MAP && MAP.closePopup) MAP.closePopup();
   if(document.getElementById("predict-explainer") && typeof closeExplainer === "function") closeExplainer();
@@ -10906,6 +11011,12 @@ function onMapClick(e){
   const {lat, lng} = e.latlng;
   pinLL = {lat, lng};
 
+  // CATCH LOCATION PICK: return the tapped point to the Log Catch form.
+  if(typeof catchPickMode !== "undefined" && catchPickMode){
+    catchPickAt(lat, lng);
+    return;
+  }
+
   // DROP-WAYPOINT MODE: when the drop tool is armed, a tap on the map opens a
   // coordinate popup with a "Save to My Waypoints" action. We disarm on the
   // NEXT tick (not synchronously) so the other click handlers registered on the
@@ -10950,8 +11061,9 @@ function toggleWpDrop(){
   else wpDropActivate();
 }
 function wpDropActivate(){
-  // Don't run two map-click tools at once — turn the ruler off if it's on.
+  // Don't run two map-click tools at once — turn the ruler / catch-pick off if on.
   if(typeof rulerActive !== "undefined" && rulerActive && typeof rulerDeactivate === "function") rulerDeactivate();
+  if(typeof catchPickMode !== "undefined" && catchPickMode && typeof catchPickDisarm === "function") catchPickDisarm();
   if(typeof wpClearDropPin === "function") wpClearDropPin();
   wpDropMode = true;
   const btn = document.getElementById("wpdrop-toggle"); if(btn) btn.classList.add("active");

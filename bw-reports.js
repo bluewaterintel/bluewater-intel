@@ -53,9 +53,9 @@ function renderMyCatches(){
     statsEl.innerHTML = `
       <div style="text-align:center;padding:20px 0">
         <div style="font-size:42px;margin-bottom:8px">🎣</div>
-        <div style="font-size:15px;font-weight:700;color:#f0f6ff;margin-bottom:4px">No catches yet</div>
-        <div style="font-size:11px;color:#9ca3af;margin-bottom:14px">Tap the button below to log your first catch.<br/>Conditions auto-fill from current data.</div>
-        <button onclick="openLogCatch()" style="
+        <div class="catch-empty-title" style="font-size:15px;font-weight:700;color:#f0f6ff;margin-bottom:4px">No catches yet</div>
+        <div class="catch-empty-sub" style="font-size:11px;color:#9ca3af;margin-bottom:14px">Tap the button below to log your first catch.<br/>Conditions auto-fill from current data.</div>
+        <button class="catches-log-btn" onclick="openLogCatch()" style="
           background:#2979b5;border:none;color:#fff;
           padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;
           cursor:pointer;font-family:inherit;
@@ -164,8 +164,8 @@ function renderCatchInsights(speciesFilter){
 // Single stat card helper for the summary row
 function statCard(label, value){
   return `<div style="flex:1;min-width:96px;background:rgba(107,191,234,.06);border:1px solid rgba(107,191,234,.18);border-radius:10px;padding:10px 14px">
-    <div style="font-size:9px;font-weight:700;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase">${label}</div>
-    <div style="font-size:18px;font-weight:700;color:#f0f6ff;margin-top:3px">${value}</div>
+    <div class="catch-stat-label" style="font-size:9px;font-weight:700;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase">${label}</div>
+    <div class="catch-stat-value" style="font-size:18px;font-weight:700;color:#f0f6ff;margin-top:3px">${value}</div>
   </div>`;
 }
 
@@ -188,19 +188,19 @@ function renderCatchCard(c){
   if(cond.tide)           condBits.push(`<span style="color:#34d399">${cond.tide}</span>`);
   if(cond.pressureTrend)  condBits.push(`<span style="color:#9ec5e8">${cond.pressureTrend}</span>`);
   return `
-    <div style="background:rgba(15,36,68,.55);border:1px solid rgba(107,191,234,.15);border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;gap:14px">
+    <div class="catch-card" style="background:rgba(15,36,68,.55);border:1px solid rgba(107,191,234,.15);border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;gap:14px">
       ${c.photo ? `<img src="${c.photo}" alt="" style="width:72px;height:72px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#0a1a2e"/>` : `<div style="width:72px;height:72px;border-radius:8px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);display:flex;align-items:center;justify-content:center;font-size:34px;flex-shrink:0">🐟</div>`}
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-          <span style="font-size:14px;font-weight:700;color:${color}">${spName}</span>
-          ${sizeText ? `<span style="font-size:12px;color:#f0f6ff;font-weight:600">${sizeText}</span>` : ""}
+          <span class="catch-card-name" style="font-size:14px;font-weight:700;color:${color}">${spName}</span>
+          ${sizeText ? `<span class="catch-card-size" style="font-size:12px;color:#f0f6ff;font-weight:600">${sizeText}</span>` : ""}
           ${c.shared ? `<span style="font-size:8px;font-weight:700;color:#fbbf24;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);padding:1px 6px;border-radius:6px">SHARED</span>` : ""}
         </div>
-        <div style="font-size:10px;color:#9ca3af;margin-top:2px">${dateStr} · ${timeStr}${c.port ? " · " + c.port.split(",")[0] : ""}</div>
-        ${c.notes ? `<div style="font-size:12px;color:#cfe5ff;line-height:1.45;margin-top:6px">${escapeHtml(c.notes)}</div>` : ""}
-        ${condBits.length ? `<div style="font-size:10px;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">${condBits.join("")}</div>` : ""}
+        <div class="catch-card-meta" style="font-size:10px;color:#9ca3af;margin-top:2px">${dateStr} · ${timeStr}${c.port ? " · " + c.port.split(",")[0] : ""}</div>
+        ${c.notes ? `<div class="catch-card-notes" style="font-size:12px;color:#cfe5ff;line-height:1.45;margin-top:6px">${escapeHtml(c.notes)}</div>` : ""}
+        ${condBits.length ? `<div class="catch-card-cond" style="font-size:10px;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">${condBits.join("")}</div>` : ""}
         <div style="display:flex;gap:8px;margin-top:8px">
-          <button onclick="confirmDeleteCatch('${c.id}')" style="
+          <button class="catch-card-delete" onclick="confirmDeleteCatch('${c.id}')" style="
             background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);
             color:#f87171;padding:5px 11px;border-radius:6px;
             font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;
