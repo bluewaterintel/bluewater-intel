@@ -6836,19 +6836,66 @@ function applySstForecastGrid(data){
   };
 }
 
+function _sstFcFillGaps(val, nLat, nLng){
+  // Fill isolated NaN holes from nearest valid neighbors so the overlay doesn't
+  // look speckled/cloudy over mostly-complete MUR fields.
+  const out = new Float32Array(val);
+  for(let pass = 0; pass < 2; pass++){
+    for(let i = 0; i < nLat; i++){
+      for(let j = 0; j < nLng; j++){
+        const idx = i * nLng + j;
+        if(isFinite(out[idx])) continue;
+        let sum = 0, n = 0;
+        for(let di = -1; di <= 1; di++){
+          for(let dj = -1; dj <= 1; dj++){
+            if(!di && !dj) continue;
+            const ii = i + di, jj = j + dj;
+            if(ii < 0 || jj < 0 || ii >= nLat || jj >= nLng) continue;
+            const v = out[ii * nLng + jj];
+            if(isFinite(v)){ sum += v; n++; }
+          }
+        }
+        if(n >= 3) out[idx] = sum / n;
+      }
+    }
+  }
+  return out;
+}
+
 function _sstFcBuildSmallCanvas(g){
   const range = computeSstDisplayRangeFromGrid(g);
   _sstColorLo = range.lo;
   _sstColorHi = range.hi;
+  // 2–3× supersample + nearest screen blit = sharper fronts than blurring a
+  // coarse grid up to the viewport (the old path looked cloudy).
+  const scale = (g.step <= 0.025) ? 2 : 3;
+  const w = g.nLng * scale, h = g.nLat * scale;
+  const filled = _sstFcFillGaps(g.val, g.nLat, g.nLng);
   const c = document.createElement("canvas");
-  c.width = g.nLng; c.height = g.nLat;
+  c.width = w; c.height = h;
   const cx = c.getContext("2d");
-  const img = cx.createImageData(g.nLng, g.nLat);
-  for(let i = 0; i < g.nLat; i++){
-    for(let j = 0; j < g.nLng; j++){
-      const v = g.val[i * g.nLng + j];
-      const y = g.nLat - 1 - i;
-      const o = (y * g.nLng + j) * 4;
+  const img = cx.createImageData(w, h);
+  for(let y = 0; y < h; y++){
+    const i0 = (h - 1 - y) / scale;
+    const i = Math.min(g.nLat - 1, Math.max(0, Math.floor(i0)));
+    const i1 = Math.min(g.nLat - 1, i + 1);
+    const fi = i0 - i;
+    for(let x = 0; x < w; x++){
+      const j0 = x / scale;
+      const j = Math.min(g.nLng - 1, Math.max(0, Math.floor(j0)));
+      const j1 = Math.min(g.nLng - 1, j + 1);
+      const fj = j0 - j;
+      const v00 = filled[i * g.nLng + j], v10 = filled[i1 * g.nLng + j];
+      const v01 = filled[i * g.nLng + j1], v11 = filled[i1 * g.nLng + j1];
+      // Bilinear only across valid neighbors — keeps breaks crisp, skips land.
+      let v = NaN, sw = 0, acc = 0;
+      const add = (vv, wgt) => { if(isFinite(vv)){ acc += vv * wgt; sw += wgt; } };
+      add(v00, (1 - fi) * (1 - fj));
+      add(v10, fi * (1 - fj));
+      add(v01, (1 - fi) * fj);
+      add(v11, fi * fj);
+      if(sw > 0.25) v = acc / sw;
+      const o = (y * w + x) * 4;
       const rgba = _sstForecastRGBA(v);
       if(!rgba){ img.data[o + 3] = 0; continue; }
       img.data[o] = rgba[0]; img.data[o + 1] = rgba[1]; img.data[o + 2] = rgba[2]; img.data[o + 3] = rgba[3];
@@ -6858,21 +6905,53 @@ function _sstFcBuildSmallCanvas(g){
   return c;
 }
 
+function _sstStepForZoom(z){
+  if(z >= 9) return 0.02;
+  if(z >= 7) return 0.03;
+  if(z >= 5) return 0.05;
+  return 0.08;
+}
+
 const SstForecastLayer = L.Layer.extend({
   onAdd: function(map){
     this._map = map;
     this._canvas = L.DomUtil.create("canvas", "leaflet-sst-forecast-layer");
     this._canvas.style.pointerEvents = "none";
+    // Crisp upscale — browser bilinear was the main "cloudy" look.
+    this._canvas.style.imageRendering = "pixelated";
+    this._canvas.style.imageRendering = "crisp-edges";
     const pane = map.getPane("ocean-overlays") || map.getPanes().overlayPane;
     pane.appendChild(this._canvas);
+    map.on("move", this._onMove, this);
     map.on("moveend zoomend resize", this._reset, this);
     this._reset();
     this._requestData();
   },
   onRemove: function(map){
+    map.off("move", this._onMove, this);
     map.off("moveend zoomend resize", this._reset, this);
+    clearTimeout(this._refetchTimer);
     if(this._canvas && this._canvas.parentNode) this._canvas.parentNode.removeChild(this._canvas);
     this._canvas = null;
+  },
+  _onMove: function(){
+    // Pan with the map using the cached grid — no network.
+    this._draw();
+  },
+  _gridCoversView: function(){
+    const g = SST_FORECAST_GRID;
+    if(!g || !this._map) return false;
+    let b;
+    try { b = this._map.getBounds(); } catch(e){ return false; }
+    const margin = Math.max(g.step * 2, 0.05);
+    if(b.getSouth() < g.bounds.s + margin) return false;
+    if(b.getNorth() > g.bounds.n - margin) return false;
+    if(b.getWest() < g.bounds.w + margin) return false;
+    if(b.getEast() > g.bounds.e - margin) return false;
+    const want = _sstStepForZoom(this._map.getZoom());
+    // Refetch when zoom wants a meaningfully denser/coarser grid.
+    if(g._requestStep != null && Math.abs(g._requestStep - want) > 0.005) return false;
+    return true;
   },
   _reset: function(){
     if(!this._map || !this._canvas) return;
@@ -6881,9 +6960,10 @@ const SstForecastLayer = L.Layer.extend({
     L.DomUtil.setPosition(this._canvas, tl);
     this._canvas.width = size.x; this._canvas.height = size.y;
     this._draw();
-    // Refetch on pan/zoom so the adaptive local scale tracks the viewport
-    // (Rutgers-style contrast for whatever water is on screen).
-    this._requestData();
+    // Only hit the network when the view leaves cached coverage (or zoom tier changes).
+    if(this._gridCoversView()) return;
+    clearTimeout(this._refetchTimer);
+    this._refetchTimer = setTimeout(() => this._requestData(), 220);
   },
   _requestData: function(){
     if(!layerVis.sst || !MAP || typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchSstGrid) return;
@@ -6891,17 +6971,21 @@ const SstForecastLayer = L.Layer.extend({
     const seq = ++_sstFcFetchSeq;
     let b;
     try { b = MAP.getBounds(); } catch(e){ return; }
-    const pad = 0.35;
+    const z = MAP.getZoom();
+    const stepDeg = _sstStepForZoom(z);
+    // Modest pad — enough to pan a bit without refetch, not a huge ERDDAP box.
+    const pad = 0.18;
     const bx = {
       s: b.getSouth() - (b.getNorth() - b.getSouth()) * pad,
       n: b.getNorth() + (b.getNorth() - b.getSouth()) * pad,
       w: b.getWest() - (b.getEast() - b.getWest()) * pad,
       e: b.getEast() + (b.getEast() - b.getWest()) * pad,
     };
-    BW_OCEAN.fetchSstGrid(bx.s, bx.n, bx.w, bx.e, hours).then(data => {
+    BW_OCEAN.fetchSstGrid(bx.s, bx.n, bx.w, bx.e, hours, stepDeg).then(data => {
       if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
       if((typeof oceanOverlayForecastHour === "function" ? oceanOverlayForecastHour() : 0) !== hours) return;
       applySstForecastGrid(data);
+      if(SST_FORECAST_GRID) SST_FORECAST_GRID._requestStep = stepDeg;
       // Canvas SST (observed + forecast) with adaptive local scale. Hide GIBS
       // so the global 0–32°C palette doesn't wash out summer Mid-Atlantic breaks.
       if(typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
@@ -6922,10 +7006,10 @@ const SstForecastLayer = L.Layer.extend({
     const west = g.bounds.w - g.step * 0.5, east = g.bounds.e + g.step * 0.5;
     const pTL = this._map.latLngToContainerPoint([north, west]);
     const pBR = this._map.latLngToContainerPoint([south, east]);
+    // Nearest-neighbor blit — bilinear here was softening every front into haze.
     const prev = ctx.imageSmoothingEnabled;
-    ctx.imageSmoothingEnabled = true;
-    if("imageSmoothingQuality" in ctx) ctx.imageSmoothingQuality = "high";
-    ctx.globalAlpha = oceanOpacity.sst || 0.7;
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = oceanOpacity.sst || 0.75;
     ctx.drawImage(this._small, pTL.x, pTL.y, pBR.x - pTL.x, pBR.y - pTL.y);
     ctx.globalAlpha = 1;
     ctx.imageSmoothingEnabled = prev;
@@ -8634,7 +8718,7 @@ function updateSatDateControlVisibility(){
     if(titleEl) titleEl.textContent = label;
     if(hintEl) hintEl.textContent = (oceanOverlayForecastHour() > 0 && layerVis.sst)
       ? "NOAA RTOFS model · ~9 km"
-      : (chlorOnly ? "NASA GIBS · VIIRS observed" : "NASA GIBS · MUR observed");
+      : (chlorOnly ? "NASA GIBS · VIIRS observed" : "MUR L4 · local scale");
     const row = box.querySelector(".map-time-pill-row");
     const footer = box.querySelector(".map-time-pill-footer");
     const forecastLocked = oceanOverlayForecastHour() > 0 && layerVis.sst;

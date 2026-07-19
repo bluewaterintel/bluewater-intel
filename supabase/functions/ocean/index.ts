@@ -1308,13 +1308,27 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
 // rather than trusting one fixed slice. MUR is the high-res source that resolves
 // sharp fronts (Gulf Stream wall) that coarse products smear. Units: analysed_sst
 // is Kelvin → converted to °F to match the app. Never synthesized.
-async function fetchSstRows(latMin: number, latMax: number, lngMin: number, lngMax: number) {
+//
+// opts.targetDeg — grid spacing override (map overlay requests denser steps when
+//   zoomed in). Clamped to [0.01, 0.10].
+// opts.lookback — daily slices to search for freshest non-fill per cell.
+async function fetchSstRows(
+  latMin: number,
+  latMax: number,
+  lngMin: number,
+  lngMax: number,
+  opts: { targetDeg?: number; lookback?: number } = {},
+) {
   const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
   const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
   const native = Number(Deno.env.get("SST_STEP_DEG") ?? "0.01");
-  const targetDeg = Number(Deno.env.get("SSTGRID_DEG") ?? "0.05");
+  const envTarget = Number(Deno.env.get("SSTGRID_DEG") ?? "0.05");
+  const targetDeg = Math.max(0.01, Math.min(0.10,
+    (typeof opts.targetDeg === "number" && isFinite(opts.targetDeg)) ? opts.targetDeg : envTarget));
   const strideIdx = Math.max(1, Math.round(targetDeg / native));
-  const lookback = Math.max(0, Number(Deno.env.get("SSTGRID_LOOKBACK") ?? "4"));
+  const envLookback = Math.max(0, Number(Deno.env.get("SSTGRID_LOOKBACK") ?? "4"));
+  const lookback = Math.max(0, Math.min(6,
+    (typeof opts.lookback === "number" && isFinite(opts.lookback)) ? opts.lookback : envLookback));
   const altIdx = SST_HAS_ALTITUDE ? "%5B(0.0)%5D" : "";
   const timeIdx = lookback > 0 ? `%5Blast-${lookback}:last%5D` : "%5B(last)%5D";
   const url = `${SST_ERDDAP}/${SST_DATASET}.json`
@@ -1781,7 +1795,13 @@ export const handler = async (req: Request): Promise<Response> => {
     }
     const hoursAhead = normalizeOceanForecastHour(num(u.searchParams.get("hours")) ?? 0);
     if (hoursAhead <= 0) {
-      const mur = await fetchSstRows(latMin, latMax, lngMin, lngMax);
+      // Map overlay may request denser stepDeg when zoomed; lookback=2 keeps
+      // the ERDDAP pull light so pans stay snappy (scoring still uses default 4).
+      const reqStep = num(u.searchParams.get("stepDeg"));
+      const mur = await fetchSstRows(latMin, latMax, lngMin, lngMax, {
+        targetDeg: reqStep ?? undefined,
+        lookback: 2,
+      });
       const rows = (mur.rows as number[][]).filter((r) => r && r[2] != null);
       if (!rows.length) return json({ error: "MUR SST unavailable" }, cors, 502);
       let freshest = 0;
