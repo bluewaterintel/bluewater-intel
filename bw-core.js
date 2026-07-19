@@ -9069,9 +9069,10 @@ function updateRadarLoopControlVisibility(){
 //           same offset reproduces those TDs when useBounds extends south.
 //           Isolines run roughly coast-parallel (NE–SW) in NC/VA waters.
 //   7980-Z: Grease Chart AC002 (Cape Fear→Cape Romain) land-to-sea (NW–SE)
-//           lines 45075…45550. Carolina Beach is the Z secondary. Raw ASF-free
+//           lines 45175…45575. Carolina Beach is the Z secondary. Raw ASF-free
 //           geometry is too steep near that station, so TD = geom*scale+offset
 //           is fitted to AC002 anchors (Oak Island≈45200, Cape Romain≈45550).
+//           Skip 45125/45150 — they collapse into short stubs at the secondary.
 // ════════════════════════════════════════════════════════════════════════════
 
 const LORAN_CHAINS = {
@@ -9097,11 +9098,14 @@ const LORAN_CHAINS = {
     secondary: {lat: 34.0626, lng: -77.9128},   // Carolina Beach NC
     scale: 0.401127,
     offset: 46135.87,
-    // Cape Fear / Oak Island through Myrtle Beach to Cape Romain.
-    useBounds: {south: 32.55, north: 34.15, west: -80.05, east: -77.15},
-    // AC002 prints every 25 µs (45075, 45100, … 45550).
-    tdMin: 45050, tdMax: 45600, step: 25,
+    // Cape Fear / Oak Island through Myrtle Beach to Cape Romain, extended
+    // NE offshore so land-to-sea lines meet the 9960-Y grid without a hole.
+    useBounds: {south: 32.45, north: 34.35, west: -80.05, east: -76.45},
+    // Every 25 µs from 45175 (drop 45125/45150 stubs near Carolina Beach).
+    tdMin: 45175, tdMax: 45600, step: 25,
     labelStep: 25,
+    // Tight exclude — 0.45° punched gaps through 45175–45225 over Long Bay.
+    stationExcludeDeg: 0.18,
   },
 };
 
@@ -9151,12 +9155,16 @@ function traceLoranLine(tdValue, bounds, step, chain){
       const lat0 = south + r * step, lng0 = west + c * step;
       const lat1 = south + (r + 1) * step, lng1 = west + (c + 1) * step;
       // Skip cells very close to THIS chain's secondary station (hyperbolas
-      // degenerate near a station so lines there are noise).
+      // degenerate near a station so lines there are noise). Per-chain
+      // stationExcludeDeg overrides the default when a wide hole would split
+      // otherwise-good ocean arcs (7980-Z over Long Bay).
       const cellLat = (lat0 + lat1) / 2;
       const cellLng = (lng0 + lng1) / 2;
       const dLatStation = cellLat - chain.secondary.lat;
       const dLngStation = cellLng - chain.secondary.lng;
-      if(Math.sqrt(dLatStation*dLatStation + dLngStation*dLngStation) < 0.45) continue;
+      const exclDeg = (typeof chain.stationExcludeDeg === "number" && isFinite(chain.stationExcludeDeg))
+        ? chain.stationExcludeDeg : 0.45;
+      if(Math.sqrt(dLatStation*dLatStation + dLngStation*dLngStation) < exclDeg) continue;
       const t00 = grid[r * (cols + 1) + c];
       const t01 = grid[r * (cols + 1) + c + 1];
       const t10 = grid[(r + 1) * (cols + 1) + c];
