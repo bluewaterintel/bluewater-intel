@@ -6864,15 +6864,34 @@ function _sstFcFillGaps(val, nLat, nLng){
   return out;
 }
 
+// Open-ocean only for the SST wash. MUR often returns values over land and
+// inside barrier sounds; those tint farmland green/yellow in the overlay.
+function _sstIsOceanCell(lat, lng){
+  if(typeof isOnLand === "function" && isOnLand(lat, lng)) return false;
+  // OBX / Bogue: west of the Atlantic barrier is Pamlico / Core / Bogue Sound.
+  if(typeof barrierCoastLng === "function" && lat >= 33.80 && lat <= 36.60){
+    if(lng < barrierCoastLng(lat)) return false;
+  }
+  return true;
+}
+
 function _sstFcBuildSmallCanvas(g){
-  const range = computeSstDisplayRangeFromGrid(g);
-  _sstColorLo = range.lo;
-  _sstColorHi = range.hi;
   // Bilinear-interpolate TEMPERATURE into a denser grid, then colorize.
-  // That restores smooth fronts (no digital squares) without the CSS blur haze.
+  // Land/sound cells are cleared first so the wash never paints over terrain.
   const scale = (g.step <= 0.025) ? 3 : 4;
   const w = g.nLng * scale, h = g.nLat * scale;
   const filled = _sstFcFillGaps(g.val, g.nLat, g.nLng);
+  for(let i = 0; i < g.nLat; i++){
+    const lat = g.minLat + i * g.step;
+    for(let j = 0; j < g.nLng; j++){
+      const lng = g.minLng + j * g.step;
+      if(!_sstIsOceanCell(lat, lng)) filled[i * g.nLng + j] = NaN;
+    }
+  }
+  // Range from ocean cells only — land temps must not skew the local stretch.
+  const range = computeSstDisplayRangeFromGrid({ val: filled });
+  _sstColorLo = range.lo;
+  _sstColorHi = range.hi;
   const c = document.createElement("canvas");
   c.width = w; c.height = h;
   const cx = c.getContext("2d");
@@ -6882,11 +6901,16 @@ function _sstFcBuildSmallCanvas(g){
     const i = Math.min(g.nLat - 1, Math.max(0, Math.floor(i0)));
     const i1 = Math.min(g.nLat - 1, i + 1);
     const fi = i0 - i;
+    const lat = g.minLat + i0 * g.step;
     for(let x = 0; x < w; x++){
       const j0 = x / scale;
       const j = Math.min(g.nLng - 1, Math.max(0, Math.floor(j0)));
       const j1 = Math.min(g.nLng - 1, j + 1);
       const fj = j0 - j;
+      const lng = g.minLng + j0 * g.step;
+      const o = (y * w + x) * 4;
+      // Per-pixel land mask stops bilinear bleed from ocean cells onto the beach.
+      if(!_sstIsOceanCell(lat, lng)){ img.data[o + 3] = 0; continue; }
       const v00 = filled[i * g.nLng + j], v10 = filled[i1 * g.nLng + j];
       const v01 = filled[i * g.nLng + j1], v11 = filled[i1 * g.nLng + j1];
       let v = NaN, sw = 0, acc = 0;
@@ -6896,7 +6920,6 @@ function _sstFcBuildSmallCanvas(g){
       add(v01, (1 - fi) * fj);
       add(v11, fi * fj);
       if(sw > 0.25) v = acc / sw;
-      const o = (y * w + x) * 4;
       const rgba = _sstForecastRGBA(v);
       if(!rgba){ img.data[o + 3] = 0; continue; }
       img.data[o] = rgba[0]; img.data[o + 1] = rgba[1]; img.data[o + 2] = rgba[2]; img.data[o + 3] = rgba[3];
@@ -8957,8 +8980,14 @@ function onOceanOpacityInput(pct){
   const v = Math.max(0, Math.min(1, (pct|0) / 100));
   oceanOpacity[key] = v;
   if(key === "sst"){
-    if(oceanOverlayForecastHour() > 0 && sstForecastLayer && typeof sstForecastLayer._draw === "function") sstForecastLayer._draw();
-    else if(sstLayer) sstLayer.setOpacity(v);
+    // Observed SST also uses the canvas layer now — always redraw it when live.
+    // (Old path only redrew on forecast hours, so the slider looked broken until zoom.)
+    if(sstForecastLayer && typeof MAP !== "undefined" && MAP && MAP.hasLayer(sstForecastLayer)
+        && typeof sstForecastLayer._draw === "function"){
+      sstForecastLayer._draw();
+    } else if(sstLayer){
+      sstLayer.setOpacity(v);
+    }
   }
   if(key === "chlor" && chlorLayer) chlorLayer.setOpacity(v);
   try { localStorage.setItem("bwi_ocean_opacity", JSON.stringify(oceanOpacity)); } catch(e){}
