@@ -4008,14 +4008,14 @@ function barrierCoastLng(lat){
     return -76.68;  // Cape Lookout / Shackleford (west of MAIN ~-76.55…-76.75)
   }
   if(lat >= 34.40 && lat < 34.58){
-    // Track MAIN -76.75…-77.20; -77.05 still truncated 39450 ~6 nm short.
-    return -77.22;
+    // Track nudged MAIN -76.88…-77.36; was -77.22 with old MAIN.
+    return -77.38;
   }
   if(lat >= 34.20 && lat < 34.40){
-    return -77.45;  // Topsail / Surf City Atlantic
+    return -77.63;  // Topsail / Surf City Atlantic (MAIN ~-77.61 at 34.20)
   }
   if(lat >= 33.95 && lat < 34.20){
-    return -77.92;  // Wrightsville / Carolina Beach / Oak Island oceanfront
+    return -78.06;  // Wrightsville / Carolina Beach (MAIN ~-78.04 at 34.00)
   }
   if(lat >= 33.80 && lat < 33.95){
     return -78.22;  // Holden / Ocean Isle (was -78.08 — truncated 45200 short)
@@ -4115,7 +4115,9 @@ const MAIN_COAST = [
   [35.35, -75.48], [35.22, -75.53], [35.10, -75.58], [35.00, -75.90],
   [34.90, -76.10], [34.80, -76.35], [34.65, -76.55],
   // ── NC south coast (Cape Lookout → Oak Island oceanfront) ──
-  [34.55, -76.75], [34.40, -77.20], [34.20, -77.45], [34.00, -77.88], [33.85, -78.05],
+  // Nudged ~8 nm west (Jul 2026): simplified vertices sat east of the visible
+  // beach and truncated 9960-Y 39100–39500 short of Topsail / Wrightsville.
+  [34.55, -76.88], [34.40, -77.36], [34.20, -77.61], [34.00, -78.04], [33.85, -78.12],
   // ── SC coast ──
   [33.70, -78.45], [33.50, -78.95], [33.20, -79.20], [32.80, -79.55],
   [32.50, -80.00],
