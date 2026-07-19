@@ -4000,13 +4000,16 @@ function barrierCoastLng(lat){
     return -76.18;  // Portsmouth / north Core Banks
   }
   if(lat >= 34.70 && lat < 34.85){
-    return -76.38;  // Core Banks
+    // Was -76.38 — sat EAST of Core Banks oceanfront (MAIN ~-76.35…-76.48)
+    // and truncated 9960-Y 39350–39450 short of Morehead / Cape Lookout.
+    return -76.50;
   }
   if(lat >= 34.58 && lat < 34.70){
-    return -76.58;  // Cape Lookout / Shackleford
+    return -76.68;  // Cape Lookout / Shackleford (west of MAIN ~-76.55…-76.75)
   }
   if(lat >= 34.40 && lat < 34.58){
-    return -76.78;  // Bogue Banks / Emerald Isle oceanfront
+    // Track MAIN -76.75…-77.20; -77.05 still truncated 39450 ~6 nm short.
+    return -77.22;
   }
   if(lat >= 34.20 && lat < 34.40){
     return -77.45;  // Topsail / Surf City Atlantic
@@ -7010,26 +7013,38 @@ const SstForecastLayer = L.Layer.extend({
   onAdd: function(map){
     this._map = map;
     this._canvas = L.DomUtil.create("canvas", "leaflet-sst-forecast-layer");
-    this._canvas.style.pointerEvents = "none";
-    // Smooth upscale (paired with temp bilinear in _sstFcBuildSmallCanvas).
-    this._canvas.style.imageRendering = "auto";
+    // Absolute + re-pin on every move (same pattern as altimetry/wind/currents).
+    // Without setPosition during pan, container-point redraw paints into a stale
+    // layer offset and the SST field "floats" with the finger on phone.
+    this._canvas.style.cssText = "position:absolute;top:0;left:0;pointer-events:none;image-rendering:auto";
     const pane = map.getPane("ocean-overlays") || map.getPanes().overlayPane;
     pane.appendChild(this._canvas);
     map.on("move", this._onMove, this);
-    map.on("moveend zoomend resize", this._reset, this);
+    map.on("moveend zoomend viewreset resize", this._reset, this);
     this._reset();
     this._requestData();
   },
   onRemove: function(map){
     map.off("move", this._onMove, this);
-    map.off("moveend zoomend resize", this._reset, this);
+    map.off("moveend zoomend viewreset resize", this._reset, this);
+    if(this._moveRAF){ cancelAnimationFrame(this._moveRAF); this._moveRAF = null; }
     clearTimeout(this._refetchTimer);
     if(this._canvas && this._canvas.parentNode) this._canvas.parentNode.removeChild(this._canvas);
     this._canvas = null;
   },
   _onMove: function(){
-    // Pan with the map using the cached grid — no network.
-    this._draw();
+    // Re-anchor the canvas to the map pane every frame, then redraw from the
+    // cached grid — no network. Matches AltimetryLayer / wind / currents.
+    if(!this._canvas || !this._map) return;
+    if(this._map._animatingZoom) return;
+    if(this._moveRAF) return;
+    this._moveRAF = requestAnimationFrame(() => {
+      this._moveRAF = null;
+      if(!this._map || !this._canvas) return;
+      const tl = this._map.containerPointToLayerPoint([0, 0]);
+      L.DomUtil.setPosition(this._canvas, tl);
+      this._draw();
+    });
   },
   _gridCoversView: function(){
     const g = SST_FORECAST_GRID;
@@ -11575,9 +11590,9 @@ function drawCanyons(){
           <div style="
             background:rgba(8,18,35,.88);
             color:#e8f0ff;
-            font-size:14.5px;font-weight:bold;
+            font-size:11.5px;font-weight:bold;
             font-family:Arial,sans-serif;
-            padding:3px 8px;
+            padding:2px 6px;
             line-height:1.3;
             border-radius:4px;
             border:1px solid ${badgeColor}99;
