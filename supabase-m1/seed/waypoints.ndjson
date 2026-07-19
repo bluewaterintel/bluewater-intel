@@ -3802,7 +3802,7 @@
 {"name":"Lightship Wreck","lat":40.43317,"lng":-73.177,"t":"wk"}
 {"name":"Lillian","lat":40.02512,"lng":-73.52735,"t":"st"}
 {"name":"Lillian","lat":39.96167,"lng":-73.325,"t":"st"}
-{"name":"Lillian Luckenback Wreck","lat":36.9761,"lng":-75.41393,"t":"wk"}
+{"name":"Lillian Luckenback","lat":36.9761,"lng":-75.41393,"t":"wk"}
 {"name":"Limestone Boulder Piles 1","lat":26.05275,"lng":-80.0965,"t":"st"}
 {"name":"Limestone Ledge","lat":30.30887,"lng":-86.43082,"t":"ld"}
 {"name":"Linda","lat":40.37667,"lng":-73.00833,"t":"st"}
@@ -7177,10 +7177,11 @@
 {"name":"US Concrete Pipe","lat":26.12133,"lng":-80.075,"t":"st"}
 {"name":"Usaf Big Dawg","lat":30.15078,"lng":-86.57373,"t":"st"}
 {"name":"USCG R C Mohawk","lat":40.41701,"lng":-73.75268,"t":"st"}
-{"name":"Uscgc Cuyahoga Wreck","lat":36.96505,"lng":-75.37982,"t":"wk"}
-{"name":"Usns Clark Wreck","lat":36.98893,"lng":-75.36307,"t":"rf"}
-{"name":"Usns Haviland Wreck","lat":36.99098,"lng":-75.36367,"t":"wk"}
-{"name":"Usns Webster Wreck","lat":36.99482,"lng":-75.36133,"t":"wk"}
+{"name":"USCGC Cuyahoga","lat":36.96505,"lng":-75.37997,"t":"wk"}
+{"name":"USNS Clark","lat":36.9889,"lng":-75.36307,"t":"wk"}
+{"name":"USNS Haviland","lat":36.99098,"lng":-75.36367,"t":"wk"}
+{"name":"USNS Webster","lat":36.99482,"lng":-75.36133,"t":"wk"}
+{"name":"USNS Garrison","lat":36.9932,"lng":-75.36303,"t":"wk"}
 {"name":"USS Blenny Wreck","lat":38.14992,"lng":-74.95105,"t":"wk"}
 {"name":"USS Bone","lat":37.7579,"lng":-75.19158,"t":"st"}
 {"name":"USS Chippewa","lat":29.96167,"lng":-85.80367,"t":"st"}
@@ -7731,7 +7732,6 @@
 {"name":"Wreck","lat":36.59866,"lng":-75.69817,"t":"wk"}
 {"name":"Wreck","lat":40.53662,"lng":-73.71767,"t":"wk"}
 {"name":"Wreck","lat":40.53601,"lng":-73.71582,"t":"wk"}
-{"name":"Wreck John Morgan","lat":37.00201,"lng":-75.40971,"t":"wk"}
 {"name":"Wreck","lat":29.07135,"lng":-94.77003,"t":"wk"}
 {"name":"Wreck","lat":27.72836,"lng":-82.55193,"t":"wk"}
 {"name":"Wreck","lat":26.55872,"lng":-97.01682,"t":"wk"}
@@ -7809,7 +7809,7 @@
 {"name":"Wreck","lat":41.29588,"lng":-71.86494,"t":"wk"}
 {"name":"Wreck","lat":37.00072,"lng":-75.37186,"t":"wk"}
 {"name":"Wreck","lat":37.0784,"lng":-75.38602,"t":"wk"}
-{"name":"Wreck","lat":37.00125,"lng":-75.40783,"t":"wk"}
+{"name":"USNS Morgan","lat":37.00125,"lng":-75.407983,"t":"wk"}
 {"name":"Wreck","lat":36.81745,"lng":-75.39621,"t":"wk"}
 {"name":"Wreck","lat":37.88888,"lng":-74.25531,"t":"wk"}
 {"name":"Wreck","lat":27.9773,"lng":-82.94783,"t":"wk"}
@@ -10736,7 +10736,6 @@
 {"name":"Chris F","lat":37.47262,"lng":-74.57667,"t":"wk"}
 {"name":"Clam Boat","lat":37.82705,"lng":-75.08813,"t":"wk"}
 {"name":"Clam Trawler","lat":37.78165,"lng":-74.68505,"t":"wk"}
-{"name":"Clark","lat":36.98392,"lng":-75.35235,"t":"wk"}
 {"name":"Clark","lat":37.08545,"lng":-76.03318,"t":"wk"}
 {"name":"Clythia","lat":36.56517,"lng":-75.83965,"t":"wk"}
 {"name":"Coast Guard Barge (Parramore Reef)","lat":37.54057,"lng":-75.42958,"t":"rf"}
@@ -10755,7 +10754,6 @@
 {"name":"Dry Dock-4 A","lat":36.59505,"lng":-75.68815,"t":"st"}
 {"name":"E R Smith","lat":37.81882,"lng":-75.39207,"t":"wk"}
 {"name":"Eastern Shore Ship Shoal Inlet","lat":37.17675,"lng":-75.78715,"t":"hp"}
-{"name":"Edgar Clark","lat":36.98198,"lng":-75.34837,"t":"wk"}
 {"name":"Edna","lat":37.4797,"lng":-74.84095,"t":"wk"}
 {"name":"Eidsvold","lat":36.91667,"lng":-74.993,"t":"wk"}
 {"name":"Elevens","lat":37.813,"lng":-74.85823,"t":"wk"}
@@ -10783,9 +10781,6 @@
 {"name":"Isabelle Paramenter","lat":36.88368,"lng":-74.74982,"t":"wk"}
 {"name":"Isabelle Paramenter","lat":36.9055,"lng":-74.86082,"t":"wk"}
 {"name":"Isabelle Paramenter","lat":36.87662,"lng":-74.73798,"t":"wk"}
-{"name":"John Morgan","lat":36.99913,"lng":-75.39973,"t":"wk"}
-{"name":"John Morgan","lat":36.99685,"lng":-75.39707,"t":"wk"}
-{"name":"John Morgan (Bridge)","lat":36.99817,"lng":-75.39775,"t":"st"}
 {"name":"Keiths","lat":36.86132,"lng":-75.49492,"t":"wk"}
 {"name":"Kingston Ceylonite","lat":36.82455,"lng":-75.85898,"t":"wk"}
 {"name":"Latimer Shoal","lat":37.12627,"lng":-75.99777,"t":"hp"}
@@ -10805,7 +10800,6 @@
 {"name":"Miss Pauline","lat":37.21388,"lng":-74.74872,"t":"wk"}
 {"name":"Mona Island","lat":37.52735,"lng":-75.43165,"t":"st"}
 {"name":"Monroe Frt 345'","lat":37.59145,"lng":-75.23678,"t":"wk"}
-{"name":"Morgan Bridge 423'X 57'34'","lat":36.999,"lng":-75.39822,"t":"st"}
 {"name":"Muriel Alene Trawler","lat":37.82705,"lng":-75.08813,"t":"wk"}
 {"name":"Nancy","lat":36.70815,"lng":-74.83287,"t":"wk"}
 {"name":"Nancy F","lat":36.09087,"lng":-75.34963,"t":"wk"}
@@ -10857,15 +10851,8 @@
 {"name":"Tiger Tanker 410'","lat":36.76328,"lng":-75.76143,"t":"wk"}
 {"name":"Trepca","lat":36.9948,"lng":-75.3982,"t":"wk"}
 {"name":"Triangle LCM","lat":36.99602,"lng":-75.36743,"t":"wk"}
-{"name":"Triangle Wrecks (Morgan)","lat":37.0023,"lng":-75.40482,"t":"wk"}
-{"name":"Triangle Wrecks (Garrison)","lat":36.98872,"lng":-75.35218,"t":"wk"}
-{"name":"Triangle Wrecks (Webster)","lat":36.99037,"lng":-75.35043,"t":"wk"}
 {"name":"Unknown At Triangle","lat":36.98887,"lng":-75.35797,"t":"wk"}
 {"name":"Unknown At Triangle","lat":36.99035,"lng":-75.3827,"t":"wk"}
-{"name":"Clark (Liberty Ship) (Triangle Wreck)","lat":36.98198,"lng":-75.34837,"t":"wk"}
-{"name":"Cuyahoga-USCG 125' (Triangle Wreck)","lat":36.96083,"lng":-75.36958,"t":"wk"}
-{"name":"Haviland (Triangle Wreck)","lat":36.98645,"lng":-75.353,"t":"wk"}
-{"name":"Haviland (Triangle Wreck)","lat":36.98813,"lng":-75.35395,"t":"wk"}
 {"name":"Turcel","lat":36.96988,"lng":-75.35837,"t":"wk"}
 {"name":"Turnof Century-William Thorp 95'X 24'X 12'","lat":36.90102,"lng":-75.88103,"t":"wk"}
 {"name":"U-111 German Sub","lat":37.755,"lng":-74.12833,"t":"wk"}
