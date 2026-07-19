@@ -38,7 +38,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const DB_URL = process.env.SUPABASE_DB_URL;
-const EXPECT_WP = 12593;
+const EXPECT_WP = 12579;
 const EXPECT_RP = 644;
 
 if (!DB_URL && (!URL || !KEY)) {
