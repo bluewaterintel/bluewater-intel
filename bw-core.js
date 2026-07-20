@@ -8420,6 +8420,26 @@ function showPredictionExplainer(cell, species){
   });
 }
 
+// Scans the next ~24h at this exact spot and returns the best-scoring horizon,
+// so a low "right now" score doesn't read as "bad all day." Reuses scoreCell +
+// withForecastHour — no new model. Returns null if now is already the best.
+function bestWindowToday(cell, speciesId){
+  const horizons = [0, 3, 6, 9, 12, 18, 24];
+  let best = { hours: 0, score: cell.score };
+  for(const h of horizons){
+    if(h === 0) continue;
+    let s;
+    try {
+      s = withForecastHour(h, () => scoreCell(cell.lat, cell.lng, speciesId));
+    } catch(e){ continue; }
+    if(s && typeof s.score === "number" && s.score > best.score + 0.03){
+      best = { hours: h, score: s.score };
+    }
+  }
+  if(best.hours === 0) return null;
+  return best;
+}
+
 function renderExplainerMain(){
   const div = document.getElementById("predict-explainer");
   if(!div || !_explainerState) return;
@@ -8451,6 +8471,33 @@ function renderExplainerMain(){
     `;
   }).join("");
 
+  // When the headline score is notably worse than the *best* individual factors
+  // suggest, find the single biggest drag so the score feels explained.
+  let limitingFactorHtml = "";
+  if(!cell.outOfRange && Array.isArray(cell.factors) && cell.score < 0.5){
+    const withQuality = cell.factors.map(f => ({
+      name: f.name,
+      raw: f.raw,
+      weight: f.weight || 0,
+      quality: (typeof f.quality === "number") ? f.quality : Math.min(1, (f.score || 0) / 0.30)
+    }));
+    const strongCount = withQuality.filter(f => f.quality >= 0.6).length;
+    if(strongCount >= 1){
+      const drag = withQuality
+        .filter(f => f.quality < 0.4)
+        .sort((a,b) => (a.quality - b.quality) || (b.weight - a.weight))[0];
+      if(drag){
+        limitingFactorHtml = `
+          <div style="margin-bottom:11px;padding:9px 11px;border-radius:8px;
+            background:rgba(251,191,36,.09);border:1px solid rgba(251,191,36,.28);
+            color:#fde68a;font-size:12px;line-height:1.5">
+            <b>Main thing holding this back:</b> ${drag.name.toLowerCase()}${drag.raw ? ` (${drag.raw})` : ""}.
+            Other factors look good — this one is the drag.
+          </div>`;
+      }
+    }
+  }
+
   const verdict = biteVerdict(Math.round(cell.score * 100));
   let verdictText = verdict.text;
   let gateBanner = "";
@@ -8470,6 +8517,27 @@ function renderExplainerMain(){
   const scoreFootnote = (rawPct != null && Math.abs(rawPct - scorePct) >= 4)
     ? `raw ${rawPct}% · stretched for map contrast`
     : "ranking unchanged · scores stretched for contrast";
+
+  // Best-window nudge: if a later horizon clearly beats "now", surface it.
+  let bestWindowHtml = "";
+  if(!cell.outOfRange && FORECAST_HOUR_OFFSET === 0){
+    const bw = bestWindowToday(cell, species.id);
+    if(bw){
+      const bwPct = Math.round(bw.score * 100);
+      const bwLabel = forecastTimeDisplay(bw.hours);
+      bestWindowHtml = `
+        <button onclick="setForecastHour(${bw.hours <= 12 ? (bw.hours <= 6 ? 0 : 12) : 24})" style="
+          width:100%;text-align:left;cursor:pointer;font-family:inherit;
+          margin-bottom:11px;padding:9px 11px;border-radius:8px;
+          background:rgba(101,163,13,.10);border:1px solid rgba(101,163,13,.32);
+          color:#d7f0b0;font-size:12px;line-height:1.45;display:flex;gap:8px;align-items:center">
+          <span style="font-size:15px">⏱</span>
+          <span style="flex:1"><b>Better window ${bwLabel.replace(/^Today\s|^Tomorrow\s/,'')}</b> — bite climbs to about ${bwPct}% ${/Tomorrow/.test(bwLabel) ? "tomorrow" : "later today"}. Tap to preview.</span>
+          <span style="opacity:.6">→</span>
+        </button>`;
+      verdictText = verdictText.replace(/\.$/, "") + " — right now. Conditions improve in the window above.";
+    }
+  }
 
   // Forecast time selector pills — picking a horizon recomputes the bite for that
   // moment (weather/tide/solunar/pressure shift; ocean fields hold at latest obs).
@@ -8541,7 +8609,9 @@ function renderExplainerMain(){
     </div>` : ''}
 
     <div style="font-size:12.5px;color:#cfe5ff;background:rgba(220,38,38,.06);border-left:2px solid ${verdict.color};padding:8px 11px;margin-bottom:11px;line-height:1.5;border-radius:4px">${verdictText}</div>
+    ${bestWindowHtml}
 
+    ${limitingFactorHtml}
     <div style="font-size:11px;color:#6bbfea;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:8px">Contributing Factors</div>
     ${factorBars}
 
