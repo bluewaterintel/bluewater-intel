@@ -9948,25 +9948,102 @@ let _catchPendingPhoto = null;
 let _catchLocationMode = "exact"; // exact | port
 let _catchPortName = null;
 let _catchFormLureColor = "";  // base64 data URI after downscale
+let _catchEditingId = null; // null = new catch; set when editing an existing entry
 // Map-pick mode: hide the log form, let the user tap the chart, then reopen.
 let catchPickMode = false;
 let _catchPickFromCatches = false;
 let _catchPickPin = null;
 
-function openLogCatch(){
-  // Populate species dropdown from SPECIES (excluding the "all" pseudo-entry)
+function catchEnsureSpeciesSelect(){
   const sel = document.getElementById("catch-species");
-  if(sel && sel.options.length <= 1){
-    sel.innerHTML = "";
-    const real = SPECIES.filter(s => s.id !== "all");
-    real.forEach(s => {
-      const opt = document.createElement("option");
-      opt.value = s.id;
-      opt.textContent = s.name;
-      sel.appendChild(opt);
-    });
-    if(activeSpId && activeSpId !== "all") sel.value = activeSpId;
+  if(!sel || sel.options.length > 1) return;
+  sel.innerHTML = "";
+  const real = SPECIES.filter(s => s.id !== "all");
+  real.forEach(s => {
+    const opt = document.createElement("option");
+    opt.value = s.id;
+    opt.textContent = s.name;
+    sel.appendChild(opt);
+  });
+}
+
+function catchSyncModalEditState(){
+  const editing = !!_catchEditingId;
+  const titleEl = document.getElementById("catch-modal-title");
+  const saveBtn = document.getElementById("catch-save-btn");
+  const modal = document.getElementById("catch-modal");
+  if(titleEl) titleEl.textContent = editing ? "✏️ Edit Catch" : "🎣 Log a Catch";
+  if(saveBtn) saveBtn.textContent = editing ? "💾 Save Changes" : "💾 Save Catch";
+  if(modal) modal.setAttribute("aria-label", editing ? "Edit catch" : "Log a catch");
+}
+
+function catchPopulateFormFromEntry(entry){
+  if(!entry) return;
+  catchEnsureSpeciesSelect();
+  const sel = document.getElementById("catch-species");
+  if(sel) sel.value = entry.species || sel.value;
+  const lenEl = document.getElementById("catch-length");
+  const wtEl = document.getElementById("catch-weight");
+  const lenUnk = document.getElementById("catch-length-unknown");
+  const wtUnk = document.getElementById("catch-weight-unknown");
+  if(lenEl){ lenEl.value = entry.lengthUnknown || entry.length == null ? "" : String(entry.length); lenEl.disabled = !!entry.lengthUnknown; }
+  if(wtEl){ wtEl.value = entry.weightUnknown || entry.weight == null ? "" : String(entry.weight); wtEl.disabled = !!entry.weightUnknown; }
+  if(lenUnk) lenUnk.checked = !!entry.lengthUnknown;
+  if(wtUnk) wtUnk.checked = !!entry.weightUnknown;
+  const dt = document.getElementById("catch-datetime");
+  if(dt && entry.timestamp){
+    const d = new Date(entry.timestamp);
+    const tzOffset = d.getTimezoneOffset() * 60000;
+    dt.value = new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
   }
+  const tackle = document.getElementById("catch-tackle-type");
+  if(tackle) tackle.value = entry.tackleType || "";
+  _catchFormLureColor = entry.lureColor || "";
+  catchInitLureColorChips("catch-lure-colors", _catchFormLureColor, "catchPickFormLureColor");
+  const notesEl = document.getElementById("catch-notes");
+  if(notesEl) notesEl.value = entry.notes || "";
+  const photoIn = document.getElementById("catch-photo");
+  if(photoIn) photoIn.value = "";
+  _catchPendingPhoto = entry.photo || null;
+  const photoPrev = document.getElementById("catch-photo-preview");
+  if(photoPrev){
+    photoPrev.innerHTML = _catchPendingPhoto
+      ? `<img src="${_catchPendingPhoto}" alt="Catch preview" style="
+          max-width:100%;max-height:160px;border-radius:8px;
+          border:1px solid rgba(107,191,234,.2);object-fit:cover;display:block;
+        "/>`
+      : "";
+  }
+  const shareCb = document.getElementById("catch-share");
+  if(shareCb) shareCb.checked = !!entry.shared;
+  _catchPendingLat = entry.lat != null ? entry.lat : null;
+  _catchPendingLng = entry.lng != null ? entry.lng : null;
+  _catchPortName = entry.port || null;
+  catchPopulatePortSelect(document.getElementById("catch-port-select"), _catchPortName);
+  catchSetLocationMode(entry.locationMode === "port" ? "port" : "exact");
+  if(entry.locationMode === "port" && entry.port) catchPortSelected(entry.port);
+  else catchUpdateLocationDisplay();
+}
+
+function openEditCatch(id){
+  const entry = typeof catchGet === "function" ? catchGet(id) : null;
+  if(!entry){
+    showToast("Catch not found — it may have been deleted.", "warning");
+    return;
+  }
+  _catchEditingId = id;
+  catchPopulateFormFromEntry(entry);
+  catchSyncModalEditState();
+  const modal = document.getElementById("catch-modal");
+  if(modal) modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+}
+
+function openLogCatch(){
+  _catchEditingId = null;
+  catchEnsureSpeciesSelect();
+  const sel = document.getElementById("catch-species");
+  if(sel && activeSpId && activeSpId !== "all") sel.value = activeSpId;
   const dt = document.getElementById("catch-datetime");
   if(dt){
     const now = new Date();
@@ -10006,11 +10083,14 @@ function openLogCatch(){
   const modal = document.getElementById("catch-modal");
   if(modal) modal.style.display = "flex";
   document.body.style.overflow = "hidden";
+  catchSyncModalEditState();
 }
 
 function closeLogCatch(){
   const modal = document.getElementById("catch-modal");
   if(modal) modal.style.display = "none";
+  _catchEditingId = null;
+  catchSyncModalEditState();
   const catchesEl = document.getElementById("catches-overlay");
   if(!catchesEl || catchesEl.style.display !== "block") document.body.style.overflow = "";
 }
@@ -10255,8 +10335,8 @@ async function catchPhotoPreview(file){
   }
 }
 
-// Save the form. Validates required fields, calls catchAdd, refreshes the
-// map pins, and closes the modal.
+// Save the form. Validates required fields, calls catchAdd or catchUpdate,
+// refreshes the map pins, and closes the modal.
 function saveCatchFromForm(){
   const species = document.getElementById("catch-species").value;
   if(!species){ showToast("Please select a species.", "warning"); return; }
@@ -10281,26 +10361,78 @@ function saveCatchFromForm(){
   const portName = _catchLocationMode === "port" ? _catchPortName : null;
   const lat = _catchPendingLat;
   const lng = _catchPendingLng;
-  catchAdd({
-    species,
-    lat,
-    lng,
-    timestamp,
-    length: (lenUnknown || isNaN(lenVal)) ? null : lenVal,
-    weight: (wtUnknown || isNaN(wtVal)) ? null : wtVal,
-    lengthUnknown: !!lenUnknown,
-    weightUnknown: !!wtUnknown,
-    notes,
-    photo: _catchPendingPhoto,
-    shared,
-    locationMode: _catchLocationMode,
-    port: portName || undefined,
-    tackleType,
-    lureColor: _catchFormLureColor || null,
-  });
-  // Refresh map pins and reports feed (the latter only matters if shared)
+  const resolvedPort = portName
+    || (lat != null && lng != null && typeof nearestPortTo === "function" ? nearestPortTo(lat, lng) : null);
+
+  if(_catchEditingId){
+    const existing = catchGet(_catchEditingId);
+    if(!existing){
+      showToast("Catch not found — it may have been deleted.", "warning");
+      _catchEditingId = null;
+      catchSyncModalEditState();
+      return;
+    }
+    const wasShared = !!existing.shared;
+    const locChanged = existing.lat !== lat || existing.lng !== lng;
+    const conditions = locChanged && lat != null && lng != null
+      ? catchAutoFillConditions(lat, lng, timestamp)
+      : (existing.conditions || {});
+    const patch = {
+      species,
+      lat,
+      lng,
+      timestamp,
+      length: (lenUnknown || isNaN(lenVal)) ? null : lenVal,
+      weight: (wtUnknown || isNaN(wtVal)) ? null : wtVal,
+      lengthUnknown: !!lenUnknown,
+      weightUnknown: !!wtUnknown,
+      notes,
+      photo: _catchPendingPhoto,
+      shared,
+      locationMode: _catchLocationMode,
+      port: resolvedPort,
+      tackleType,
+      lureColor: _catchFormLureColor || null,
+      conditions,
+    };
+    catchUpdate(_catchEditingId, patch);
+    if(wasShared && !shared){
+      catchUnshare(_catchEditingId);
+      catchUpdate(_catchEditingId, { shared: false });
+    } else if(!wasShared && shared){
+      const updated = catchGet(_catchEditingId);
+      if(updated){
+        updated.shared = true;
+        catchShareAsReport(updated);
+        catchUpdate(_catchEditingId, { shared: true });
+      }
+    }
+    showToast("Catch updated.", "success");
+  } else {
+    catchAdd({
+      species,
+      lat,
+      lng,
+      timestamp,
+      length: (lenUnknown || isNaN(lenVal)) ? null : lenVal,
+      weight: (wtUnknown || isNaN(wtVal)) ? null : wtVal,
+      lengthUnknown: !!lenUnknown,
+      weightUnknown: !!wtUnknown,
+      notes,
+      photo: _catchPendingPhoto,
+      shared,
+      locationMode: _catchLocationMode,
+      port: portName || undefined,
+      tackleType,
+      lureColor: _catchFormLureColor || null,
+    });
+  }
   if(typeof drawCatchPins === "function") drawCatchPins();
   if(shared && typeof renderReports === "function") renderReports();
+  if(typeof renderMyCatches === "function"){
+    const catchesEl = document.getElementById("catches-overlay");
+    if(catchesEl && catchesEl.style.display === "block") renderMyCatches();
+  }
   closeLogCatch();
 }
 
@@ -10853,8 +10985,7 @@ function catchLoad(){
 }
 
 // catchUpdate — part of the CRUD API surface alongside add/delete/get.
-// Not currently called from any UI (no "Edit catch" page yet) but exposed
-// for the future edit flow and for programmatic use.
+// Used by the catch edit flow (My Catches + map pin popups).
 function catchUpdate(id, patch){
   const idx = USER_CATCHES.findIndex(c => c.id === id);
   if(idx < 0) return false;
@@ -12060,6 +12191,22 @@ function drawCatchPins(){
     const date = new Date(c.timestamp);
     const dateStr = date.toLocaleDateString(undefined, {month:"short", day:"numeric"});
     const sizeText = c.weight ? `${c.weight}lb` : c.length ? `${c.length}"` : "";
+    const safeId = String(c.id).replace(/'/g, "\\'");
+    const popupHtml = `<div style="max-width:240px;font-family:Arial,sans-serif">
+        <div style="font-weight:bold;font-size:14px;color:${color};margin-bottom:3px">${sp ? sp.name : c.species}${sizeText ? " · " + sizeText : ""}</div>
+        <div style="font-size:11px;color:#aaa;margin-bottom:5px">${dateStr}${c.port ? " · " + c.port.split(",")[0] : ""}</div>
+        ${c.notes ? `<div style="font-size:12px;line-height:1.45;color:#dde8f5;margin-bottom:8px">${c.notes.length > 100 ? c.notes.slice(0, 100) + "…" : c.notes}</div>` : ""}
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="openEditCatch('${safeId}')" style="
+            flex:1;min-width:88px;background:rgba(41,121,181,.22);border:1px solid rgba(41,121,181,.45);
+            color:#7dd3fc;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;
+          ">Edit</button>
+          <button onclick="confirmDeleteCatch('${safeId}')" style="
+            flex:1;min-width:88px;background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.35);
+            color:#f87171;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;
+          ">Delete</button>
+        </div>
+      </div>`;
     const mk = L.marker([c.lat, c.lng], {
       icon: L.divIcon({
         className: "",
@@ -12079,14 +12226,7 @@ function drawCatchPins(){
         iconAnchor: [9, 18],
       }),
       zIndexOffset: 250,
-    }).bindTooltip(
-      `<div style="max-width:240px;font-family:Arial,sans-serif">
-        <div style="font-weight:bold;font-size:14px;color:${color};margin-bottom:3px">${sp ? sp.name : c.species}${sizeText ? " · " + sizeText : ""}</div>
-        <div style="font-size:11px;color:#aaa;margin-bottom:5px">${dateStr}${c.port ? " · " + c.port.split(",")[0] : ""}</div>
-        ${c.notes ? `<div style="font-size:12px;line-height:1.45;color:#dde8f5">${c.notes.length > 100 ? c.notes.slice(0, 100) + "…" : c.notes}</div>` : ""}
-      </div>`,
-      {sticky:false, direction:"top", opacity:.97, className:"spot-tt"}
-    ).addTo(MAP);
+    }).bindPopup(popupHtml, {offset:[0,-18], className:"wp-fc-popup", maxWidth:280}).addTo(MAP);
     bindRulerMarkerClick(mk, c.lat, c.lng);
     catchLayers.push(mk);
   });

@@ -218,6 +218,11 @@ function renderCatchCard(c){
         ${c.notes ? `<div class="catch-card-notes" style="font-size:12px;color:#cfe5ff;line-height:1.45;margin-top:6px">${escapeHtml(c.notes)}</div>` : ""}
         ${condBits.length ? `<div class="catch-card-cond" style="font-size:10px;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">${condBits.join("")}</div>` : ""}
         <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="catch-card-edit" onclick="openEditCatch('${c.id}')" style="
+            background:rgba(41,121,181,.15);border:1px solid rgba(41,121,181,.35);
+            color:#7dd3fc;padding:5px 11px;border-radius:6px;
+            font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;
+          ">Edit</button>
           <button class="catch-card-delete" onclick="confirmDeleteCatch('${c.id}')" style="
             background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);
             color:#f87171;padding:5px 11px;border-radius:6px;

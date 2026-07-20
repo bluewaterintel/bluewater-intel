@@ -3300,7 +3300,7 @@ body.modal-open #brief-toggle{
 <div id="catch-modal" onclick="if(event.target===this)closeLogCatch()" role="dialog" aria-label="Log a catch">
   <div id="catch-modal-dialog" class="modal-dialog">
     <div class="modal-header">
-      <span style="font-size:15px;font-weight:700;color:#f0f6ff">🎣 Log a Catch</span>
+      <span id="catch-modal-title" style="font-size:15px;font-weight:700;color:#f0f6ff">🎣 Log a Catch</span>
       <button type="button" onclick="closeLogCatch()" aria-label="Close" class="layers-close-btn">✕</button>
     </div>
     <div class="catch-modal-body">
@@ -3402,7 +3402,7 @@ body.modal-open #brief-toggle{
     </div>
     <div class="catch-modal-footer">
       <button type="button" class="catch-cancel-btn" onclick="closeLogCatch()">Cancel</button>
-      <button type="button" class="catch-save-btn" onclick="saveCatchFromForm()">💾 Save Catch</button>
+      <button type="button" id="catch-save-btn" class="catch-save-btn" onclick="saveCatchFromForm()">💾 Save Catch</button>
     </div>
   </div>
 </div>
