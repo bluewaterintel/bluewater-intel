@@ -8147,7 +8147,22 @@ function showPredictLoading(){
 }
 function syncPredictLoadingPosition(){
   if(!_predictLoadingEl || !MAP) return;
-  const top = (typeof viewportPanelTopPx === "function") ? viewportPanelTopPx(8) : 64;
+  // Position is map-relative. Sit below the bite-score banner (and ocean
+  // legend if taller) so the loading pill is visible on the map instead of
+  // covering the top bubble — especially on desktop where both are centered.
+  const mapTop = MAP.getContainer().getBoundingClientRect().top;
+  let top = 12;
+  for(const id of ["bite-banner", "ocean-legend"]){
+    const el = document.getElementById(id);
+    if(!el || el.style.display === "none") continue;
+    const r = el.getBoundingClientRect();
+    if(r.height <= 0) continue;
+    top = Math.max(top, Math.round(r.bottom - mapTop) + 12);
+  }
+  if(top <= 12 && typeof biteBannerHeightPx === "function"){
+    const bh = biteBannerHeightPx();
+    if(bh > 0) top = 8 + bh + 12;
+  }
   _predictLoadingEl.style.top = top + "px";
 }
 function hidePredictLoading(){
@@ -11365,6 +11380,7 @@ function toggleBiteBannerForecast(){
   b.classList.toggle("bite-fc-open");
   const btn = document.getElementById("bite-fc-toggle");
   if(btn) btn.setAttribute("aria-expanded", b.classList.contains("bite-fc-open") ? "true" : "false");
+  if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
 }
 
 function biteBannerHeightPx(){
@@ -11420,6 +11436,7 @@ function updateBiteBanner(){
   }
   updateWindBiteSyncHints();
   syncExplainerPosition();
+  if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
 }
 
 function updateScaleBar(){
@@ -13279,6 +13296,7 @@ window.addEventListener("resize", () => {
   refreshWpLegendDisplay();
   restackBottomControls();
   if(typeof syncExplainerPosition === "function") syncExplainerPosition();
+  if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
   if(typeof isPhoneView === "function" && !isPhoneView()){
     if(typeof closeOceanLegendSheet === "function") closeOceanLegendSheet();
     document.querySelectorAll(".map-time-pill--open").forEach(p => {
