@@ -8911,6 +8911,7 @@ function toggleLayer(key){
   }
   else if(key==="waypoints"){
     drawWaypoints();
+    if(typeof drawUserWaypoints === "function") drawUserWaypoints();
     updateWaypointControlVisibility();
   }
   else if(key==="ramps"){
@@ -12829,6 +12830,18 @@ const WP_VIEW_BUFFER = 0.35;     // pad viewport bounds by 35% so panning feels 
 
 let _wpDrawSeq = 0;  // guards against out-of-order async responses (rapid port/radius changes)
 async function drawWaypoints(){
+  const mapSource = (typeof WP_state !== "undefined" && WP_state.mapSource === "saved") ? "saved" : "charted";
+  if(mapSource === "saved"){
+    _wpInRangeCache = null;
+    renderWaypointMarkers(true);
+    if(typeof drawUserWaypoints === "function") drawUserWaypoints();
+    const savedN = (typeof WP_state !== "undefined" && Array.isArray(WP_state.userPoints))
+      ? WP_state.userPoints.length : 0;
+    updateWaypointPanel(savedN, savedN, "saved");
+    updateWaypointControlVisibility();
+    bindWaypointRedraw();
+    return;
+  }
   // If the layer is off or no port is selected, clear and bail (no network call).
   if(!layerVis.waypoints || !activePort || !PORTS[activePort]){
     _wpInRangeCache = null;
@@ -12918,6 +12931,10 @@ function renderWaypointMarkers(force){
     const latStr = Math.abs(w.lat).toFixed(5) + (w.lat>=0 ? "° N" : "° S");
     const lngStr = Math.abs(w.lng).toFixed(5) + (w.lng>=0 ? "° E" : "° W");
     const wpSafeName = (w.name || "Spot").replace(/'/g, "\\'");
+    const panelType = (typeof WP_CODE_TO_PANEL_TYPE !== "undefined" && WP_CODE_TO_PANEL_TYPE[w.t])
+      ? WP_CODE_TO_PANEL_TYPE[w.t] : "wreck";
+    const saveBtn = (typeof wpChartedSaveButtonHtml === "function")
+      ? wpChartedSaveButtonHtml(w.lat, w.lng, w.name, panelType) : "";
     // ONE combined bubble: name + label/distance + coordinates + the forecast
     // button, in a single interactive popup (previously a hover tooltip plus a
     // separate forecast popup that overlapped on tap).
@@ -12927,6 +12944,7 @@ function renderWaypointMarkers(force){
         <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:15px;padding:0 18px">${w.name}</div>
         <div style="font-size:12px;color:#cfe5ff;margin-bottom:2px">${s.label} · ${w.nm.toFixed(1)} nm</div>
         <div style="font-size:10.5px;color:#8fb4d8;margin-bottom:9px">${latStr}, ${lngStr}</div>
+        ${saveBtn}
         <button onclick="showForecast(${w.lat},${w.lng},'${wpSafeName}')" style="
           width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
           padding:11px 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
@@ -13233,6 +13251,13 @@ function updateWaypointPanel(total, drawn, status){
   if(status === "cached")           tag = " · cached (reconnecting)";
   else if(status === "offline-embedded") tag = " · offline data";
   else if(status === "unavailable"){ el.textContent = "waypoints unavailable offline — reconnect to load"; return; }
+  else if(status === "saved"){
+    const n = total || 0;
+    el.textContent = n
+      ? `${n} saved waypoint${n === 1 ? "" : "s"} (yours only)`
+      : "no saved waypoints yet — star spots to add them";
+    return;
+  }
   if(total === undefined){
     const items = waypointsInRange();
     total = items.length;
@@ -13282,6 +13307,7 @@ function refreshWpLegendDisplay(){
   const closeBtn = document.getElementById("wp-legend-close");
   if(!legend || !toggle) return;
   buildWpLegend();
+  if(typeof wpRefreshMapSourceUi === "function") wpRefreshMapSourceUi();
   const layerOn = layerVis.waypoints;
   if(!layerOn){
     legend.style.display = "none";

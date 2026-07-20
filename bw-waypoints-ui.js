@@ -391,6 +391,7 @@ var WP_state = {
   typeFilter: "all",
   regionFilter: "all",
   sourceFilter: "all",   // "all" | "manual" | a pack id — filters the My Waypoints list
+  mapSource: "charted",  // "charted" = full database layer | "saved" = only My Waypoints on map
   userPoints: [],
   editing: null,
   // Charted database waypoints (the ~13k dataset) shown in the Waypoints panel
@@ -514,20 +515,70 @@ function wpRemovePack(packId){
   wpRender();
 }
 
+const WP_MAP_SOURCE_KEY = "bwi_wp_map_source_v1";
+
 function wpLoadUser(){
   try { return JSON.parse(localStorage.getItem(WP_USER_KEY) || "[]"); }
   catch { return []; }
 }
+function wpLoadMapSource(){
+  try {
+    const v = localStorage.getItem(WP_MAP_SOURCE_KEY);
+    return (v === "saved") ? "saved" : "charted";
+  } catch(e){ return "charted"; }
+}
 function wpSaveUser(){
   try { localStorage.setItem(WP_USER_KEY, JSON.stringify(WP_state.userPoints)); } catch(e){}
+}
+function wpSaveMapSource(){
+  try { localStorage.setItem(WP_MAP_SOURCE_KEY, WP_state.mapSource || "charted"); } catch(e){}
+}
+WP_state.mapSource = wpLoadMapSource();
+
+// Map layer: charted database vs only the user's saved waypoints.
+function setWpMapSource(mode){
+  const next = (mode === "saved") ? "saved" : "charted";
+  if(WP_state.mapSource === next) return;
+  WP_state.mapSource = next;
+  wpSaveMapSource();
+  wpRefreshMapSourceUi();
+  if(typeof drawWaypoints === "function") drawWaypoints();
+  else if(typeof drawUserWaypoints === "function") drawUserWaypoints();
+  if(typeof updateWaypointControlVisibility === "function") updateWaypointControlVisibility();
+}
+
+function wpRefreshMapSourceUi(){
+  const sel = document.getElementById("wp-map-source");
+  if(sel) sel.value = WP_state.mapSource || "charted";
+  const radiusSec = document.getElementById("wp-radius-section");
+  if(radiusSec) radiusSec.style.display = (WP_state.mapSource === "saved") ? "none" : "";
+  const rows = document.getElementById("wp-legend-rows");
+  if(rows) rows.style.display = (WP_state.mapSource === "saved") ? "none" : "";
+}
+
+function wpChartedSaveButtonHtml(lat, lng, name, panelType){
+  const saved = wpIsSavedToMine({ lat, lng, name, type: panelType || "wreck" });
+  const safeName = (name || "Spot").replace(/'/g, "\\'");
+  const safeType = (panelType || "wreck").replace(/'/g, "\\'");
+  return `<button onclick="wpToggleSaveAt(${lat},${lng},'${safeName}','${safeType}', event)" style="
+    width:100%;background:${saved ? "rgba(245,158,11,.35)" : "rgba(245,158,11,.14)"};color:#fde68a;
+    border:1px solid rgba(251,191,36,.55);border-radius:9px;padding:9px 12px;font-size:13px;font-weight:700;
+    cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px">
+    ${wpSaveStarSVG(saved)}<span>${saved ? "Saved — tap to remove" : "Save to My Waypoints"}</span>
+  </button>`;
 }
 
 function openWaypoints(){
   if(!WP_state.userPoints.length) WP_state.userPoints = wpLoadUser();
+  WP_state.mapSource = wpLoadMapSource();
   // Public tab always scopes to a port — default to the map's active home port.
+  // My Waypoints tab is global: always start on All Ports so saved spots aren't
+  // hidden by whichever port is selected on the map.
   if(WP_state.tab === "public" && WP_state.regionFilter === "all" &&
      typeof activePort !== "undefined" && activePort){
     WP_state.regionFilter = activePort;
+  } else if(WP_state.tab === "mine"){
+    WP_state.regionFilter = "all";
   }
   document.getElementById("wp-overlay").style.display = "block";
   document.body.style.overflow = "hidden";
@@ -543,7 +594,9 @@ function closeWaypoints(){
 function wpSwitchTab(tab){
   WP_state.tab = tab;
   WP_state.search = "";
-  if(tab === "public" && WP_state.regionFilter === "all" &&
+  if(tab === "mine"){
+    WP_state.regionFilter = "all";
+  } else if(tab === "public" && WP_state.regionFilter === "all" &&
      typeof activePort !== "undefined" && activePort){
     WP_state.regionFilter = activePort;
   }
@@ -664,8 +717,9 @@ function wpFilteredList(list){
       out = out.filter(p => {
         // Charted rows are already scoped to the port we fetched for.
         if(p.charted) return WP_state.chartedPort === WP_state.regionFilter;
-        // Keep user waypoints regardless (they have no meaningful port range).
-        if(String(p.id || "").startsWith("u-")) return p.region === WP_state.regionFilter;
+        // Personal waypoints: use distance from the selected port, not the
+        // stored region label (often blank or from a different port when saved).
+        if(String(p.id || "").startsWith("u-")) return wpWithinPortNm(p, WP_state.regionFilter);
         return wpWithinPortNm(p, WP_state.regionFilter);
       });
     } else {
@@ -718,19 +772,59 @@ function wpIsSavedToMine(p){
   return WP_state.userPoints.some(u => wpSameLocation(u, p));
 }
 
+function wpFindSavedAt(lat, lng){
+  return WP_state.userPoints.find(u => wpSameLocation(u, { lat, lng }));
+}
+
+function wpToggleSaveAt(lat, lng, name, type, ev){
+  wpToggleSave({
+    lat, lng, name,
+    type: type || "wreck",
+    region: (typeof activePort !== "undefined" && activePort) ? activePort : "",
+  }, ev);
+}
+
+function wpToggleSave(p, ev){
+  if(ev){
+    ev.stopPropagation();
+    ev.preventDefault();
+  }
+  const existing = WP_state.userPoints.find(u => wpSameLocation(u, p));
+  if(existing){
+    wpDeleteWaypoint(existing.id, { confirm: false });
+    if(typeof showToast === "function"){
+      showToast(`"${existing.name || "Waypoint"}" removed from My Waypoints.`, "info");
+    }
+    if(ev && ev.currentTarget) wpSetSaveBtnUnsaved(ev.currentTarget, p);
+    wpRender();
+    return;
+  }
+  wpCopyToMine(p, ev);
+}
+
 function wpSaveStarSVG(filled){
   const fill = filled ? "currentColor" : "none";
   return `<svg viewBox="0 0 24 24" width="15" height="15" fill="${fill}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.9 6.2 6.8.9-5 4.7 1.3 6.7L12 17.8 5.9 20.5 7.2 13.8 2.2 9.1l6.8-.9z"/></svg>`;
 }
 
-function wpSetSaveBtnSaved(btn){
+function wpSetSaveBtnSaved(btn, p){
   if(!btn) return;
   btn.classList.add("on");
-  btn.title = "Saved to My Waypoints";
-  btn.setAttribute("aria-label", "Saved to My Waypoints");
+  btn.title = "Saved — tap to remove from My Waypoints";
+  btn.setAttribute("aria-label", "Saved — tap to remove from My Waypoints");
   btn.innerHTML = wpSaveStarSVG(true) + `<span>Saved</span>`;
-  btn.onclick = null;
-  btn.style.cursor = "default";
+  btn.style.cursor = "pointer";
+  btn.onclick = (e) => wpToggleSave(p, e);
+}
+
+function wpSetSaveBtnUnsaved(btn, p){
+  if(!btn) return;
+  btn.classList.remove("on");
+  btn.title = "Save to My Waypoints";
+  btn.setAttribute("aria-label", "Save to My Waypoints");
+  btn.innerHTML = wpSaveStarSVG(false) + `<span>Save</span>`;
+  btn.style.cursor = "pointer";
+  btn.onclick = (e) => wpToggleSave(p, e);
 }
 
 function wpCardHTML(p, isUser){
@@ -774,7 +868,7 @@ function wpCardHTML(p, isUser){
             <span>Delete</span>
           </button>
         ` : `
-          <button class="wp-action-btn save${saved ? " on" : ""}" ${saved ? "" : `onclick="wpCopyToMine(${JSON.stringify(p).replace(/"/g,'&quot;')}, event)"`} title="${saved ? "Saved to My Waypoints" : "Save to My Waypoints"}" aria-label="${saved ? "Saved to My Waypoints" : "Save to My Waypoints"}"${saved ? ' style="cursor:default"' : ""}>
+          <button class="wp-action-btn save${saved ? " on" : ""}" onclick="wpToggleSave(${JSON.stringify(p).replace(/"/g,'&quot;')}, event)" title="${saved ? "Saved — tap to remove from My Waypoints" : "Save to My Waypoints"}" aria-label="${saved ? "Saved — tap to remove from My Waypoints" : "Save to My Waypoints"}">
             ${wpSaveStarSVG(saved)}
             <span>${saved ? "Saved" : "Save"}</span>
           </button>
@@ -1081,17 +1175,16 @@ function drawUserWaypoints(){
   if(typeof MAP === "undefined") return;
   if(!userWpLayerGroup){ userWpLayerGroup = L.layerGroup().addTo(MAP); }
   userWpLayerGroup.clearLayers();
+  const savedOnlyMode = (WP_state.mapSource === "saved" && typeof layerVis !== "undefined" && layerVis.waypoints);
   for(const p of WP_state.userPoints){
-    if(!p.showOnMap) continue;
+    if(!savedOnlyMode && !p.showOnMap) continue;
     if(typeof p.lat !== "number" || typeof p.lng !== "number") continue;
     const iconKey = p.sourceType || p.type;
     const t = wpType(iconKey);
     const latStr = Math.abs(p.lat).toFixed(5) + (p.lat>=0 ? "° N" : "° S");
     const lngStr = Math.abs(p.lng).toFixed(5) + (p.lng>=0 ? "° E" : "° W");
     const safeName = (p.name || "Waypoint").replace(/'/g, "\\'");
-    // ONE combined bubble: name + type/depth + coordinates + the forecast
-    // button, in a single interactive popup (was a hover tooltip plus a
-    // separate overlapping forecast popup).
+    const safeId = String(p.id || "").replace(/'/g, "\\'");
     const m = L.marker([p.lat, p.lng], {icon: userWpMarkerIcon(p), zIndexOffset: 800});
     m.bindPopup(
       `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:170px">
@@ -1101,9 +1194,16 @@ function drawUserWaypoints(){
         <button onclick="showForecast(${p.lat},${p.lng},'${safeName}')" style="
           width:100%;background:#2979b5;color:#fff;border:none;border-radius:9px;
           padding:11px 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
-          display:flex;align-items:center;justify-content:center;gap:7px">
+          display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:8px">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0 0-9 6 6 0 0 0-11.6-2A4.5 4.5 0 0 0 6.5 19Z"/><path d="M8 13l-1.5 3M12 13l-1.5 3M16 13l-1.5 3"/></svg>
           6-Day Forecast
+        </button>
+        <button onclick="wpDeleteFromMap('${safeId}')" style="
+          width:100%;background:rgba(220,38,38,.18);color:#fca5a5;border:1px solid rgba(248,113,113,.45);
+          border-radius:9px;padding:9px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;
+          display:flex;align-items:center;justify-content:center;gap:6px">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Delete waypoint
         </button>
       </div>`,
       {offset:[0,-46], className:"wp-fc-popup"}
@@ -1189,9 +1289,13 @@ function wpDismissActiveMarker(){
 }
 
 function wpCopyToMine(p, ev){
+  if(ev){
+    ev.stopPropagation();
+    ev.preventDefault();
+  }
   if(wpIsSavedToMine(p)){
-    if(ev && ev.currentTarget) wpSetSaveBtnSaved(ev.currentTarget);
-    showToast(`"${p.name}" is already in My Waypoints.`, "info");
+    if(ev && ev.currentTarget) wpSetSaveBtnSaved(ev.currentTarget, p);
+    if(typeof showToast === "function") showToast(`"${p.name}" is already in My Waypoints.`, "info");
     return;
   }
   const newPoint = {
@@ -1206,8 +1310,13 @@ function wpCopyToMine(p, ev){
   wpSaveUser();
   if(window.BW_AUTH) window.BW_AUTH.saveWaypoint(newPoint).catch(e => console.error("waypoint sync", e));
   drawUserWaypoints();
-  if(ev && ev.currentTarget) wpSetSaveBtnSaved(ev.currentTarget);
-  showToast(`"${p.name}" saved to your waypoints and shown on the map.`, "success");
+  if(ev && ev.currentTarget) wpSetSaveBtnSaved(ev.currentTarget, p);
+  if(typeof showToast === "function") showToast(`"${p.name}" saved to your waypoints and shown on the map.`, "success");
+}
+
+function wpDeleteFromMap(id){
+  wpDeleteWaypoint(id);
+  if(typeof MAP !== "undefined" && MAP) MAP.closePopup();
 }
 
 function wpNewWaypoint(){
@@ -1352,14 +1461,16 @@ function wpSaveEditor(isNew){
   wpRender();
 }
 
-function wpDeleteWaypoint(id){
+function wpDeleteWaypoint(id, opts){
+  opts = opts || {};
   const p = WP_state.userPoints.find(x => x.id === id);
   if(!p) return;
-  if(!confirm(`Delete "${p.name}"? This cannot be undone.`)) return;
+  if(opts.confirm !== false && !confirm(`Delete "${p.name}"? This cannot be undone.`)) return;
   WP_state.userPoints = WP_state.userPoints.filter(x => x.id !== id);
   wpSaveUser();
   if(window.BW_AUTH) window.BW_AUTH.deleteWaypoint(id).catch(e => console.error("waypoint delete", e));
   drawUserWaypoints();
+  if(typeof drawWaypoints === "function") drawWaypoints();
   wpRender();
 }
 

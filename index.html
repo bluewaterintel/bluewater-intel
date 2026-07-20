@@ -2967,6 +2967,17 @@ body.modal-open #brief-toggle{
       cursor:pointer;padding:0 2px;">×</button>
   </div>
   <div id="wp-legend-rows" style="display:flex;flex-direction:column;gap:4px"></div>
+  <div id="wp-map-source-section" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)">
+    <label for="wp-map-source" style="display:block;font-size:9px;color:#f87171;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:4px">Map shows</label>
+    <select id="wp-map-source" onchange="setWpMapSource(this.value)" aria-label="Waypoint map source" style="
+      width:100%;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);
+      color:#fecaca;font-weight:700;font-size:12px;border-radius:8px;padding:6px 8px;
+      font-family:inherit;cursor:pointer;outline:none;
+    ">
+      <option value="charted">Charted database</option>
+      <option value="saved">⭐ My saved only</option>
+    </select>
+  </div>
   <!-- Distance-from-port selector — moved here from the old bottom bubble so the
        bottom of the map stays clean. Compact dropdown + in-range count. -->
   <div id="wp-radius-section" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)">
