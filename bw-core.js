@@ -3395,6 +3395,20 @@ function scoreCell(lat, lng, speciesId){
     }
   }
 
+  // ── Peak-season heat coupling ──
+  // When season is strong, normal summer warmth is EXPECTED for that fishery —
+  // not a second independent penalty. If temp is only "warm" (above ideal max
+  // but still inside the working/tolerance band), lift tempScore toward a
+  // neutral floor so Season "peak" and Water temperature stop fighting each
+  // other every day of summer. Extreme heat (≥ working max) still penalizes.
+  // Raw °F text in the explainer is unchanged — only the score is adjusted.
+  if(tempForScore != null && seasonScore >= 0.66){
+    const warmButTolerable = tempForScore > prefs.tempIdeal[1] && tempForScore < prefs.tempWorking[1];
+    if(warmButTolerable){
+      tempScore = Math.max(tempScore, 0.7);
+    }
+  }
+
   // ── Factor 8: Barometric pressure trend ──
   let pressureScore = 0.5;
   if(pressureTrend != null){
@@ -3499,10 +3513,13 @@ function scoreCell(lat, lng, speciesId){
   // so the gate stays moderate rather than nuking a fish sitting on a cool reef
   // under a hot surface.
   //   floor by category — gate = floor + (1-floor)*tempScore^exp
-  const _tempGateFloor = speciesCat === "inshore"  ? 0.50   // firmer — cold water now actually bites
+  // Warm-adapted inshore (redfish/snook/tarpon) get a softer floor: heat mainly
+  // compresses feeding windows (tide/solunar), and those factors already carry
+  // the weight. Cold-preferring inshore keep the firmer floor.
+  const _tempGateFloor = speciesCat === "inshore"  ? (prefs.warmAdapted ? 0.62 : 0.50)
                        : speciesCat === "nearshore" ? 0.42
                        : 0.30;                                // offshore = firm
-  const _tempGateExp   = speciesCat === "inshore"  ? 0.85 : 0.70;
+  const _tempGateExp   = speciesCat === "inshore"  ? (prefs.warmAdapted ? 0.70 : 0.85) : 0.70;
   const tempGate = sst == null ? 1 : _tempGateFloor + (1 - _tempGateFloor) * Math.pow(tempScore, _tempGateExp);
   finalScore = finalScore * tempGate;
 

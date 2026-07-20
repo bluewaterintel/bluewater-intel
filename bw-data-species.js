@@ -110,7 +110,12 @@ const PREDICT_SPECIES_PREFS = {
   // "cruising rays and turtles in 10-50 ft"). Floor raised from 2 m (~6.5 ft)
   // so skinny bay/shoal cells can't outrank Light Tower / CBBT structure.
   cobia:        {tempIdeal:[68,78], tempWorking:[64,82], chlorPref:"high",    salinityPref:"high", depthBands:[[3.4,40]],   breakPref:"stable", warmAdapted:true },
-  redfish:      {tempIdeal:[62,78], tempWorking:[58,84], chlorPref:"high",    depthBands:[[1,15]],     breakPref:"stable"},
+  // Redfish — FL/Gulf summer surface routinely sits mid-80s°F during peak season.
+  // Old idealHi 78 / workingMax 84 treated normal Tampa summer water (≈87°F) as a
+  // hard penalty and fought the "peak season" factor every day of summer. Ideal
+  // band now covers published 70–90°F comfort; warmAdapted keeps warm-side credit
+  // through the working edge.
+  redfish:      {tempIdeal:[70,88], tempWorking:[58,92], chlorPref:"high",    depthBands:[[1,15]],     breakPref:"stable", warmAdapted:true },
   flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable", demersal:true },
   blackseabass: {tempIdeal:[58,72], tempWorking:[52,76], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable", demersal:true },
   tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable", demersal:true },
@@ -136,17 +141,22 @@ const PREDICT_SPECIES_PREFS = {
   // 300 m+ water. Starting at 300 m scored the 100-fathom troll at ~20%.
   bigeye:       {tempIdeal:[64,74], tempWorking:[58,78], chlorPref:"low",     depthBands:[[180,2000]], breakPref:"edge"  },
   // ── INSHORE / NEARSHORE EAST COAST ─────────────────────────────────────
-  speckledtrout:{tempIdeal:[62,75], tempWorking:[55,82], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,20]],     breakPref:"stable"},
+  // Speckled trout — cooler-preferring than redfish/snook, but still fishable
+  // into the mid/upper 80s in FL summer (they compress into low-light/tide windows).
+  speckledtrout:{tempIdeal:[62,82], tempWorking:[52,88], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,20]],     breakPref:"stable", warmAdapted:true },
   spadefish:    {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[6,80]],     breakPref:"any"  },
   croaker:      {tempIdeal:[60,75], tempWorking:[55,82], chlorPref:"high",    depthBands:[[2,60]],     breakPref:"stable"},
   spanishmack:  {tempIdeal:[68,80], tempWorking:[62,84], chlorPref:"edge",    depthBands:[[5,40]],     breakPref:"any", warmAdapted:true },
   kingmack:     {tempIdeal:[70,82], tempWorking:[66,85], chlorPref:"edge",    depthBands:[[15,80]],    breakPref:"any", warmAdapted:true },
   triggerfish:  {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
   // ── FLORIDA / TROPICAL SPECIES ──────────────────────────────────────────
-  tarpon:       {tempIdeal:[72,84], tempWorking:[68,88], chlorPref:"high",    salinityPref:"moderate", depthBands:[[3,40]],     breakPref:"stable"},
-  snook:        {tempIdeal:[70,84], tempWorking:[64,88], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,30]],     breakPref:"stable"},
-  bonefish:     {tempIdeal:[74,84], tempWorking:[70,88], chlorPref:"high",    depthBands:[[1,6]],      breakPref:"stable"},
-  permit:       {tempIdeal:[74,84], tempWorking:[70,88], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable"},
+  // Heat-tolerant FL/Gulf inshore: peak season IS hot water. Keep idealHi high
+  // enough that normal summer SST (~86–88°F) is not a drag, and mark warmAdapted
+  // so warm-side credit extends through the working edge.
+  tarpon:       {tempIdeal:[75,90], tempWorking:[68,95], chlorPref:"high",    salinityPref:"moderate", depthBands:[[3,40]],     breakPref:"stable", warmAdapted:true },
+  snook:        {tempIdeal:[72,89], tempWorking:[60,93], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,30]],     breakPref:"stable", warmAdapted:true },
+  bonefish:     {tempIdeal:[74,88], tempWorking:[70,92], chlorPref:"high",    depthBands:[[1,6]],      breakPref:"stable", warmAdapted:true },
+  permit:       {tempIdeal:[74,88], tempWorking:[70,92], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable", warmAdapted:true },
   ceromack:     {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"edge",    depthBands:[[10,80]],    breakPref:"any", warmAdapted:true },
   hogfish:      {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[10,40]],    breakPref:"any", demersal:true },
   muttonsnap:   {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
@@ -157,8 +167,8 @@ const PREDICT_SPECIES_PREFS = {
   bluelinetile: {tempIdeal:[55,68], tempWorking:[50,72], chlorPref:"any",     depthBands:[[70,250]],  breakPref:"any", bottom:true },
   gaggrouper:   {tempIdeal:[66,76], tempWorking:[60,82], chlorPref:"any",     depthBands:[[20,150]],   breakPref:"any", demersal:true },
   amberjack:    {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
-  tripletail:   {tempIdeal:[72,84], tempWorking:[68,88], chlorPref:"any",     depthBands:[[2,40]],     breakPref:"any"  },
-  pompano:      {tempIdeal:[68,78], tempWorking:[62,82], chlorPref:"any",     depthBands:[[2,15]],     breakPref:"stable"},
+  tripletail:   {tempIdeal:[72,88], tempWorking:[68,92], chlorPref:"any",     depthBands:[[2,40]],     breakPref:"any", warmAdapted:true },
+  pompano:      {tempIdeal:[68,84], tempWorking:[62,88], chlorPref:"any",     depthBands:[[2,15]],     breakPref:"stable", warmAdapted:true },
   // Vermilion (beeliner): a warm-temperate hard-bottom snapper caught on ledges
   // in ~100-350 ft (30-107m) — NOT the old 50-200m band, whose 50m (164 ft) floor
   // zeroed the depth score across the shallow shelf where most vermilion are
