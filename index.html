@@ -1575,12 +1575,17 @@ body.modal-open #brief-toggle{
 /* MAP */
 #map{flex:1;min-height:0;position:relative}
 .leaflet-container{
-  background:#3a4a5a;
+  /* Deep ocean — if a 1px tile seam ever opens, it must not flash light gray */
+  background:#0a1628;
   -webkit-backface-visibility:hidden;
   backface-visibility:hidden;
 }
-.leaflet-tile-pane img.leaflet-tile{
-  outline:1px solid transparent;
+/* Leaflet 1.9.4 sets mix-blend-mode:plus-lighter on tiles to hide gaps, but at
+   common browser zoom / DPR values that paints a bright square grid over every
+   basemap (satellite + BlueTopo). Force normal blending; tile overlap in JS
+   covers residual sub-pixel seams instead. */
+.leaflet-container img.leaflet-tile{
+  mix-blend-mode:normal;
   -webkit-backface-visibility:hidden;
   backface-visibility:hidden;
 }

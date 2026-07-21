@@ -391,6 +391,25 @@ let layersPanelOpen=false;
 // ════════════════════════════════════════════════════════════════════════════
 // MAP INIT
 // ════════════════════════════════════════════════════════════════════════════
+// Leaflet tile seams: browsers round each tile's CSS transform independently,
+// which opens 1px gaps that read as a light square grid over satellite and
+// BlueTopo. Slightly oversize every tile so neighbors overlap and seal the gap.
+// (Companion to mix-blend-mode:normal override in index.html — Leaflet 1.9.4's
+// plus-lighter blend was painting the bright grid instead of hiding gaps.)
+(function patchLeafletTileSeams(){
+  if(typeof L === "undefined" || !L.GridLayer || L.GridLayer.prototype._bwiTileSeamPatched) return;
+  const originalInitTile = L.GridLayer.prototype._initTile;
+  L.GridLayer.include({
+    _bwiTileSeamPatched: true,
+    _initTile: function(tile){
+      originalInitTile.call(this, tile);
+      const size = this.getTileSize();
+      tile.style.width = (size.x + 1) + "px";
+      tile.style.height = (size.y + 1) + "px";
+    },
+  });
+})();
+
 async function initMap(){
   // Restore saved preferences (default port, basemap, etc.) before any view
   // logic reads them, so the app opens with the user's chosen defaults.
