@@ -57,11 +57,15 @@ function renderMyCatches(){
       </div>`;
     listEl.innerHTML = "";
     const filterBtn = document.getElementById("catches-filter-btn");
+    const filterRow = document.getElementById("catches-filter-row");
     if(filterBtn) filterBtn.style.display = "none";
+    if(filterRow) filterRow.style.display = "none";
     if(typeof closeCatchesFilterPopup === "function") closeCatchesFilterPopup();
     return;
   }
   const filterBtn = document.getElementById("catches-filter-btn");
+  const filterRow = document.getElementById("catches-filter-row");
+  if(filterRow) filterRow.style.display = "block";
   if(filterBtn) filterBtn.style.display = "inline-flex";
   if(typeof catchUpdateFilterBtnState === "function") catchUpdateFilterBtnState();
 
@@ -87,6 +91,11 @@ function renderMyCatches(){
       </button>
     </div>
     <div id="catch-analytics-output"></div>`;
+
+  // Keep Filters directly under analytics (move the row after stats content).
+  if(filterRow && statsEl.nextElementSibling !== filterRow){
+    statsEl.insertAdjacentElement("afterend", filterRow);
+  }
 
   if(typeof catchReadFilterControls === "function") catchReadFilterControls();
   else {

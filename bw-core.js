@@ -502,11 +502,13 @@ async function initMap(){
   // ── NOAA NAUTICAL CHART: ENC Chart Display (paper-chart symbology) ──
   // Traditional soundings, depth contours, wrecks, buoys — best for reading
   // labeled depths. WMS from NOAA Marine Chart Division; weekly ENC updates.
+  // Omit layers 8/9 (Data quality / Low accuracy CATZOC star symbols) — they
+  // tile the chart with survey-confidence markers that clutter fishing use.
   // Informational only — not for navigation / not a carriage-requirement chart.
   noaaChartLayer = L.tileLayer.wms(
     "https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/NOAAChartDisplay/MapServer/exts/MaritimeChartService/WMSServer",
     {
-      layers: "0,1,2,3,4,5,6,7,8,9,10,11,12",
+      layers: "0,1,2,3,4,5,6,7,10,11,12",
       format: "image/png",
       transparent: false,
       version: "1.1.1",

@@ -4293,11 +4293,6 @@ body.modal-open #brief-toggle{
       <div class="catches-title" style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🎣 My Catches</div>
       <div class="catches-sub overlay-page-sub">Personal Log · Auto-filled Conditions</div>
     </div>
-    <button type="button" id="catches-filter-btn" class="catches-filter-btn" onclick="toggleCatchesFilterPopup()" style="
-      background:rgba(41,121,181,.18);border:1px solid rgba(41,121,181,.4);color:#7dd3fc;
-      padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;
-      cursor:pointer;font-family:inherit;display:none;align-items:center;gap:5px;
-    ">🔎 Filters</button>
     <button class="catches-log-btn" onclick="openLogCatch()" style="
       background:#2979b5;border:none;color:#fff;
       padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;
@@ -4308,6 +4303,15 @@ body.modal-open #brief-toggle{
   <!-- Stats summary -->
   <div id="catches-stats" style="padding:18px 20px;border-bottom:1px solid rgba(107,191,234,.08)"></div>
 
+  <!-- Filters — left-aligned, below analytics / above catch list -->
+  <div id="catches-filter-row" style="display:none;padding:0 20px 12px;border-bottom:1px solid rgba(107,191,234,.08)">
+    <button type="button" id="catches-filter-btn" class="catches-filter-btn" onclick="toggleCatchesFilterPopup()" style="
+      background:rgba(41,121,181,.18);border:1px solid rgba(41,121,181,.4);color:#7dd3fc;
+      padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;
+      cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px;
+    ">🔎 Filters</button>
+  </div>
+
   <!-- Catch list -->
   <div id="catches-list" style="padding:14px 20px"></div>
 
@@ -4316,8 +4320,8 @@ body.modal-open #brief-toggle{
     display:none;position:fixed;inset:0;z-index:5100;background:rgba(0,0,0,.45);
   "></div>
   <div id="catches-filter-popup" role="dialog" aria-label="Catch filters" style="
-    display:none;position:fixed;left:50%;top:72px;transform:translateX(-50%);
-    z-index:5101;width:min(420px,calc(100% - 24px));max-height:min(70vh,560px);
+    display:none;position:fixed;left:20px;top:auto;bottom:auto;transform:none;
+    z-index:5101;width:min(420px,calc(100% - 40px));max-height:min(70vh,560px);
     background:#0f2444;color:#e8f4ff;border:1px solid rgba(107,191,234,.28);
     border-radius:14px;box-shadow:0 16px 48px rgba(0,0,0,.65);
     overflow:hidden;font-family:inherit;
