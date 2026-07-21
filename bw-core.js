@@ -325,7 +325,7 @@ let _predictGrid = null, _predictSpecies = null, _predictTooltip = null, _predic
 // load (old behavior) produced different hotspot rankings as bathy/ocean data
 // arrived in different order, which is why the #1/#2/#3 badges jumped on zoom.
 let _predictResultCache = null; // { key, heatGrid, hotspots, badges, gridStep, gridOriginLat, gridOriginLng }
-let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null;
+let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, noaaChartLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null;
 let _activeBaseMap = "satellite";
 const M_PER_FATHOM = 1.8288;
 // Satellite-imagery date control (SEPARATE from the prediction forecast slider).
@@ -474,11 +474,11 @@ async function initMap(){
     {maxZoom:18,minZoom:0,attribution:'',opacity:0.7}
   ).addTo(MAP);
 
-  // ── OCEAN BATHYMETRIC: Esri Ocean Base + NOAA BlueTopo color + hillshade ──
-  // Esri/GEBCO fills the globe; BlueTopo elevation (color by depth) + hillshade
-  // show survey-grade US seafloor structure (ledges, channels, edges) to ~z16.
-  // World_Ocean_Reference is intentionally omitted — it draws lat/lon graticule
-  // lines that read as a distracting grid over the chart.
+  // ── OCEAN BATHYMETRIC: Esri Ocean Base + NOAA BlueTopo (hillshade-led) ──
+  // Color elevation alone washes the shelf into a flat purple/blue slab and
+  // makes the break look harsh. Lead with hillshade for ledges/edges, keep a
+  // light elevation tint for depth context. Esri/GEBCO fills gaps globally.
+  // World_Ocean_Reference omitted (lat/lon graticule clutter).
   const _blueTopoWmts =
     "https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
     + "&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A{z}&TILEROW={y}&TILECOL={x}&FORMAT=image%2Fpng8";
@@ -489,23 +489,38 @@ async function initMap(){
     ),
     L.tileLayer(
       _blueTopoWmts + "&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation",
-      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.92,
+      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.28,
         attribution:'© NOAA OCS · BlueTopo',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
     ),
     L.tileLayer(
       _blueTopoWmts + "&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade",
-      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.55,
+      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.72,
         attribution:'© NOAA OCS · BlueTopo CUDEM',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
     ),
   ]);
 
+  // ── NOAA NAUTICAL CHART: ENC Chart Display (paper-chart symbology) ──
+  // Traditional soundings, depth contours, wrecks, buoys — best for reading
+  // labeled depths. WMS from NOAA Marine Chart Division; weekly ENC updates.
+  // Informational only — not for navigation / not a carriage-requirement chart.
+  noaaChartLayer = L.tileLayer.wms(
+    "https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/NOAAChartDisplay/MapServer/exts/MaritimeChartService/WMSServer",
+    {
+      layers: "0,1,2,3,4,5,6,7,8,9,10,11,12",
+      format: "image/png",
+      transparent: false,
+      version: "1.1.1",
+      attribution: "© NOAA OCS · ENC Chart Display (not for navigation)",
+      maxZoom: 18,
+      minZoom: 0,
+    }
+  );
+
   bathyLayer=esriOceanLayer; // alias for backward compat
 
-  // Street + SeaMarks basemap removed — Satellite and Ocean Bathymetric only.
-
   // Apply saved default basemap (prefLoad already ran at start of initMap).
-  if(typeof USER_PREFS !== "undefined" && USER_PREFS.defaultBaseMap === "ocean"){
-    switchBase("ocean");
+  if(typeof USER_PREFS !== "undefined" && (USER_PREFS.defaultBaseMap === "ocean" || USER_PREFS.defaultBaseMap === "chart")){
+    switchBase(USER_PREFS.defaultBaseMap);
   } else {
     _activeBaseMap = "satellite";
   }
@@ -926,7 +941,8 @@ async function prefetchCurrentView(){
       `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`,
       `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`],
   };
-  const buildUrls = urlBuilders[activeBase] || urlBuilders.satellite;
+  // NOAA Chart is WMS (bbox tiles) — prefetch Esri ocean underlay as a useful offline fallback.
+  const buildUrls = urlBuilders[activeBase === "chart" ? "ocean" : activeBase] || urlBuilders.satellite;
 
   // Helper: convert lat/lng to tile coords for a given zoom
   const latLngToTile = (lat, lng, z) => {
@@ -1094,7 +1110,8 @@ async function dtPrefetchTiles(bounds, onProgress){
       `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`,
       `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`],
   };
-  const buildUrls = urlBuilders[activeBase] || urlBuilders.satellite;
+  // NOAA Chart is WMS (bbox tiles) — prefetch Esri ocean underlay as a useful offline fallback.
+  const buildUrls = urlBuilders[activeBase === "chart" ? "ocean" : activeBase] || urlBuilders.satellite;
   const latLngToTile = (lat, lng, z) => {
     const n = Math.pow(2, z);
     const xt = Math.floor((lng + 180) / 360 * n);
@@ -11936,9 +11953,10 @@ function rulerRedraw(){
 
 function switchBase(val){
   if(val === "osm") val = "satellite"; // Street + SeaMarks removed
+  if(val !== "ocean" && val !== "chart") val = "satellite";
   _activeBaseMap = val;
   // Remove all base layers
-  [satelliteLayer,satelliteLabelsLayer,esriOceanLayer].forEach(l=>{
+  [satelliteLayer,satelliteLabelsLayer,esriOceanLayer,noaaChartLayer].forEach(l=>{
     if(l && MAP.hasLayer(l)) MAP.removeLayer(l);
   });
   // Sync radio buttons (covers migrated osm → satellite)
@@ -11946,8 +11964,11 @@ function switchBase(val){
     r.checked = (r.value === val);
   });
   // Add the selected one
-  if(val==="ocean") {
+  if(val === "ocean") {
     esriOceanLayer.addTo(MAP);
+    if(typeof ensureOceanBathyForView === "function") ensureOceanBathyForView();
+  } else if(val === "chart") {
+    if(noaaChartLayer) noaaChartLayer.addTo(MAP);
     if(typeof ensureOceanBathyForView === "function") ensureOceanBathyForView();
   } else {
     satelliteLayer.addTo(MAP);
@@ -12043,7 +12064,23 @@ async function ensureOceanBathyForView(){
 function updateBathyDepthLegend(){
   const el = document.getElementById("bathy-depth-legend");
   if(!el) return;
-  el.style.display = (_activeBaseMap === "ocean") ? "block" : "none";
+  const show = (_activeBaseMap === "ocean" || _activeBaseMap === "chart");
+  el.style.display = show ? "block" : "none";
+  const title = el.querySelector(".bathy-depth-legend-title");
+  const hint = el.querySelector(".bathy-depth-legend-hint");
+  const bar = el.querySelector(".bathy-depth-legend-bar");
+  const labels = el.querySelector(".bathy-depth-legend-labels");
+  if(_activeBaseMap === "chart"){
+    if(title) title.textContent = "NOAA Chart";
+    if(hint) hint.textContent = "Soundings & contours · tap for ft / fm · not for navigation";
+    if(bar) bar.style.display = "none";
+    if(labels) labels.style.display = "none";
+  } else if(_activeBaseMap === "ocean"){
+    if(title) title.textContent = "BlueTopo relief";
+    if(hint) hint.textContent = "Hillshade + light depth tint · tap for ft / fm";
+    if(bar) bar.style.display = "block";
+    if(labels) labels.style.display = "flex";
+  }
 }
 
 async function showDepthReadoutAt(lat, lng, containerPoint){
