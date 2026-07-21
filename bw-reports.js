@@ -124,6 +124,7 @@ function runCatchAnalytics(){
   const out = document.getElementById("catch-analytics-output");
   const btn = document.getElementById("run-analytics-btn");
   if(!out) return;
+  if(typeof catchReadFilterControls === "function") catchReadFilterControls();
   const sp = CATCH_FILTER.species === "all" ? "all" : CATCH_FILTER.species;
   out.innerHTML = renderCatchInsights(sp);
   out.scrollIntoView({behavior:"smooth", block:"nearest"});
