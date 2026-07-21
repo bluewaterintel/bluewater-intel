@@ -1542,30 +1542,6 @@ body.modal-open #brief-toggle{
   letter-spacing:.02em;
   text-shadow:0 1px 3px rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.7);
 }
-#bathy-depth-legend{
-  position:absolute;left:10px;bottom:54px;z-index:560;
-  background:rgba(8,20,38,.9);border:1px solid rgba(103,232,249,.35);
-  border-radius:10px;padding:8px 10px;min-width:148px;
-  box-shadow:0 4px 16px rgba(0,0,0,.45);pointer-events:none;
-  font-family:'Segoe UI',Arial,sans-serif;color:#e8f4ff;
-}
-.bathy-depth-legend-title{
-  font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:#67e8f9;margin-bottom:5px;
-}
-.bathy-depth-legend-bar{
-  height:8px;border-radius:4px;
-  /* Approximate NOAA BlueTopo nbs_elevation shallow→deep ramp */
-  background:linear-gradient(90deg,#fde68a 0%,#34d399 22%,#22d3ee 48%,#2563eb 72%,#1e3a8a 100%);
-  border:1px solid rgba(255,255,255,.15);
-}
-.bathy-depth-legend-labels{
-  display:flex;justify-content:space-between;margin-top:4px;
-  font-size:9px;color:#9ec5e8;font-weight:600;
-}
-.bathy-depth-legend-hint{
-  margin-top:5px;font-size:9px;color:#7dd3fc;opacity:.85;line-height:1.3;
-}
 /* Hillshade multiplies over depth color so relief shows without washing out blues */
 .leaflet-layer.bluetopo-hillshade{
   mix-blend-mode:multiply;
@@ -2935,14 +2911,6 @@ body.modal-open #brief-toggle{
       <span class="map-time-pill-hint">NOAA SSH · observed passes</span>
       <span>Latest →</span>
     </div>
-  </div>
-
-  <!-- Ocean Bathymetric depth legend — shown only when BlueTopo basemap is active. -->
-  <div id="bathy-depth-legend" style="display:none" aria-hidden="true">
-    <div class="bathy-depth-legend-title">BlueTopo depth</div>
-    <div class="bathy-depth-legend-bar"></div>
-    <div class="bathy-depth-legend-labels"><span>Shallow</span><span>Deep</span></div>
-    <div class="bathy-depth-legend-hint">Color = depth · shade = relief · tap for ft / fm</div>
   </div>
 
 </div>
