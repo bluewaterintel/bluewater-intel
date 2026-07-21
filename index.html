@@ -3434,9 +3434,9 @@ body.modal-open #brief-toggle{
         <input type="radio" name="base" value="satellite" checked onchange="switchBase(this.value)">
         <span>🛰 Satellite</span>
       </label>
-      <label class="layer-row" title="NOAA BlueTopo depth color (shallow→deep) with hillshade for ledges and the shelf edge. Tap for depth in ft/fm.">
+      <label class="layer-row" title="NOAA BlueTopo seafloor color + hillshade for ledges and the shelf edge. Tap the map for depth in ft/fm.">
         <input type="radio" name="base" value="ocean" onchange="switchBase(this.value)">
-        <span>🌊 Ocean Bathymetric <span style="font-size:10px;color:#9ec5e8;font-weight:500">(BlueTopo depth)</span></span>
+        <span>🌊 Ocean Bathymetric</span>
       </label>
     </div>
   </div>
@@ -3470,7 +3470,7 @@ body.modal-open #brief-toggle{
       <div class="layers-section">DEFAULT BASE MAP</div>
       <select id="pref-basemap" class="pref-select" onchange="prefSet('defaultBaseMap', this.value)">
         <option value="satellite">🛰 Satellite</option>
-        <option value="ocean">🌊 Ocean Bathymetric (BlueTopo depth)</option>
+        <option value="ocean">🌊 Ocean Bathymetric</option>
       </select>
 
       <hr class="layers-divider">
@@ -4050,7 +4050,7 @@ body.modal-open #brief-toggle{
       <div class="tut-step-body">
         <div class="tut-step-title">Use the right-side icon column</div>
         <div class="tut-step-desc" style="line-height:1.7">
-          <div style="margin:6px 0"><span class="tut-icon">🗺</span> <b>Base Map</b> — switch between Satellite and <b>Ocean Bathymetric</b> (NOAA BlueTopo depth color + hillshade for ledges/structure). Tap the map for depth in feet and fathoms.</div>
+          <div style="margin:6px 0"><span class="tut-icon">🗺</span> <b>Base Map</b> — switch between Satellite and <b>Ocean Bathymetric</b> (NOAA BlueTopo seafloor + hillshade for ledges/structure). Tap the map for depth in feet and fathoms.</div>
           <div style="margin:6px 0"><span class="tut-icon">◆</span> <b>Layers</b> — iOS-style toggles grouped into Predictions, Map Markers, Ocean Data, and an Advanced section. Toggle the <b>Bite Map</b> (the color-coded bite forecast for your target species), <b>Major Fishing Areas</b> (canyons, wrecks, reefs, lumps and ledges — the 15 closest to your port), ports, your catches, satellite <b>SST &amp; Chlorophyll</b>, animated <b>Wind</b>, <b>Front Convergence (SSH)</b>, and ocean currents. Closures and LORAN-C live under Advanced.</div>
           <div style="margin:6px 0"><span class="tut-icon">📏</span> <b>Ruler</b> — tap to measure distance in nautical miles. Drop multiple points to plot a route.</div>
           <div style="margin:6px 0"><span class="tut-icon">⚙</span> <b>Settings</b> — set defaults like home port, species, base map, and account preferences.</div>
@@ -4121,7 +4121,7 @@ body.modal-open #brief-toggle{
       <div class="tut-feature-icon">📐</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Real-feature bathymetry under the hood</div>
-        <div class="tut-feature-desc">Depth-driven habitat scoring is anchored to NOAA CUDEM / BlueTopo (~3 m) on US waters (ETOPO elsewhere), blended with 201 real-world reference points — canyon heads, named banks, shelf-edge stations, and Gulf canyons. The algorithm merges these with the regional shelf model so depth is correct around real features instead of just averaged. To <em>see</em> the seafloor, switch the basemap to Ocean Bathymetric (BlueTopo depth color + hillshade) and tap the map for depth in feet and fathoms.</div>
+        <div class="tut-feature-desc">Depth-driven habitat scoring is anchored to NOAA CUDEM / BlueTopo (~3 m) on US waters (ETOPO elsewhere), blended with 201 real-world reference points — canyon heads, named banks, shelf-edge stations, and Gulf canyons. The algorithm merges these with the regional shelf model so depth is correct around real features instead of just averaged. To <em>see</em> the seafloor, switch the basemap to Ocean Bathymetric and tap the map for depth in feet and fathoms.</div>
       </div>
     </div>
 
