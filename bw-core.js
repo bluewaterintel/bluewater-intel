@@ -470,20 +470,7 @@ async function initMap(){
   ).addTo(MAP);
   satelliteLayer.on('tileload',()=>{
     tileStats.loaded++;
-    // New basemap tile arrived → invalidate sampler cache and schedule a
-    // single deferred repaint so the heat layer picks up the new tiles.
-    BasemapSampler.invalidate();
-    if(!BasemapSampler._repaintScheduled){
-      BasemapSampler._repaintScheduled = true;
-      requestAnimationFrame(() => {
-        BasemapSampler._repaintScheduled = false;
-        // Repaint the heat land-mask only — never re-score the grid on tile load.
-        // drawPrediction() here was the root cause of hotspot badges shifting on zoom.
-        if(_heatLayer && typeof _heatLayer._scheduleReset === "function"){
-          _heatLayer._scheduleReset();
-        }
-      });
-    }
+    scheduleHeatMaskRepaint();
   });
   satelliteLayer.on('tileerror',()=>{tileStats.errored++; if(tileStats.errored>=4&&tileStats.loaded===0)showDemoNotice();});
 
@@ -519,6 +506,8 @@ async function initMap(){
         attribution:'© NOAA OCS · BlueTopo CUDEM',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
     ),
   ]);
+
+  esriOceanLayer.eachLayer(bindBasemapTileRefresh);
 
   bathyLayer=esriOceanLayer; // alias for backward compat
 
@@ -5793,17 +5782,23 @@ const BasemapSampler = {
   // Tuned for:
   //   • Esri satellite imagery (real-world ocean blue, somewhat dark)
   //   • Esri Ocean Base (light cartographic blue)
+  //   • NOAA BlueTopo elevation + hillshade (green/teal shelf → deep blue)
   //   • OSM (very light cyan/blue water tiles ~#aad3df)
   //   • OpenSeaMap seamarks (mostly transparent — falls through to base layer)
   // Land is grass green, forest, brown, tan, or built-up gray-tan.
   _classify: function(r, g, b){
+    const brightness = (r + g + b) / 3;
     // Strong saturated cartographic blue (OSM, Esri Ocean): light blue
     // where B is dominant by a clear margin.
     if(b > r + 12 && b > g - 5 && b > 130) return true;
+    // BlueTopo shelf / mid-depth tint (yellow-green → teal) before hillshade grays it
+    if(g > r + 8 && g > 85 && b > 55 && brightness > 90 && brightness < 420) return true;
+    if(b > r + 2 && g > r + 4 && b > 65 && brightness > 85 && brightness < 360) return true;
     // Dark satellite ocean: muted dark blue/teal where B ≥ G > R and total
     // brightness is low (ocean photos are dark).
-    const brightness = (r + g + b) / 3;
     if(brightness < 100 && b >= g - 5 && b > r + 5) return true;
+    // BlueTopo hillshade on water: gray-blue where B still leads slightly
+    if(b > r + 3 && b >= g - 18 && brightness > 70 && brightness < 300) return true;
     // Very dark near-black: deep ocean in satellite imagery
     if(r < 50 && g < 70 && b < 90 && b > r) return true;
     // Default: not water
@@ -5820,6 +5815,25 @@ const BasemapSampler = {
     return this._failed;
   },
 };
+
+// Basemap tiles loaded or switched → refresh the heat-map land/water mask.
+function scheduleHeatMaskRepaint(){
+  BasemapSampler.invalidate();
+  if(!BasemapSampler._repaintScheduled){
+    BasemapSampler._repaintScheduled = true;
+    requestAnimationFrame(() => {
+      BasemapSampler._repaintScheduled = false;
+      if(_heatLayer && typeof _heatLayer._scheduleReset === "function"){
+        _heatLayer._scheduleReset();
+      }
+    });
+  }
+}
+
+function bindBasemapTileRefresh(layer){
+  if(!layer || !layer.on) return;
+  layer.on("tileload", scheduleHeatMaskRepaint);
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // CUSTOM CANVAS HEAT LAYER
@@ -6036,12 +6050,14 @@ const HeatCanvasLayer = L.Layer.extend({
         // sounds and rivers everywhere from Maine to Southern California — so the heat never
         // paints over land even when the satellite basemap pixel is ambiguous
         // (turbid bay water, shadows, vegetation reading as "water").
+        let bathyWater = false;
         if(typeof realDepthAt === "function"){
           const _rd = realDepthAt(ll.lat, ll.lng);
           if(_rd != null && _rd <= 0){
             this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
             continue;
           }
+          if(_rd != null && _rd > 0) bathyWater = true;
         }
 
         // ── Water/land mask — basemap pixel first, polygon fallback ──
@@ -6050,8 +6066,10 @@ const HeatCanvasLayer = L.Layer.extend({
         // no more whack-a-mole polygon fixes. If the sampler isn't usable
         // (CORS blocked, tiles still loading), fall through to the polygon
         // check so the app still works.
+        // When bathy confirms water, skip basemap misreads (BlueTopo hillshade
+        // often classifies shelf pixels as land).
         let isWater = null;
-        if(useBasemap){
+        if(!bathyWater && useBasemap){
           isWater = BasemapSampler.isWater(x, y);
         }
         if(isWater === false){
@@ -8578,7 +8596,7 @@ function renderExplainerMain(){
           <span style="flex:1"><b>Better window ${bwLabel.replace(/^Today\s|^Tomorrow\s/,'')}</b> — bite climbs to about ${bwPct}% ${/Tomorrow/.test(bwLabel) ? "tomorrow" : "later today"}. Tap to preview.</span>
           <span style="opacity:.6">→</span>
         </button>`;
-      verdictText = verdictText.replace(/\.$/, "") + " — right now. Conditions improve in the window above.";
+      verdictText = verdictText.replace(/\.$/, "") + " — right now. Conditions improve in the window below.";
     }
   }
 
@@ -11986,6 +12004,7 @@ function switchBase(val){
     satelliteLayer.addTo(MAP);
     satelliteLabelsLayer.addTo(MAP);
   }
+  scheduleHeatMaskRepaint();
   // Auto-close the basemap modal after a selection so the user sees the
   // new map immediately. Short delay lets the radio animation finish.
   const m = document.getElementById("basemap-modal");
