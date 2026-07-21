@@ -312,7 +312,7 @@ let pinLL=null;
 // the chosen hotspot cells; null for the normal single-spot brief (tap a spot).
 let _briefRunPlanSpots=null;
 let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, ports:true, predict:false, loran:false, depth:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
+let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -326,6 +326,8 @@ let _predictGrid = null, _predictSpecies = null, _predictTooltip = null, _predic
 // arrived in different order, which is why the #1/#2/#3 badges jumped on zoom.
 let _predictResultCache = null; // { key, heatGrid, hotspots, badges, gridStep, gridOriginLat, gridOriginLng }
 let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null;
+let _activeBaseMap = "satellite";
+const M_PER_FATHOM = 1.8288;
 // Satellite-imagery date control (SEPARATE from the prediction forecast slider).
 // Satellite layers (SST/chlor) are OBSERVED data — they only go backward. This
 // is days back from the most-recent expected image (GIBS lags ~2 days). The
@@ -393,7 +395,7 @@ async function initMap(){
   // Restore saved preferences (default port, basemap, etc.) before any view
   // logic reads them, so the app opens with the user's chosen defaults.
   if(typeof prefLoad === "function") prefLoad();
-  MAP=L.map("map",{center:[29.0,-85.0],zoom:5,zoomControl:false,attributionControl:true,maxZoom:13,
+  MAP=L.map("map",{center:[29.0,-85.0],zoom:5,zoomControl:false,attributionControl:true,maxZoom:18,
     // Trackpad/mouse-wheel zoom is handled by our own debounced handler below
     // (bindTrackpadZoom). Leaflet's built-in scrollWheelZoom accumulates the many
     // tiny wheel events a trackpad fires and ends up jumping 2-3 levels per
@@ -472,35 +474,41 @@ async function initMap(){
     {maxZoom:18,minZoom:0,attribution:'',opacity:0.7}
   ).addTo(MAP);
 
-  // ── OCEAN BATHYMETRIC: Esri Ocean Base + NOAA BlueTopo hillshade (US) ──
+  // ── OCEAN BATHYMETRIC: Esri Ocean Base + NOAA BlueTopo color + hillshade ──
+  // Esri/GEBCO fills the globe; BlueTopo elevation (color by depth) + hillshade
+  // show survey-grade US seafloor structure (ledges, channels, edges) to ~z16.
   // World_Ocean_Reference is intentionally omitted — it draws lat/lon graticule
   // lines that read as a distracting grid over the chart.
+  const _blueTopoWmts =
+    "https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
+    + "&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A{z}&TILEROW={y}&TILECOL={x}&FORMAT=image%2Fpng8";
   esriOceanLayer=L.layerGroup([
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
-      {maxZoom:19,maxNativeZoom:13,minZoom:0,crossOrigin:'anonymous',attribution:'© Esri · GEBCO · NOAA · NGA'}
+      {maxZoom:18,maxNativeZoom:13,minZoom:0,crossOrigin:'anonymous',attribution:'© Esri · GEBCO · NOAA · NGA'}
     ),
     L.tileLayer(
-      "https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
-        + "&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade&TILEMATRIXSET=EPSG%3A3857"
-        + "&TILEMATRIX=EPSG%3A3857%3A{z}&TILEROW={y}&TILECOL={x}&FORMAT=image%2Fpng8",
-      // BlueTopo GWC serves survey-resolution relief to z20 — cap native at 16 (fine
-      // detail: ledges, humps, wrecks) and let Leaflet upscale past that so the layer
-      // never disappears when the user zooms in tight. Was mistakenly capped at z9,
-      // which only showed coarse regional relief.
-      {maxZoom:19,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.78,
+      _blueTopoWmts + "&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation",
+      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.92,
+        attribution:'© NOAA OCS · BlueTopo',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
+    ),
+    L.tileLayer(
+      _blueTopoWmts + "&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade",
+      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.55,
         attribution:'© NOAA OCS · BlueTopo CUDEM',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
     ),
   ]);
 
-  // ── STREET + SEAMARKS ──
-  osmLayer=L.layerGroup([
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      {maxZoom:19,minZoom:0,crossOrigin:'anonymous',attribution:'© OpenStreetMap contributors',subdomains:'abc'}),
-    L.tileLayer("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
-      {maxZoom:18,crossOrigin:'anonymous',attribution:'© OpenSeaMap',opacity:0.9})]);
-
   bathyLayer=esriOceanLayer; // alias for backward compat
+
+  // Street + SeaMarks basemap removed — Satellite and Ocean Bathymetric only.
+
+  // Apply saved default basemap (prefLoad already ran at start of initMap).
+  if(typeof USER_PREFS !== "undefined" && USER_PREFS.defaultBaseMap === "ocean"){
+    switchBase("ocean");
+  } else {
+    _activeBaseMap = "satellite";
+  }
 
   // ── Dedicated pane for satellite ocean overlays ──
   // SST and Chlorophyll go in their own pane so the BasemapSampler (which
@@ -632,15 +640,16 @@ async function initMap(){
       attribution: '© NOAA/NWS nowCOAST · MRMS base reflectivity',
     });
 
-  // ── Bathymetric contour overlay ──
-  // High-res US relief is on the Ocean Bathymetric basemap via NOAA BlueTopo WMTS
-  // (bluetopo:hillshade / nbs_hillshade, EPSG:3857, z0–9). Scoring depth comes from
-  // CUDEM 1/9 arc-sec NCSS tiles in the ocean edge function (ETOPO fallback offshore).
+  // ── Bathymetry note ──
+  // High-res US seafloor is on the Ocean Bathymetric basemap via NOAA BlueTopo
+  // (color elevation + hillshade, ~z16). Scoring depth comes from CUDEM NCSS /
+  // ETOPO in the ocean edge function. Tap the map for a ft/fm depth readout.
 
   L.control.zoom({position:"topleft"}).addTo(MAP);
   MAP.on("click",onMapClick);
   // Live wind point-readout (speed / gusts / direction under the cursor)
   bindWindReadout();
+  bindDepthReadout();
   // Initial scale bar draw + wire to zoom/move events
   updateScaleBar();
   MAP.on("zoomend moveend", updateScaleBar);
@@ -913,10 +922,9 @@ async function prefetchCurrentView(){
       `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,
       `https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/${z}/${y}/${x}`],
     ocean: (z,x,y) => [
-      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/${z}/${y}/${x}`],
-    osm: (z,x,y) => [
-      `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`,
-      `https://tiles.openseamap.org/seamark/${z}/${x}/${y}.png`],
+      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/${z}/${y}/${x}`,
+      `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`,
+      `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`],
   };
   const buildUrls = urlBuilders[activeBase] || urlBuilders.satellite;
 
@@ -1082,10 +1090,9 @@ async function dtPrefetchTiles(bounds, onProgress){
       `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,
       `https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/${z}/${y}/${x}`],
     ocean: (z,x,y) => [
-      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/${z}/${y}/${x}`],
-    osm: (z,x,y) => [
-      `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`,
-      `https://tiles.openseamap.org/seamark/${z}/${x}/${y}.png`],
+      `https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/${z}/${y}/${x}`,
+      `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`,
+      `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`],
   };
   const buildUrls = urlBuilders[activeBase] || urlBuilders.satellite;
   const latLngToTile = (lat, lng, z) => {
@@ -8862,7 +8869,6 @@ function toggleLayer(key){
   }
   else if(key==="ports")drawPortMarkers();
   else if(key==="loran")drawLoranLines();
-  else if(key==="depth")drawDepthContours();
   else if(key==="catches")drawCatchPins();
   else if(key==="closures")drawClosures();
   else if(key==="platforms")drawPlatforms();
@@ -9910,201 +9916,9 @@ function drawLoranLines(){
   loranLayer.addTo(MAP);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// DEPTH CONTOURS (fathoms)
-// Isolines from the CUDEM/ETOPO BATHY_GRID. Informational only — not for nav.
-// ════════════════════════════════════════════════════════════════════════════
-const M_PER_FATHOM = 1.8288;
-const DEPTH_CONTOUR_FMS = [5, 10, 20, 30, 50, 100, 200, 500, 1000];
-let depthContourLayer = null;
-let _depthContourMoveBound = false;
-let _depthContourRedrawTimer = null;
-let _depthContourFetchSeq = 0;
-
-function depthContourLevelsForZoom(z){
-  if(z < 7) return [100, 200, 500, 1000];
-  if(z < 9) return [20, 50, 100, 200, 500, 1000];
-  return DEPTH_CONTOUR_FMS.slice();
-}
-
-function depthContourIsMajor(fm){
-  return fm >= 100 || fm === 50 || fm === 20;
-}
-
-function stitchContourSegments(segments, step){
-  if(segments.length < 2) return segments;
-  const EPS = Math.max(step * 0.05, 1e-6);
-  const ptKey = (lat, lng) => `${Math.round(lat / EPS)},${Math.round(lng / EPS)}`;
-  const endpoints = new Map();
-  segments.forEach((seg, i) => {
-    const k0 = ptKey(seg[0][0], seg[0][1]);
-    const k1 = ptKey(seg[1][0], seg[1][1]);
-    if(!endpoints.has(k0)) endpoints.set(k0, []);
-    if(!endpoints.has(k1)) endpoints.set(k1, []);
-    endpoints.get(k0).push([i, 0]);
-    endpoints.get(k1).push([i, 1]);
-  });
-  const used = new Array(segments.length).fill(false);
-  const polylines = [];
-  for(let i = 0; i < segments.length; i++){
-    if(used[i]) continue;
-    used[i] = true;
-    const chain = [segments[i][0], segments[i][1]];
-    while(true){
-      const last = chain[chain.length - 1];
-      const candidates = endpoints.get(ptKey(last[0], last[1])) || [];
-      let next = null;
-      for(const [idx, end] of candidates){
-        if(used[idx]) continue;
-        next = [idx, end];
-        break;
-      }
-      if(!next) break;
-      used[next[0]] = true;
-      chain.push(segments[next[0]][1 - next[1]]);
-    }
-    while(true){
-      const first = chain[0];
-      const candidates = endpoints.get(ptKey(first[0], first[1])) || [];
-      let prev = null;
-      for(const [idx, end] of candidates){
-        if(used[idx]) continue;
-        prev = [idx, end];
-        break;
-      }
-      if(!prev) break;
-      used[prev[0]] = true;
-      chain.unshift(segments[prev[0]][1 - prev[1]]);
-    }
-    polylines.push(chain);
-  }
-  return polylines;
-}
-
-// Marching-squares isolines on BATHY_GRID for a depth in meters (positive = water).
-function traceDepthContourOnGrid(g, depthM){
-  if(!g || !g.depth || depthM <= 0) return [];
-  const { step, minLat, minLng, nLat, nLng, depth } = g;
-  const cell = (i, j) => {
-    if(i < 0 || j < 0 || i >= nLat || j >= nLng) return NaN;
-    return depth[i * nLng + j];
-  };
-  const interp = (v1, v2, lat1, lng1, lat2, lng2) => {
-    const frac = (depthM - v1) / (v2 - v1);
-    return [lat1 + (lat2 - lat1) * frac, lng1 + (lng2 - lng1) * frac];
-  };
-  const segments = [];
-  for(let i = 0; i < nLat - 1; i++){
-    for(let j = 0; j < nLng - 1; j++){
-      const v00 = cell(i, j), v01 = cell(i, j + 1);
-      const v10 = cell(i + 1, j), v11 = cell(i + 1, j + 1);
-      if(!isFinite(v00) || !isFinite(v01) || !isFinite(v10) || !isFinite(v11)) continue;
-      // Skip fully dry cells — contours start at the waterline.
-      if(v00 <= 0 && v01 <= 0 && v10 <= 0 && v11 <= 0) continue;
-      const lat0 = minLat + i * step, lng0 = minLng + j * step;
-      const lat1 = minLat + (i + 1) * step, lng1 = minLng + (j + 1) * step;
-      const edges = [];
-      if((v00 < depthM) !== (v01 < depthM)) edges.push(interp(v00, v01, lat0, lng0, lat0, lng1));
-      if((v01 < depthM) !== (v11 < depthM)) edges.push(interp(v01, v11, lat0, lng1, lat1, lng1));
-      if((v10 < depthM) !== (v11 < depthM)) edges.push(interp(v10, v11, lat1, lng0, lat1, lng1));
-      if((v00 < depthM) !== (v10 < depthM)) edges.push(interp(v00, v10, lat0, lng0, lat1, lng0));
-      if(edges.length === 2) segments.push(edges);
-    }
-  }
-  return stitchContourSegments(segments, step);
-}
-
-function clearDepthContours(){
-  if(depthContourLayer && typeof MAP !== "undefined" && MAP){
-    try { MAP.removeLayer(depthContourLayer); } catch(e){}
-  }
-  depthContourLayer = null;
-}
-
-function bindDepthContourRedraw(){
-  if(_depthContourMoveBound || !MAP) return;
-  _depthContourMoveBound = true;
-  const schedule = () => {
-    if(!layerVis.depth) return;
-    clearTimeout(_depthContourRedrawTimer);
-    _depthContourRedrawTimer = setTimeout(() => drawDepthContours(), 220);
-  };
-  MAP.on("moveend zoomend", schedule);
-}
-
-async function ensureDepthContourBathy(){
-  if(!MAP) return false;
-  const b = MAP.getBounds();
-  const padLat = (b.getNorth() - b.getSouth()) * 0.25;
-  const padLng = (b.getEast() - b.getWest()) * 0.25;
-  const latMin = b.getSouth() - padLat, latMax = b.getNorth() + padLat;
-  const lngMin = b.getWest() - padLng, lngMax = b.getEast() + padLng;
-  if(_bathyGridCoversView(latMin, latMax, lngMin, lngMax)) return true;
-  const seq = ++_depthContourFetchSeq;
-  try {
-    await buildBathyGrid(latMin, latMax, lngMin, lngMax);
-  } catch(e){}
-  return seq === _depthContourFetchSeq && !!BATHY_GRID;
-}
-
-async function drawDepthContours(){
-  clearDepthContours();
-  if(!layerVis.depth || !MAP) return;
-  bindDepthContourRedraw();
-  const ready = await ensureDepthContourBathy();
-  if(!layerVis.depth || !ready || !BATHY_GRID) return;
-
-  const z = MAP.getZoom();
-  const levels = depthContourLevelsForZoom(z);
-  const featureGroup = L.featureGroup();
-  const majorStyle = { color: "#67e8f9", weight: 2.0, opacity: 0.9, interactive: false, pane: "ocean-overlays" };
-  const minorStyle = { color: "#22d3ee", weight: 1.1, opacity: 0.55, interactive: false, pane: "ocean-overlays" };
-  const labelStyle = "color:#a5f3fc;font-size:11px;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.03em;text-shadow:0 0 3px #06101c,0 1px 2px #06101c,-1px 0 2px #06101c,1px 0 2px #06101c;white-space:nowrap;pointer-events:none;line-height:1";
-
-  levels.forEach(fm => {
-    const depthM = fm * M_PER_FATHOM;
-    const polylines = traceDepthContourOnGrid(BATHY_GRID, depthM);
-    if(!polylines.length) return;
-    const isMajor = depthContourIsMajor(fm);
-    const style = isMajor ? majorStyle : minorStyle;
-
-    let labelPolyIdx = -1, labelPolyLen = 0;
-    if(isMajor){
-      polylines.forEach((poly, idx) => {
-        if(poly.length < 4) return;
-        let len = 0;
-        for(let i = 1; i < poly.length; i++){
-          const dLat = poly[i][0] - poly[i - 1][0];
-          const dLng = (poly[i][1] - poly[i - 1][1]) * Math.cos(poly[i][0] * Math.PI / 180);
-          len += Math.hypot(dLat, dLng);
-        }
-        if(len > labelPolyLen){ labelPolyLen = len; labelPolyIdx = idx; }
-      });
-    }
-
-    polylines.forEach((poly, idx) => {
-      if(poly.length < 2) return;
-      L.polyline(poly, style).addTo(featureGroup);
-      if(isMajor && idx === labelPolyIdx && labelPolyLen > 0.08){
-        const mid = poly[Math.floor(poly.length / 2)];
-        L.marker(mid, {
-          icon: L.divIcon({
-            className: "depth-contour-label",
-            html: `<div style="${labelStyle}">${fm} fm</div>`,
-            iconSize: [52, 14],
-            iconAnchor: [26, 7],
-          }),
-          interactive: false,
-          keyboard: false,
-          pane: "ocean-overlays",
-        }).addTo(featureGroup);
-      }
-    });
-  });
-
-  depthContourLayer = featureGroup;
-  depthContourLayer.addTo(MAP);
-}
+// Depth Contours layer removed — Ocean Bathymetric basemap now uses NOAA
+// BlueTopo color elevation + hillshade for seafloor structure; tap the map
+// for a depth readout in feet and fathoms.
 
 function toggleLayersPanel(){
   layersPanelOpen=!layersPanelOpen;
@@ -10746,7 +10560,10 @@ function prefLoad(){
     if(saved && typeof saved === "object"){
       if("defaultPort" in saved)    USER_PREFS.defaultPort    = saved.defaultPort;
       if("defaultSpecies" in saved) USER_PREFS.defaultSpecies = saved.defaultSpecies;
-      if("defaultBaseMap" in saved) USER_PREFS.defaultBaseMap = saved.defaultBaseMap || "satellite";
+      if("defaultBaseMap" in saved){
+        USER_PREFS.defaultBaseMap = saved.defaultBaseMap || "satellite";
+        if(USER_PREFS.defaultBaseMap === "osm") USER_PREFS.defaultBaseMap = "satellite";
+      }
       if("autozoomPort" in saved)   USER_PREFS.autozoomPort   = !!saved.autozoomPort;
       if("persistLoran" in saved)   USER_PREFS.persistLoran   = !!saved.persistLoran;
     }
@@ -10955,7 +10772,10 @@ function refreshSettingsModal(){
 
   // ── Base map default ──
   const bmSel = document.getElementById("pref-basemap");
-  if(bmSel) bmSel.value = USER_PREFS.defaultBaseMap;
+  if(bmSel){
+    if(USER_PREFS.defaultBaseMap === "osm") USER_PREFS.defaultBaseMap = "satellite";
+    bmSel.value = USER_PREFS.defaultBaseMap;
+  }
 
   if(typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
 }
@@ -12115,19 +11935,25 @@ function rulerRedraw(){
 }
 
 function switchBase(val){
+  if(val === "osm") val = "satellite"; // Street + SeaMarks removed
+  _activeBaseMap = val;
   // Remove all base layers
-  [satelliteLayer,satelliteLabelsLayer,osmLayer,esriOceanLayer].forEach(l=>{
+  [satelliteLayer,satelliteLabelsLayer,esriOceanLayer].forEach(l=>{
     if(l && MAP.hasLayer(l)) MAP.removeLayer(l);
   });
+  // Sync radio buttons (covers migrated osm → satellite)
+  document.querySelectorAll('input[name="base"]').forEach(r => {
+    r.checked = (r.value === val);
+  });
   // Add the selected one
-  if(val==="satellite"){
+  if(val==="ocean") {
+    esriOceanLayer.addTo(MAP);
+    if(typeof ensureOceanBathyForView === "function") ensureOceanBathyForView();
+  } else {
     satelliteLayer.addTo(MAP);
     satelliteLabelsLayer.addTo(MAP);
-  } else if(val==="ocean") {
-    esriOceanLayer.addTo(MAP);
-  } else {
-    osmLayer.addTo(MAP);
   }
+  if(typeof updateBathyDepthLegend === "function") updateBathyDepthLegend();
   // Auto-close the basemap modal after a selection so the user sees the
   // new map immediately. Short delay lets the radio animation finish.
   const m = document.getElementById("basemap-modal");
@@ -12147,14 +11973,9 @@ function updateLegend(){
 // ════════════════════════════════════════════════════════════════════════════
 function onMapClick(e){
   if(typeof rulerActive !== "undefined" && rulerActive) return;
-  // Per UX spec: nothing should happen when tapping open water on the map.
-  // All useful detail is delivered via the hotspot popup, which is opened by
-  // tapping a heat cell or top-3 badge (those have their own click handlers).
-  // Tapping a port or canyon marker is also already handled by those layers.
-  // So a tap on EMPTY water should be a no-op — no pin, no panel, no errors.
-  //
-  // We still capture the location into pinLL because some legacy code paths
-  // (Brief generator, Reports filter) read from it. But we do nothing else.
+  // Per UX spec: tapping open water does not open a panel or drop a pin.
+  // We still capture pinLL for legacy Brief/Reports readers, and show a
+  // lightweight depth readout (ft + fm) when bathymetry is available.
   const {lat, lng} = e.latlng;
   pinLL = {lat, lng};
 
@@ -12171,7 +11992,88 @@ function onMapClick(e){
   if(typeof wpDropMode !== "undefined" && wpDropMode){
     wpShowDropPopup(lat, lng);
     setTimeout(wpDropDeactivate, 0);
+    return;
   }
+
+  showDepthReadoutAt(lat, lng, e.containerPoint);
+}
+
+// ── Depth readout (tap map → feet + fathoms) ─────────────────────────────────
+let _depthReadoutEl = null;
+let _depthReadoutTimer = null;
+let _depthReadoutBound = false;
+
+function bindDepthReadout(){
+  if(_depthReadoutBound || !MAP) return;
+  _depthReadoutBound = true;
+  MAP.on("movestart zoomstart", hideDepthReadout);
+  MAP.on("moveend zoomend", () => {
+    if(_activeBaseMap === "ocean" && typeof ensureOceanBathyForView === "function"){
+      ensureOceanBathyForView();
+    }
+  });
+  updateBathyDepthLegend();
+}
+
+function hideDepthReadout(){
+  if(_depthReadoutTimer){ clearTimeout(_depthReadoutTimer); _depthReadoutTimer = null; }
+  if(_depthReadoutEl) _depthReadoutEl.style.display = "none";
+}
+
+function formatDepthReadout(meters){
+  if(meters == null || !isFinite(meters) || meters <= 0) return null;
+  const ft = meters * 3.280839895;
+  const fm = meters / M_PER_FATHOM;
+  const ftTxt = ft >= 100 ? String(Math.round(ft)) : ft.toFixed(ft >= 10 ? 0 : 1);
+  const fmTxt = fm >= 100 ? String(Math.round(fm)) : fm.toFixed(fm >= 10 ? 0 : 1);
+  return { ftTxt, fmTxt, ft, fm };
+}
+
+async function ensureOceanBathyForView(){
+  if(!MAP || typeof buildBathyGrid !== "function") return;
+  const b = MAP.getBounds();
+  const padLat = (b.getNorth() - b.getSouth()) * 0.2;
+  const padLng = (b.getEast() - b.getWest()) * 0.2;
+  const latMin = b.getSouth() - padLat, latMax = b.getNorth() + padLat;
+  const lngMin = b.getWest() - padLng, lngMax = b.getEast() + padLng;
+  if(typeof _bathyGridCoversView === "function" && _bathyGridCoversView(latMin, latMax, lngMin, lngMax)) return;
+  try { await buildBathyGrid(latMin, latMax, lngMin, lngMax); } catch(e){}
+}
+
+function updateBathyDepthLegend(){
+  const el = document.getElementById("bathy-depth-legend");
+  if(!el) return;
+  el.style.display = (_activeBaseMap === "ocean") ? "block" : "none";
+}
+
+async function showDepthReadoutAt(lat, lng, containerPoint){
+  if(!MAP) return;
+  let m = (typeof realDepthAt === "function") ? realDepthAt(lat, lng) : null;
+  if((m == null || m <= 0) && typeof buildBathyGrid === "function"){
+    const pad = 0.4;
+    try { await buildBathyGrid(lat - pad, lat + pad, lng - pad, lng + pad); } catch(e){}
+    m = (typeof realDepthAt === "function") ? realDepthAt(lat, lng) : null;
+  }
+  const fmt = formatDepthReadout(m);
+  if(!fmt){ hideDepthReadout(); return; }
+
+  if(!_depthReadoutEl){
+    _depthReadoutEl = document.createElement("div");
+    _depthReadoutEl.id = "depth-readout";
+    _depthReadoutEl.style.cssText = "position:absolute;z-index:520;pointer-events:none;background:rgba(8,20,38,.94);border:1px solid rgba(103,232,249,.45);border-radius:9px;padding:6px 10px;box-shadow:0 3px 12px rgba(0,0,0,.55);font:600 12px 'Segoe UI',Arial,sans-serif;color:#e8f4ff;white-space:nowrap;transform:translate(-50%,calc(-100% - 14px))";
+    MAP.getContainer().appendChild(_depthReadoutEl);
+  }
+  _depthReadoutEl.innerHTML =
+    `<span style="color:#67e8f9">Depth</span> ` +
+    `<b>${fmt.ftTxt}</b><span style="opacity:.7;font-weight:400"> ft</span>` +
+    `<span style="opacity:.4;margin:0 5px">·</span>` +
+    `<b>${fmt.fmTxt}</b><span style="opacity:.7;font-weight:400"> fm</span>`;
+  const pt = containerPoint || MAP.latLngToContainerPoint([lat, lng]);
+  _depthReadoutEl.style.left = pt.x + "px";
+  _depthReadoutEl.style.top = pt.y + "px";
+  _depthReadoutEl.style.display = "block";
+  if(_depthReadoutTimer) clearTimeout(_depthReadoutTimer);
+  _depthReadoutTimer = setTimeout(hideDepthReadout, 4500);
 }
 
 // ── DROP-A-WAYPOINT TOOL ─────────────────────────────────────────────────────
@@ -16644,7 +16546,10 @@ window.bwOnSignedIn = async function (user) {
         if(acct && typeof acct === "object"){
           if("defaultPort"    in acct) USER_PREFS.defaultPort    = acct.defaultPort;
           if("defaultSpecies" in acct) USER_PREFS.defaultSpecies = acct.defaultSpecies;
-          if("defaultBaseMap" in acct) USER_PREFS.defaultBaseMap = acct.defaultBaseMap || "satellite";
+          if("defaultBaseMap" in acct){
+            USER_PREFS.defaultBaseMap = acct.defaultBaseMap || "satellite";
+            if(USER_PREFS.defaultBaseMap === "osm") USER_PREFS.defaultBaseMap = "satellite";
+          }
           if("autozoomPort"   in acct) USER_PREFS.autozoomPort   = !!acct.autozoomPort;
           if("persistLoran"   in acct) USER_PREFS.persistLoran   = !!acct.persistLoran;
         }
