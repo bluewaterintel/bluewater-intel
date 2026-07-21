@@ -474,10 +474,10 @@ async function initMap(){
     {maxZoom:18,minZoom:0,attribution:'',opacity:0.7}
   ).addTo(MAP);
 
-  // ── OCEAN BATHYMETRIC: Esri Ocean Base + NOAA BlueTopo (hillshade-led) ──
-  // Color elevation alone washes the shelf into a flat purple/blue slab and
-  // makes the break look harsh. Lead with hillshade for ledges/edges, keep a
-  // light elevation tint for depth context. Esri/GEBCO fills gaps globally.
+  // ── OCEAN BATHYMETRIC: Esri Ocean Base + NOAA BlueTopo depth + hillshade ──
+  // Color elevation carries the shallow→deep ramp (matches the legend).
+  // Hillshade sits on top with multiply so ledges/canyons stay readable
+  // without greying out the depth tint. Esri/GEBCO fills gaps globally.
   // World_Ocean_Reference omitted (lat/lon graticule clutter).
   const _blueTopoWmts =
     "https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
@@ -489,12 +489,14 @@ async function initMap(){
     ),
     L.tileLayer(
       _blueTopoWmts + "&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation",
-      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.28,
+      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.82,
+        className:"bluetopo-elevation",
         attribution:'© NOAA OCS · BlueTopo',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
     ),
     L.tileLayer(
       _blueTopoWmts + "&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade",
-      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.72,
+      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.48,
+        className:"bluetopo-hillshade",
         attribution:'© NOAA OCS · BlueTopo CUDEM',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
     ),
   ]);
@@ -12060,8 +12062,8 @@ function updateBathyDepthLegend(){
   const hint = el.querySelector(".bathy-depth-legend-hint");
   const bar = el.querySelector(".bathy-depth-legend-bar");
   const labels = el.querySelector(".bathy-depth-legend-labels");
-  if(title) title.textContent = "BlueTopo relief";
-  if(hint) hint.textContent = "Hillshade + light depth tint · tap for ft / fm";
+  if(title) title.textContent = "BlueTopo depth";
+  if(hint) hint.textContent = "Color = depth · shade = relief · tap for ft / fm";
   if(bar) bar.style.display = "block";
   if(labels) labels.style.display = "flex";
 }
