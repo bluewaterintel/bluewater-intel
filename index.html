@@ -3460,13 +3460,6 @@ body.modal-open #brief-toggle{
         <input type="radio" name="base" value="ocean" onchange="switchBase(this.value)">
         <span>🌊 Ocean Bathymetric <span style="font-size:10px;color:#9ec5e8;font-weight:500">(BlueTopo relief)</span></span>
       </label>
-      <label class="layer-row" title="NOAA ENC Chart Display — traditional paper-chart soundings, depth contours, wrecks and buoys. Best for labeled depths. Informational only — not for navigation.">
-        <input type="radio" name="base" value="chart" onchange="switchBase(this.value)">
-        <span>🧭 NOAA Nautical Chart <span style="font-size:10px;color:#9ec5e8;font-weight:500">(soundings)</span></span>
-      </label>
-      <div style="font-size:10px;color:#7d9bb8;line-height:1.45;padding:4px 2px 2px">
-        Compare BlueTopo (bottom shape) vs NOAA Chart (printed soundings &amp; contours). Chart is not for navigation.
-      </div>
     </div>
   </div>
 </div>
@@ -3500,7 +3493,6 @@ body.modal-open #brief-toggle{
       <select id="pref-basemap" class="pref-select" onchange="prefSet('defaultBaseMap', this.value)">
         <option value="satellite">🛰 Satellite</option>
         <option value="ocean">🌊 Ocean Bathymetric (BlueTopo relief)</option>
-        <option value="chart">🧭 NOAA Nautical Chart (soundings)</option>
       </select>
 
       <hr class="layers-divider">
@@ -4080,7 +4072,7 @@ body.modal-open #brief-toggle{
       <div class="tut-step-body">
         <div class="tut-step-title">Use the right-side icon column</div>
         <div class="tut-step-desc" style="line-height:1.7">
-          <div style="margin:6px 0"><span class="tut-icon">🗺</span> <b>Base Map</b> — Satellite, <b>Ocean Bathymetric</b> (NOAA BlueTopo hillshade for ledges/structure), or <b>NOAA Nautical Chart</b> (ENC soundings &amp; contours). Tap the map for depth in feet and fathoms. Charts are informational only — not for navigation.</div>
+          <div style="margin:6px 0"><span class="tut-icon">🗺</span> <b>Base Map</b> — switch between Satellite and <b>Ocean Bathymetric</b> (NOAA BlueTopo hillshade for ledges/structure). Tap the map for depth in feet and fathoms.</div>
           <div style="margin:6px 0"><span class="tut-icon">◆</span> <b>Layers</b> — iOS-style toggles grouped into Predictions, Map Markers, Ocean Data, and an Advanced section. Toggle the <b>Bite Map</b> (the color-coded bite forecast for your target species), <b>Major Fishing Areas</b> (canyons, wrecks, reefs, lumps and ledges — the 15 closest to your port), ports, your catches, satellite <b>SST &amp; Chlorophyll</b>, animated <b>Wind</b>, <b>Front Convergence (SSH)</b>, and ocean currents. Closures and LORAN-C live under Advanced.</div>
           <div style="margin:6px 0"><span class="tut-icon">📏</span> <b>Ruler</b> — tap to measure distance in nautical miles. Drop multiple points to plot a route.</div>
           <div style="margin:6px 0"><span class="tut-icon">⚙</span> <b>Settings</b> — set defaults like home port, species, base map, and account preferences.</div>
@@ -4151,7 +4143,7 @@ body.modal-open #brief-toggle{
       <div class="tut-feature-icon">📐</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Real-feature bathymetry under the hood</div>
-        <div class="tut-feature-desc">Depth-driven habitat scoring is anchored to NOAA CUDEM / BlueTopo (~3 m) on US waters (ETOPO elsewhere), blended with 201 real-world reference points — canyon heads, named banks, shelf-edge stations, and Gulf canyons. The algorithm merges these with the regional shelf model so depth is correct around real features instead of just averaged. To <em>see</em> the seafloor, use Ocean Bathymetric (BlueTopo relief) for shape, or NOAA Nautical Chart for labeled soundings and contours; tap the map for depth in feet and fathoms.</div>
+        <div class="tut-feature-desc">Depth-driven habitat scoring is anchored to NOAA CUDEM / BlueTopo (~3 m) on US waters (ETOPO elsewhere), blended with 201 real-world reference points — canyon heads, named banks, shelf-edge stations, and Gulf canyons. The algorithm merges these with the regional shelf model so depth is correct around real features instead of just averaged. To <em>see</em> the seafloor, switch the basemap to Ocean Bathymetric (BlueTopo relief) and tap the map for depth in feet and fathoms.</div>
       </div>
     </div>
 

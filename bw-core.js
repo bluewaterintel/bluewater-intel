@@ -325,7 +325,7 @@ let _predictGrid = null, _predictSpecies = null, _predictTooltip = null, _predic
 // load (old behavior) produced different hotspot rankings as bathy/ocean data
 // arrived in different order, which is why the #1/#2/#3 badges jumped on zoom.
 let _predictResultCache = null; // { key, heatGrid, hotspots, badges, gridStep, gridOriginLat, gridOriginLng }
-let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, noaaChartLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null;
+let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null;
 let _activeBaseMap = "satellite";
 const M_PER_FATHOM = 1.8288;
 // Satellite-imagery date control (SEPARATE from the prediction forecast slider).
@@ -499,30 +499,11 @@ async function initMap(){
     ),
   ]);
 
-  // ── NOAA NAUTICAL CHART: ENC Chart Display (paper-chart symbology) ──
-  // Traditional soundings, depth contours, wrecks, buoys — best for reading
-  // labeled depths. WMS from NOAA Marine Chart Division; weekly ENC updates.
-  // Omit layers 8/9 (Data quality / Low accuracy CATZOC star symbols) — they
-  // tile the chart with survey-confidence markers that clutter fishing use.
-  // Informational only — not for navigation / not a carriage-requirement chart.
-  noaaChartLayer = L.tileLayer.wms(
-    "https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/NOAAChartDisplay/MapServer/exts/MaritimeChartService/WMSServer",
-    {
-      layers: "0,1,2,3,4,5,6,7,10,11,12",
-      format: "image/png",
-      transparent: false,
-      version: "1.1.1",
-      attribution: "© NOAA OCS · ENC Chart Display (not for navigation)",
-      maxZoom: 18,
-      minZoom: 0,
-    }
-  );
-
   bathyLayer=esriOceanLayer; // alias for backward compat
 
   // Apply saved default basemap (prefLoad already ran at start of initMap).
-  if(typeof USER_PREFS !== "undefined" && (USER_PREFS.defaultBaseMap === "ocean" || USER_PREFS.defaultBaseMap === "chart")){
-    switchBase(USER_PREFS.defaultBaseMap);
+  if(typeof USER_PREFS !== "undefined" && USER_PREFS.defaultBaseMap === "ocean"){
+    switchBase("ocean");
   } else {
     _activeBaseMap = "satellite";
   }
@@ -943,8 +924,7 @@ async function prefetchCurrentView(){
       `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`,
       `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`],
   };
-  // NOAA Chart is WMS (bbox tiles) — prefetch Esri ocean underlay as a useful offline fallback.
-  const buildUrls = urlBuilders[activeBase === "chart" ? "ocean" : activeBase] || urlBuilders.satellite;
+  const buildUrls = urlBuilders[activeBase] || urlBuilders.satellite;
 
   // Helper: convert lat/lng to tile coords for a given zoom
   const latLngToTile = (lat, lng, z) => {
@@ -1112,8 +1092,7 @@ async function dtPrefetchTiles(bounds, onProgress){
       `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`,
       `https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image%2Fpng8`],
   };
-  // NOAA Chart is WMS (bbox tiles) — prefetch Esri ocean underlay as a useful offline fallback.
-  const buildUrls = urlBuilders[activeBase === "chart" ? "ocean" : activeBase] || urlBuilders.satellite;
+  const buildUrls = urlBuilders[activeBase] || urlBuilders.satellite;
   const latLngToTile = (lat, lng, z) => {
     const n = Math.pow(2, z);
     const xt = Math.floor((lng + 180) / 360 * n);
@@ -10581,7 +10560,9 @@ function prefLoad(){
       if("defaultSpecies" in saved) USER_PREFS.defaultSpecies = saved.defaultSpecies;
       if("defaultBaseMap" in saved){
         USER_PREFS.defaultBaseMap = saved.defaultBaseMap || "satellite";
-        if(USER_PREFS.defaultBaseMap === "osm") USER_PREFS.defaultBaseMap = "satellite";
+        if(USER_PREFS.defaultBaseMap === "osm" || USER_PREFS.defaultBaseMap === "chart"){
+          USER_PREFS.defaultBaseMap = "satellite";
+        }
       }
       if("autozoomPort" in saved)   USER_PREFS.autozoomPort   = !!saved.autozoomPort;
       if("persistLoran" in saved)   USER_PREFS.persistLoran   = !!saved.persistLoran;
@@ -10792,7 +10773,9 @@ function refreshSettingsModal(){
   // ── Base map default ──
   const bmSel = document.getElementById("pref-basemap");
   if(bmSel){
-    if(USER_PREFS.defaultBaseMap === "osm") USER_PREFS.defaultBaseMap = "satellite";
+    if(USER_PREFS.defaultBaseMap === "osm" || USER_PREFS.defaultBaseMap === "chart"){
+      USER_PREFS.defaultBaseMap = "satellite";
+    }
     bmSel.value = USER_PREFS.defaultBaseMap;
   }
 
@@ -10881,6 +10864,15 @@ function openCatchesFilterPopup(){
   catchSyncFilterControls();
   const popup = document.getElementById("catches-filter-popup");
   const backdrop = document.getElementById("catches-filter-backdrop");
+  const btn = document.getElementById("catches-filter-btn");
+  if(popup && btn){
+    const r = btn.getBoundingClientRect();
+    const top = Math.min(r.bottom + 8, window.innerHeight - 80);
+    popup.style.left = "20px";
+    popup.style.right = "auto";
+    popup.style.top = Math.max(12, top) + "px";
+    popup.style.transform = "none";
+  }
   if(popup) popup.style.display = "block";
   if(backdrop) backdrop.style.display = "block";
   _catchesFilterPopupOpen = true;
@@ -11954,23 +11946,20 @@ function rulerRedraw(){
 }
 
 function switchBase(val){
-  if(val === "osm") val = "satellite"; // Street + SeaMarks removed
-  if(val !== "ocean" && val !== "chart") val = "satellite";
+  if(val === "osm" || val === "chart") val = "satellite"; // removed basemaps
+  if(val !== "ocean") val = "satellite";
   _activeBaseMap = val;
   // Remove all base layers
-  [satelliteLayer,satelliteLabelsLayer,esriOceanLayer,noaaChartLayer].forEach(l=>{
+  [satelliteLayer,satelliteLabelsLayer,esriOceanLayer].forEach(l=>{
     if(l && MAP.hasLayer(l)) MAP.removeLayer(l);
   });
-  // Sync radio buttons (covers migrated osm → satellite)
+  // Sync radio buttons (covers migrated osm/chart → satellite)
   document.querySelectorAll('input[name="base"]').forEach(r => {
     r.checked = (r.value === val);
   });
   // Add the selected one
   if(val === "ocean") {
     esriOceanLayer.addTo(MAP);
-    if(typeof ensureOceanBathyForView === "function") ensureOceanBathyForView();
-  } else if(val === "chart") {
-    if(noaaChartLayer) noaaChartLayer.addTo(MAP);
     if(typeof ensureOceanBathyForView === "function") ensureOceanBathyForView();
   } else {
     satelliteLayer.addTo(MAP);
@@ -12066,23 +12055,15 @@ async function ensureOceanBathyForView(){
 function updateBathyDepthLegend(){
   const el = document.getElementById("bathy-depth-legend");
   if(!el) return;
-  const show = (_activeBaseMap === "ocean" || _activeBaseMap === "chart");
-  el.style.display = show ? "block" : "none";
+  el.style.display = (_activeBaseMap === "ocean") ? "block" : "none";
   const title = el.querySelector(".bathy-depth-legend-title");
   const hint = el.querySelector(".bathy-depth-legend-hint");
   const bar = el.querySelector(".bathy-depth-legend-bar");
   const labels = el.querySelector(".bathy-depth-legend-labels");
-  if(_activeBaseMap === "chart"){
-    if(title) title.textContent = "NOAA Chart";
-    if(hint) hint.textContent = "Soundings & contours · tap for ft / fm · not for navigation";
-    if(bar) bar.style.display = "none";
-    if(labels) labels.style.display = "none";
-  } else if(_activeBaseMap === "ocean"){
-    if(title) title.textContent = "BlueTopo relief";
-    if(hint) hint.textContent = "Hillshade + light depth tint · tap for ft / fm";
-    if(bar) bar.style.display = "block";
-    if(labels) labels.style.display = "flex";
-  }
+  if(title) title.textContent = "BlueTopo relief";
+  if(hint) hint.textContent = "Hillshade + light depth tint · tap for ft / fm";
+  if(bar) bar.style.display = "block";
+  if(labels) labels.style.display = "flex";
 }
 
 async function showDepthReadoutAt(lat, lng, containerPoint){
@@ -16587,7 +16568,9 @@ window.bwOnSignedIn = async function (user) {
           if("defaultSpecies" in acct) USER_PREFS.defaultSpecies = acct.defaultSpecies;
           if("defaultBaseMap" in acct){
             USER_PREFS.defaultBaseMap = acct.defaultBaseMap || "satellite";
-            if(USER_PREFS.defaultBaseMap === "osm") USER_PREFS.defaultBaseMap = "satellite";
+            if(USER_PREFS.defaultBaseMap === "osm" || USER_PREFS.defaultBaseMap === "chart"){
+              USER_PREFS.defaultBaseMap = "satellite";
+            }
           }
           if("autozoomPort"   in acct) USER_PREFS.autozoomPort   = !!acct.autozoomPort;
           if("persistLoran"   in acct) USER_PREFS.persistLoran   = !!acct.persistLoran;
