@@ -11986,7 +11986,6 @@ function switchBase(val){
     satelliteLayer.addTo(MAP);
     satelliteLabelsLayer.addTo(MAP);
   }
-  if(typeof updateBathyDepthLegend === "function") updateBathyDepthLegend();
   // Auto-close the basemap modal after a selection so the user sees the
   // new map immediately. Short delay lets the radio animation finish.
   const m = document.getElementById("basemap-modal");
@@ -12045,7 +12044,6 @@ function bindDepthReadout(){
       ensureOceanBathyForView();
     }
   });
-  updateBathyDepthLegend();
 }
 
 function hideDepthReadout(){
@@ -12071,20 +12069,6 @@ async function ensureOceanBathyForView(){
   const lngMin = b.getWest() - padLng, lngMax = b.getEast() + padLng;
   if(typeof _bathyGridCoversView === "function" && _bathyGridCoversView(latMin, latMax, lngMin, lngMax)) return;
   try { await buildBathyGrid(latMin, latMax, lngMin, lngMax); } catch(e){}
-}
-
-function updateBathyDepthLegend(){
-  const el = document.getElementById("bathy-depth-legend");
-  if(!el) return;
-  el.style.display = (_activeBaseMap === "ocean") ? "block" : "none";
-  const title = el.querySelector(".bathy-depth-legend-title");
-  const hint = el.querySelector(".bathy-depth-legend-hint");
-  const bar = el.querySelector(".bathy-depth-legend-bar");
-  const labels = el.querySelector(".bathy-depth-legend-labels");
-  if(title) title.textContent = "BlueTopo depth";
-  if(hint) hint.textContent = "Color = depth · shade = relief · tap for ft / fm";
-  if(bar) bar.style.display = "block";
-  if(labels) labels.style.display = "flex";
 }
 
 async function showDepthReadoutAt(lat, lng, containerPoint){
