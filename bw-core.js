@@ -743,6 +743,13 @@ async function initMap(){
     wpCtl.addEventListener("touchstart",   stopAllWp, {passive: true});
     wpCtl.addEventListener("mousedown",    stopAllWp);
   }
+  // Bite score banner (+12h/+24h pills) and ocean legend sit over the map —
+  // without this, taps change forecast AND fire depth readout underneath.
+  shieldMapOverlayFromLeaflet(document.getElementById("bite-banner"));
+  shieldMapOverlayFromLeaflet(document.getElementById("ocean-legend"));
+  shieldMapOverlayFromLeaflet(document.getElementById("wp-legend-toggle"));
+  shieldMapOverlayFromLeaflet(document.getElementById("mobile-controls-toggle"));
+  shieldMapOverlayFromLeaflet(document.getElementById("predict-loading"));
 
   // ── Initial port + map view ──
   // Three cases:
@@ -8109,6 +8116,7 @@ function bindPredictInteractionHandlers(){
   // drop-waypoint tool is armed so a tap marks a spot instead of opening the
   // hotspot explainer.
   MAP.on('click', (e) => {
+    if(clickOriginatedOnMapChrome(e)) return;
     if(typeof rulerActive !== "undefined" && rulerActive){ return; }
     if(typeof wpDropMode !== "undefined" && wpDropMode){ return; }
     if(typeof catchPickMode !== "undefined" && catchPickMode){ return; }
@@ -11981,7 +11989,35 @@ function updateLegend(){
 // ════════════════════════════════════════════════════════════════════════════
 // MAP CLICK — DROP PIN
 // ════════════════════════════════════════════════════════════════════════════
+// Map chrome (bite banner, legends, time pills) lives inside #map, so Leaflet
+// still fires map click unless we block propagation or ignore the target.
+const MAP_CHROME_CLICK_SELECTOR =
+  "#bite-banner, #ocean-legend, #ocean-legend-sheet, #predict-loading, " +
+  "#mobile-controls-toggle, #waypoint-legend, #wp-legend-toggle, " +
+  ".map-time-pill, #radar-loop-control, #depth-readout, " +
+  ".leaflet-control, .leaflet-popup, .leaflet-tooltip, " +
+  "#predict-explainer, #predict-explainer-backdrop";
+
+function clickOriginatedOnMapChrome(ev){
+  const t = (ev && ev.originalEvent && ev.originalEvent.target) || (ev && ev.target);
+  return !!(t && t.closest && t.closest(MAP_CHROME_CLICK_SELECTOR));
+}
+
+function shieldMapOverlayFromLeaflet(el){
+  if(!el || typeof L === "undefined" || !L.DomEvent) return;
+  L.DomEvent.disableClickPropagation(el);
+  L.DomEvent.disableScrollPropagation(el);
+  const stop = e => { e.stopPropagation(); };
+  el.addEventListener("pointerdown", stop);
+  el.addEventListener("pointermove", stop);
+  el.addEventListener("touchstart", stop, {passive: true});
+  el.addEventListener("touchmove", stop, {passive: true});
+  el.addEventListener("mousedown", stop);
+  el.addEventListener("mousemove", stop);
+}
+
 function onMapClick(e){
+  if(clickOriginatedOnMapChrome(e)) return;
   if(typeof rulerActive !== "undefined" && rulerActive) return;
   // Per UX spec: tapping open water does not open a panel or drop a pin.
   // We still capture pinLL for legacy Brief/Reports readers, and show a
