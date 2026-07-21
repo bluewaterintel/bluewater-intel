@@ -9952,6 +9952,7 @@ let _catchEditingId = null; // null = new catch; set when editing an existing en
 // Map-pick mode: hide the log form, let the user tap the chart, then reopen.
 let catchPickMode = false;
 let _catchPickFromCatches = false;
+let _catchLogFromCatches = false; // opened log/edit form from My Catches — return + refresh on save
 let _catchPickPin = null;
 
 function catchEnsureSpeciesSelect(){
@@ -10031,6 +10032,8 @@ function openEditCatch(id){
     showToast("Catch not found — it may have been deleted.", "warning");
     return;
   }
+  const catchesEl = document.getElementById("catches-overlay");
+  _catchLogFromCatches = !!(catchesEl && catchesEl.style.display === "block");
   _catchEditingId = id;
   catchPopulateFormFromEntry(entry);
   catchSyncModalEditState();
@@ -10041,6 +10044,8 @@ function openEditCatch(id){
 
 function openLogCatch(){
   _catchEditingId = null;
+  const catchesEl = document.getElementById("catches-overlay");
+  _catchLogFromCatches = !!(catchesEl && catchesEl.style.display === "block");
   catchEnsureSpeciesSelect();
   const sel = document.getElementById("catch-species");
   if(sel && activeSpId && activeSpId !== "all") sel.value = activeSpId;
@@ -10160,6 +10165,7 @@ function catchLocPickOnMap(){
   }
   const catchesEl = document.getElementById("catches-overlay");
   _catchPickFromCatches = !!(catchesEl && catchesEl.style.display === "block");
+  if(_catchPickFromCatches) _catchLogFromCatches = true;
   closeLogCatch();
   if(_catchPickFromCatches){
     catchesEl.style.display = "none";
@@ -10363,9 +10369,10 @@ function saveCatchFromForm(){
   const lng = _catchPendingLng;
   const resolvedPort = portName
     || (lat != null && lng != null && typeof nearestPortTo === "function" ? nearestPortTo(lat, lng) : null);
+  const editingId = _catchEditingId;
 
-  if(_catchEditingId){
-    const existing = catchGet(_catchEditingId);
+  if(editingId){
+    const existing = catchGet(editingId);
     if(!existing){
       showToast("Catch not found — it may have been deleted.", "warning");
       _catchEditingId = null;
@@ -10395,16 +10402,16 @@ function saveCatchFromForm(){
       lureColor: _catchFormLureColor || null,
       conditions,
     };
-    catchUpdate(_catchEditingId, patch);
+    catchUpdate(editingId, patch);
     if(wasShared && !shared){
-      catchUnshare(_catchEditingId);
-      catchUpdate(_catchEditingId, { shared: false });
+      catchUnshare(editingId);
+      catchUpdate(editingId, { shared: false });
     } else if(!wasShared && shared){
-      const updated = catchGet(_catchEditingId);
+      const updated = catchGet(editingId);
       if(updated){
         updated.shared = true;
         catchShareAsReport(updated);
-        catchUpdate(_catchEditingId, { shared: true });
+        catchUpdate(editingId, { shared: true });
       }
     }
     showToast("Catch updated.", "success");
@@ -10429,11 +10436,29 @@ function saveCatchFromForm(){
   }
   if(typeof drawCatchPins === "function") drawCatchPins();
   if(shared && typeof renderReports === "function") renderReports();
-  if(typeof renderMyCatches === "function"){
+  const fromCatches = _catchLogFromCatches;
+  const isNewCatch = !editingId;
+  if(fromCatches && isNewCatch){
+    CATCH_FILTER.species = "all";
+    CATCH_FILTER.color = "all";
+  }
+  if(fromCatches){
+    const catchesEl = document.getElementById("catches-overlay");
+    if(catchesEl){
+      catchesEl.style.display = "block";
+      document.body.style.overflow = "hidden";
+    }
+  }
+  closeLogCatch();
+  if(fromCatches){
+    if(typeof catchesSwitchTab === "function") catchesSwitchTab("list");
+    if(typeof catchSyncFilterControls === "function") catchSyncFilterControls();
+    if(typeof renderMyCatches === "function") renderMyCatches();
+  } else if(typeof renderMyCatches === "function"){
     const catchesEl = document.getElementById("catches-overlay");
     if(catchesEl && catchesEl.style.display === "block") renderMyCatches();
   }
-  closeLogCatch();
+  _catchLogFromCatches = false;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -10785,12 +10810,96 @@ const CATCH_LURE_COLORS = [
 
 // My Catches filter state (session-scoped).
 const CATCH_FILTER = {
-  species: new Set(),
-  colors: new Set(),
+  species: "all",
+  color: "all",
   dateFrom: "",
   dateTo: "",
   tackle: "all",
 };
+
+let _catchesTab = "list";
+
+function catchesSwitchTab(tab){
+  _catchesTab = tab === "filters" ? "filters" : "list";
+  document.querySelectorAll(".catches-tab").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.tab === _catchesTab);
+  });
+  const listPanel = document.getElementById("catches-tab-list");
+  const filtersPanel = document.getElementById("catches-tab-filters");
+  if(listPanel) listPanel.style.display = _catchesTab === "list" ? "block" : "none";
+  if(filtersPanel) filtersPanel.style.display = _catchesTab === "filters" ? "block" : "none";
+}
+
+function catchInitFilterDropdowns(){
+  const speciesSel = document.getElementById("catches-filter-species");
+  if(speciesSel && speciesSel.options.length <= 1){
+    speciesSel.innerHTML = `<option value="all">All species</option>` +
+      SPECIES.filter(s => s.id !== "all").map(s =>
+        `<option value="${s.id}">${s.name}</option>`
+      ).join("");
+  }
+  const colorSel = document.getElementById("catches-filter-color");
+  if(colorSel && colorSel.options.length <= 1){
+    colorSel.innerHTML = `<option value="all">All lure colors</option>` +
+      CATCH_LURE_COLORS.map(c =>
+        `<option value="${c.id}">${c.label}</option>`
+      ).join("");
+  }
+}
+
+function catchSyncFilterControls(){
+  catchInitFilterDropdowns();
+  const speciesSel = document.getElementById("catches-filter-species");
+  const colorSel = document.getElementById("catches-filter-color");
+  const from = document.getElementById("catches-filter-date-from");
+  const to = document.getElementById("catches-filter-date-to");
+  const tackle = document.getElementById("catches-filter-tackle");
+  const sort = document.getElementById("catches-sort");
+  if(speciesSel) speciesSel.value = CATCH_FILTER.species || "all";
+  if(colorSel) colorSel.value = CATCH_FILTER.color || "all";
+  if(from) from.value = CATCH_FILTER.dateFrom || "";
+  if(to) to.value = CATCH_FILTER.dateTo || "";
+  if(tackle) tackle.value = CATCH_FILTER.tackle || "all";
+  if(sort && !sort.value) sort.value = "date";
+}
+
+function catchReadFilterControls(){
+  const speciesSel = document.getElementById("catches-filter-species");
+  const colorSel = document.getElementById("catches-filter-color");
+  const from = document.getElementById("catches-filter-date-from");
+  const to = document.getElementById("catches-filter-date-to");
+  const tackle = document.getElementById("catches-filter-tackle");
+  CATCH_FILTER.species = speciesSel?.value || "all";
+  CATCH_FILTER.color = colorSel?.value || "all";
+  CATCH_FILTER.dateFrom = from?.value || "";
+  CATCH_FILTER.dateTo = to?.value || "";
+  CATCH_FILTER.tackle = tackle?.value || "all";
+}
+
+function catchFilterChanged(){
+  catchReadFilterControls();
+  renderMyCatches();
+}
+
+function catchClearDateFilter(){
+  CATCH_FILTER.dateFrom = "";
+  CATCH_FILTER.dateTo = "";
+  const from = document.getElementById("catches-filter-date-from");
+  const to = document.getElementById("catches-filter-date-to");
+  if(from) from.value = "";
+  if(to) to.value = "";
+  renderMyCatches();
+}
+
+function catchClearAllFilters(){
+  CATCH_FILTER.species = "all";
+  CATCH_FILTER.color = "all";
+  CATCH_FILTER.dateFrom = "";
+  CATCH_FILTER.dateTo = "";
+  CATCH_FILTER.tackle = "all";
+  catchSyncFilterControls();
+  renderMyCatches();
+}
 
 function catchLureColorLabel(id){
   const hit = CATCH_LURE_COLORS.find(c => c.id === id);
@@ -10806,69 +10915,11 @@ function catchInitLureColorChips(containerId, selectedId, onPick){
   }).join("") + `<button type="button" class="catch-chip${!selectedId ? " active" : ""}" data-color="" onclick="${onPick}('')">None</button>`;
 }
 
-function catchToggleFilterSpecies(id){
-  if(CATCH_FILTER.species.has(id)) CATCH_FILTER.species.delete(id);
-  else CATCH_FILTER.species.add(id);
-  renderMyCatches();
-}
-
-function catchToggleFilterColor(id){
-  if(CATCH_FILTER.colors.has(id)) CATCH_FILTER.colors.delete(id);
-  else CATCH_FILTER.colors.add(id);
-  renderMyCatches();
-}
-
-function catchClearDateFilter(){
-  CATCH_FILTER.dateFrom = "";
-  CATCH_FILTER.dateTo = "";
-  const from = document.getElementById("catches-filter-date-from");
-  const to = document.getElementById("catches-filter-date-to");
-  if(from) from.value = "";
-  if(to) to.value = "";
-  renderMyCatches();
-}
-
-function catchClearAllFilters(){
-  CATCH_FILTER.species.clear();
-  CATCH_FILTER.colors.clear();
-  CATCH_FILTER.dateFrom = "";
-  CATCH_FILTER.dateTo = "";
-  CATCH_FILTER.tackle = "all";
-  catchClearDateFilter();
-  const tackle = document.getElementById("catches-filter-tackle");
-  if(tackle) tackle.value = "all";
-  renderMyCatches();
-}
-
 function catchPopulatePortSelect(selectEl, selectedPort){
   if(!selectEl || typeof PORTS === "undefined") return;
   selectEl.innerHTML = `<option value="">— Select port —</option>` +
     Object.keys(PORTS).sort().map(name => `<option value="${name.replace(/"/g, "&quot;")}">${name}</option>`).join("");
   if(selectedPort && PORTS[selectedPort]) selectEl.value = selectedPort;
-}
-
-function catchRenderSpeciesFilterChips(){
-  const wrap = document.getElementById("catches-filter-species");
-  const countEl = document.getElementById("catches-filter-species-count");
-  if(!wrap) return;
-  wrap.innerHTML = SPECIES.filter(s => s.id !== "all").map(s => {
-    const active = CATCH_FILTER.species.has(s.id) ? " active" : "";
-    return `<button type="button" class="catch-chip${active}" onclick="catchToggleFilterSpecies('${s.id}')">${s.name}</button>`;
-  }).join("");
-  if(countEl){
-    countEl.textContent = CATCH_FILTER.species.size
-      ? `(${CATCH_FILTER.species.size} selected)`
-      : "(all)";
-  }
-}
-
-function catchRenderColorFilterChips(){
-  const wrap = document.getElementById("catches-filter-colors");
-  if(!wrap) return;
-  wrap.innerHTML = CATCH_LURE_COLORS.map(c => {
-    const active = CATCH_FILTER.colors.has(c.id) ? " active" : "";
-    return `<button type="button" class="catch-chip${active}" onclick="catchToggleFilterColor('${c.id}')">${c.label}</button>`;
-  }).join("");
 }
 
 // Generate a unique id for a new catch

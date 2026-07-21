@@ -25,8 +25,9 @@ function closeTutorial(){
 function openMyCatches(){
   document.getElementById("catches-overlay").style.display = "block";
   document.body.style.overflow = "hidden";
-  if(typeof catchRenderSpeciesFilterChips === "function") catchRenderSpeciesFilterChips();
-  if(typeof catchRenderColorFilterChips === "function") catchRenderColorFilterChips();
+  if(typeof catchInitFilterDropdowns === "function") catchInitFilterDropdowns();
+  if(typeof catchSyncFilterControls === "function") catchSyncFilterControls();
+  if(typeof catchesSwitchTab === "function") catchesSwitchTab("list");
   renderMyCatches();
 }
 
@@ -54,10 +55,16 @@ function renderMyCatches(){
         ">+ Log Your First Catch</button>
       </div>`;
     listEl.innerHTML = "";
-    document.getElementById("catches-filters").style.display = "none";
+    const filtersWrap = document.getElementById("catches-filters-wrap");
+    if(filtersWrap) filtersWrap.style.display = "none";
+    const tabsEl = document.getElementById("catches-tabs");
+    if(tabsEl) tabsEl.style.display = "none";
     return;
   }
-  document.getElementById("catches-filters").style.display = "block";
+  const filtersWrap = document.getElementById("catches-filters-wrap");
+  if(filtersWrap) filtersWrap.style.display = "block";
+  const tabsEl = document.getElementById("catches-tabs");
+  if(tabsEl) tabsEl.style.display = "flex";
 
   const stats = catchStats();
   const biggestText = stats.biggest && stats.biggest.weight
@@ -82,20 +89,22 @@ function renderMyCatches(){
     </div>
     <div id="catch-analytics-output"></div>`;
 
-  const dateFromEl = document.getElementById("catches-filter-date-from");
-  const dateToEl = document.getElementById("catches-filter-date-to");
-  const tackleEl = document.getElementById("catches-filter-tackle");
-  if(dateFromEl) CATCH_FILTER.dateFrom = dateFromEl.value || "";
-  if(dateToEl) CATCH_FILTER.dateTo = dateToEl.value || "";
-  if(tackleEl) CATCH_FILTER.tackle = tackleEl.value || "all";
-  if(typeof catchRenderSpeciesFilterChips === "function") catchRenderSpeciesFilterChips();
-  if(typeof catchRenderColorFilterChips === "function") catchRenderColorFilterChips();
+  if(typeof catchReadFilterControls === "function") catchReadFilterControls();
+  else {
+    const dateFromEl = document.getElementById("catches-filter-date-from");
+    const dateToEl = document.getElementById("catches-filter-date-to");
+    const tackleEl = document.getElementById("catches-filter-tackle");
+    if(dateFromEl) CATCH_FILTER.dateFrom = dateFromEl.value || "";
+    if(dateToEl) CATCH_FILTER.dateTo = dateToEl.value || "";
+    if(tackleEl) CATCH_FILTER.tackle = tackleEl.value || "all";
+  }
 
-  const sortVal = document.getElementById("catches-sort").value;
-  const speciesIds = CATCH_FILTER.species.size ? Array.from(CATCH_FILTER.species) : null;
+  const sortVal = document.getElementById("catches-sort")?.value || "date";
+  const speciesIds = CATCH_FILTER.species && CATCH_FILTER.species !== "all" ? [CATCH_FILTER.species] : null;
+  const lureColors = CATCH_FILTER.color && CATCH_FILTER.color !== "all" ? [CATCH_FILTER.color] : null;
   const filtered = catchList({
     speciesIds,
-    lureColors: CATCH_FILTER.colors.size ? Array.from(CATCH_FILTER.colors) : null,
+    lureColors,
     dateFrom: CATCH_FILTER.dateFrom,
     dateTo: CATCH_FILTER.dateTo,
     tackleType: CATCH_FILTER.tackle,
@@ -115,13 +124,8 @@ function runCatchAnalytics(){
   const out = document.getElementById("catch-analytics-output");
   const btn = document.getElementById("run-analytics-btn");
   if(!out) return;
-  const sp = CATCH_FILTER.species.size === 1 ? Array.from(CATCH_FILTER.species)[0]
-    : (CATCH_FILTER.species.size === 0 ? "all" : null);
-  if(CATCH_FILTER.species.size > 1){
-    out.innerHTML = `<div style="margin-top:16px;font-size:12px;color:#9ec5e8;line-height:1.5">Select a single species filter to run species-specific analytics, or clear species filters for all-species patterns.</div>`;
-    return;
-  }
-  out.innerHTML = renderCatchInsights(sp || "all");
+  const sp = CATCH_FILTER.species === "all" ? "all" : CATCH_FILTER.species;
+  out.innerHTML = renderCatchInsights(sp);
   out.scrollIntoView({behavior:"smooth", block:"nearest"});
   if(btn) btn.textContent = "📈 Refresh Analytics";
 }
