@@ -1555,7 +1555,8 @@ body.modal-open #brief-toggle{
 }
 .bathy-depth-legend-bar{
   height:8px;border-radius:4px;
-  background:linear-gradient(90deg,#fde68a 0%,#34d399 28%,#22d3ee 55%,#2563eb 78%,#1e3a8a 100%);
+  /* Approximate NOAA BlueTopo nbs_elevation shallow→deep ramp */
+  background:linear-gradient(90deg,#fde68a 0%,#34d399 22%,#22d3ee 48%,#2563eb 72%,#1e3a8a 100%);
   border:1px solid rgba(255,255,255,.15);
 }
 .bathy-depth-legend-labels{
@@ -1564,6 +1565,10 @@ body.modal-open #brief-toggle{
 }
 .bathy-depth-legend-hint{
   margin-top:5px;font-size:9px;color:#7dd3fc;opacity:.85;line-height:1.3;
+}
+/* Hillshade multiplies over depth color so relief shows without washing out blues */
+.leaflet-layer.bluetopo-hillshade{
+  mix-blend-mode:multiply;
 }
 
 /* Species legend pill — top left, below header */
@@ -2929,10 +2934,10 @@ body.modal-open #brief-toggle{
 
   <!-- Ocean Bathymetric depth legend — shown only when BlueTopo basemap is active. -->
   <div id="bathy-depth-legend" style="display:none" aria-hidden="true">
-    <div class="bathy-depth-legend-title">Depth</div>
+    <div class="bathy-depth-legend-title">BlueTopo depth</div>
     <div class="bathy-depth-legend-bar"></div>
     <div class="bathy-depth-legend-labels"><span>Shallow</span><span>Deep</span></div>
-    <div class="bathy-depth-legend-hint">Hillshade + light depth tint · tap for ft / fm</div>
+    <div class="bathy-depth-legend-hint">Color = depth · shade = relief · tap for ft / fm</div>
   </div>
 
 </div>
