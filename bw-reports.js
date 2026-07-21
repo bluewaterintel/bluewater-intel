@@ -27,11 +27,12 @@ function openMyCatches(){
   document.body.style.overflow = "hidden";
   if(typeof catchInitFilterDropdowns === "function") catchInitFilterDropdowns();
   if(typeof catchSyncFilterControls === "function") catchSyncFilterControls();
-  if(typeof catchesSwitchTab === "function") catchesSwitchTab("list");
+  if(typeof closeCatchesFilterPopup === "function") closeCatchesFilterPopup();
   renderMyCatches();
 }
 
 function closeMyCatches(){
+  if(typeof closeCatchesFilterPopup === "function") closeCatchesFilterPopup();
   document.getElementById("catches-overlay").style.display = "none";
   document.body.style.overflow = "";
 }
@@ -55,16 +56,14 @@ function renderMyCatches(){
         ">+ Log Your First Catch</button>
       </div>`;
     listEl.innerHTML = "";
-    const filtersWrap = document.getElementById("catches-filters-wrap");
-    if(filtersWrap) filtersWrap.style.display = "none";
-    const tabsEl = document.getElementById("catches-tabs");
-    if(tabsEl) tabsEl.style.display = "none";
+    const filterBtn = document.getElementById("catches-filter-btn");
+    if(filterBtn) filterBtn.style.display = "none";
+    if(typeof closeCatchesFilterPopup === "function") closeCatchesFilterPopup();
     return;
   }
-  const filtersWrap = document.getElementById("catches-filters-wrap");
-  if(filtersWrap) filtersWrap.style.display = "block";
-  const tabsEl = document.getElementById("catches-tabs");
-  if(tabsEl) tabsEl.style.display = "flex";
+  const filterBtn = document.getElementById("catches-filter-btn");
+  if(filterBtn) filterBtn.style.display = "inline-flex";
+  if(typeof catchUpdateFilterBtnState === "function") catchUpdateFilterBtnState();
 
   const stats = catchStats();
   const biggestText = stats.biggest && stats.biggest.weight

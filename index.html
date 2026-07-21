@@ -1274,14 +1274,11 @@ body.modal-open #brief-toggle{
   flex:1;min-width:120px;background:rgba(255,255,255,.05);border:1px solid rgba(107,191,234,.25);
   color:#f0f6ff;padding:8px 10px;border-radius:8px;font-size:12px;font-family:inherit;
 }
-.catches-tab{
-  flex:1;background:transparent;border:none;color:#5d96c4;
-  padding:14px 12px;font-size:12px;font-weight:600;letter-spacing:.05em;
-  cursor:pointer;border-bottom:3px solid transparent;
-  font-family:inherit;transition:all .15s;white-space:nowrap;
+.catches-filter-btn.active{
+  background:rgba(41,121,181,.35) !important;
+  border-color:rgba(125,211,252,.55) !important;
+  color:#f0f6ff !important;
 }
-.catches-tab:hover{color:#9ec5e8;background:rgba(255,255,255,.02)}
-.catches-tab.active{color:#7dd3fc;border-bottom-color:#2979b5;background:rgba(41,121,181,.08)}
 .overlay-page-sub{font-size:10px;color:#6bbfea;letter-spacing:.06em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .map-time-pill--green{border:1px solid rgba(34,197,94,.40)}
 .map-time-pill--green .map-time-pill-title{color:#4ade80}
@@ -3208,6 +3205,14 @@ body.modal-open #brief-toggle{
       </span>
       <span class="lyr-toggle"></span>
     </label>
+    <label class="layer-row" title="Bathymetric contour lines in fathoms from CUDEM/ETOPO depth grid. Informational only — not for navigation.">
+      <input type="checkbox" id="chk-depth" onchange="toggleLayer('depth')">
+      <span class="lyr-label">
+        <span class="layer-swatch" style="background:transparent;border:1.5px solid #67e8f9;border-radius:0;width:14px;height:2px"></span>
+        <span>Depth Contours <span style="font-size:8px;color:#9ec5e8;opacity:.7">(fathoms)</span></span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
     <label class="layer-row" title="LORAN-C TD lines: 9960-Y coast-parallel (MD→Hatteras→Oak Island, AC001) and 7980-Z land-to-sea 45xxx (Cape Fear→Cape Romain, AC002).">
       <input type="checkbox" id="chk-loran" onchange="toggleLayer('loran')">
       <span class="lyr-label">
@@ -4262,6 +4267,11 @@ body.modal-open #brief-toggle{
       <div class="catches-title" style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🎣 My Catches</div>
       <div class="catches-sub overlay-page-sub">Personal Log · Auto-filled Conditions</div>
     </div>
+    <button type="button" id="catches-filter-btn" class="catches-filter-btn" onclick="toggleCatchesFilterPopup()" style="
+      background:rgba(41,121,181,.18);border:1px solid rgba(41,121,181,.4);color:#7dd3fc;
+      padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;
+      cursor:pointer;font-family:inherit;display:none;align-items:center;gap:5px;
+    ">🔎 Filters</button>
     <button class="catches-log-btn" onclick="openLogCatch()" style="
       background:#2979b5;border:none;color:#fff;
       padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;
@@ -4272,57 +4282,60 @@ body.modal-open #brief-toggle{
   <!-- Stats summary -->
   <div id="catches-stats" style="padding:18px 20px;border-bottom:1px solid rgba(107,191,234,.08)"></div>
 
-  <!-- Tab nav -->
-  <div id="catches-tabs" style="display:none;border-bottom:1px solid rgba(107,191,234,.1);background:rgba(0,0,0,.2);overflow-x:auto">
-    <button class="catches-tab active" data-tab="list" type="button" onclick="catchesSwitchTab('list')">🎣 My Catches</button>
-    <button class="catches-tab" data-tab="filters" type="button" onclick="catchesSwitchTab('filters')">🔎 Filters</button>
-  </div>
+  <!-- Catch list -->
+  <div id="catches-list" style="padding:14px 20px"></div>
 
-  <!-- Catches list tab -->
-  <div id="catches-tab-list">
-    <div id="catches-list" style="padding:14px 20px"></div>
-  </div>
-
-  <!-- Filters tab -->
-  <div id="catches-tab-filters" style="display:none">
-    <div id="catches-filters-wrap" style="padding:14px 20px;border-bottom:1px solid rgba(107,191,234,.08);background:rgba(0,0,0,.18)">
-      <div id="catches-filters">
-        <div class="catch-filter-section">
-          <div class="catch-filter-label">Species</div>
-          <select id="catches-filter-species" class="rp-filter" onchange="catchFilterChanged()" style="width:100%">
-            <option value="all">All species</option>
-          </select>
-        </div>
-        <div class="catch-filter-section">
-          <div class="catch-filter-label">Lure color</div>
-          <select id="catches-filter-color" class="rp-filter" onchange="catchFilterChanged()" style="width:100%">
-            <option value="all">All lure colors</option>
-          </select>
-        </div>
-        <div class="catch-filter-section">
-          <div class="catch-filter-label">Date range</div>
-          <div class="catch-filter-row">
-            <input id="catches-filter-date-from" type="date" class="catch-filter-date" onchange="catchFilterChanged()" aria-label="From date">
-            <input id="catches-filter-date-to" type="date" class="catch-filter-date" onchange="catchFilterChanged()" aria-label="To date">
-            <button type="button" class="catch-chip" onclick="catchClearDateFilter()">Clear dates</button>
-          </div>
-        </div>
+  <!-- Filters popup -->
+  <div id="catches-filter-backdrop" onclick="closeCatchesFilterPopup()" style="
+    display:none;position:fixed;inset:0;z-index:5100;background:rgba(0,0,0,.45);
+  "></div>
+  <div id="catches-filter-popup" role="dialog" aria-label="Catch filters" style="
+    display:none;position:fixed;left:50%;top:72px;transform:translateX(-50%);
+    z-index:5101;width:min(420px,calc(100% - 24px));max-height:min(70vh,560px);
+    background:#0f2444;color:#e8f4ff;border:1px solid rgba(107,191,234,.28);
+    border-radius:14px;box-shadow:0 16px 48px rgba(0,0,0,.65);
+    overflow:hidden;font-family:inherit;
+  ">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid rgba(107,191,234,.18)">
+      <div style="font-size:14px;font-weight:700;color:#f0f6ff">🔎 Filters</div>
+      <button type="button" onclick="closeCatchesFilterPopup()" aria-label="Close filters" class="layers-close-btn">✕</button>
+    </div>
+    <div id="catches-filters" style="padding:14px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:min(58vh,480px)">
+      <div class="catch-filter-section">
+        <div class="catch-filter-label">Species</div>
+        <select id="catches-filter-species" class="rp-filter" onchange="catchFilterChanged()" style="width:100%">
+          <option value="all">All species</option>
+        </select>
+      </div>
+      <div class="catch-filter-section">
+        <div class="catch-filter-label">Lure color</div>
+        <select id="catches-filter-color" class="rp-filter" onchange="catchFilterChanged()" style="width:100%">
+          <option value="all">All lure colors</option>
+        </select>
+      </div>
+      <div class="catch-filter-section">
+        <div class="catch-filter-label">Date range</div>
         <div class="catch-filter-row">
-          <select class="rp-filter" id="catches-filter-tackle" onchange="catchFilterChanged()" style="flex:1;min-width:140px">
-            <option value="all">All tackle</option>
-            <option value="bait">Live / cut bait</option>
-            <option value="artificial">Artificial lure</option>
-          </select>
-          <select class="rp-filter" id="catches-sort" onchange="catchFilterChanged()" style="flex:1;min-width:140px">
-            <option value="date">Newest first</option>
-            <option value="weight">Heaviest first</option>
-            <option value="species">By species</option>
-          </select>
+          <input id="catches-filter-date-from" type="date" class="catch-filter-date" onchange="catchFilterChanged()" aria-label="From date">
+          <input id="catches-filter-date-to" type="date" class="catch-filter-date" onchange="catchFilterChanged()" aria-label="To date">
+          <button type="button" class="catch-chip" onclick="catchClearDateFilter()">Clear dates</button>
         </div>
-        <div class="catch-filter-row">
-          <button type="button" class="catch-chip" onclick="catchClearAllFilters()">Clear all filters</button>
-          <button type="button" class="catch-chip" onclick="catchesSwitchTab('list')">View catches</button>
-        </div>
+      </div>
+      <div class="catch-filter-row">
+        <select class="rp-filter" id="catches-filter-tackle" onchange="catchFilterChanged()" style="flex:1;min-width:140px">
+          <option value="all">All tackle</option>
+          <option value="bait">Live / cut bait</option>
+          <option value="artificial">Artificial lure</option>
+        </select>
+        <select class="rp-filter" id="catches-sort" onchange="catchFilterChanged()" style="flex:1;min-width:140px">
+          <option value="date">Newest first</option>
+          <option value="weight">Heaviest first</option>
+          <option value="species">By species</option>
+        </select>
+      </div>
+      <div class="catch-filter-row" style="margin-bottom:0">
+        <button type="button" class="catch-chip" onclick="catchClearAllFilters()">Clear all filters</button>
+        <button type="button" class="catch-chip" style="background:rgba(41,121,181,.28);border-color:rgba(125,211,252,.45);color:#f0f6ff" onclick="closeCatchesFilterPopup()">Done</button>
       </div>
     </div>
   </div>

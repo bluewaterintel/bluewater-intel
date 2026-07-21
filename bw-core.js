@@ -312,7 +312,7 @@ let pinLL=null;
 // the chosen hotspot cells; null for the normal single-spot brief (tap a spot).
 let _briefRunPlanSpots=null;
 let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
+let layerVis={spots:true, ports:true, predict:false, loran:false, depth:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -8862,6 +8862,7 @@ function toggleLayer(key){
   }
   else if(key==="ports")drawPortMarkers();
   else if(key==="loran")drawLoranLines();
+  else if(key==="depth")drawDepthContours();
   else if(key==="catches")drawCatchPins();
   else if(key==="closures")drawClosures();
   else if(key==="platforms")drawPlatforms();
@@ -9909,6 +9910,202 @@ function drawLoranLines(){
   loranLayer.addTo(MAP);
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// DEPTH CONTOURS (fathoms)
+// Isolines from the CUDEM/ETOPO BATHY_GRID. Informational only — not for nav.
+// ════════════════════════════════════════════════════════════════════════════
+const M_PER_FATHOM = 1.8288;
+const DEPTH_CONTOUR_FMS = [5, 10, 20, 30, 50, 100, 200, 500, 1000];
+let depthContourLayer = null;
+let _depthContourMoveBound = false;
+let _depthContourRedrawTimer = null;
+let _depthContourFetchSeq = 0;
+
+function depthContourLevelsForZoom(z){
+  if(z < 7) return [100, 200, 500, 1000];
+  if(z < 9) return [20, 50, 100, 200, 500, 1000];
+  return DEPTH_CONTOUR_FMS.slice();
+}
+
+function depthContourIsMajor(fm){
+  return fm >= 100 || fm === 50 || fm === 20;
+}
+
+function stitchContourSegments(segments, step){
+  if(segments.length < 2) return segments;
+  const EPS = Math.max(step * 0.05, 1e-6);
+  const ptKey = (lat, lng) => `${Math.round(lat / EPS)},${Math.round(lng / EPS)}`;
+  const endpoints = new Map();
+  segments.forEach((seg, i) => {
+    const k0 = ptKey(seg[0][0], seg[0][1]);
+    const k1 = ptKey(seg[1][0], seg[1][1]);
+    if(!endpoints.has(k0)) endpoints.set(k0, []);
+    if(!endpoints.has(k1)) endpoints.set(k1, []);
+    endpoints.get(k0).push([i, 0]);
+    endpoints.get(k1).push([i, 1]);
+  });
+  const used = new Array(segments.length).fill(false);
+  const polylines = [];
+  for(let i = 0; i < segments.length; i++){
+    if(used[i]) continue;
+    used[i] = true;
+    const chain = [segments[i][0], segments[i][1]];
+    while(true){
+      const last = chain[chain.length - 1];
+      const candidates = endpoints.get(ptKey(last[0], last[1])) || [];
+      let next = null;
+      for(const [idx, end] of candidates){
+        if(used[idx]) continue;
+        next = [idx, end];
+        break;
+      }
+      if(!next) break;
+      used[next[0]] = true;
+      chain.push(segments[next[0]][1 - next[1]]);
+    }
+    while(true){
+      const first = chain[0];
+      const candidates = endpoints.get(ptKey(first[0], first[1])) || [];
+      let prev = null;
+      for(const [idx, end] of candidates){
+        if(used[idx]) continue;
+        prev = [idx, end];
+        break;
+      }
+      if(!prev) break;
+      used[prev[0]] = true;
+      chain.unshift(segments[prev[0]][1 - prev[1]]);
+    }
+    polylines.push(chain);
+  }
+  return polylines;
+}
+
+// Marching-squares isolines on BATHY_GRID for a depth in meters (positive = water).
+function traceDepthContourOnGrid(g, depthM){
+  if(!g || !g.depth || depthM <= 0) return [];
+  const { step, minLat, minLng, nLat, nLng, depth } = g;
+  const cell = (i, j) => {
+    if(i < 0 || j < 0 || i >= nLat || j >= nLng) return NaN;
+    return depth[i * nLng + j];
+  };
+  const interp = (v1, v2, lat1, lng1, lat2, lng2) => {
+    const frac = (depthM - v1) / (v2 - v1);
+    return [lat1 + (lat2 - lat1) * frac, lng1 + (lng2 - lng1) * frac];
+  };
+  const segments = [];
+  for(let i = 0; i < nLat - 1; i++){
+    for(let j = 0; j < nLng - 1; j++){
+      const v00 = cell(i, j), v01 = cell(i, j + 1);
+      const v10 = cell(i + 1, j), v11 = cell(i + 1, j + 1);
+      if(!isFinite(v00) || !isFinite(v01) || !isFinite(v10) || !isFinite(v11)) continue;
+      // Skip fully dry cells — contours start at the waterline.
+      if(v00 <= 0 && v01 <= 0 && v10 <= 0 && v11 <= 0) continue;
+      const lat0 = minLat + i * step, lng0 = minLng + j * step;
+      const lat1 = minLat + (i + 1) * step, lng1 = minLng + (j + 1) * step;
+      const edges = [];
+      if((v00 < depthM) !== (v01 < depthM)) edges.push(interp(v00, v01, lat0, lng0, lat0, lng1));
+      if((v01 < depthM) !== (v11 < depthM)) edges.push(interp(v01, v11, lat0, lng1, lat1, lng1));
+      if((v10 < depthM) !== (v11 < depthM)) edges.push(interp(v10, v11, lat1, lng0, lat1, lng1));
+      if((v00 < depthM) !== (v10 < depthM)) edges.push(interp(v00, v10, lat0, lng0, lat1, lng0));
+      if(edges.length === 2) segments.push(edges);
+    }
+  }
+  return stitchContourSegments(segments, step);
+}
+
+function clearDepthContours(){
+  if(depthContourLayer && typeof MAP !== "undefined" && MAP){
+    try { MAP.removeLayer(depthContourLayer); } catch(e){}
+  }
+  depthContourLayer = null;
+}
+
+function bindDepthContourRedraw(){
+  if(_depthContourMoveBound || !MAP) return;
+  _depthContourMoveBound = true;
+  const schedule = () => {
+    if(!layerVis.depth) return;
+    clearTimeout(_depthContourRedrawTimer);
+    _depthContourRedrawTimer = setTimeout(() => drawDepthContours(), 220);
+  };
+  MAP.on("moveend zoomend", schedule);
+}
+
+async function ensureDepthContourBathy(){
+  if(!MAP) return false;
+  const b = MAP.getBounds();
+  const padLat = (b.getNorth() - b.getSouth()) * 0.25;
+  const padLng = (b.getEast() - b.getWest()) * 0.25;
+  const latMin = b.getSouth() - padLat, latMax = b.getNorth() + padLat;
+  const lngMin = b.getWest() - padLng, lngMax = b.getEast() + padLng;
+  if(_bathyGridCoversView(latMin, latMax, lngMin, lngMax)) return true;
+  const seq = ++_depthContourFetchSeq;
+  try {
+    await buildBathyGrid(latMin, latMax, lngMin, lngMax);
+  } catch(e){}
+  return seq === _depthContourFetchSeq && !!BATHY_GRID;
+}
+
+async function drawDepthContours(){
+  clearDepthContours();
+  if(!layerVis.depth || !MAP) return;
+  bindDepthContourRedraw();
+  const ready = await ensureDepthContourBathy();
+  if(!layerVis.depth || !ready || !BATHY_GRID) return;
+
+  const z = MAP.getZoom();
+  const levels = depthContourLevelsForZoom(z);
+  const featureGroup = L.featureGroup();
+  const majorStyle = { color: "#67e8f9", weight: 2.0, opacity: 0.9, interactive: false, pane: "ocean-overlays" };
+  const minorStyle = { color: "#22d3ee", weight: 1.1, opacity: 0.55, interactive: false, pane: "ocean-overlays" };
+  const labelStyle = "color:#a5f3fc;font-size:11px;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.03em;text-shadow:0 0 3px #06101c,0 1px 2px #06101c,-1px 0 2px #06101c,1px 0 2px #06101c;white-space:nowrap;pointer-events:none;line-height:1";
+
+  levels.forEach(fm => {
+    const depthM = fm * M_PER_FATHOM;
+    const polylines = traceDepthContourOnGrid(BATHY_GRID, depthM);
+    if(!polylines.length) return;
+    const isMajor = depthContourIsMajor(fm);
+    const style = isMajor ? majorStyle : minorStyle;
+
+    let labelPolyIdx = -1, labelPolyLen = 0;
+    if(isMajor){
+      polylines.forEach((poly, idx) => {
+        if(poly.length < 4) return;
+        let len = 0;
+        for(let i = 1; i < poly.length; i++){
+          const dLat = poly[i][0] - poly[i - 1][0];
+          const dLng = (poly[i][1] - poly[i - 1][1]) * Math.cos(poly[i][0] * Math.PI / 180);
+          len += Math.hypot(dLat, dLng);
+        }
+        if(len > labelPolyLen){ labelPolyLen = len; labelPolyIdx = idx; }
+      });
+    }
+
+    polylines.forEach((poly, idx) => {
+      if(poly.length < 2) return;
+      L.polyline(poly, style).addTo(featureGroup);
+      if(isMajor && idx === labelPolyIdx && labelPolyLen > 0.08){
+        const mid = poly[Math.floor(poly.length / 2)];
+        L.marker(mid, {
+          icon: L.divIcon({
+            className: "depth-contour-label",
+            html: `<div style="${labelStyle}">${fm} fm</div>`,
+            iconSize: [52, 14],
+            iconAnchor: [26, 7],
+          }),
+          interactive: false,
+          keyboard: false,
+          pane: "ocean-overlays",
+        }).addTo(featureGroup);
+      }
+    });
+  });
+
+  depthContourLayer = featureGroup;
+  depthContourLayer.addTo(MAP);
+}
+
 function toggleLayersPanel(){
   layersPanelOpen=!layersPanelOpen;
   const modal = document.getElementById("layers-modal");
@@ -10252,6 +10449,10 @@ document.addEventListener("keydown", e => {
     e.preventDefault();
     catchPickCancel();
   }
+  if(e.key === "Escape" && typeof _catchesFilterPopupOpen !== "undefined" && _catchesFilterPopupOpen){
+    e.preventDefault();
+    closeCatchesFilterPopup();
+  }
 });
 
 function catchLocFromDevice(){
@@ -10451,7 +10652,6 @@ function saveCatchFromForm(){
   }
   closeLogCatch();
   if(fromCatches){
-    if(typeof catchesSwitchTab === "function") catchesSwitchTab("list");
     if(typeof catchSyncFilterControls === "function") catchSyncFilterControls();
     if(typeof renderMyCatches === "function") renderMyCatches();
   } else if(typeof renderMyCatches === "function"){
@@ -10817,17 +11017,47 @@ const CATCH_FILTER = {
   tackle: "all",
 };
 
-let _catchesTab = "list";
+let _catchesFilterPopupOpen = false;
 
-function catchesSwitchTab(tab){
-  _catchesTab = tab === "filters" ? "filters" : "list";
-  document.querySelectorAll(".catches-tab").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.tab === _catchesTab);
-  });
-  const listPanel = document.getElementById("catches-tab-list");
-  const filtersPanel = document.getElementById("catches-tab-filters");
-  if(listPanel) listPanel.style.display = _catchesTab === "list" ? "block" : "none";
-  if(filtersPanel) filtersPanel.style.display = _catchesTab === "filters" ? "block" : "none";
+function catchesFiltersActive(){
+  return !!(
+    (CATCH_FILTER.species && CATCH_FILTER.species !== "all") ||
+    (CATCH_FILTER.color && CATCH_FILTER.color !== "all") ||
+    CATCH_FILTER.dateFrom ||
+    CATCH_FILTER.dateTo ||
+    (CATCH_FILTER.tackle && CATCH_FILTER.tackle !== "all")
+  );
+}
+
+function catchUpdateFilterBtnState(){
+  const btn = document.getElementById("catches-filter-btn");
+  if(!btn) return;
+  const active = catchesFiltersActive();
+  btn.classList.toggle("active", active);
+  btn.textContent = active ? "🔎 Filters · on" : "🔎 Filters";
+}
+
+function openCatchesFilterPopup(){
+  catchInitFilterDropdowns();
+  catchSyncFilterControls();
+  const popup = document.getElementById("catches-filter-popup");
+  const backdrop = document.getElementById("catches-filter-backdrop");
+  if(popup) popup.style.display = "block";
+  if(backdrop) backdrop.style.display = "block";
+  _catchesFilterPopupOpen = true;
+}
+
+function closeCatchesFilterPopup(){
+  const popup = document.getElementById("catches-filter-popup");
+  const backdrop = document.getElementById("catches-filter-backdrop");
+  if(popup) popup.style.display = "none";
+  if(backdrop) backdrop.style.display = "none";
+  _catchesFilterPopupOpen = false;
+}
+
+function toggleCatchesFilterPopup(){
+  if(_catchesFilterPopupOpen) closeCatchesFilterPopup();
+  else openCatchesFilterPopup();
 }
 
 function catchInitFilterDropdowns(){
@@ -10878,6 +11108,7 @@ function catchReadFilterControls(){
 
 function catchFilterChanged(){
   catchReadFilterControls();
+  catchUpdateFilterBtnState();
   renderMyCatches();
 }
 
@@ -10888,6 +11119,7 @@ function catchClearDateFilter(){
   const to = document.getElementById("catches-filter-date-to");
   if(from) from.value = "";
   if(to) to.value = "";
+  catchUpdateFilterBtnState();
   renderMyCatches();
 }
 
@@ -10898,6 +11130,7 @@ function catchClearAllFilters(){
   CATCH_FILTER.dateTo = "";
   CATCH_FILTER.tackle = "all";
   catchSyncFilterControls();
+  catchUpdateFilterBtnState();
   renderMyCatches();
 }
 
