@@ -1544,8 +1544,22 @@ body.modal-open #brief-toggle{
   text-shadow:0 1px 3px rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.7);
 }
 /* Hillshade multiplies over depth color so relief shows without washing out blues */
-.leaflet-layer.bluetopo-hillshade{
+.leaflet-layer.bluetopo-hillshade,
+.leaflet-layer.bathy-relief-bluetopo{
   mix-blend-mode:multiply;
+}
+/* GEBCO contour tiles are dark ink — invert to white over satellite / dark water;
+   keep dark lines over the lighter Ocean Bathymetric basemap. */
+.leaflet-pane.bathy-contours-dark .bathy-contour-tile{
+  filter: invert(1) brightness(1.9) contrast(1.2);
+}
+.leaflet-pane.bathy-contours-light .bathy-contour-tile{
+  filter: none;
+}
+.leaflet-pane.bathy img.leaflet-tile,
+.leaflet-pane.bathy-contours img.leaflet-tile{
+  mix-blend-mode:normal;
+  image-rendering:auto;
 }
 #bluetopo-relief-control{
   position:absolute;left:10px;bottom:54px;z-index:560;
@@ -3344,9 +3358,10 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
     <div class="layers-section">BOTTOM STRUCTURE</div>
     <div style="font-size:11px;color:#8fb4d0;line-height:1.45;margin:2px 0 8px;padding:0 2px">
       Bathymetry for fishing reference only — <b>not for navigation</b>.
-      Coverage is detailed offshore and limited in shallow/inshore water.
+      Best on Satellite: BlueTopo fills in high-res US structure when you zoom in.
+      Contours are labeled in meters (sparse inshore).
     </div>
-    <label class="layer-row" title="Shaded-relief hillshade from GEBCO (global) with NOAA NCEI multibeam mosaic on top where available. Shows canyons, humps, ledges, and drop-offs.">
+    <label class="layer-row" title="Shaded-relief hillshade: GEBCO (global) + NOAA multibeam where available + BlueTopo hillshade on Satellite for fishing-zoom detail. Shows canyons, humps, ledges, and drop-offs.">
       <input type="checkbox" id="chk-relief" onchange="toggleLayer('relief')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">🏔</span>
@@ -3354,7 +3369,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="Color-graduated depth shading from GEBCO. Easier depth-band reading than hillshade alone.">
+    <label class="layer-row" title="Color-graduated depth shading: GEBCO globally, BlueTopo elevation on Satellite when zoomed in for sharper US coastal detail.">
       <input type="checkbox" id="chk-depthShade" onchange="toggleLayer('depthShade')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">🌊</span>
@@ -3362,7 +3377,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="Labeled isobath lines from GEBCO. Depths shown in meters. Renders above SST/chlor so lines stay legible.">
+    <label class="layer-row" title="Labeled GEBCO isobaths in meters. White lines over Satellite, dark lines over Ocean Bathymetric. Native detail to ~zoom 10; lines stay visible when you zoom in by upscaling.">
       <input type="checkbox" id="chk-contours" onchange="toggleLayer('contours')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">〰️</span>
@@ -3585,7 +3600,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260722c"></script>
+<script src="bw-core.js?v=20260722d"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
