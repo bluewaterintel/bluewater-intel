@@ -1554,6 +1554,10 @@ body.modal-open #brief-toggle{
   mix-blend-mode:normal;
   image-rendering:auto;
 }
+/* Hardness (backscatter) reads as a grayscale wash over the basemap */
+.leaflet-layer.bathy-hardness-tile{
+  mix-blend-mode:normal;
+}
 /* BlueTopo relief strength — same vertical chrome as #ocean-opacity-control,
    parked on the right next to the map/layers icon column. Desktop only. */
 #bluetopo-relief-control{
@@ -3377,17 +3381,25 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       <span class="lyr-toggle"></span>
     </label>
 
-    <!-- BOTTOM STRUCTURE — seafloor relief overlay -->
+    <!-- BOTTOM STRUCTURE — seafloor relief + hardness overlays -->
     <div class="layers-section">BOTTOM STRUCTURE</div>
     <div style="font-size:11px;color:#8fb4d0;line-height:1.45;margin:2px 0 8px;padding:0 2px">
       Bathymetry for fishing reference only — <b>not for navigation</b>.
-      Best on Satellite: BlueTopo fills in high-res US structure when you zoom in.
+      Hardness coverage is patchy (survey footprints only).
     </div>
     <label class="layer-row" title="Shaded-relief hillshade: GEBCO (global) + NOAA multibeam where available + BlueTopo hillshade on Satellite for fishing-zoom detail. Shows canyons, humps, ledges, and drop-offs.">
       <input type="checkbox" id="chk-relief" onchange="toggleLayer('relief')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">🏔</span>
         <span>Seafloor Relief <span style="font-size:8px;color:#9ec5e8;opacity:.7">(hillshade · canyons &amp; humps)</span></span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
+    <label class="layer-row" title="NOAA NOS multibeam acoustic backscatter — brighter = harder bottom (sand/shell/rock), darker = softer (mud). Patchy survey coverage. Not for navigation.">
+      <input type="checkbox" id="chk-hardness" onchange="toggleLayer('hardness')">
+      <span class="lyr-label">
+        <span class="layer-swatch" style="background:linear-gradient(90deg,#0a0a0a 0%,#737373 50%,#f5f5f4 100%);width:18px;height:8px;border-radius:2px"></span>
+        <span>Bottom Hardness <span style="font-size:8px;color:#9ec5e8;opacity:.7">(backscatter · soft→hard)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -3606,7 +3618,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260722e"></script>
+<script src="bw-core.js?v=20260722f"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

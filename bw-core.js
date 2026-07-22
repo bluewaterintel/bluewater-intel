@@ -312,7 +312,7 @@ let pinLL=null;
 // the chosen hotspot cells; null for the normal single-spot brief (tap a spot).
 let _briefRunPlanSpots=null;
 let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, buoys:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false, relief:false};
+let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, buoys:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false, relief:false, hardness:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -325,7 +325,7 @@ let _predictGrid = null, _predictSpecies = null, _predictTooltip = null, _predic
 // load (old behavior) produced different hotspot rankings as bathy/ocean data
 // arrived in different order, which is why the #1/#2/#3 badges jumped on zoom.
 let _predictResultCache = null; // { key, heatGrid, hotspots, badges, gridStep, gridOriginLat, gridOriginLng }
-let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null, reliefLayer=null;
+let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null, reliefLayer=null, hardnessLayer=null;
 let blueTopoElevationLayer=null, blueTopoHillshadeLayer=null;
 let _activeBaseMap = "satellite";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
@@ -350,22 +350,25 @@ let SAT_FRESH_DATE = { sst: null, chlor: null };
 // opacity slider on the right of the map. Defaults keep structure readable
 // underneath while stopping the basemap from washing SST/chlor into pastel haze.
 // Persisted so a user's preferred dim level survives navigation and reloads.
-const OCEAN_OPACITY_DEFAULT = { sst: 0.82, chlor: 0.70, relief: 0.75 };
+const OCEAN_OPACITY_DEFAULT = { sst: 0.82, chlor: 0.70, relief: 0.75, hardness: 0.80 };
 let oceanOpacity = { ...OCEAN_OPACITY_DEFAULT };
 try {
   const saved = JSON.parse(localStorage.getItem("bwi_ocean_opacity") || "null");
   if(saved && typeof saved === "object"){
-    if(typeof saved.sst === "number")    oceanOpacity.sst    = Math.max(0, Math.min(1, saved.sst));
-    if(typeof saved.chlor === "number")  oceanOpacity.chlor  = Math.max(0, Math.min(1, saved.chlor));
-    if(typeof saved.relief === "number") oceanOpacity.relief = Math.max(0, Math.min(1, saved.relief));
+    if(typeof saved.sst === "number")      oceanOpacity.sst      = Math.max(0, Math.min(1, saved.sst));
+    if(typeof saved.chlor === "number")    oceanOpacity.chlor    = Math.max(0, Math.min(1, saved.chlor));
+    if(typeof saved.relief === "number")   oceanOpacity.relief   = Math.max(0, Math.min(1, saved.relief));
+    if(typeof saved.hardness === "number") oceanOpacity.hardness = Math.max(0, Math.min(1, saved.hardness));
   }
 } catch(e){}
-const BATHY_LAYER_KEYS = ["relief"];
+const BATHY_LAYER_KEYS = ["relief", "hardness"];
 const LAYER_VIS_KEY = "bwi_layer_vis";
 try {
   const savedVis = JSON.parse(localStorage.getItem(LAYER_VIS_KEY) || "null");
   if(savedVis && typeof savedVis === "object"){
-    if(typeof savedVis.relief === "boolean") layerVis.relief = savedVis.relief;
+    for(const k of BATHY_LAYER_KEYS){
+      if(typeof savedVis[k] === "boolean") layerVis[k] = savedVis[k];
+    }
   }
 } catch(e){}
 let briefSp=[], briefAutoPick=false, aiCOA="", aiLoading=false, briefDayOffset=0;  // briefDayOffset: 0=today,1=tomorrow,...
@@ -690,7 +693,41 @@ async function initMap(){
     }
     return L.layerGroup(layers);
   };
+
+  // Seafloor hardness via NOAA NOS multibeam acoustic backscatter (ImageServer).
+  // Not a pre-tiled XYZ cache — each Leaflet tile requests exportImage for its
+  // Web-Mercator bbox. Bright = harder/rockier return; dark = softer sediment.
+  // Coverage is patchy (survey footprints only). Not for navigation.
+  const ArcGisImageTileLayer = L.TileLayer.extend({
+    getTileUrl(coords){
+      const bounds = this._tileCoordsToBounds(coords);
+      const sw = L.CRS.EPSG3857.project(bounds.getSouthWest());
+      const ne = L.CRS.EPSG3857.project(bounds.getNorthEast());
+      const bbox = [sw.x, sw.y, ne.x, ne.y].join(",");
+      const mosaic = encodeURIComponent(JSON.stringify({ mosaicMethod: "esriMosaicNorthwest" }));
+      const base = this.options.imageServerUrl;
+      return `${base}/exportImage?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=256,256`
+        + `&format=png32&transparent=true&f=image&mosaicRule=${mosaic}`
+        + `&interpolation=RSP_BilinearInterpolation`;
+    }
+  });
+  window.buildHardnessLayer = function(opacity){
+    const op = (typeof opacity === "number") ? opacity : oceanOpacity.hardness;
+    return new ArcGisImageTileLayer("", {
+      pane: "bathy",
+      opacity: op,
+      maxNativeZoom: 13,
+      maxZoom: 18,
+      minZoom: 0,
+      className: "bathy-hardness-tile",
+      attribution: "© NOAA NOS / NCEI Multibeam Acoustic Backscatter",
+      errorTileUrl: _BATHY_EMPTY,
+      imageServerUrl: "https://gis.ngdc.noaa.gov/arcgis/rest/services/NOS_MBAB/NOS_MBAB_U8/ImageServer",
+      crossOrigin: true,
+    });
+  };
   reliefLayer = window.buildReliefLayer();
+  hardnessLayer = window.buildHardnessLayer();
 
   // ── Live weather radar (NOAA nowCOAST MRMS base reflectivity) ──
   // NOAA retired the old /arcgis/ radar service; nowCOAST moved to a GeoServer
@@ -8983,8 +9020,9 @@ function openSubPanel(kind){
 // ════════════════════════════════════════════════════════════════════════════
 const BATHY_ATTRIB = {
   relief: "© GEBCO_2024 · NOAA NCEI Multibeam",
+  hardness: "© NOAA NOS / NCEI Multibeam Acoustic Backscatter",
 };
-let _bathyAttribAdded = { relief: false };
+let _bathyAttribAdded = { relief: false, hardness: false };
 
 function saveBathyLayerVis(){
   try {
@@ -9020,15 +9058,23 @@ function setLayerTreeOpacity(layer, opacity){
 }
 
 function applyBathyLayer(key){
-  if(key !== "relief") return;
-  if(!reliefLayer) reliefLayer = window.buildReliefLayer();
-  setLayerTreeOpacity(reliefLayer, oceanOpacity.relief);
-  if(!MAP.hasLayer(reliefLayer)) reliefLayer.addTo(MAP);
+  if(key === "relief"){
+    if(!reliefLayer) reliefLayer = window.buildReliefLayer();
+    setLayerTreeOpacity(reliefLayer, oceanOpacity.relief);
+    if(!MAP.hasLayer(reliefLayer)) reliefLayer.addTo(MAP);
+  } else if(key === "hardness"){
+    if(!hardnessLayer) hardnessLayer = window.buildHardnessLayer();
+    setLayerTreeOpacity(hardnessLayer, oceanOpacity.hardness);
+    if(!MAP.hasLayer(hardnessLayer)) hardnessLayer.addTo(MAP);
+  } else {
+    return;
+  }
   updateBathyAttribution();
 }
 
 function removeBathyLayer(key){
   if(key === "relief" && reliefLayer && MAP.hasLayer(reliefLayer)) MAP.removeLayer(reliefLayer);
+  else if(key === "hardness" && hardnessLayer && MAP.hasLayer(hardnessLayer)) MAP.removeLayer(hardnessLayer);
   updateBathyAttribution();
 }
 
@@ -9039,16 +9085,19 @@ function applySavedBathyLayers(){
     if(layerVis[k]) applyBathyLayer(k);
   }
   updateOpacityControl();
+  if(typeof updateOceanLegend === "function") updateOceanLegend();
 }
 
 // Rebuild relief stack when the basemap changes — BlueTopo is only stacked
-// on satellite (Ocean Bathymetric already includes it).
+// on satellite (Ocean Bathymetric already includes it). Hardness is survey
+// imagery and does not depend on basemap choice.
 function rebuildActiveBathyLayers(){
   if(typeof MAP === "undefined" || !MAP) return;
-  if(!layerVis.relief) return;
-  removeBathyLayer("relief");
-  reliefLayer = window.buildReliefLayer();
-  applyBathyLayer("relief");
+  if(layerVis.relief){
+    removeBathyLayer("relief");
+    reliefLayer = window.buildReliefLayer();
+    applyBathyLayer("relief");
+  }
 }
 
 function toggleLayer(key){
@@ -9128,11 +9177,12 @@ function toggleLayer(key){
       showToast("Select a home port first to see boat ramps within range.", "info");
     }
   }
-  else if(key==="relief"){
-    if(layerVis.relief) applyBathyLayer("relief");
-    else removeBathyLayer("relief");
+  else if(key==="relief" || key==="hardness"){
+    if(layerVis[key]) applyBathyLayer(key);
+    else removeBathyLayer(key);
     saveBathyLayerVis();
     updateOpacityControl();
+    if(key === "hardness") updateOceanLegend();
   }
 }
 
@@ -9471,9 +9521,10 @@ function restackBottomControls(){
 // at. Dimming lets you read SST and then fade it to reveal structure/waypoints
 // underneath without turning the layer off entirely.
 function activeOceanLayerKey(){
-  if(layerVis.sst)    return "sst";
-  if(layerVis.chlor)  return "chlor";
-  if(layerVis.relief) return "relief";
+  if(layerVis.sst)      return "sst";
+  if(layerVis.chlor)    return "chlor";
+  if(layerVis.relief)   return "relief";
+  if(layerVis.hardness) return "hardness";
   return null;
 }
 // Apply the stored opacity to whichever ocean layers are live (called after a
@@ -9486,6 +9537,7 @@ function applyOceanOpacity(){
   }
   if(layerVis.chlor && chlorLayer) chlorLayer.setOpacity(oceanOpacity.chlor);
   if(layerVis.relief && reliefLayer) setLayerTreeOpacity(reliefLayer, oceanOpacity.relief);
+  if(layerVis.hardness && hardnessLayer) setLayerTreeOpacity(hardnessLayer, oceanOpacity.hardness);
 }
 // Slider handler. value is 0–100 (percent). Targets the active layer.
 function onOceanOpacityInput(pct){
@@ -9505,6 +9557,7 @@ function onOceanOpacityInput(pct){
   }
   if(key === "chlor" && chlorLayer) chlorLayer.setOpacity(v);
   if(key === "relief" && reliefLayer) setLayerTreeOpacity(reliefLayer, v);
+  if(key === "hardness" && hardnessLayer) setLayerTreeOpacity(hardnessLayer, v);
   try { localStorage.setItem("bwi_ocean_opacity", JSON.stringify(oceanOpacity)); } catch(e){}
   updateOpacityControl(true); // refresh readout/label without rebuilding position
 }
@@ -9527,7 +9580,7 @@ function updateOpacityControl(valueOnly){
   if(input && +input.value !== pct) input.value = pct;
   if(readout) readout.textContent = pct + "%";
   if(label){
-    const labels = { sst: "SST", chlor: "Chlor", relief: "Relief" };
+    const labels = { sst: "SST", chlor: "Chlor", relief: "Relief", hardness: "Hard" };
     label.textContent = labels[key] || key;
   }
   if(typeof restackRightSliders === "function") restackRightSliders();
@@ -11654,7 +11707,7 @@ function updateOceanLegend(){
   const el = document.getElementById("ocean-legend");
   const content = document.getElementById("ocean-legend-content");
   if(!el || !content) return;
-  if(!layerVis.sst && !layerVis.chlor && !layerVis.wind && !layerVis.radar && !layerVis.currents && !layerVis.altimetry){
+  if(!layerVis.sst && !layerVis.chlor && !layerVis.wind && !layerVis.radar && !layerVis.currents && !layerVis.altimetry && !layerVis.hardness){
     el.style.display = "none";
     if(typeof closeOceanLegendSheet === "function") closeOceanLegendSheet();
     updateBiteBanner();
@@ -11805,6 +11858,20 @@ function updateOceanLegend(){
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>light</span><span>moderate</span><span>heavy</span><span>intense</span>
         </div>
+      </div>`);
+  }
+  if(layerVis.hardness){
+    parts.push(`
+      <div style="${gap()}">
+        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#e7e5e4;letter-spacing:.08em;margin-bottom:3px">BOTTOM HARDNESS</div>
+        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#0a0a0a 0%,#525252 45%,#e7e5e4 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
+          <span>Soft</span><span>Mixed</span><span>Hard</span>
+        </div>
+        ${detail(`<div style="font-size:13px;color:#9ec5e8;margin-top:6px;line-height:1.45">
+          NOAA NOS multibeam <b style="color:#e7e5e4">acoustic backscatter</b> — brighter return ≈ harder bottom (sand, shell, rock); darker ≈ softer (mud/silt).
+          Coverage follows survey footprints only (patchy). Fishing reference — <b>not for navigation</b>.
+        </div>`)}
       </div>`);
   }
   // Single toggle controlling every collapsed detail block, so the panel stays
