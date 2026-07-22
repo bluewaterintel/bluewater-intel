@@ -312,7 +312,7 @@ let pinLL=null;
 // the chosen hotspot cells; null for the normal single-spot brief (tap a spot).
 let _briefRunPlanSpots=null;
 let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, buoys:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false, relief:false, depthShade:false, contours:false};
+let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, buoys:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false, relief:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -325,7 +325,7 @@ let _predictGrid = null, _predictSpecies = null, _predictTooltip = null, _predic
 // load (old behavior) produced different hotspot rankings as bathy/ocean data
 // arrived in different order, which is why the #1/#2/#3 badges jumped on zoom.
 let _predictResultCache = null; // { key, heatGrid, hotspots, badges, gridStep, gridOriginLat, gridOriginLng }
-let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null, reliefLayer=null, depthShadeLayer=null, contourLayer=null;
+let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null, reliefLayer=null;
 let blueTopoElevationLayer=null, blueTopoHillshadeLayer=null;
 let _activeBaseMap = "satellite";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
@@ -350,26 +350,22 @@ let SAT_FRESH_DATE = { sst: null, chlor: null };
 // opacity slider on the right of the map. Defaults keep structure readable
 // underneath while stopping the basemap from washing SST/chlor into pastel haze.
 // Persisted so a user's preferred dim level survives navigation and reloads.
-const OCEAN_OPACITY_DEFAULT = { sst: 0.82, chlor: 0.70, relief: 0.75, depthShade: 0.55, contours: 0.85 };
+const OCEAN_OPACITY_DEFAULT = { sst: 0.82, chlor: 0.70, relief: 0.75 };
 let oceanOpacity = { ...OCEAN_OPACITY_DEFAULT };
 try {
   const saved = JSON.parse(localStorage.getItem("bwi_ocean_opacity") || "null");
   if(saved && typeof saved === "object"){
-    if(typeof saved.sst === "number")        oceanOpacity.sst        = Math.max(0, Math.min(1, saved.sst));
-    if(typeof saved.chlor === "number")      oceanOpacity.chlor      = Math.max(0, Math.min(1, saved.chlor));
-    if(typeof saved.relief === "number")     oceanOpacity.relief     = Math.max(0, Math.min(1, saved.relief));
-    if(typeof saved.depthShade === "number") oceanOpacity.depthShade = Math.max(0, Math.min(1, saved.depthShade));
-    if(typeof saved.contours === "number")   oceanOpacity.contours   = Math.max(0, Math.min(1, saved.contours));
+    if(typeof saved.sst === "number")    oceanOpacity.sst    = Math.max(0, Math.min(1, saved.sst));
+    if(typeof saved.chlor === "number")  oceanOpacity.chlor  = Math.max(0, Math.min(1, saved.chlor));
+    if(typeof saved.relief === "number") oceanOpacity.relief = Math.max(0, Math.min(1, saved.relief));
   }
 } catch(e){}
-const BATHY_LAYER_KEYS = ["relief", "depthShade", "contours"];
+const BATHY_LAYER_KEYS = ["relief"];
 const LAYER_VIS_KEY = "bwi_layer_vis";
 try {
   const savedVis = JSON.parse(localStorage.getItem(LAYER_VIS_KEY) || "null");
   if(savedVis && typeof savedVis === "object"){
-    for(const k of BATHY_LAYER_KEYS){
-      if(typeof savedVis[k] === "boolean") layerVis[k] = savedVis[k];
-    }
+    if(typeof savedVis.relief === "boolean") layerVis.relief = savedVis.relief;
   }
 } catch(e){}
 let briefSp=[], briefAutoPick=false, aiCOA="", aiLoading=false, briefDayOffset=0;  // briefDayOffset: 0=today,1=tomorrow,...
@@ -547,9 +543,6 @@ async function initMap(){
   MAP.createPane("bathy");
   MAP.getPane("bathy").style.zIndex = 250;
   MAP.getPane("bathy").style.pointerEvents = "none";
-  MAP.createPane("bathy-contours");
-  MAP.getPane("bathy-contours").style.zIndex = 450;
-  MAP.getPane("bathy-contours").style.pointerEvents = "none";
 
   // ── Dedicated pane for satellite ocean overlays ──
   // SST and Chlorophyll go in their own pane so the BasemapSampler (which
@@ -660,14 +653,11 @@ async function initMap(){
   // isn't blocked; until it resolves the conservative 1-day-back default applies.
   if(typeof ensureFreshestSatDates === "function") ensureFreshestSatDates();
 
-  // ── Bottom-structure bathymetry overlays ──
-  // Stack: GEBCO (global, Max LOD 10) as the floor, NOAA NCEI multibeam where
-  // it exists (~z11), then BlueTopo (US coastal, ~z16) so fishing zooms still
-  // show real bottom structure instead of a blurry upscale.
-  // ArcGIS tile URLs use {z}/{y}/{x} — NOT Leaflet's default {z}/{x}/{y}.
-  // IMPORTANT: maxNativeZoom must match the last zoom that actually returns
-  // tiles. Asking past that (e.g. contours at z11) 404s and the layer vanishes
-  // instead of upscaling — that was why contours disappeared on zoom-in.
+  // ── Seafloor Relief overlay ──
+  // Stack: GEBCO grayscale (global, Max LOD 10) as the floor, NOAA NCEI
+  // multibeam where it exists (~z11), then BlueTopo hillshade on Satellite
+  // (US coastal, ~z16) so fishing zooms stay sharp. ArcGIS tiles use
+  // {z}/{y}/{x} — NOT Leaflet's default {z}/{x}/{y}.
   const _BATHY_EMPTY =
     "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
   const _blueTopoOverlayWmts =
@@ -688,8 +678,8 @@ async function initMap(){
         attribution: "NOAA NCEI Multibeam Mosaic", errorTileUrl: _BATHY_EMPTY }
     );
     const layers = [gebco, multibeam];
-    // BlueTopo is already in the Ocean Bathymetric basemap — don't double it
-    // (that stacked grainy grid). On satellite, add it so fishing zooms stay sharp.
+    // BlueTopo is already in the Ocean Bathymetric basemap — don't double it.
+    // On satellite, add it so fishing zooms stay sharp.
     if(_activeBaseMap !== "ocean"){
       layers.push(L.tileLayer(
         _blueTopoOverlayWmts + "&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade",
@@ -700,40 +690,7 @@ async function initMap(){
     }
     return L.layerGroup(layers);
   };
-  window.buildDepthShadeLayer = function(opacity){
-    const op = (typeof opacity === "number") ? opacity : oceanOpacity.depthShade;
-    // GEBCO color relief as global floor (native ≤ z10). On satellite, stack
-    // BlueTopo elevation for sharp US coastal depth bands at fishing zoom.
-    const gebco = L.tileLayer(
-      "https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/GEBCO_basemap_NCEI/MapServer/tile/{z}/{y}/{x}",
-      { pane:"bathy", opacity: op, maxNativeZoom: 10, maxZoom: 18, className:"bathy-depth-tile",
-        attribution: "Imagery reproduced from the GEBCO_2024 Grid, GEBCO Compilation Group · NOAA NCEI",
-        errorTileUrl: _BATHY_EMPTY }
-    );
-    const layers = [gebco];
-    if(_activeBaseMap !== "ocean"){
-      layers.push(L.tileLayer(
-        _blueTopoOverlayWmts + "&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation",
-        { pane:"bathy", opacity: op, maxNativeZoom: 16, maxZoom: 18, className:"bathy-depth-tile",
-          attribution: "© NOAA OCS · BlueTopo", errorTileUrl: _BATHY_EMPTY }
-      ));
-    }
-    return L.layerGroup(layers);
-  };
-  window.buildContourLayer = function(opacity){
-    const op = (typeof opacity === "number") ? opacity : oceanOpacity.contours;
-    // GEBCO contours: Max LOD 10 (~1:578k). Past that Leaflet must upscale —
-    // do NOT set maxNativeZoom above 10 or tiles 404 and the layer goes blank.
-    return L.tileLayer(
-      "https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/GEBCO_contours/MapServer/tile/{z}/{y}/{x}",
-      { pane:"bathy-contours", opacity: op, maxNativeZoom: 10, maxZoom: 18,
-        className:"bathy-contour-tile",
-        attribution: "GEBCO_2024 Contours · NOAA NCEI", errorTileUrl: _BATHY_EMPTY }
-    );
-  };
   reliefLayer = window.buildReliefLayer();
-  depthShadeLayer = window.buildDepthShadeLayer();
-  contourLayer = window.buildContourLayer();
 
   // ── Live weather radar (NOAA nowCOAST MRMS base reflectivity) ──
   // NOAA retired the old /arcgis/ radar service; nowCOAST moved to a GeoServer
@@ -9026,10 +8983,8 @@ function openSubPanel(kind){
 // ════════════════════════════════════════════════════════════════════════════
 const BATHY_ATTRIB = {
   relief: "© GEBCO_2024 · NOAA NCEI Multibeam",
-  depthShade: "© GEBCO_2024 Grid · NOAA NCEI",
-  contours: "© GEBCO_2024 Contours · NOAA NCEI",
 };
-let _bathyAttribAdded = { relief: false, depthShade: false, contours: false };
+let _bathyAttribAdded = { relief: false };
 
 function saveBathyLayerVis(){
   try {
@@ -9054,8 +9009,7 @@ function updateBathyAttribution(){
   }
 }
 
-// Leaflet LayerGroup has no setOpacity — calling it on the relief/depth stacks
-// threw and aborted addTo(), so Seafloor Relief never appeared. Walk children.
+// Leaflet LayerGroup has no setOpacity — walk children instead.
 function setLayerTreeOpacity(layer, opacity){
   if(!layer) return;
   if(typeof layer.eachLayer === "function"){
@@ -9065,38 +9019,16 @@ function setLayerTreeOpacity(layer, opacity){
   if(typeof layer.setOpacity === "function") layer.setOpacity(opacity);
 }
 
-function updateBathyContourContrast(){
-  const pane = MAP && MAP.getPane && MAP.getPane("bathy-contours");
-  if(!pane) return;
-  // GEBCO contour tiles are dark lines. Invert to white over satellite / dark
-  // water; keep dark lines over the lighter Ocean Bathymetric basemap.
-  const lightBase = _activeBaseMap === "ocean";
-  pane.classList.toggle("bathy-contours-light", !!lightBase);
-  pane.classList.toggle("bathy-contours-dark", !lightBase);
-}
-
 function applyBathyLayer(key){
-  if(key === "relief"){
-    if(!reliefLayer) reliefLayer = window.buildReliefLayer();
-    setLayerTreeOpacity(reliefLayer, oceanOpacity.relief);
-    if(!MAP.hasLayer(reliefLayer)) reliefLayer.addTo(MAP);
-  } else if(key === "depthShade"){
-    if(!depthShadeLayer) depthShadeLayer = window.buildDepthShadeLayer();
-    setLayerTreeOpacity(depthShadeLayer, oceanOpacity.depthShade);
-    if(!MAP.hasLayer(depthShadeLayer)) depthShadeLayer.addTo(MAP);
-  } else if(key === "contours"){
-    if(!contourLayer) contourLayer = window.buildContourLayer();
-    setLayerTreeOpacity(contourLayer, oceanOpacity.contours);
-    if(!MAP.hasLayer(contourLayer)) contourLayer.addTo(MAP);
-    updateBathyContourContrast();
-  }
+  if(key !== "relief") return;
+  if(!reliefLayer) reliefLayer = window.buildReliefLayer();
+  setLayerTreeOpacity(reliefLayer, oceanOpacity.relief);
+  if(!MAP.hasLayer(reliefLayer)) reliefLayer.addTo(MAP);
   updateBathyAttribution();
 }
 
 function removeBathyLayer(key){
   if(key === "relief" && reliefLayer && MAP.hasLayer(reliefLayer)) MAP.removeLayer(reliefLayer);
-  else if(key === "depthShade" && depthShadeLayer && MAP.hasLayer(depthShadeLayer)) MAP.removeLayer(depthShadeLayer);
-  else if(key === "contours" && contourLayer && MAP.hasLayer(contourLayer)) MAP.removeLayer(contourLayer);
   updateBathyAttribution();
 }
 
@@ -9106,23 +9038,17 @@ function applySavedBathyLayers(){
     if(chk) chk.checked = !!layerVis[k];
     if(layerVis[k]) applyBathyLayer(k);
   }
-  updateBathyContourContrast();
   updateOpacityControl();
 }
 
-// Rebuild relief/depth stacks when the basemap changes — BlueTopo is only
-// stacked on satellite (Ocean Bathymetric already includes it).
+// Rebuild relief stack when the basemap changes — BlueTopo is only stacked
+// on satellite (Ocean Bathymetric already includes it).
 function rebuildActiveBathyLayers(){
   if(typeof MAP === "undefined" || !MAP) return;
-  for(const key of BATHY_LAYER_KEYS){
-    if(!layerVis[key]) continue;
-    removeBathyLayer(key);
-    if(key === "relief") reliefLayer = window.buildReliefLayer();
-    else if(key === "depthShade") depthShadeLayer = window.buildDepthShadeLayer();
-    else if(key === "contours") contourLayer = window.buildContourLayer();
-    applyBathyLayer(key);
-  }
-  updateBathyContourContrast();
+  if(!layerVis.relief) return;
+  removeBathyLayer("relief");
+  reliefLayer = window.buildReliefLayer();
+  applyBathyLayer("relief");
 }
 
 function toggleLayer(key){
@@ -9202,12 +9128,11 @@ function toggleLayer(key){
       showToast("Select a home port first to see boat ramps within range.", "info");
     }
   }
-  else if(key==="relief" || key==="depthShade" || key==="contours"){
-    if(layerVis[key]) applyBathyLayer(key);
-    else removeBathyLayer(key);
+  else if(key==="relief"){
+    if(layerVis.relief) applyBathyLayer("relief");
+    else removeBathyLayer("relief");
     saveBathyLayerVis();
     updateOpacityControl();
-    if(key === "contours" || key === "depthShade") updateOceanLegend();
   }
 }
 
@@ -9546,11 +9471,9 @@ function restackBottomControls(){
 // at. Dimming lets you read SST and then fade it to reveal structure/waypoints
 // underneath without turning the layer off entirely.
 function activeOceanLayerKey(){
-  if(layerVis.sst)        return "sst";
-  if(layerVis.chlor)      return "chlor";
-  if(layerVis.relief)     return "relief";
-  if(layerVis.depthShade) return "depthShade";
-  if(layerVis.contours)   return "contours";
+  if(layerVis.sst)    return "sst";
+  if(layerVis.chlor)  return "chlor";
+  if(layerVis.relief) return "relief";
   return null;
 }
 // Apply the stored opacity to whichever ocean layers are live (called after a
@@ -9563,8 +9486,6 @@ function applyOceanOpacity(){
   }
   if(layerVis.chlor && chlorLayer) chlorLayer.setOpacity(oceanOpacity.chlor);
   if(layerVis.relief && reliefLayer) setLayerTreeOpacity(reliefLayer, oceanOpacity.relief);
-  if(layerVis.depthShade && depthShadeLayer) setLayerTreeOpacity(depthShadeLayer, oceanOpacity.depthShade);
-  if(layerVis.contours && contourLayer) setLayerTreeOpacity(contourLayer, oceanOpacity.contours);
 }
 // Slider handler. value is 0–100 (percent). Targets the active layer.
 function onOceanOpacityInput(pct){
@@ -9584,8 +9505,6 @@ function onOceanOpacityInput(pct){
   }
   if(key === "chlor" && chlorLayer) chlorLayer.setOpacity(v);
   if(key === "relief" && reliefLayer) setLayerTreeOpacity(reliefLayer, v);
-  if(key === "depthShade" && depthShadeLayer) setLayerTreeOpacity(depthShadeLayer, v);
-  if(key === "contours" && contourLayer) setLayerTreeOpacity(contourLayer, v);
   try { localStorage.setItem("bwi_ocean_opacity", JSON.stringify(oceanOpacity)); } catch(e){}
   updateOpacityControl(true); // refresh readout/label without rebuilding position
 }
@@ -9608,9 +9527,10 @@ function updateOpacityControl(valueOnly){
   if(input && +input.value !== pct) input.value = pct;
   if(readout) readout.textContent = pct + "%";
   if(label){
-    const labels = { sst: "SST", chlor: "Chlor", relief: "Relief", depthShade: "Depth", contours: "Contours" };
+    const labels = { sst: "SST", chlor: "Chlor", relief: "Relief" };
     label.textContent = labels[key] || key;
   }
+  if(typeof restackRightSliders === "function") restackRightSliders();
 }
 
 // ── TIME-LAPSE PLAYBACK ──────────────────────────────────────────────────────
@@ -11734,7 +11654,7 @@ function updateOceanLegend(){
   const el = document.getElementById("ocean-legend");
   const content = document.getElementById("ocean-legend-content");
   if(!el || !content) return;
-  if(!layerVis.sst && !layerVis.chlor && !layerVis.wind && !layerVis.radar && !layerVis.currents && !layerVis.altimetry && !layerVis.contours && !layerVis.depthShade){
+  if(!layerVis.sst && !layerVis.chlor && !layerVis.wind && !layerVis.radar && !layerVis.currents && !layerVis.altimetry){
     el.style.display = "none";
     if(typeof closeOceanLegendSheet === "function") closeOceanLegendSheet();
     updateBiteBanner();
@@ -11884,17 +11804,6 @@ function updateOceanLegend(){
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#04e9e7 0%,#019ff4 15%,#0300f4 28%,#02fd02 42%,#01c501 52%,#fdf802 64%,#e5bc00 72%,#fd9500 80%,#fd0000 90%,#d40000 95%,#bc0000 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>light</span><span>moderate</span><span>heavy</span><span>intense</span>
-        </div>
-      </div>`);
-  }
-  if(layerVis.contours || layerVis.depthShade){
-    parts.push(`
-      <div style="${gap()}">
-        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#8fb4d0;letter-spacing:.08em;margin-bottom:3px">DEPTH CONTOURS (m)</div>
-        <div style="font-size:12px;color:#9ec5e8;line-height:1.45">
-          GEBCO isobaths are labeled in <b style="color:#cfe5ff">meters</b>
-          (100 fm ≈ 183 m · 50 fm ≈ 91 m · 500 fm ≈ 914 m).
-          Contour labels are drawn at chart scale — they stay visible when you zoom in, but spacing stays coarse inshore.
         </div>
       </div>`);
   }
@@ -12275,7 +12184,6 @@ function switchBase(val){
   scheduleHeatMaskRepaint();
   updateBlueTopoReliefControl();
   if(typeof rebuildActiveBathyLayers === "function") rebuildActiveBathyLayers();
-  else if(typeof updateBathyContourContrast === "function") updateBathyContourContrast();
   // Auto-close the basemap modal after a selection so the user sees the
   // new map immediately. Short delay lets the radio animation finish.
   const m = document.getElementById("basemap-modal");
@@ -12303,8 +12211,8 @@ function applyBlueTopoRelief(val, persist){
   }
   const input = document.getElementById("bluetopo-relief-input");
   if(input) input.value = String(Math.round(blueTopoRelief * 100));
-  const lbl = document.getElementById("bluetopo-relief-label");
-  if(lbl) lbl.textContent = t < 0.34 ? "Light" : (t > 0.66 ? "Dark" : "Medium");
+  const readout = document.getElementById("bluetopo-relief-readout");
+  if(readout) readout.textContent = t < 0.34 ? "Light" : (t > 0.66 ? "Dark" : "Med");
 }
 
 function onBlueTopoReliefInput(val){
@@ -12312,15 +12220,31 @@ function onBlueTopoReliefInput(val){
   if(typeof scheduleHeatMaskRepaint === "function") scheduleHeatMaskRepaint();
 }
 
+// Stack the vertical right-side sliders (opacity + BlueTopo relief) so they
+// don't overlap when both are visible. Nearest the icon column = 74px.
+function restackRightSliders(){
+  const op = document.getElementById("ocean-opacity-control");
+  const rel = document.getElementById("bluetopo-relief-control");
+  if(!op && !rel) return;
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
+  if(phone) return;
+  const opOn = !!(op && op.style.display === "flex");
+  const relOn = !!(rel && rel.style.display === "flex");
+  if(op) op.style.right = "74px";
+  if(rel) rel.style.right = (opOn && relOn) ? "130px" : "74px";
+}
+
 function updateBlueTopoReliefControl(){
   const el = document.getElementById("bluetopo-relief-control");
   if(!el) return;
-  const show = _activeBaseMap === "ocean";
-  el.style.display = show ? "block" : "none";
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
+  const show = _activeBaseMap === "ocean" && !phone;
+  el.style.display = show ? "flex" : "none";
   if(show){
     applyBlueTopoRelief(blueTopoRelief, false);
     if(typeof shieldMapOverlayFromLeaflet === "function") shieldMapOverlayFromLeaflet(el);
   }
+  restackRightSliders();
 }
 
 function updateLegend(){

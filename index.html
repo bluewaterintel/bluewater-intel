@@ -678,6 +678,7 @@ body.nav-open{
 body.nav-open .leaflet-control-zoom,
 body.nav-open #layers-ctrl,
 body.nav-open #ocean-opacity-control,
+body.nav-open #bluetopo-relief-control,
 body.nav-open #ruler-readout{
   opacity:0;
   pointer-events:none;
@@ -819,8 +820,9 @@ body.modal-open #brief-toggle{
 .ocean-opacity-cap{font-size:11px;color:#9ec5e8;line-height:1;opacity:.8}
 
 @media (max-width:680px){
-  /* SST/chlor dimmer is desktop-only — fixed 55% opacity on phones. */
-  #ocean-opacity-control{display:none !important}
+  /* Vertical map-side sliders are desktop-only — too much chrome on phones. */
+  #ocean-opacity-control,
+  #bluetopo-relief-control{display:none !important}
 }
 
 /* Leaflet popups need to render above the right-side icon column (z-index 600)
@@ -1548,39 +1550,61 @@ body.modal-open #brief-toggle{
 .leaflet-layer.bathy-relief-bluetopo{
   mix-blend-mode:multiply;
 }
-/* GEBCO contour tiles are dark ink — invert to white over satellite / dark water;
-   keep dark lines over the lighter Ocean Bathymetric basemap. */
-.leaflet-pane.bathy-contours-dark .bathy-contour-tile{
-  filter: invert(1) brightness(1.9) contrast(1.2);
-}
-.leaflet-pane.bathy-contours-light .bathy-contour-tile{
-  filter: none;
-}
-.leaflet-pane.bathy img.leaflet-tile,
-.leaflet-pane.bathy-contours img.leaflet-tile{
+.leaflet-pane.bathy img.leaflet-tile{
   mix-blend-mode:normal;
   image-rendering:auto;
 }
+/* BlueTopo relief strength — same vertical chrome as #ocean-opacity-control,
+   parked on the right next to the map/layers icon column. Desktop only. */
 #bluetopo-relief-control{
-  position:absolute;left:10px;bottom:54px;z-index:560;
-  background:rgba(8,20,38,.92);border:1px solid rgba(103,232,249,.35);
-  border-radius:10px;padding:8px 10px;min-width:168px;max-width:220px;
-  box-shadow:0 4px 16px rgba(0,0,0,.45);pointer-events:auto;
-  font-family:'Segoe UI',Arial,sans-serif;color:#e8f4ff;
+  display:none;
+  position:absolute;
+  top:50%;
+  right:74px;
+  transform:translateY(-50%);
+  z-index:600;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+  padding:12px 8px 10px;
+  background:var(--bw-map-chrome-bg);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:12px;
+  box-shadow:0 4px 14px rgba(0,0,0,.55);
+  user-select:none;
+  pointer-events:auto;
 }
-.bluetopo-relief-title{
-  font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:#67e8f9;margin-bottom:6px;
+#bluetopo-relief-label{
+  font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:#7dd3fc;font-family:'Segoe UI',Arial,sans-serif;
 }
-.bluetopo-relief-row{
-  display:flex;align-items:center;gap:8px;
-  font-size:10px;color:#9ec5e8;font-weight:600;
+#bluetopo-relief-readout{
+  font-size:11px;font-weight:700;color:#e8f4ff;
+  font-family:'Segoe UI',Arial,sans-serif;line-height:1;
 }
-.bluetopo-relief-row input[type="range"]{
-  flex:1;min-width:0;accent-color:#38bdf8;cursor:pointer;
+#bluetopo-relief-input{
+  -webkit-appearance:slider-vertical;
+  appearance:slider-vertical;
+  writing-mode:vertical-lr;
+  direction:rtl;                        /* TOP = dark (strong), BOTTOM = light */
+  width:8px;height:150px;
+  background:linear-gradient(to top,rgba(125,211,252,.15),#7dd3fc);
+  border-radius:5px;outline:none;cursor:pointer;margin:2px 0;
 }
-.bluetopo-relief-label{
-  margin-top:4px;font-size:10px;color:#7dd3fc;font-weight:600;text-align:center;
+#bluetopo-relief-input::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:20px;height:20px;border-radius:50%;
+  background:#fff;border:2px solid #2979b5;
+  box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer;
+}
+#bluetopo-relief-input::-moz-range-thumb{
+  width:18px;height:18px;border-radius:50%;
+  background:#fff;border:2px solid #2979b5;
+  box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer;
+}
+#bluetopo-relief-input::-moz-range-track{
+  width:8px;border-radius:5px;
+  background:linear-gradient(to top,rgba(125,211,252,.15),#7dd3fc);
 }
 .buoy-marker{background:transparent !important;border:none !important}
 .buoy-marker-dot{
@@ -1596,7 +1620,6 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 .explainer-drag-hint{color:#6bbfea;font-weight:500;font-size:11px}
 @media (max-width:680px){
   .explainer-drag-hint{display:none}
-  #bluetopo-relief-control{left:8px;right:auto;bottom:118px;min-width:148px;padding:7px 9px}
 }
 
 /* Species legend pill — top left, below header */
@@ -2988,18 +3011,6 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
   </div>
 </div>
 
-<!-- Ocean Bathymetric relief strength — shown only on BlueTopo basemap -->
-<div id="bluetopo-relief-control" style="display:none" aria-label="BlueTopo relief shading">
-  <div class="bluetopo-relief-title">Relief shading</div>
-  <div class="bluetopo-relief-row">
-    <span>Light</span>
-    <input id="bluetopo-relief-input" type="range" min="0" max="100" step="1" value="55"
-      oninput="onBlueTopoReliefInput(this.value)" aria-label="Relief shading intensity">
-    <span>Dark</span>
-  </div>
-  <div id="bluetopo-relief-label" class="bluetopo-relief-label">Medium</div>
-</div>
-
 <!-- Distance scale bar — nautical miles; opaque chrome so map markers don't show through. -->
 <div id="map-scale-bar" aria-hidden="true">
   <div id="scale-bar-track">
@@ -3192,6 +3203,18 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
   <div class="ocean-opacity-cap" title="Dim">▽</div>
 </div>
 
+<!-- Ocean Bathymetric relief strength — vertical, same chrome as opacity slider.
+     Desktop only; shown when Ocean Bathymetric basemap is active. -->
+<div id="bluetopo-relief-control" aria-label="BlueTopo relief shading">
+  <div id="bluetopo-relief-label">Relief</div>
+  <div id="bluetopo-relief-readout">Med</div>
+  <input id="bluetopo-relief-input" type="range" min="0" max="100" step="1" value="55"
+    orient="vertical"
+    aria-label="Relief shading intensity"
+    oninput="onBlueTopoReliefInput(this.value)">
+  <div class="ocean-opacity-cap" title="Light">▽</div>
+</div>
+
 <!-- LAYERS MODAL — centered overlay with backdrop. Sits above EVERYTHING
      (above the top header, above any map controls) so it can't be cut off
      by parent containers, headers, or right-side icons. -->
@@ -3354,34 +3377,17 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       <span class="lyr-toggle"></span>
     </label>
 
-    <!-- BOTTOM STRUCTURE — bathymetry overlays -->
+    <!-- BOTTOM STRUCTURE — seafloor relief overlay -->
     <div class="layers-section">BOTTOM STRUCTURE</div>
     <div style="font-size:11px;color:#8fb4d0;line-height:1.45;margin:2px 0 8px;padding:0 2px">
       Bathymetry for fishing reference only — <b>not for navigation</b>.
       Best on Satellite: BlueTopo fills in high-res US structure when you zoom in.
-      Contours are labeled in meters (sparse inshore).
     </div>
     <label class="layer-row" title="Shaded-relief hillshade: GEBCO (global) + NOAA multibeam where available + BlueTopo hillshade on Satellite for fishing-zoom detail. Shows canyons, humps, ledges, and drop-offs.">
       <input type="checkbox" id="chk-relief" onchange="toggleLayer('relief')">
       <span class="lyr-label">
         <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">🏔</span>
         <span>Seafloor Relief <span style="font-size:8px;color:#9ec5e8;opacity:.7">(hillshade · canyons &amp; humps)</span></span>
-      </span>
-      <span class="lyr-toggle"></span>
-    </label>
-    <label class="layer-row" title="Color-graduated depth shading: GEBCO globally, BlueTopo elevation on Satellite when zoomed in for sharper US coastal detail.">
-      <input type="checkbox" id="chk-depthShade" onchange="toggleLayer('depthShade')">
-      <span class="lyr-label">
-        <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">🌊</span>
-        <span>Depth Shading <span style="font-size:8px;color:#9ec5e8;opacity:.7">(color by depth)</span></span>
-      </span>
-      <span class="lyr-toggle"></span>
-    </label>
-    <label class="layer-row" title="Labeled GEBCO isobaths in meters. White lines over Satellite, dark lines over Ocean Bathymetric. Native detail to ~zoom 10; lines stay visible when you zoom in by upscaling.">
-      <input type="checkbox" id="chk-contours" onchange="toggleLayer('contours')">
-      <span class="lyr-label">
-        <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">〰️</span>
-        <span>Depth Contours <span style="font-size:8px;color:#9ec5e8;opacity:.7">(labeled isobaths, m)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -3600,7 +3606,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260722d"></script>
+<script src="bw-core.js?v=20260722e"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
