@@ -1571,9 +1571,10 @@ body.modal-open #brief-toggle{
 .buoy-marker{background:transparent !important;border:none !important}
 .buoy-marker-dot{
   width:14px;height:14px;border-radius:50%;
-  background:radial-gradient(circle at 35% 30%,#7dd3fc,#0284c7 70%);
-  border:2px solid rgba(255,255,255,.92);
-  box-shadow:0 1px 4px rgba(0,0,0,.55);
+  /* Match real yellow weather/data buoys */
+  background:radial-gradient(circle at 35% 30%,#fde047,#eab308 62%,#ca8a04 100%);
+  border:2px solid rgba(255,255,255,.95);
+  box-shadow:0 1px 4px rgba(0,0,0,.55), 0 0 0 1px rgba(202,138,4,.35);
 }
 .explainer-drag-handle{cursor:grab;user-select:none;-webkit-user-select:none}
 .explainer-drag-handle:active{cursor:grabbing}
@@ -3250,7 +3251,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
     <label class="layer-row" title="Weather and research buoys (NDBC + IOOS partners) within 150 nm of your home port. Buoys can hold bait and fish — tap a marker for station details. Informational only — not for navigation.">
       <input type="checkbox" id="chk-buoys" onchange="toggleLayer('buoys')">
       <span class="lyr-label">
-        <span class="layer-swatch" style="background:#38bdf8;width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 2px rgba(56,189,248,.35)"></span>
+        <span class="layer-swatch" style="background:#eab308;width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 2px rgba(234,179,8,.4)"></span>
         <span>Weather Buoys <span style="font-size:8px;color:#9ec5e8;opacity:.7">(150 nm)</span></span>
       </span>
       <span class="lyr-toggle"></span>
