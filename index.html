@@ -28,6 +28,7 @@
 <script src="bw-waypoints.js"></script>
 <!-- Gulf of Mexico federal OCS platforms (BSEE active surface structures). Rebuild: npm run build:platforms -->
 <script src="bw-platforms-gom.js"></script>
+<script src="bw-data-buoys.js"></script>
 <script src="bw-data-ports.js"></script>
 <script src="bw-tide-stations.js?v=20260717c"></script>
 <script src="bw-data-species.js?v=20260720c"></script>
@@ -1546,6 +1547,42 @@ body.modal-open #brief-toggle{
 .leaflet-layer.bluetopo-hillshade{
   mix-blend-mode:multiply;
 }
+#bluetopo-relief-control{
+  position:absolute;left:10px;bottom:54px;z-index:560;
+  background:rgba(8,20,38,.92);border:1px solid rgba(103,232,249,.35);
+  border-radius:10px;padding:8px 10px;min-width:168px;max-width:220px;
+  box-shadow:0 4px 16px rgba(0,0,0,.45);pointer-events:auto;
+  font-family:'Segoe UI',Arial,sans-serif;color:#e8f4ff;
+}
+.bluetopo-relief-title{
+  font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:#67e8f9;margin-bottom:6px;
+}
+.bluetopo-relief-row{
+  display:flex;align-items:center;gap:8px;
+  font-size:10px;color:#9ec5e8;font-weight:600;
+}
+.bluetopo-relief-row input[type="range"]{
+  flex:1;min-width:0;accent-color:#38bdf8;cursor:pointer;
+}
+.bluetopo-relief-label{
+  margin-top:4px;font-size:10px;color:#7dd3fc;font-weight:600;text-align:center;
+}
+.buoy-marker{background:transparent !important;border:none !important}
+.buoy-marker-dot{
+  width:14px;height:14px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#7dd3fc,#0284c7 70%);
+  border:2px solid rgba(255,255,255,.92);
+  box-shadow:0 1px 4px rgba(0,0,0,.55);
+}
+.explainer-drag-handle{cursor:grab;user-select:none;-webkit-user-select:none}
+.explainer-drag-handle:active{cursor:grabbing}
+body.explainer-dragging{cursor:grabbing !important;user-select:none}
+.explainer-drag-hint{color:#6bbfea;font-weight:500;font-size:11px}
+@media (max-width:680px){
+  .explainer-drag-hint{display:none}
+  #bluetopo-relief-control{left:8px;right:auto;bottom:118px;min-width:148px;padding:7px 9px}
+}
 
 /* Species legend pill — top left, below header */
 /* MAP */
@@ -2936,6 +2973,18 @@ body.modal-open #brief-toggle{
   </div>
 </div>
 
+<!-- Ocean Bathymetric relief strength — shown only on BlueTopo basemap -->
+<div id="bluetopo-relief-control" style="display:none" aria-label="BlueTopo relief shading">
+  <div class="bluetopo-relief-title">Relief shading</div>
+  <div class="bluetopo-relief-row">
+    <span>Light</span>
+    <input id="bluetopo-relief-input" type="range" min="0" max="100" step="1" value="55"
+      oninput="onBlueTopoReliefInput(this.value)" aria-label="Relief shading intensity">
+    <span>Dark</span>
+  </div>
+  <div id="bluetopo-relief-label" class="bluetopo-relief-label">Medium</div>
+</div>
+
 <!-- Distance scale bar — nautical miles; opaque chrome so map markers don't show through. -->
 <div id="map-scale-bar" aria-hidden="true">
   <div id="scale-bar-track">
@@ -3195,6 +3244,14 @@ body.modal-open #brief-toggle{
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 20V8l6-4 6 4v12"/><path d="M9 20v-5h6v5"/><path d="M10 8h4"/><path d="M12 4v4"/></svg>
         </span>
         <span>Gulf Rigs <span style="font-size:8px;color:#9ec5e8;opacity:.7">(150 nm)</span></span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
+    <label class="layer-row" title="Weather and research buoys (NDBC + IOOS partners) within 150 nm of your home port. Buoys can hold bait and fish — tap a marker for station details. Informational only — not for navigation.">
+      <input type="checkbox" id="chk-buoys" onchange="toggleLayer('buoys')">
+      <span class="lyr-label">
+        <span class="layer-swatch" style="background:#38bdf8;width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 2px rgba(56,189,248,.35)"></span>
+        <span>Weather Buoys <span style="font-size:8px;color:#9ec5e8;opacity:.7">(150 nm)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -3496,7 +3553,7 @@ body.modal-open #brief-toggle{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260720c"></script>
+<script src="bw-core.js?v=20260722a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

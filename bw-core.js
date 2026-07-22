@@ -312,7 +312,7 @@ let pinLL=null;
 // the chosen hotspot cells; null for the normal single-spot brief (tap a spot).
 let _briefRunPlanSpots=null;
 let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
+let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, buoys:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -326,7 +326,11 @@ let _predictGrid = null, _predictSpecies = null, _predictTooltip = null, _predic
 // arrived in different order, which is why the #1/#2/#3 badges jumped on zoom.
 let _predictResultCache = null; // { key, heatGrid, hotspots, badges, gridStep, gridOriginLat, gridOriginLng }
 let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null;
+let blueTopoElevationLayer=null, blueTopoHillshadeLayer=null;
 let _activeBaseMap = "satellite";
+// Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
+const BLUETOPO_RELIEF_KEY = "bwi.bluetopoRelief";
+let blueTopoRelief = 0.55; // maps to hillshade opacity ~0.20–0.85
 const M_PER_FATHOM = 1.8288;
 // Satellite-imagery date control (SEPARATE from the prediction forecast slider).
 // Satellite layers (SST/chlor) are OBSERVED data — they only go backward. This
@@ -488,26 +492,33 @@ async function initMap(){
   const _blueTopoWmts =
     "https://nowcoast.noaa.gov/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
     + "&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A{z}&TILEROW={y}&TILECOL={x}&FORMAT=image%2Fpng8";
+  try {
+    const savedRelief = parseFloat(localStorage.getItem(BLUETOPO_RELIEF_KEY));
+    if(isFinite(savedRelief)) blueTopoRelief = Math.max(0, Math.min(1, savedRelief));
+  } catch(e){}
+  blueTopoElevationLayer = L.tileLayer(
+    _blueTopoWmts + "&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation",
+    {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.82,
+      className:"bluetopo-elevation",
+      attribution:'© NOAA OCS · BlueTopo',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
+  );
+  blueTopoHillshadeLayer = L.tileLayer(
+    _blueTopoWmts + "&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade",
+    {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.48,
+      className:"bluetopo-hillshade",
+      attribution:'© NOAA OCS · BlueTopo CUDEM',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
+  );
   esriOceanLayer=L.layerGroup([
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
       {maxZoom:18,maxNativeZoom:13,minZoom:0,crossOrigin:'anonymous',attribution:'© Esri · GEBCO · NOAA · NGA'}
     ),
-    L.tileLayer(
-      _blueTopoWmts + "&LAYER=bluetopo%3Abathymetry&STYLE=nbs_elevation",
-      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.82,
-        className:"bluetopo-elevation",
-        attribution:'© NOAA OCS · BlueTopo',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
-    ),
-    L.tileLayer(
-      _blueTopoWmts + "&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade",
-      {maxZoom:18,maxNativeZoom:16,minZoom:0,crossOrigin:'anonymous',opacity:0.48,
-        className:"bluetopo-hillshade",
-        attribution:'© NOAA OCS · BlueTopo CUDEM',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
-    ),
+    blueTopoElevationLayer,
+    blueTopoHillshadeLayer,
   ]);
 
   esriOceanLayer.eachLayer(bindBasemapTileRefresh);
+  applyBlueTopoRelief(blueTopoRelief, false);
 
   bathyLayer=esriOceanLayer; // alias for backward compat
 
@@ -517,6 +528,7 @@ async function initMap(){
   } else {
     _activeBaseMap = "satellite";
   }
+  updateBlueTopoReliefControl();
 
   // ── Dedicated pane for satellite ocean overlays ──
   // SST and Chlorophyll go in their own pane so the BasemapSampler (which
@@ -2466,7 +2478,8 @@ function depthAtFromGrid(g, lat, lng){
 }
 
 async function buildBathyGrid(latMin, latMax, lngMin, lngMax){
-  BATHY_GRID = null;
+  // Keep the last good grid while fetching — nulling it mid-pan made the bite
+  // heat mask fall back to BlueTopo pixel classification and paint blank.
   if(typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchBathy) return;
   let data = null;
   try { data = await BW_OCEAN.fetchBathy(latMin, latMax, lngMin, lngMax); }
@@ -2476,7 +2489,9 @@ async function buildBathyGrid(latMin, latMax, lngMin, lngMax){
 
 // Build BATHY_GRID from an already-fetched {stepDeg, rows} payload.
 function applyBathyData(data){
-  BATHY_GRID = _buildBathyGridFromRows(data);
+  const next = _buildBathyGridFromRows(data);
+  if(next) BATHY_GRID = next;
+  if(typeof scheduleHeatMaskRepaint === "function") scheduleHeatMaskRepaint();
 }
 
 // Bite-map-only bathy — keeps map-wide BATHY_GRID intact for currents, waypoints, depth popups.
@@ -5920,8 +5935,10 @@ const HeatCanvasLayer = L.Layer.extend({
     if(this._rafId) return;
     this._rafId = requestAnimationFrame(() => {
       this._rafId = null;
-      this._reset();
-      if(this._canvas) this._canvas.style.visibility = 'visible';
+      try { this._reset(); }
+      finally {
+        if(this._canvas) this._canvas.style.visibility = 'visible';
+      }
     });
   },
   _reset: function(){
@@ -6057,22 +6074,24 @@ const HeatCanvasLayer = L.Layer.extend({
         // sounds and rivers everywhere from Maine to Southern California — so the heat never
         // paints over land even when the satellite basemap pixel is ambiguous
         // (turbid bay water, shadows, vegetation reading as "water").
+        // Prefer the stable port-scoped predict bathy grid (same as scoring).
+        // Viewport BATHY_GRID can briefly lag during pan; BlueTopo hillshade
+        // then mislabels shelf water as land and the heat field goes blank.
         let bathyWater = false;
-        if(typeof realDepthAt === "function"){
-          const _rd = realDepthAt(ll.lat, ll.lng);
-          if(_rd != null && _rd <= 0){
-            this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
-            continue;
-          }
-          if(_rd != null && _rd > 0) bathyWater = true;
+        let _rd = null;
+        if(typeof depthAtFromGrid === "function" && typeof PREDICT_BATHY_GRID !== "undefined" && PREDICT_BATHY_GRID){
+          _rd = depthAtFromGrid(PREDICT_BATHY_GRID, ll.lat, ll.lng);
         }
+        if((_rd == null || !isFinite(_rd)) && typeof realDepthAt === "function"){
+          _rd = realDepthAt(ll.lat, ll.lng);
+        }
+        if(_rd != null && isFinite(_rd) && _rd <= 0){
+          this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
+          continue;
+        }
+        if(_rd != null && isFinite(_rd) && _rd > 0) bathyWater = true;
 
         // ── Water/land mask — basemap pixel first, polygon fallback ──
-        // Pixel sampling against the rendered basemap is pixel-perfect for
-        // every coastline, bay, inlet, sound, lagoon, and barrier island —
-        // no more whack-a-mole polygon fixes. If the sampler isn't usable
-        // (CORS blocked, tiles still loading), fall through to the polygon
-        // check so the app still works.
         // When bathy confirms water, skip basemap misreads (BlueTopo hillshade
         // often classifies shelf pixels as land).
         let isWater = null;
@@ -8464,6 +8483,7 @@ function showPredictionExplainer(cell, species){
   div.id = "predict-explainer";
   document.body.appendChild(div);
   syncExplainerPosition();
+  bindExplainerDesktopDrag(div);
 
   // Stop scroll events from bubbling to the map underneath
   const stopProp = e => e.stopPropagation();
@@ -8486,6 +8506,55 @@ function showPredictionExplainer(cell, species){
     syncExplainerPosition();
     resetExplainerScrollTop();
     requestAnimationFrame(() => { syncExplainerPosition(); resetExplainerScrollTop(); });
+  });
+}
+
+// Desktop: drag the bite explainer by its header so captains can park it aside
+// and see the heat map / hotspots behind it. Phone keeps the fixed sheet.
+let _explainerDragPos = null; // {left, top} when user has moved it this session
+function bindExplainerDesktopDrag(div){
+  if(!div || div._bwiDragBound) return;
+  div._bwiDragBound = true;
+  let dragging = false, startX = 0, startY = 0, origL = 0, origT = 0;
+  const onMove = (e) => {
+    if(!dragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    const w = div.offsetWidth || 420;
+    const h = div.offsetHeight || 320;
+    const left = Math.max(8, Math.min(window.innerWidth - w - 8, origL + dx));
+    const top = Math.max(8, Math.min(window.innerHeight - 80, origT + dy));
+    div.style.left = left + "px";
+    div.style.top = top + "px";
+    div.style.right = "auto";
+    div.style.bottom = "auto";
+    div.style.maxHeight = `calc(100dvh - ${top + 14}px)`;
+    _explainerDragPos = { left, top };
+  };
+  const onUp = () => {
+    if(!dragging) return;
+    dragging = false;
+    document.body.classList.remove("explainer-dragging");
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  };
+  div.addEventListener("pointerdown", (e) => {
+    if(typeof isPhoneView === "function" && isPhoneView()) return;
+    const handle = e.target && e.target.closest ? e.target.closest(".explainer-drag-handle") : null;
+    if(!handle) return;
+    if(e.target.closest("button, a, input, select, textarea")) return;
+    dragging = true;
+    document.body.classList.add("explainer-dragging");
+    const rect = div.getBoundingClientRect();
+    startX = e.clientX; startY = e.clientY;
+    origL = rect.left; origT = rect.top;
+    div.style.left = origL + "px";
+    div.style.top = origT + "px";
+    div.style.right = "auto";
+    div.style.bottom = "auto";
+    e.preventDefault();
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   });
 }
 
@@ -8585,11 +8654,11 @@ function renderExplainerMain(){
   }).join("");
 
   div.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(107,191,234,.15)">
+    <div class="explainer-drag-handle" title="Drag to move" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(107,191,234,.15)">
       <div style="font-size:24px">${verdict.emoji}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:bold;color:${verdict.color}">${verdict.label}</div>
-        <div style="font-size:12px;color:#9ec5e8">Conditions for ${species.name}</div>
+        <div style="font-size:12px;color:#9ec5e8">Conditions for ${species.name}<span class="explainer-drag-hint"> · drag to move</span></div>
       </div>
       <button onclick="closeExplainer()" aria-label="Close" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#f0f6ff;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:22px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>
     </div>
@@ -8795,7 +8864,9 @@ function closeExplainer(){
   const bd = document.getElementById("predict-explainer-backdrop");
   if(bd) bd.remove();
   document.body.classList.remove("explainer-open");
+  document.body.classList.remove("explainer-dragging");
   _explainerState = null;
+  _explainerDragPos = null;
   clearExplainerState();
   if(wxAutoRefreshTimer){ clearInterval(wxAutoRefreshTimer); wxAutoRefreshTimer = null; }
   updateBriefFab();
@@ -8876,6 +8947,7 @@ function toggleLayer(key){
   else if(key==="catches")drawCatchPins();
   else if(key==="closures")drawClosures();
   else if(key==="platforms")drawPlatforms();
+  else if(key==="buoys")drawBuoys();
   else if(key==="wind")drawWind();
   else if(key==="currents"){
     drawCurrents();
@@ -11972,11 +12044,51 @@ function switchBase(val){
     satelliteLabelsLayer.addTo(MAP);
   }
   scheduleHeatMaskRepaint();
+  updateBlueTopoReliefControl();
   // Auto-close the basemap modal after a selection so the user sees the
   // new map immediately. Short delay lets the radio animation finish.
   const m = document.getElementById("basemap-modal");
   if(m && m.classList.contains("open")){
     setTimeout(() => m.classList.remove("open"), 180);
+  }
+}
+
+// BlueTopo relief strength: slider 0 (light) → 1 (dark). Hillshade opacity is
+// the main lever; elevation tint stays readable underneath.
+function applyBlueTopoRelief(val, persist){
+  const t = Math.max(0, Math.min(1, Number(val)));
+  if(!isFinite(t)) return;
+  blueTopoRelief = t;
+  const hill = 0.18 + t * 0.67;   // ~0.18 … 0.85
+  const elev = 0.92 - t * 0.22;   // slightly more color when relief is light
+  if(blueTopoHillshadeLayer && typeof blueTopoHillshadeLayer.setOpacity === "function"){
+    blueTopoHillshadeLayer.setOpacity(hill);
+  }
+  if(blueTopoElevationLayer && typeof blueTopoElevationLayer.setOpacity === "function"){
+    blueTopoElevationLayer.setOpacity(elev);
+  }
+  if(persist !== false){
+    try { localStorage.setItem(BLUETOPO_RELIEF_KEY, String(blueTopoRelief)); } catch(e){}
+  }
+  const input = document.getElementById("bluetopo-relief-input");
+  if(input) input.value = String(Math.round(blueTopoRelief * 100));
+  const lbl = document.getElementById("bluetopo-relief-label");
+  if(lbl) lbl.textContent = t < 0.34 ? "Light" : (t > 0.66 ? "Dark" : "Medium");
+}
+
+function onBlueTopoReliefInput(val){
+  applyBlueTopoRelief((parseInt(val, 10) || 0) / 100, true);
+  if(typeof scheduleHeatMaskRepaint === "function") scheduleHeatMaskRepaint();
+}
+
+function updateBlueTopoReliefControl(){
+  const el = document.getElementById("bluetopo-relief-control");
+  if(!el) return;
+  const show = _activeBaseMap === "ocean";
+  el.style.display = show ? "block" : "none";
+  if(show){
+    applyBlueTopoRelief(blueTopoRelief, false);
+    if(typeof shieldMapOverlayFromLeaflet === "function") shieldMapOverlayFromLeaflet(el);
   }
 }
 
@@ -11994,7 +12106,7 @@ function updateLegend(){
 const MAP_CHROME_CLICK_SELECTOR =
   "#bite-banner, #ocean-legend, #ocean-legend-sheet, #predict-loading, " +
   "#mobile-controls-toggle, #waypoint-legend, #wp-legend-toggle, " +
-  ".map-time-pill, #radar-loop-control, #depth-readout, " +
+  "#bluetopo-relief-control, .map-time-pill, #radar-loop-control, #depth-readout, " +
   ".leaflet-control, .leaflet-popup, .leaflet-tooltip, " +
   "#predict-explainer, #predict-explainer-backdrop";
 
@@ -12612,7 +12724,7 @@ let BW_BRIEF_REMAINING = 0;
 let BW_BRIEF_LIMIT = 0;
 let BW_ADMIN = false;
 // Premium-gated map layers (everything outside the free baseline).
-const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "altimetry", "radar", "ramps", "loran", "waypoints", "platforms"];
+const BW_PREMIUM_LAYERS = ["predict", "sst", "chlor", "wind", "currents", "altimetry", "radar", "ramps", "loran", "waypoints", "platforms", "buoys"];
 
 async function refreshBriefAllowance(){
   BW_TRIALING = false;
@@ -12723,6 +12835,7 @@ function applyEntitlementGating(){
           if(typeof stopRadarLoop === "function") stopRadarLoop();
         }
         else if(k === "platforms" && typeof drawPlatforms === "function") drawPlatforms();
+        else if(k === "buoys" && typeof drawBuoys === "function") drawBuoys();
         else if(k === "loran" && typeof drawLoranLines === "function") drawLoranLines();
         else if(k === "ramps" && typeof drawRamps === "function") drawRamps();
         else if(k === "waypoints" && typeof drawWaypoints === "function") drawWaypoints();
@@ -13959,6 +14072,70 @@ function bindPlatformRedraw(){
       _platMoveTimer = setTimeout(() => renderPlatformMarkers(false), 140);
     }
   });
+}
+
+// ── Weather / research buoys (NDBC + IOOS partners) within BUOY_RADIUS_NM ──
+let buoyLayerGroup = null;
+let _buoyInRangeCache = null;
+let _buoyInRangePort = null;
+const BUOY_RADIUS_NM = 150;
+
+function buildBuoyInRangeCache(){
+  const items = [];
+  if(!activePort || !PORTS[activePort] || typeof window.BW_BUOYS === "undefined") return items;
+  const port = PORTS[activePort];
+  for(const b of window.BW_BUOYS){
+    if(b == null || b.lat == null || b.lng == null) continue;
+    const nm = nmBetween(port.lat, port.lng, b.lat, b.lng);
+    if(nm <= BUOY_RADIUS_NM){
+      items.push({
+        id: b.id, lat: b.lat, lng: b.lng, nm,
+        name: b.name || b.id,
+        owner: b.owner || "NDBC",
+        pgm: b.pgm || "",
+      });
+    }
+  }
+  items.sort((a, c) => a.nm - c.nm);
+  return items;
+}
+
+function drawBuoys(){
+  if(!buoyLayerGroup){ buoyLayerGroup = L.layerGroup().addTo(MAP); }
+  if(!BW_PREMIUM || !layerVis.buoys || !activePort || !PORTS[activePort] ||
+     typeof window.BW_BUOYS === "undefined" || !window.BW_BUOYS.length){
+    buoyLayerGroup.clearLayers();
+    _buoyInRangeCache = null;
+    _buoyInRangePort = null;
+    return;
+  }
+  if(_buoyInRangePort !== activePort){
+    _buoyInRangeCache = buildBuoyInRangeCache();
+    _buoyInRangePort = activePort;
+  }
+  buoyLayerGroup.clearLayers();
+  if(!_buoyInRangeCache || !_buoyInRangeCache.length) return;
+  for(const b of _buoyInRangeCache){
+    const icon = L.divIcon({
+      className: "buoy-marker",
+      html: `<div class="buoy-marker-dot" title="${b.id}"></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
+    const m = L.marker([b.lat, b.lng], { icon, interactive: true });
+    m.bindPopup(
+      `<div style="font-family:'Segoe UI',Arial,sans-serif;min-width:180px;line-height:1.45">
+        <div style="font-weight:700;color:#38bdf8;font-size:13px;margin-bottom:4px">⚓ ${b.id}</div>
+        <div style="font-size:12px;color:#e8f4ff">${b.name}</div>
+        <div style="font-size:11px;color:#9ec5e8;margin-top:4px">${b.owner}${b.pgm ? ` · ${b.pgm}` : ""}</div>
+        <div style="font-size:11px;color:#7dd3fc;margin-top:4px">${b.nm.toFixed(0)} nm from ${activePort.split(",")[0]} · ${b.lat.toFixed(3)}°N ${Math.abs(b.lng).toFixed(3)}°W</div>
+        <a href="https://www.ndbc.noaa.gov/station_page.php?station=${encodeURIComponent(b.id)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:7px;font-size:11px;color:#7dd3fc">NDBC station page →</a>
+      </div>`,
+      { maxWidth: 260, className: "buoy-popup" }
+    );
+    bindRulerMarkerClick(m, b.lat, b.lng);
+    buoyLayerGroup.addLayer(m);
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -15997,6 +16174,7 @@ function selectPort(name){
   drawWaypoints();
   drawRamps();
   drawPlatforms();
+  drawBuoys();
   ensurePredictLayerOn();
   primeOceanDataForPort(p);
   drawPrediction();
@@ -16123,21 +16301,38 @@ function resetExplainerScrollTop(){
 
 // Pin the bite explainer under the header on desktop; on phone the full-screen
 // backdrop covers the header so CSS anchors the sheet to the viewport top.
+// If the user has dragged it aside, keep that position until they close it.
 function syncExplainerPosition(){
   const expl = document.getElementById("predict-explainer");
   if(!expl) return;
   const phone = (typeof isPhoneView === "function") && isPhoneView();
   if(phone){
+    _explainerDragPos = null;
+    expl.classList.remove("explainer-user");
+    expl.style.left = "";
+    expl.style.right = "";
     expl.style.top = "";
     expl.style.bottom = "auto";
     expl.style.maxHeight = "";
     return;
   }
+  if(_explainerDragPos){
+    expl.classList.add("explainer-moved");
+    expl.style.left = _explainerDragPos.left + "px";
+    expl.style.top = _explainerDragPos.top + "px";
+    expl.style.right = "auto";
+    expl.style.bottom = "auto";
+    expl.style.maxHeight = `calc(100dvh - ${_explainerDragPos.top + 14}px)`;
+    return;
+  }
+  expl.classList.remove("explainer-moved");
   syncHeaderHeightVar();
   const top = viewportPanelTopPx(8);
   const bottomPad = 14;
   expl.style.top = `${top}px`;
   expl.style.bottom = `${bottomPad}px`;
+  expl.style.left = "";
+  expl.style.right = "";
   expl.style.maxHeight = `calc(100dvh - ${top + bottomPad}px)`;
 }
 
