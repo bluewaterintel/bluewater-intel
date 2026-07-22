@@ -694,37 +694,59 @@ async function initMap(){
     return L.layerGroup(layers);
   };
 
-  // Seafloor hardness via NOAA NOS multibeam acoustic backscatter (ImageServer).
-  // Not a pre-tiled XYZ cache — each Leaflet tile requests exportImage for its
-  // Web-Mercator bbox. Bright = harder/rockier return; dark = softer sediment.
-  // Coverage is patchy (survey footprints only). Not for navigation.
+  // Seafloor hardness: NOAA NOS multibeam acoustic backscatter where surveyed,
+  // plus NOS seabed substrate sample points everywhere else (patchy MBAB coverage).
+  // Each Leaflet tile requests exportImage/export for its Web-Mercator bbox.
+  function _arcgisTileBbox(coords, layer){
+    const bounds = layer._tileCoordsToBounds(coords);
+    const sw = L.CRS.EPSG3857.project(bounds.getSouthWest());
+    const ne = L.CRS.EPSG3857.project(bounds.getNorthEast());
+    return [sw.x, sw.y, ne.x, ne.y].join(",");
+  }
   const ArcGisImageTileLayer = L.TileLayer.extend({
     getTileUrl(coords){
-      const bounds = this._tileCoordsToBounds(coords);
-      const sw = L.CRS.EPSG3857.project(bounds.getSouthWest());
-      const ne = L.CRS.EPSG3857.project(bounds.getNorthEast());
-      const bbox = [sw.x, sw.y, ne.x, ne.y].join(",");
+      const bbox = _arcgisTileBbox(coords, this);
       const mosaic = encodeURIComponent(JSON.stringify({ mosaicMethod: "esriMosaicNorthwest" }));
+      const stretch = encodeURIComponent(JSON.stringify({
+        rasterFunction: "Stretch",
+        rasterFunctionArguments: { StretchType: 2, Min: 0, Max: 255 },
+      }));
       const base = this.options.imageServerUrl;
       return `${base}/exportImage?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=256,256`
         + `&format=png32&transparent=true&f=image&mosaicRule=${mosaic}`
-        + `&interpolation=RSP_BilinearInterpolation`;
+        + `&renderingRule=${stretch}&interpolation=RSP_BilinearInterpolation`;
+    }
+  });
+  const ArcGisMapExportTileLayer = L.TileLayer.extend({
+    getTileUrl(coords){
+      const bbox = _arcgisTileBbox(coords, this);
+      const base = this.options.mapServerUrl;
+      const layers = this.options.exportLayers || "show:0";
+      return `${base}/export?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=256,256`
+        + `&format=png32&transparent=true&f=image&layers=${layers}`;
     }
   });
   window.buildHardnessLayer = function(opacity){
     const op = (typeof opacity === "number") ? opacity : oceanOpacity.hardness;
-    return new ArcGisImageTileLayer("", {
+    const common = {
       pane: "bathy",
       opacity: op,
       maxNativeZoom: 13,
       maxZoom: 18,
       minZoom: 0,
       className: "bathy-hardness-tile",
-      attribution: "© NOAA NOS / NCEI Multibeam Acoustic Backscatter",
       errorTileUrl: _BATHY_EMPTY,
+      crossOrigin: "anonymous",
+    };
+    const substrate = new ArcGisMapExportTileLayer("", Object.assign({}, common, {
+      mapServerUrl: "https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_seabed_dynamic/MapServer",
+      exportLayers: "show:0",
+    }));
+    const backscatter = new ArcGisImageTileLayer("", Object.assign({}, common, {
+      className: "bathy-hardness-tile bathy-hardness-backscatter",
       imageServerUrl: "https://gis.ngdc.noaa.gov/arcgis/rest/services/NOS_MBAB/NOS_MBAB_U8/ImageServer",
-      crossOrigin: true,
-    });
+    }));
+    return L.layerGroup([substrate, backscatter]);
   };
   reliefLayer = window.buildReliefLayer();
   hardnessLayer = window.buildHardnessLayer();
@@ -866,9 +888,12 @@ async function initMap(){
   // to the page keeps the user's zoom + position instead of snapping back to a
   // default. The active port still resolves from the saved default below.
   const savedView = loadMapView();
+  const autozoomHome = USER_PREFS.autozoomPort !== false;
   if (savedDefault && PORTS[savedDefault]) {
     activePort = savedDefault;
-    if (savedView) {
+    if (autozoomHome) {
+      MAP.setView([PORTS[savedDefault].lat, PORTS[savedDefault].lng], HOME_PORT_ZOOM);
+    } else if (savedView) {
       MAP.setView([savedView.lat, savedView.lng], savedView.zoom);
     } else {
       MAP.setView([PORTS[savedDefault].lat, PORTS[savedDefault].lng], HOME_PORT_ZOOM);
@@ -9020,7 +9045,7 @@ function openSubPanel(kind){
 // ════════════════════════════════════════════════════════════════════════════
 const BATHY_ATTRIB = {
   relief: "© GEBCO_2024 · NOAA NCEI Multibeam",
-  hardness: "© NOAA NOS / NCEI Multibeam Acoustic Backscatter",
+  hardness: "© NOAA NOS Seabed Samples · NCEI Multibeam Backscatter",
 };
 let _bathyAttribAdded = { relief: false, hardness: false };
 
@@ -11869,8 +11894,9 @@ function updateOceanLegend(){
           <span>Soft</span><span>Mixed</span><span>Hard</span>
         </div>
         ${detail(`<div style="font-size:13px;color:#9ec5e8;margin-top:6px;line-height:1.45">
-          NOAA NOS multibeam <b style="color:#e7e5e4">acoustic backscatter</b> — brighter return ≈ harder bottom (sand, shell, rock); darker ≈ softer (mud/silt).
-          Coverage follows survey footprints only (patchy). Fishing reference — <b>not for navigation</b>.
+          Brighter ≈ harder bottom (sand, shell, rock); darker ≈ softer (mud/silt).
+          Uses NOAA multibeam <b style="color:#e7e5e4">backscatter</b> where surveyed, with NOS <b style="color:#e7e5e4">seabed substrate samples</b> elsewhere.
+          Fishing reference — <b>not for navigation</b>.
         </div>`)}
       </div>`);
   }
@@ -16362,7 +16388,8 @@ function closePortDd(){
   document.getElementById("port-btn").setAttribute("aria-expanded", "false");
 }
 
-function selectPort(name){
+function selectPort(name, opts){
+  opts = opts || {};
   activePort=name;
   if(typeof _hdrTide !== "undefined") _hdrTide = { key: "", text: "", atMs: 0 };
   // NOTE: selecting a port from the dropdown is a SESSION-ONLY action — it does
@@ -16388,8 +16415,10 @@ function selectPort(name){
   const p = PORTS[name];
   if (p && MAP) {
     const curZoom = MAP.getZoom();
-    const targetZoom = Math.max(curZoom, HOME_PORT_ZOOM);  // never below current
-    MAP.setView([p.lat, p.lng], targetZoom, { animate: true });
+    const frameHome = opts.frameHomeZoom
+      || (opts.isLoginRecenter && USER_PREFS.autozoomPort !== false);
+    const targetZoom = frameHome ? HOME_PORT_ZOOM : Math.max(curZoom, HOME_PORT_ZOOM);
+    MAP.setView([p.lat, p.lng], targetZoom, { animate: opts.animate !== false && !opts.isLoginRecenter });
   }
   drawCanyons();
   drawPortMarkers();
@@ -17042,7 +17071,7 @@ window.bwOnSignedIn = async function (user) {
     // one-time login centering happens once per page session.
     if(loginDefault && typeof selectPort === "function" && !window._bwDidLoginRecenter){
       window._bwDidLoginRecenter = true;
-      selectPort(loginDefault);
+      selectPort(loginDefault, { isLoginRecenter: true });
     }
   } catch(e){ console.error("profile load failed", e); }
   try {
