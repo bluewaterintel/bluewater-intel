@@ -14125,11 +14125,11 @@ function drawBuoys(){
     const m = L.marker([b.lat, b.lng], { icon, interactive: true });
     m.bindPopup(
       `<div style="font-family:'Segoe UI',Arial,sans-serif;min-width:180px;line-height:1.45">
-        <div style="font-weight:700;color:#38bdf8;font-size:13px;margin-bottom:4px">⚓ ${b.id}</div>
+        <div style="font-weight:700;color:#facc15;font-size:13px;margin-bottom:4px">⚓ ${b.id}</div>
         <div style="font-size:12px;color:#e8f4ff">${b.name}</div>
         <div style="font-size:11px;color:#9ec5e8;margin-top:4px">${b.owner}${b.pgm ? ` · ${b.pgm}` : ""}</div>
-        <div style="font-size:11px;color:#7dd3fc;margin-top:4px">${b.nm.toFixed(0)} nm from ${activePort.split(",")[0]} · ${b.lat.toFixed(3)}°N ${Math.abs(b.lng).toFixed(3)}°W</div>
-        <a href="https://www.ndbc.noaa.gov/station_page.php?station=${encodeURIComponent(b.id)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:7px;font-size:11px;color:#7dd3fc">NDBC station page →</a>
+        <div style="font-size:11px;color:#fde68a;margin-top:4px">${b.nm.toFixed(0)} nm from ${activePort.split(",")[0]} · ${b.lat.toFixed(3)}°N ${Math.abs(b.lng).toFixed(3)}°W</div>
+        <a href="https://www.ndbc.noaa.gov/station_page.php?station=${encodeURIComponent(b.id)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:7px;font-size:11px;color:#facc15">NDBC station page →</a>
       </div>`,
       { maxWidth: 260, className: "buoy-popup" }
     );
