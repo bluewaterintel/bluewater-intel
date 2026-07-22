@@ -362,12 +362,20 @@ try {
   }
 } catch(e){}
 const BATHY_LAYER_KEYS = ["relief", "hardness"];
+// Only Seafloor Relief is remembered between sessions — Bottom Hardness always
+// starts off so it doesn't keep re-enabling from a prior toggle.
+const BATHY_PERSIST_KEYS = ["relief"];
 const LAYER_VIS_KEY = "bwi_layer_vis";
 try {
   const savedVis = JSON.parse(localStorage.getItem(LAYER_VIS_KEY) || "null");
   if(savedVis && typeof savedVis === "object"){
-    for(const k of BATHY_LAYER_KEYS){
+    for(const k of BATHY_PERSIST_KEYS){
       if(typeof savedVis[k] === "boolean") layerVis[k] = savedVis[k];
+    }
+    // Drop any legacy hardness flag so old saves can't resurrect the layer.
+    if("hardness" in savedVis){
+      delete savedVis.hardness;
+      localStorage.setItem(LAYER_VIS_KEY, JSON.stringify(savedVis));
     }
   }
 } catch(e){}
@@ -9052,7 +9060,7 @@ let _bathyAttribAdded = { relief: false, hardness: false };
 function saveBathyLayerVis(){
   try {
     const out = {};
-    for(const k of BATHY_LAYER_KEYS) out[k] = !!layerVis[k];
+    for(const k of BATHY_PERSIST_KEYS) out[k] = !!layerVis[k];
     localStorage.setItem(LAYER_VIS_KEY, JSON.stringify(out));
   } catch(e){}
 }
