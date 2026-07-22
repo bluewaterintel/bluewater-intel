@@ -312,7 +312,7 @@ let pinLL=null;
 // the chosen hotspot cells; null for the normal single-spot brief (tap a spot).
 let _briefRunPlanSpots=null;
 let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, buoys:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false};
+let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, buoys:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false, relief:false, depthShade:false, contours:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -325,7 +325,7 @@ let _predictGrid = null, _predictSpecies = null, _predictTooltip = null, _predic
 // load (old behavior) produced different hotspot rankings as bathy/ocean data
 // arrived in different order, which is why the #1/#2/#3 badges jumped on zoom.
 let _predictResultCache = null; // { key, heatGrid, hotspots, badges, gridStep, gridOriginLat, gridOriginLng }
-let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null;
+let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null, reliefLayer=null, depthShadeLayer=null, contourLayer=null;
 let blueTopoElevationLayer=null, blueTopoHillshadeLayer=null;
 let _activeBaseMap = "satellite";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
@@ -350,13 +350,26 @@ let SAT_FRESH_DATE = { sst: null, chlor: null };
 // opacity slider on the right of the map. Defaults keep structure readable
 // underneath while stopping the basemap from washing SST/chlor into pastel haze.
 // Persisted so a user's preferred dim level survives navigation and reloads.
-const OCEAN_OPACITY_DEFAULT = { sst: 0.82, chlor: 0.70 };
+const OCEAN_OPACITY_DEFAULT = { sst: 0.82, chlor: 0.70, relief: 0.75, depthShade: 0.55, contours: 0.85 };
 let oceanOpacity = { ...OCEAN_OPACITY_DEFAULT };
 try {
   const saved = JSON.parse(localStorage.getItem("bwi_ocean_opacity") || "null");
   if(saved && typeof saved === "object"){
-    if(typeof saved.sst === "number")   oceanOpacity.sst   = Math.max(0, Math.min(1, saved.sst));
-    if(typeof saved.chlor === "number") oceanOpacity.chlor = Math.max(0, Math.min(1, saved.chlor));
+    if(typeof saved.sst === "number")        oceanOpacity.sst        = Math.max(0, Math.min(1, saved.sst));
+    if(typeof saved.chlor === "number")      oceanOpacity.chlor      = Math.max(0, Math.min(1, saved.chlor));
+    if(typeof saved.relief === "number")     oceanOpacity.relief     = Math.max(0, Math.min(1, saved.relief));
+    if(typeof saved.depthShade === "number") oceanOpacity.depthShade = Math.max(0, Math.min(1, saved.depthShade));
+    if(typeof saved.contours === "number")   oceanOpacity.contours   = Math.max(0, Math.min(1, saved.contours));
+  }
+} catch(e){}
+const BATHY_LAYER_KEYS = ["relief", "depthShade", "contours"];
+const LAYER_VIS_KEY = "bwi_layer_vis";
+try {
+  const savedVis = JSON.parse(localStorage.getItem(LAYER_VIS_KEY) || "null");
+  if(savedVis && typeof savedVis === "object"){
+    for(const k of BATHY_LAYER_KEYS){
+      if(typeof savedVis[k] === "boolean") layerVis[k] = savedVis[k];
+    }
   }
 } catch(e){}
 let briefSp=[], briefAutoPick=false, aiCOA="", aiLoading=false, briefDayOffset=0;  // briefDayOffset: 0=today,1=tomorrow,...
@@ -530,6 +543,14 @@ async function initMap(){
   }
   updateBlueTopoReliefControl();
 
+  // Bathymetry context layers sit above the basemap but under SST/chlor/predict.
+  MAP.createPane("bathy");
+  MAP.getPane("bathy").style.zIndex = 250;
+  MAP.getPane("bathy").style.pointerEvents = "none";
+  MAP.createPane("bathy-contours");
+  MAP.getPane("bathy-contours").style.zIndex = 450;
+  MAP.getPane("bathy-contours").style.pointerEvents = "none";
+
   // ── Dedicated pane for satellite ocean overlays ──
   // SST and Chlorophyll go in their own pane so the BasemapSampler (which
   // classifies water vs land from basemap pixel colors) doesn't include
@@ -638,6 +659,42 @@ async function initMap(){
   // (and on-screen date label) as soon as it resolves. Fire-and-forget so init
   // isn't blocked; until it resolves the conservative 1-day-back default applies.
   if(typeof ensureFreshestSatDates === "function") ensureFreshestSatDates();
+
+  // ── Bottom-structure bathymetry overlays (GEBCO + NOAA NCEI multibeam) ──
+  // ArcGIS tile URLs use {z}/{y}/{x} — NOT Leaflet's default {z}/{x}/{y}.
+  window.buildReliefLayer = function(opacity){
+    const op = (typeof opacity === "number") ? opacity : oceanOpacity.relief;
+    const gebco = L.tileLayer(
+      "https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/GEBCO_grayscale_basemap_NCEI/MapServer/tile/{z}/{y}/{x}",
+      { pane:"bathy", opacity: op, maxNativeZoom: 9, maxZoom: 18,
+        attribution: "Imagery reproduced from the GEBCO_2024 Grid, GEBCO Compilation Group · NOAA NCEI" }
+    );
+    const multibeam = L.tileLayer(
+      "https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/multibeam_mosaic_hillshade/MapServer/tile/{z}/{y}/{x}",
+      { pane:"bathy", opacity: op, maxNativeZoom: 13, maxZoom: 18,
+        attribution: "NOAA NCEI Multibeam Mosaic", errorTileUrl: "" }
+    );
+    return L.layerGroup([gebco, multibeam]);
+  };
+  window.buildDepthShadeLayer = function(opacity){
+    const op = (typeof opacity === "number") ? opacity : oceanOpacity.depthShade;
+    return L.tileLayer(
+      "https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/GEBCO_basemap_NCEI/MapServer/tile/{z}/{y}/{x}",
+      { pane:"bathy", opacity: op, maxNativeZoom: 9, maxZoom: 18,
+        attribution: "Imagery reproduced from the GEBCO_2024 Grid, GEBCO Compilation Group · NOAA NCEI" }
+    );
+  };
+  window.buildContourLayer = function(opacity){
+    const op = (typeof opacity === "number") ? opacity : oceanOpacity.contours;
+    return L.tileLayer(
+      "https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/GEBCO_contours/MapServer/tile/{z}/{y}/{x}",
+      { pane:"bathy-contours", opacity: op, maxNativeZoom: 11, maxZoom: 18,
+        attribution: "GEBCO_2024 Contours · NOAA NCEI" }
+    );
+  };
+  reliefLayer = window.buildReliefLayer();
+  depthShadeLayer = window.buildDepthShadeLayer();
+  contourLayer = window.buildContourLayer();
 
   // ── Live weather radar (NOAA nowCOAST MRMS base reflectivity) ──
   // NOAA retired the old /arcgis/ radar service; nowCOAST moved to a GeoServer
@@ -837,6 +894,8 @@ async function initMap(){
 
   if(activePort) primeOceanDataForPort(PORTS[activePort]);
   else requestAnimationFrame(syncHeaderHeightVar);
+
+  applySavedBathyLayers();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -8926,6 +8985,69 @@ function openSubPanel(kind){
 // ════════════════════════════════════════════════════════════════════════════
 // LAYER CONTROLS
 // ════════════════════════════════════════════════════════════════════════════
+const BATHY_ATTRIB = {
+  relief: "© GEBCO_2024 · NOAA NCEI Multibeam",
+  depthShade: "© GEBCO_2024 Grid · NOAA NCEI",
+  contours: "© GEBCO_2024 Contours · NOAA NCEI",
+};
+let _bathyAttribAdded = { relief: false, depthShade: false, contours: false };
+
+function saveBathyLayerVis(){
+  try {
+    const out = {};
+    for(const k of BATHY_LAYER_KEYS) out[k] = !!layerVis[k];
+    localStorage.setItem(LAYER_VIS_KEY, JSON.stringify(out));
+  } catch(e){}
+}
+
+function updateBathyAttribution(){
+  if(!MAP || !MAP.attributionControl) return;
+  const ac = MAP.attributionControl;
+  for(const k of BATHY_LAYER_KEYS){
+    const on = !!layerVis[k];
+    if(on && !_bathyAttribAdded[k]){
+      ac.addAttribution(BATHY_ATTRIB[k]);
+      _bathyAttribAdded[k] = true;
+    } else if(!on && _bathyAttribAdded[k]){
+      ac.removeAttribution(BATHY_ATTRIB[k]);
+      _bathyAttribAdded[k] = false;
+    }
+  }
+}
+
+function applyBathyLayer(key){
+  if(key === "relief"){
+    if(!reliefLayer) reliefLayer = window.buildReliefLayer();
+    reliefLayer.setOpacity(oceanOpacity.relief);
+    if(!MAP.hasLayer(reliefLayer)) reliefLayer.addTo(MAP);
+  } else if(key === "depthShade"){
+    if(!depthShadeLayer) depthShadeLayer = window.buildDepthShadeLayer();
+    depthShadeLayer.setOpacity(oceanOpacity.depthShade);
+    if(!MAP.hasLayer(depthShadeLayer)) depthShadeLayer.addTo(MAP);
+  } else if(key === "contours"){
+    if(!contourLayer) contourLayer = window.buildContourLayer();
+    contourLayer.setOpacity(oceanOpacity.contours);
+    if(!MAP.hasLayer(contourLayer)) contourLayer.addTo(MAP);
+  }
+  updateBathyAttribution();
+}
+
+function removeBathyLayer(key){
+  if(key === "relief" && reliefLayer && MAP.hasLayer(reliefLayer)) MAP.removeLayer(reliefLayer);
+  else if(key === "depthShade" && depthShadeLayer && MAP.hasLayer(depthShadeLayer)) MAP.removeLayer(depthShadeLayer);
+  else if(key === "contours" && contourLayer && MAP.hasLayer(contourLayer)) MAP.removeLayer(contourLayer);
+  updateBathyAttribution();
+}
+
+function applySavedBathyLayers(){
+  for(const k of BATHY_LAYER_KEYS){
+    const chk = document.getElementById("chk-" + k);
+    if(chk) chk.checked = !!layerVis[k];
+    if(layerVis[k]) applyBathyLayer(k);
+  }
+  updateOpacityControl();
+}
+
 function toggleLayer(key){
   // Premium gate: heat map, SST, chlorophyll, wind and radar require a trial or
   // subscription. Turning one ON while not premium opens the upgrade modal.
@@ -9002,6 +9124,13 @@ function toggleLayer(key){
     if(layerVis.ramps && !activePort){
       showToast("Select a home port first to see boat ramps within range.", "info");
     }
+  }
+  else if(key==="relief" || key==="depthShade" || key==="contours"){
+    if(layerVis[key]) applyBathyLayer(key);
+    else removeBathyLayer(key);
+    saveBathyLayerVis();
+    updateOpacityControl();
+    if(key === "contours" || key === "depthShade") updateOceanLegend();
   }
 }
 
@@ -9340,8 +9469,11 @@ function restackBottomControls(){
 // at. Dimming lets you read SST and then fade it to reveal structure/waypoints
 // underneath without turning the layer off entirely.
 function activeOceanLayerKey(){
-  if(layerVis.sst)   return "sst";
-  if(layerVis.chlor) return "chlor";
+  if(layerVis.sst)        return "sst";
+  if(layerVis.chlor)      return "chlor";
+  if(layerVis.relief)     return "relief";
+  if(layerVis.depthShade) return "depthShade";
+  if(layerVis.contours)   return "contours";
   return null;
 }
 // Apply the stored opacity to whichever ocean layers are live (called after a
@@ -9353,6 +9485,9 @@ function applyOceanOpacity(){
     } else if(sstLayer) sstLayer.setOpacity(oceanOpacity.sst);
   }
   if(layerVis.chlor && chlorLayer) chlorLayer.setOpacity(oceanOpacity.chlor);
+  if(layerVis.relief && reliefLayer) reliefLayer.setOpacity(oceanOpacity.relief);
+  if(layerVis.depthShade && depthShadeLayer) depthShadeLayer.setOpacity(oceanOpacity.depthShade);
+  if(layerVis.contours && contourLayer) contourLayer.setOpacity(oceanOpacity.contours);
 }
 // Slider handler. value is 0–100 (percent). Targets the active layer.
 function onOceanOpacityInput(pct){
@@ -9371,6 +9506,9 @@ function onOceanOpacityInput(pct){
     }
   }
   if(key === "chlor" && chlorLayer) chlorLayer.setOpacity(v);
+  if(key === "relief" && reliefLayer) reliefLayer.setOpacity(v);
+  if(key === "depthShade" && depthShadeLayer) depthShadeLayer.setOpacity(v);
+  if(key === "contours" && contourLayer) contourLayer.setOpacity(v);
   try { localStorage.setItem("bwi_ocean_opacity", JSON.stringify(oceanOpacity)); } catch(e){}
   updateOpacityControl(true); // refresh readout/label without rebuilding position
 }
@@ -9392,7 +9530,10 @@ function updateOpacityControl(valueOnly){
   const label = document.getElementById("ocean-opacity-label");
   if(input && +input.value !== pct) input.value = pct;
   if(readout) readout.textContent = pct + "%";
-  if(label) label.textContent = key === "sst" ? "SST" : "Chlor";
+  if(label){
+    const labels = { sst: "SST", chlor: "Chlor", relief: "Relief", depthShade: "Depth", contours: "Contours" };
+    label.textContent = labels[key] || key;
+  }
 }
 
 // ── TIME-LAPSE PLAYBACK ──────────────────────────────────────────────────────
@@ -11516,7 +11657,7 @@ function updateOceanLegend(){
   const el = document.getElementById("ocean-legend");
   const content = document.getElementById("ocean-legend-content");
   if(!el || !content) return;
-  if(!layerVis.sst && !layerVis.chlor && !layerVis.wind && !layerVis.radar && !layerVis.currents && !layerVis.altimetry){
+  if(!layerVis.sst && !layerVis.chlor && !layerVis.wind && !layerVis.radar && !layerVis.currents && !layerVis.altimetry && !layerVis.contours && !layerVis.depthShade){
     el.style.display = "none";
     if(typeof closeOceanLegendSheet === "function") closeOceanLegendSheet();
     updateBiteBanner();
@@ -11666,6 +11807,16 @@ function updateOceanLegend(){
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#04e9e7 0%,#019ff4 15%,#0300f4 28%,#02fd02 42%,#01c501 52%,#fdf802 64%,#e5bc00 72%,#fd9500 80%,#fd0000 90%,#d40000 95%,#bc0000 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>light</span><span>moderate</span><span>heavy</span><span>intense</span>
+        </div>
+      </div>`);
+  }
+  if(layerVis.contours || layerVis.depthShade){
+    parts.push(`
+      <div style="${gap()}">
+        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#8fb4d0;letter-spacing:.08em;margin-bottom:3px">DEPTH CONTOURS (m)</div>
+        <div style="font-size:12px;color:#9ec5e8;line-height:1.45">
+          GEBCO isobaths are labeled in <b style="color:#cfe5ff">meters</b>.
+          100 fathoms ≈ 183 m · 50 fathoms ≈ 91 m · 500 fathoms ≈ 914 m.
         </div>
       </div>`);
   }

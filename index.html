@@ -3340,6 +3340,37 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       <span class="lyr-toggle"></span>
     </label>
 
+    <!-- BOTTOM STRUCTURE — bathymetry overlays -->
+    <div class="layers-section">BOTTOM STRUCTURE</div>
+    <div style="font-size:11px;color:#8fb4d0;line-height:1.45;margin:2px 0 8px;padding:0 2px">
+      Bathymetry for fishing reference only — <b>not for navigation</b>.
+      Coverage is detailed offshore and limited in shallow/inshore water.
+    </div>
+    <label class="layer-row" title="Shaded-relief hillshade from GEBCO (global) with NOAA NCEI multibeam mosaic on top where available. Shows canyons, humps, ledges, and drop-offs.">
+      <input type="checkbox" id="chk-relief" onchange="toggleLayer('relief')">
+      <span class="lyr-label">
+        <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">🏔</span>
+        <span>Seafloor Relief <span style="font-size:8px;color:#9ec5e8;opacity:.7">(hillshade · canyons &amp; humps)</span></span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
+    <label class="layer-row" title="Color-graduated depth shading from GEBCO. Easier depth-band reading than hillshade alone.">
+      <input type="checkbox" id="chk-depthShade" onchange="toggleLayer('depthShade')">
+      <span class="lyr-label">
+        <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">🌊</span>
+        <span>Depth Shading <span style="font-size:8px;color:#9ec5e8;opacity:.7">(color by depth)</span></span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
+    <label class="layer-row" title="Labeled isobath lines from GEBCO. Depths shown in meters. Renders above SST/chlor so lines stay legible.">
+      <input type="checkbox" id="chk-contours" onchange="toggleLayer('contours')">
+      <span class="lyr-label">
+        <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">〰️</span>
+        <span>Depth Contours <span style="font-size:8px;color:#9ec5e8;opacity:.7">(labeled isobaths, m)</span></span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
+
     <hr class="layers-divider">
     <div class="layers-section">OFFLINE</div>
     <div style="font-size:14px;color:#9ec5e8;line-height:1.55;margin:2px 0 12px">
@@ -3554,7 +3585,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260722a"></script>
+<script src="bw-core.js?v=20260722c"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
