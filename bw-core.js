@@ -10266,7 +10266,21 @@ function drawLoranLines(){
 
   loranLayer = featureGroup;
   loranLayer.addTo(MAP);
+  // Re-place in-line labels when the view settles so numbers stay on the
+  // western / on-screen part of each arc instead of drifting off to the SE.
+  if(!_loranViewBound && MAP){
+    _loranViewBound = true;
+    let t = null;
+    const schedule = () => {
+      if(!layerVis.loran) return;
+      clearTimeout(t);
+      t = setTimeout(() => { if(layerVis.loran) drawLoranLines(); }, 220);
+    };
+    MAP.on("moveend zoomend", schedule);
+  }
 }
+
+let _loranViewBound = false;
 
 // Depth Contours layer removed — Ocean Bathymetric basemap now uses NOAA
 // BlueTopo color elevation + hillshade for seafloor structure; tap the map
