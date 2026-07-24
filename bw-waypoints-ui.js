@@ -132,8 +132,8 @@ const WP_PUBLIC = [
   // ── OUTER BANKS / OREGON INLET / HATTERAS ─────────────────────────────
   {id:"p-pointob",     name:"The Point (Diamond Shoals)", type:"ledge", lat:35.1500, lng:-75.0500, depth:"200-400ft",
    region:"Hatteras, NC", desc:"Famous Hatteras shoal where Gulf Stream meets the shelf. Marlin, yellowfin, sailfish."},
-  {id:"p-hatterascyn", name:"Hatteras Canyon",         type:"canyon", lat:35.3500, lng:-74.9200, depth:"500-2000ft",
-   region:"Hatteras, NC", desc:"Major Hatteras canyon 30nm E. Blue marlin, yellowfin, mahi, wahoo."},
+  {id:"p-hatterascyn", name:"Hatteras Canyon",         type:"canyon", lat:34.96587, lng:-75.21584, depth:"500-2000ft",
+   region:"Hatteras, NC", desc:"Hatteras Canyon tip 30nm E. Blue marlin, yellowfin, mahi, wahoo."},
   {id:"p-hatterashole",name:"Hatteras Hole",           type:"canyon", lat:35.2500, lng:-74.7500, depth:"1200-2000ft",
    region:"Hatteras, NC", desc:"Deep drop sword fishing grounds 35-40nm E. Night drifts producer."},
   {id:"p-100line-or",  name:"The 100-fathom line",     type:"ledge",  lat:35.5000, lng:-74.8500, depth:"600ft",

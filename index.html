@@ -5496,7 +5496,7 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
 }
 </style>
 
-<script src="bw-waypoints-ui.js?v=20260719f"></script>
+<script src="bw-waypoints-ui.js?v=20260724b"></script>
 
 <style>
 /* ── 6-DAY FORECAST MODAL ─────────────────────────────────────────────────── */
@@ -5611,7 +5611,7 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
   /* Anchor to top of viewport (not a bottom sheet) so the brief sits under the
      status bar / URL chrome with no dead gap above the header row. */
   .fc-modal{
-    align-items:flex-start;
+    align-items:stretch;
     justify-content:flex-start;
     padding:0;
     padding-top:env(safe-area-inset-top,0px);
@@ -5621,11 +5621,22 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
   .fc-modal .modal-dialog.fc-dialog{
     max-width:100% !important;
     width:100% !important;
+    height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
     max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
-    border-radius:0 0 18px 18px !important;
+    border-radius:0 !important;
     margin:0 !important;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
   }
-  .fc-body{padding:12px 8px 16px}
+  .fc-modal .fc-header{flex-shrink:0}
+  .fc-body{
+    flex:1 1 auto;
+    min-height:0;
+    padding:12px 8px calc(16px + env(safe-area-inset-bottom,0px));
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
   .fc-fresh{flex-wrap:wrap;gap:6px}
   .fc-fresh .fc-fresh-src{margin-left:0;width:100%}
   .fcw-table{overflow-x:visible}
