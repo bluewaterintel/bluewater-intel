@@ -86,7 +86,7 @@ const BATHY_REFS = [
   {lat:36.91, lng:-75.65, depth:22,   name:"Triangle Wrecks (Va Beach)"},
   // ── HATTERAS / OUTER BANKS ───────────────────────────────────────────
   {lat:35.80, lng:-74.80, depth:200,  name:"Diamond Shoals offshore"},
-  {lat:35.35, lng:-74.92, depth:1500, name:"Hatteras Canyon head"},
+  {lat:34.96587, lng:-75.21584, depth:1737, name:"Hatteras Canyon tip"},
   {lat:35.10, lng:-74.70, depth:1800, name:"Hatteras shelf-break"},
   {lat:34.90, lng:-74.50, depth:2500, name:"Cape Hatteras slope"},
   {lat:34.50, lng:-74.40, depth:3500, name:"Hatteras Abyssal Plain"},
