@@ -5479,27 +5479,73 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
   .wp-info-box{margin-left:auto;margin-right:auto}
 }
 
+/* Charted GPX export — sized to the hint text (+ a little padding), not full bleed */
+.wp-export-charted{
+  width:fit-content;
+  max-width:min(100%, 36rem);
+  margin:14px auto;
+  padding:0 14px;
+  box-sizing:content-box;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:6px;
+}
+.wp-export-charted-btn{
+  width:100%;
+  white-space:normal;
+  line-height:1.3;
+}
+.wp-export-charted-hint{
+  font-size:11px;
+  color:#9ec5e8;
+  text-align:center;
+  line-height:1.45;
+  margin:0 -14px; /* hint measures natural width; button/wrap is a bit wider */
+}
+
 @media (max-width:680px){
   .wp-list{padding:10px}
   .wp-card{padding:10px}
   .wp-card-icon{width:36px;height:36px;font-size:20px}
   .wp-card-name{font-size:13px}
+  .wp-export-charted{max-width:100%; padding:0 10px; margin-left:16px; margin-right:16px; width:auto; box-sizing:border-box}
+  .wp-export-charted-hint{margin:0}
 }
 </style>
 
-<script src="bw-waypoints-ui.js?v=20260724b"></script>
+<script src="bw-waypoints-ui.js?v=20260724g"></script>
 
 <style>
 /* ── 6-DAY FORECAST MODAL ─────────────────────────────────────────────────── */
 .fc-modal{
   position:fixed; inset:0; z-index:10001; display:none;
   align-items:center; justify-content:center; padding:18px;
-  background:#060e1a;
+  /* Match layers/basemap/settings dim — map stays visible underneath */
+  background:rgba(0,0,0,.55);
+  -webkit-backdrop-filter:blur(2px);
+  backdrop-filter:blur(2px);
 }
 .fc-modal.open{display:flex}
-.fc-dialog{max-width:440px}
-.fc-header{font-size:17px}
-.fc-body{padding:14px 16px 16px; overflow-y:auto}
+.fc-modal .fc-dialog,
+.fc-modal .modal-dialog.fc-dialog{
+  max-width:520px;
+  width:100%;
+  max-height:90vh;
+  height:min(90vh, 860px);
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  overflow:hidden;
+}
+.fc-header{font-size:17px; flex-shrink:0}
+.fc-body{
+  flex:1 1 auto;
+  min-height:0;
+  padding:14px 16px 16px;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
 .fc-sub{font-size:13px;color:#7dd3fc;letter-spacing:.04em;margin-bottom:8px;font-weight:600}
 /* Freshness / trust banner */
 .fc-fresh{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;padding:7px 11px;border-radius:9px;margin-bottom:11px}
@@ -5607,13 +5653,15 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
     padding:0;
     padding-top:env(safe-area-inset-top,0px);
     padding-bottom:env(safe-area-inset-bottom,0px);
+    /* Keep the same dim overlay on phone — never a solid blackout */
+    background:rgba(0,0,0,.55);
   }
   .fc-modal .fc-dialog,
   .fc-modal .modal-dialog.fc-dialog{
     max-width:100% !important;
     width:100% !important;
-    height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
-    max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+    height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)) !important;
+    max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)) !important;
     border-radius:0 !important;
     margin:0 !important;
     display:flex;
