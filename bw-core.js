@@ -532,6 +532,9 @@ async function initMap(){
     const c = this.getContainer && this.getContainer();
     if(c) c.style.mixBlendMode = "multiply";
   });
+  blueTopoHillshadeLayer.on("tileload", function(ev){
+    if(ev.tile) ev.tile.style.mixBlendMode = "multiply";
+  });
   esriOceanLayer=L.layerGroup([
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
