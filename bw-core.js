@@ -9863,6 +9863,10 @@ const LORAN_CHAINS = {
     useBounds: {south: 33.70, north: 38.85, west: -78.55, east: -73.20},
     tdMin: 39000, tdMax: 42650, step: 50,
     labelStep: 100,
+    // Shift shelf-side labels west along the hyperbola (fixed nm, not viewport).
+    labelAlongOffsetNm: {
+      40300: 20, 40400: 20, 40500: 20, 40600: 20, 40700: 20, 40800: 20,
+    },
     // Tight exclude — default 0.45° stubbed 39xxx lines short of Oak Island.
     stationExcludeDeg: 0.18,
   },
@@ -10084,9 +10088,12 @@ let loranLayer = null;
 
 // Split a polyline at its midpoint with a short gap for an in-line TD label
 // (Grease Chart style — number sits in a break in the line, not a boxed badge).
+// opts.alongOffsetNm — optional fixed shift along the arc toward the western
+// end of the polyline (stable at all zoom levels; negative would shift east).
 // Returns { a, b, labelLatLng, angleDeg } or null if the line is too short.
-function loranGapLabelSplit(poly){
+function loranGapLabelSplit(poly, opts){
   if(!poly || poly.length < 4) return null;
+  opts = opts || {};
   let total = 0;
   const segLen = [];
   for(let i = 1; i < poly.length; i++){
@@ -10097,7 +10104,18 @@ function loranGapLabelSplit(poly){
     total += d;
   }
   if(total < 0.08) return null; // ~5 nm minimum before labeling
-  const midTarget = total * 0.5;
+
+  const alongOffsetNm = (typeof opts.alongOffsetNm === "number" && isFinite(opts.alongOffsetNm))
+    ? opts.alongOffsetNm : 0;
+  const offsetDeg = alongOffsetNm / 60; // segLen units ≈ degrees (~60 nm/°)
+  const westTowardStart = poly[0][1] <= poly[poly.length - 1][1];
+  let midTarget = total * 0.5;
+  if(offsetDeg > 0){
+    midTarget += westTowardStart ? -offsetDeg : offsetDeg;
+    const margin = 0.05;
+    midTarget = Math.max(margin, Math.min(total - margin, midTarget));
+  }
+
   // Gap half-length in degrees (~0.035° ≈ 2 nm) so the five-digit TD fits.
   const gapHalf = 0.035;
   let acc = 0, midI = 1;
@@ -10186,7 +10204,8 @@ function drawLoranLines(){
 
       polylines.forEach((poly, idx) => {
         if(isMajor && idx === labelPolyIdx){
-          const split = loranGapLabelSplit(poly);
+          const alongOffsetNm = (chain.labelAlongOffsetNm && chain.labelAlongOffsetNm[td]) || 0;
+          const split = loranGapLabelSplit(poly, { alongOffsetNm });
           if(split){
             L.polyline(split.a, style).addTo(featureGroup);
             L.polyline(split.b, style).addTo(featureGroup);
