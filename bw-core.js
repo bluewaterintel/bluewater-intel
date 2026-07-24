@@ -8268,50 +8268,68 @@ function bindPredictInteractionHandlers(){
 }
 
 // ── Live wind readout ────────────────────────────────────────────────────────
-// While the animated wind layer is on, follow the cursor with a compact pill
-// showing wind speed, GUSTS, and compass direction at that point — the same
-// point-readout the big weather apps (Windy/PredictWind) lead with. Gust data is
-// already in WIND_GRID; this just surfaces it where a captain reads it.
+// While the animated wind layer is on, show wind speed, GUSTS, and compass
+// direction at the cursor (desktop hover) or tap point (phone / click). When
+// wind is on, that readout takes priority over the depth pill.
 let _windReadoutBound = false;
 let _windReadoutEl = null;
+let _windReadoutTimer = null;
+function ensureWindReadoutEl(){
+  if(_windReadoutEl || !MAP) return _windReadoutEl;
+  _windReadoutEl = document.createElement("div");
+  _windReadoutEl.id = "wind-readout";
+  _windReadoutEl.style.cssText = "position:absolute;z-index:520;pointer-events:none;background:rgba(8,20,38,.92);border:1px solid rgba(125,211,252,.4);border-radius:9px;padding:5px 9px;box-shadow:0 3px 12px rgba(0,0,0,.5);font:600 12px 'Segoe UI',Arial,sans-serif;color:#e8f4ff;white-space:nowrap;transform:translate(-50%,calc(-100% - 14px))";
+  MAP.getContainer().appendChild(_windReadoutEl);
+  return _windReadoutEl;
+}
+function showWindReadoutAt(lat, lng, containerPoint, opts){
+  opts = opts || {};
+  if(!MAP || !layerVis.wind || !WIND_GRID) return false;
+  const wind = (typeof getWindField === "function") ? getWindField(lat, lng) : null;
+  if(!wind || wind.speedKts == null){ hideWindReadout(); return false; }
+  if(typeof hideDepthReadout === "function") hideDepthReadout();
+  const el = ensureWindReadoutEl();
+  if(!el) return false;
+  const from = (typeof bwiCompass16 === "function") ? bwiCompass16(wind.dirDeg) : Math.round(wind.dirDeg) + "°";
+  const spd = Math.round(wind.speedKts);
+  const gust = wind.gustKts != null ? Math.round(wind.gustKts) : null;
+  const gustBadge = (gust != null && gust > spd)
+    ? `<span style="color:#fca5a5"> · G${gust}</span>` : "";
+  const arrow = `<span style="display:inline-block;transform:rotate(${wind.dirDeg}deg);color:#7dd3fc;font-size:13px;line-height:1">↓</span>`;
+  el.innerHTML = `${arrow} <b>${from}</b> ${spd}<span style="opacity:.65;font-weight:400">kt</span>${gustBadge}`;
+  const pt = containerPoint || MAP.latLngToContainerPoint([lat, lng]);
+  el.style.left = pt.x + "px";
+  el.style.top = pt.y + "px";
+  el.style.display = "block";
+  if(_windReadoutTimer){ clearTimeout(_windReadoutTimer); _windReadoutTimer = null; }
+  if(opts.autoHideMs){
+    _windReadoutTimer = setTimeout(hideWindReadout, opts.autoHideMs);
+  }
+  return true;
+}
 function bindWindReadout(){
   if(_windReadoutBound || !MAP) return;
   _windReadoutBound = true;
-  const hide = () => { if(_windReadoutEl) _windReadoutEl.style.display = "none"; };
   let _wmScheduled = false, _wmEv = null;
   MAP.on('mousemove', (e) => {
-    if(!layerVis.wind || !WIND_GRID){ hide(); return; }
+    if(!layerVis.wind || !WIND_GRID){ hideWindReadout(); return; }
     _wmEv = e;
     if(_wmScheduled) return;
     _wmScheduled = true;
     requestAnimationFrame(() => {
       _wmScheduled = false;
-      if(!layerVis.wind || !WIND_GRID || !_wmEv){ hide(); return; }
-      const wind = getWindField(_wmEv.latlng.lat, _wmEv.latlng.lng);
-      if(!wind || wind.speedKts == null){ hide(); return; }
-      if(!_windReadoutEl){
-        _windReadoutEl = document.createElement("div");
-        _windReadoutEl.id = "wind-readout";
-        _windReadoutEl.style.cssText = "position:absolute;z-index:520;pointer-events:none;background:rgba(8,20,38,.92);border:1px solid rgba(125,211,252,.4);border-radius:9px;padding:5px 9px;box-shadow:0 3px 12px rgba(0,0,0,.5);font:600 12px 'Segoe UI',Arial,sans-serif;color:#e8f4ff;white-space:nowrap;transform:translate(-50%,calc(-100% - 14px))";
-        MAP.getContainer().appendChild(_windReadoutEl);
-      }
-      const from = (typeof bwiCompass16==="function") ? bwiCompass16(wind.dirDeg) : Math.round(wind.dirDeg)+"°";
-      const spd = Math.round(wind.speedKts);
-      const gust = wind.gustKts != null ? Math.round(wind.gustKts) : null;
-      const gustBadge = (gust != null && gust > spd)
-        ? `<span style="color:#fca5a5"> · G${gust}</span>` : "";
-      const arrow = `<span style="display:inline-block;transform:rotate(${wind.dirDeg}deg);color:#7dd3fc;font-size:13px;line-height:1">↓</span>`;
-      _windReadoutEl.innerHTML = `${arrow} <b>${from}</b> ${spd}<span style="opacity:.65;font-weight:400">kt</span>${gustBadge}`;
-      const pt = _wmEv.containerPoint;
-      _windReadoutEl.style.left = pt.x + "px";
-      _windReadoutEl.style.top = pt.y + "px";
-      _windReadoutEl.style.display = "block";
+      if(!layerVis.wind || !WIND_GRID || !_wmEv){ hideWindReadout(); return; }
+      // Hover follows the cursor (no auto-hide); tap uses showWindReadoutAt with a timer.
+      showWindReadoutAt(_wmEv.latlng.lat, _wmEv.latlng.lng, _wmEv.containerPoint);
     });
   });
-  MAP.getContainer().addEventListener("mouseleave", hide);
-  MAP.on('movestart zoomstart', hide);
+  MAP.getContainer().addEventListener("mouseleave", hideWindReadout);
+  MAP.on('movestart zoomstart', hideWindReadout);
 }
-function hideWindReadout(){ if(_windReadoutEl) _windReadoutEl.style.display = "none"; }
+function hideWindReadout(){
+  if(_windReadoutTimer){ clearTimeout(_windReadoutTimer); _windReadoutTimer = null; }
+  if(_windReadoutEl) _windReadoutEl.style.display = "none";
+}
 
 // When the user explicitly turns the heat map OFF, auto-enable (ensurePredictLayerOn)
 // must not silently turn it back on. This is the "uncheck = hard stop" contract.
@@ -12407,6 +12425,13 @@ function onMapClick(e){
     return;
   }
 
+  // Wind layer wins on tap: show speed + gust at the point (phone has no hover
+  // readout). Depth is the default when wind is off.
+  if(layerVis.wind && typeof showWindReadoutAt === "function"
+      && showWindReadoutAt(lat, lng, e.containerPoint, { autoHideMs: 4500 })){
+    return;
+  }
+  if(typeof hideWindReadout === "function") hideWindReadout();
   showDepthReadoutAt(lat, lng, e.containerPoint);
 }
 
@@ -12453,6 +12478,8 @@ async function ensureOceanBathyForView(){
 
 async function showDepthReadoutAt(lat, lng, containerPoint){
   if(!MAP) return;
+  // Wind layer owns the tap/hover pill — don't cover it with depth.
+  if(layerVis.wind) return;
   let m = (typeof realDepthAt === "function") ? realDepthAt(lat, lng) : null;
   if((m == null || m <= 0) && typeof buildBathyGrid === "function"){
     const pad = 0.4;
