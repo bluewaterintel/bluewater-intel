@@ -9836,10 +9836,12 @@ function updateRadarLoopControlVisibility(){
 // Carolinas without overlapping line confusion.
 //
 // ── CALIBRATION ──
-//   9960-Y: anchored at Norfolk Canyon = 41550 (the "550 line"); Grease Chart
-//           AC001 places ~40000 near Hatteras and ~39000 at Oak Island —
-//           same offset reproduces those TDs when useBounds extends south.
-//           Isolines run roughly coast-parallel (NE–SW) in NC/VA waters.
+//   9960-Y: TD = geom*scale+offset. Anchored at Norfolk Canyon = 41550 (the
+//           "550 line") and at Big Rock / just-west-of-shelf Cape Lookout =
+//           40000 so the 39800–41000 family sits on the fishing grounds west
+//           of the continental shelf instead of walling off deep water east
+//           of the break (ASF-free geometry alone pushed those lines ~1.3°
+//           too far offshore). Isolines run coast-parallel (NE–SW).
 //   7980-Z: Grease Chart AC002 (Cape Fear→Cape Romain) land-to-sea (NW–SE)
 //           lines 45175…45575. Carolina Beach is the Z secondary. Raw ASF-free
 //           geometry is too steep near that station, so TD = geom*scale+offset
@@ -9853,10 +9855,11 @@ const LORAN_CHAINS = {
     label: "9960-Y",
     master:    {lat: 42.7142, lng: -76.8253},   // Seneca NY
     secondary: {lat: 34.0626, lng: -77.9128},   // Carolina Beach NC
-    offset: 42237.7,
-    // Coast-parallel Y-rate lines from VA/MD through Hatteras to Oak Island
-    // (Grease Chart AC001: 42600→39000). East/north cover Baltimore (~42300)
-    // and Wilmington Canyon (~42530) — former east:-74.0 cut those short.
+    // Fit: Norfolk Canyon → 41550; Big Rock / shelf-west Cape Lookout → 40000.
+    scale: 0.815322,
+    offset: 42108.91,
+    // Coast-parallel Y-rate lines from VA/MD through Hatteras to Oak Island.
+    // East/north cover Baltimore (~42160) and Wilmington Canyon (~42350).
     useBounds: {south: 33.70, north: 38.85, west: -78.55, east: -73.20},
     tdMin: 39000, tdMax: 42650, step: 50,
     labelStep: 100,
