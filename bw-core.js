@@ -9849,6 +9849,26 @@ function updateRadarLoopControlVisibility(){
 //           Skip 45125/45150 — they collapse into short stubs at the secondary.
 // ════════════════════════════════════════════════════════════════════════════
 
+// Tunable shelf / drop-off trace for LORAN label placement. Each labeled
+// hyperbola gets its number where it crosses this path (or nearest point).
+// Edit these [lat, lng] points to nudge the label row along the shelf edge.
+const LORAN_SHELF_ANCHOR_PATH_9960Y = [
+  [36.52, -74.85], // NE — off VA capes shelf break
+  [36.18, -74.96],
+  [35.84, -75.06],
+  [35.50, -75.14],
+  [35.16, -75.20], // Oregon Inlet / mid-OBX
+  [34.82, -75.26], // Hatteras shelf
+  [34.48, -75.36],
+  [34.14, -75.50], // Cape Lookout shelf
+  [33.82, -75.66],
+];
+
+const LORAN_SHELF_LABEL = {
+  perpendicularOffsetNm: 1.5, // beside line, offshore of shelf path
+  gapHalfNm: 2,
+};
+
 const LORAN_CHAINS = {
   // Northeast US Chain - 9960
   ne9960Y: {
@@ -9863,14 +9883,8 @@ const LORAN_CHAINS = {
     useBounds: {south: 33.70, north: 38.85, west: -78.55, east: -73.20},
     tdMin: 39000, tdMax: 42650, step: 50,
     labelStep: 100,
-    // Shift shelf-side labels west along the hyperbola (fixed nm, not viewport).
-    labelAlongOffsetNm: {
-      40300: 20, 40700: 20, 40800: 20,
-    },
-    // Shelf-side labels share 40300's longitude so the column lines up on chart.
-    labelAlignToTd: {
-      40200: 40300, 40400: 40300, 40500: 40300, 40600: 40300,
-    },
+    labelShelfAnchorPath: LORAN_SHELF_ANCHOR_PATH_9960Y,
+    labelShelfPerpOffsetNm: LORAN_SHELF_LABEL.perpendicularOffsetNm,
     // Tight exclude — default 0.45° stubbed 39xxx lines short of Oak Island.
     stationExcludeDeg: 0.18,
   },
@@ -10103,35 +10117,84 @@ function loranPolySegLens(poly){
   return { total, segLen };
 }
 
-// Find where a polyline crosses a target longitude (for aligned shelf labels).
-function loranFindAtLng(poly, targetLng){
-  if(!poly || poly.length < 2) return null;
+function loranSegIntersect(p1, p2, p3, p4){
+  const x1 = p1[1], y1 = p1[0], x2 = p2[1], y2 = p2[0];
+  const x3 = p3[1], y3 = p3[0], x4 = p4[1], y4 = p4[0];
+  const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  if(Math.abs(denom) < 1e-14) return null;
+  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+  const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+  if(t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return [y1 + t * (y2 - y1), x1 + t * (x2 - x1)];
+}
+
+function loranDistPointSeg(p, a, b){
+  const px = p[1], py = p[0], ax = a[1], ay = a[0], bx = b[1], by = b[0];
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if(len2 < 1e-18) return { dist2: (px - ax) ** 2 + (py - ay) ** 2, pt: [ay, ax] };
+  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t * dx, cy = ay + t * dy;
+  return { dist2: (px - cx) ** 2 + (py - cy) ** 2, pt: [cy, cx] };
+}
+
+// Where a LORAN hyperbola meets (or best approaches) the shelf anchor path.
+function loranPolyShelfHit(poly, anchorPath){
+  if(!poly || poly.length < 2 || !anchorPath || anchorPath.length < 2) return null;
+  const hits = [];
+  for(let i = 1; i < poly.length; i++){
+    for(let j = 1; j < anchorPath.length; j++){
+      const pt = loranSegIntersect(poly[i - 1], poly[i], anchorPath[j - 1], anchorPath[j]);
+      if(pt) hits.push({ mid: pt, midI: i, kind: "cross" });
+    }
+  }
+  if(hits.length){
+    // Westernmost crossing = shelf-side column for this hyperbola family.
+    hits.sort((a, b) => a.mid[1] - b.mid[1]);
+    return hits[0];
+  }
   let best = null, bestDist = Infinity;
   for(let i = 1; i < poly.length; i++){
-    const lng0 = poly[i-1][1], lng1 = poly[i][1];
-    const minLng = Math.min(lng0, lng1), maxLng = Math.max(lng0, lng1);
-    if(targetLng < minLng - 1e-9 || targetLng > maxLng + 1e-9) continue;
-    if(Math.abs(lng1 - lng0) < 1e-12){
-      const d = Math.abs(lng0 - targetLng);
-      if(d < bestDist){
-        bestDist = d;
-        best = { mid: [poly[i][0], targetLng], midI: i };
+    const a = poly[i - 1], b = poly[i];
+    for(let j = 1; j < anchorPath.length; j++){
+      const c = anchorPath[j - 1], d = anchorPath[j];
+      for(const q of [a, b]){
+        const hit = loranDistPointSeg(q, c, d);
+        if(hit.dist2 < bestDist){
+          bestDist = hit.dist2;
+          best = { mid: q, midI: i, kind: "near" };
+        }
       }
-      continue;
+      for(const q of [c, d]){
+        const hit = loranDistPointSeg(q, a, b);
+        if(hit.dist2 < bestDist){
+          bestDist = hit.dist2;
+          best = { mid: hit.pt, midI: i, kind: "near" };
+        }
+      }
     }
-    const frac = (targetLng - lng0) / (lng1 - lng0);
-    const lat = poly[i-1][0] + (poly[i][0] - poly[i-1][0]) * frac;
-    return { mid: [lat, targetLng], midI: i };
   }
   return best;
 }
 
-// Split a polyline at its midpoint with a short gap for an in-line TD label
-// (Grease Chart style — number sits in a break in the line, not a boxed badge).
-// opts.alongOffsetNm — optional fixed shift along the arc toward the western
-// end of the polyline (stable at all zoom levels; negative would shift east).
-// opts.atLng — place the label where the line crosses this longitude instead.
-// Returns { a, b, labelLatLng, angleDeg } or null if the line is too short.
+function loranPerpOffsetPoint(mid, prev, next, offsetNm){
+  const lat = mid[0];
+  const dLat = next[0] - prev[0];
+  const dLng = (next[1] - prev[1]) * Math.cos(lat * Math.PI / 180);
+  const len = Math.hypot(dLat, dLng) || 1;
+  let pLat = -dLng / len;
+  let pLng = dLat / len / Math.cos(lat * Math.PI / 180);
+  // Offshore / away from shelf path = east in this region.
+  if(pLng < 0){ pLat = -pLat; pLng = -pLng; }
+  const off = offsetNm / 60;
+  return [mid[0] + pLat * off, mid[1] + pLng * off];
+}
+
+// Split a polyline with a short gap for an in-line TD label (Grease Chart
+// style). opts.shelfHit — { mid, midI } from loranPolyShelfHit; gap sits on
+// the line at that point and the marker is nudged perpendicular (offshore).
+// Falls back to geometric midpoint when no shelf hit is supplied.
 function loranGapLabelSplit(poly, opts){
   if(!poly || poly.length < 4) return null;
   opts = opts || {};
@@ -10139,23 +10202,14 @@ function loranGapLabelSplit(poly, opts){
   if(total < 0.08) return null; // ~5 nm minimum before labeling
 
   let mid, midI;
-  if(typeof opts.atLng === "number" && isFinite(opts.atLng)){
-    const hit = loranFindAtLng(poly, opts.atLng);
-    if(!hit) return null;
-    mid = hit.mid;
-    midI = hit.midI;
+  const gapHalf = (typeof opts.gapHalfNm === "number" ? opts.gapHalfNm : LORAN_SHELF_LABEL.gapHalfNm) / 60;
+
+  if(opts.shelfHit && opts.shelfHit.mid){
+    mid = opts.shelfHit.mid;
+    midI = Math.max(1, Math.min(poly.length - 1, opts.shelfHit.midI));
   } else {
-    const alongOffsetNm = (typeof opts.alongOffsetNm === "number" && isFinite(opts.alongOffsetNm))
-      ? opts.alongOffsetNm : 0;
-    const offsetDeg = alongOffsetNm / 60; // segLen units ≈ degrees (~60 nm/°)
-    const westTowardStart = poly[0][1] <= poly[poly.length - 1][1];
-    let midTarget = total * 0.5;
-    if(offsetDeg > 0){
-      midTarget += westTowardStart ? -offsetDeg : offsetDeg;
-      const margin = 0.05;
-      midTarget = Math.max(margin, Math.min(total - margin, midTarget));
-    }
     let acc = 0;
+    const midTarget = total * 0.5;
     midI = 1;
     for(let i = 0; i < segLen.length; i++){
       if(acc + segLen[i] >= midTarget){ midI = i + 1; break; }
@@ -10165,34 +10219,35 @@ function loranGapLabelSplit(poly, opts){
     mid = poly[midI];
   }
 
-  // Gap half-length in degrees (~0.035° ≈ 2 nm) so the five-digit TD fits.
-  const gapHalf = 0.035;
   const prev = poly[Math.max(0, midI - 1)];
   const next = poly[Math.min(poly.length - 1, midI + 1)];
   let ang = Math.atan2(next[0] - prev[0], next[1] - prev[1]) * 180 / Math.PI;
-  // Keep text roughly upright (readable left→right along the coast-parallel line).
   if(ang > 90) ang -= 180;
   if(ang < -90) ang += 180;
 
-  // Walk outward from mid until cumulative distance ≥ gapHalf each side.
   let aEnd = midI, bStart = midI;
   let dA = 0, dB = 0;
   while(aEnd > 1 && dA < gapHalf){
-    const dLat = poly[aEnd][0] - poly[aEnd-1][0];
-    const dLng = (poly[aEnd][1] - poly[aEnd-1][1]) * Math.cos(poly[aEnd][0] * Math.PI / 180);
+    const dLat = poly[aEnd][0] - poly[aEnd - 1][0];
+    const dLng = (poly[aEnd][1] - poly[aEnd - 1][1]) * Math.cos(poly[aEnd][0] * Math.PI / 180);
     dA += Math.hypot(dLat, dLng);
     aEnd--;
   }
   while(bStart < poly.length - 2 && dB < gapHalf){
-    const dLat = poly[bStart+1][0] - poly[bStart][0];
-    const dLng = (poly[bStart+1][1] - poly[bStart][1]) * Math.cos(poly[bStart][0] * Math.PI / 180);
+    const dLat = poly[bStart + 1][0] - poly[bStart][0];
+    const dLng = (poly[bStart + 1][1] - poly[bStart][1]) * Math.cos(poly[bStart][0] * Math.PI / 180);
     dB += Math.hypot(dLat, dLng);
     bStart++;
   }
   const a = poly.slice(0, aEnd + 1);
   const b = poly.slice(bStart);
   if(a.length < 2 || b.length < 2) return null;
-  return { a, b, labelLatLng: mid, angleDeg: ang };
+
+  const perpNm = (typeof opts.perpOffsetNm === "number" && isFinite(opts.perpOffsetNm))
+    ? opts.perpOffsetNm
+    : (opts.shelfHit ? LORAN_SHELF_LABEL.perpendicularOffsetNm : 0);
+  const labelLatLng = perpNm > 0 ? loranPerpOffsetPoint(mid, prev, next, perpNm) : mid;
+  return { a, b, labelLatLng, angleDeg: ang };
 }
 
 function loranLongestPoly(polylines){
@@ -10232,19 +10287,7 @@ function drawLoranLines(){
     }
 
     const labelStep = chain.labelStep || 100;
-    const chainLabelAnchorLng = {};
-    if(chain.labelAlignToTd){
-      const anchorTds = new Set(Object.values(chain.labelAlignToTd));
-      anchorTds.forEach(anchorTd => {
-        if(anchorTd % labelStep !== 0) return;
-        const anchorPolys = traceLoranLine(anchorTd, chain.useBounds, step, chain);
-        const anchorPoly = loranLongestPoly(anchorPolys);
-        if(!anchorPoly) return;
-        const alongOffsetNm = (chain.labelAlongOffsetNm && chain.labelAlongOffsetNm[anchorTd]) || 0;
-        const anchorSplit = loranGapLabelSplit(anchorPoly, { alongOffsetNm });
-        if(anchorSplit) chainLabelAnchorLng[anchorTd] = anchorSplit.labelLatLng[1];
-      });
-    }
+    const shelfPath = chain.labelShelfAnchorPath;
 
     tdValues.forEach(td => {
       // traceLoranLine now returns an array of polylines (each one is an
@@ -10264,11 +10307,14 @@ function drawLoranLines(){
 
       polylines.forEach((poly, idx) => {
         if(isMajor && idx === labelPolyIdx){
-          const alignTo = chain.labelAlignToTd && chain.labelAlignToTd[td];
-          const anchorLng = alignTo && chainLabelAnchorLng[alignTo];
-          const splitOpts = (typeof anchorLng === "number" && isFinite(anchorLng))
-            ? { atLng: anchorLng }
-            : { alongOffsetNm: (chain.labelAlongOffsetNm && chain.labelAlongOffsetNm[td]) || 0 };
+          const splitOpts = {};
+          if(shelfPath){
+            const shelfHit = loranPolyShelfHit(poly, shelfPath);
+            if(shelfHit){
+              splitOpts.shelfHit = shelfHit;
+              splitOpts.perpOffsetNm = chain.labelShelfPerpOffsetNm;
+            }
+          }
           const split = loranGapLabelSplit(poly, splitOpts);
           if(split){
             L.polyline(split.a, style).addTo(featureGroup);
