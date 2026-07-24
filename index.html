@@ -3387,29 +3387,6 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       <span class="lyr-toggle"></span>
     </label>
 
-    <!-- BOTTOM STRUCTURE — seafloor relief + hardness overlays -->
-    <div class="layers-section">BOTTOM STRUCTURE</div>
-    <div style="font-size:11px;color:#8fb4d0;line-height:1.45;margin:2px 0 8px;padding:0 2px">
-      Bathymetry for fishing reference only — <b>not for navigation</b>.
-      Hardness coverage is patchy (survey footprints only).
-    </div>
-    <label class="layer-row" title="Shaded-relief hillshade: GEBCO (global) + NOAA multibeam where available + BlueTopo hillshade on Satellite for fishing-zoom detail. Shows canyons, humps, ledges, and drop-offs.">
-      <input type="checkbox" id="chk-relief" onchange="toggleLayer('relief')">
-      <span class="lyr-label">
-        <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">🏔</span>
-        <span>Seafloor Relief <span style="font-size:8px;color:#9ec5e8;opacity:.7">(hillshade · canyons &amp; humps)</span></span>
-      </span>
-      <span class="lyr-toggle"></span>
-    </label>
-    <label class="layer-row" title="NOAA NOS multibeam acoustic backscatter — brighter = harder bottom (sand/shell/rock), darker = softer (mud). Only where surveys exist (patchy). Blank = no survey, not soft bottom. Not for navigation.">
-      <input type="checkbox" id="chk-hardness" onchange="toggleLayer('hardness')">
-      <span class="lyr-label">
-        <span class="layer-swatch" style="background:linear-gradient(90deg,#0a0a0a 0%,#737373 50%,#f5f5f4 100%);width:18px;height:8px;border-radius:2px"></span>
-        <span>Bottom Hardness <span style="font-size:8px;color:#9ec5e8;opacity:.7">(survey backscatter · soft→hard)</span></span>
-      </span>
-      <span class="lyr-toggle"></span>
-    </label>
-
     <hr class="layers-divider">
     <div class="layers-section">OFFLINE</div>
     <div style="font-size:14px;color:#9ec5e8;line-height:1.55;margin:2px 0 12px">
@@ -3566,6 +3543,18 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
         <input type="radio" name="base" value="ocean" onchange="switchBase(this.value)">
         <span>🌊 Ocean Bathymetric</span>
       </label>
+      <label class="layer-row" title="GEBCO + NOAA multibeam hillshade with BlueTopo detail. Fishing reference — not for navigation.">
+        <input type="radio" name="base" value="relief" onchange="switchBase(this.value)">
+        <span>🏔 Seafloor Relief</span>
+      </label>
+      <label class="layer-row" title="NOAA multibeam acoustic backscatter — brighter = harder bottom. Survey footprints only (patchy). Not for navigation.">
+        <input type="radio" name="base" value="hardness" onchange="switchBase(this.value)">
+        <span>⬛ Bottom Hardness</span>
+      </label>
+      <div style="font-size:11px;color:#8fb4d0;line-height:1.45;margin:8px 2px 0;padding:0 2px">
+        Relief and hardness are fishing reference only — <b>not for navigation</b>.
+        Hardness coverage is patchy (survey footprints only).
+      </div>
     </div>
   </div>
 </div>
@@ -3599,6 +3588,8 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       <select id="pref-basemap" class="pref-select" onchange="prefSet('defaultBaseMap', this.value)">
         <option value="satellite">🛰 Satellite</option>
         <option value="ocean">🌊 Ocean Bathymetric</option>
+        <option value="relief">🏔 Seafloor Relief</option>
+        <option value="hardness">⬛ Bottom Hardness</option>
       </select>
 
       <hr class="layers-divider">
@@ -3624,7 +3615,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260724c"></script>
+<script src="bw-core.js?v=20260724d"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

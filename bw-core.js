@@ -361,24 +361,21 @@ try {
     if(typeof saved.hardness === "number") oceanOpacity.hardness = Math.max(0, Math.min(1, saved.hardness));
   }
 } catch(e){}
+// Seafloor Relief / Bottom Hardness are basemap options (not layer toggles).
+// layerVis.relief / layerVis.hardness stay in sync with _activeBaseMap for
+// legend + opacity helpers. Clear any legacy layer-toggle persistence.
 const BATHY_LAYER_KEYS = ["relief", "hardness"];
-// Only Seafloor Relief is remembered between sessions — Bottom Hardness always
-// starts off so it doesn't keep re-enabling from a prior toggle.
-const BATHY_PERSIST_KEYS = ["relief"];
 const LAYER_VIS_KEY = "bwi_layer_vis";
 try {
   const savedVis = JSON.parse(localStorage.getItem(LAYER_VIS_KEY) || "null");
-  if(savedVis && typeof savedVis === "object"){
-    for(const k of BATHY_PERSIST_KEYS){
-      if(typeof savedVis[k] === "boolean") layerVis[k] = savedVis[k];
-    }
-    // Drop any legacy hardness flag so old saves can't resurrect the layer.
-    if("hardness" in savedVis){
-      delete savedVis.hardness;
-      localStorage.setItem(LAYER_VIS_KEY, JSON.stringify(savedVis));
-    }
+  if(savedVis && typeof savedVis === "object" && ("relief" in savedVis || "hardness" in savedVis)){
+    delete savedVis.relief;
+    delete savedVis.hardness;
+    localStorage.setItem(LAYER_VIS_KEY, JSON.stringify(savedVis));
   }
 } catch(e){}
+layerVis.relief = false;
+layerVis.hardness = false;
 let briefSp=[], briefAutoPick=false, aiCOA="", aiLoading=false, briefDayOffset=0;  // briefDayOffset: 0=today,1=tomorrow,...
 let briefLoadMsg = "";
 let _briefLoadTimers = [];
@@ -550,8 +547,9 @@ async function initMap(){
   bathyLayer=esriOceanLayer; // alias for backward compat
 
   // Apply saved default basemap (prefLoad already ran at start of initMap).
-  if(typeof USER_PREFS !== "undefined" && USER_PREFS.defaultBaseMap === "ocean"){
-    switchBase("ocean");
+  const startBase = (typeof USER_PREFS !== "undefined" && USER_PREFS.defaultBaseMap) || "satellite";
+  if(startBase && startBase !== "satellite"){
+    switchBase(startBase);
   } else {
     _activeBaseMap = "satellite";
   }
@@ -696,8 +694,8 @@ async function initMap(){
         attribution: "NOAA NCEI Multibeam Mosaic", errorTileUrl: _BATHY_EMPTY }
     );
     const layers = [gebco, multibeam];
-    // BlueTopo is already in the Ocean Bathymetric basemap — don't double it.
-    // On satellite, add it so fishing zooms stay sharp.
+    // BlueTopo hillshade for fishing-zoom detail (Seafloor Relief basemap, or
+    // legacy overlay on Satellite). Ocean Bathymetric already includes it.
     if(_activeBaseMap !== "ocean"){
       layers.push(L.tileLayer(
         _blueTopoOverlayWmts + "&LAYER=bluetopo%3Ahillshade&STYLE=nbs_hillshade",
@@ -5530,10 +5528,10 @@ function nmBetween(lat1, lng1, lat2, lng2){
 // ════════════════════════════════════════════════════════════════════════════
 const HOME_PORT_RADIUS_NM = 200;
 const FALLBACK_HOME_PORT = "Oregon Inlet, NC";
-// Initial zoom level when centering on the home port. At zoom 6 the scale
-// bar reads roughly 100 nm — wide enough to see local fishing areas / canyon
-// tips around a home port. Zoom 7 (~50 nm) was still too tight on first open.
-const HOME_PORT_ZOOM = 6;
+// Initial zoom level when centering on the home port. Zoom 7 ≈ 50 nm scale —
+// frames the home port with nearby sounds/shelf and local fishing marks
+// without opening too far offshore.
+const HOME_PORT_ZOOM = 7;
 
 function getHomePort(){
   // 1. Currently-active port — what the user is actually fishing this session
@@ -6567,8 +6565,8 @@ const WindParticleLayer = L.Layer.extend({
         continue;
       }
       // Step length grows with speed (px/frame), capped so gales stay readable.
-      // ~3x slower than before: light wind ≈ 0.2-0.5 px/frame, a 35kt gale ≈ 1.6.
-      const stepPx = Math.min(1.8, wind.speedKts * 0.045) * zoomScale;
+      // Trim 0.2 px/frame so streaks read a touch slower without going stagnant.
+      const stepPx = Math.max(0.05, Math.min(1.8, wind.speedKts * 0.045) * zoomScale - 0.2);
       const mag = Math.hypot(wind.u, wind.v) || 1;
       const dx = (wind.u / mag) * stepPx;     // east = +x
       const dy = (-wind.v / mag) * stepPx;    // north = -y on screen
@@ -9072,11 +9070,8 @@ const BATHY_ATTRIB = {
 let _bathyAttribAdded = { relief: false, hardness: false };
 
 function saveBathyLayerVis(){
-  try {
-    const out = {};
-    for(const k of BATHY_PERSIST_KEYS) out[k] = !!layerVis[k];
-    localStorage.setItem(LAYER_VIS_KEY, JSON.stringify(out));
-  } catch(e){}
+  // No-op: relief/hardness are basemap choices, not persisted layer toggles.
+  try { localStorage.removeItem(LAYER_VIS_KEY); } catch(e){}
 }
 
 function updateBathyAttribution(){
@@ -9126,26 +9121,13 @@ function removeBathyLayer(key){
 }
 
 function applySavedBathyLayers(){
-  for(const k of BATHY_LAYER_KEYS){
-    const chk = document.getElementById("chk-" + k);
-    if(chk) chk.checked = !!layerVis[k];
-    if(layerVis[k]) applyBathyLayer(k);
-  }
+  // Relief / hardness follow the active basemap (set in switchBase / init).
   updateOpacityControl();
   if(typeof updateOceanLegend === "function") updateOceanLegend();
 }
 
-// Rebuild relief stack when the basemap changes — BlueTopo is only stacked
-// on satellite (Ocean Bathymetric already includes it). Hardness is survey
-// imagery and does not depend on basemap choice.
-function rebuildActiveBathyLayers(){
-  if(typeof MAP === "undefined" || !MAP) return;
-  if(layerVis.relief){
-    removeBathyLayer("relief");
-    reliefLayer = window.buildReliefLayer();
-    applyBathyLayer("relief");
-  }
-}
+// Kept for callers; structure overlays are rebuilt inside switchBase now.
+function rebuildActiveBathyLayers(){}
 
 function toggleLayer(key){
   // Premium gate: heat map, SST, chlorophyll, wind and radar require a trial or
@@ -9225,11 +9207,8 @@ function toggleLayer(key){
     }
   }
   else if(key==="relief" || key==="hardness"){
-    if(layerVis[key]) applyBathyLayer(key);
-    else removeBathyLayer(key);
-    saveBathyLayerVis();
-    updateOpacityControl();
-    if(key === "hardness") updateOceanLegend();
+    // Moved to Base Map picker — selecting the checkbox switches basemap.
+    if(typeof switchBase === "function") switchBase(key);
   }
 }
 
@@ -10879,6 +10858,9 @@ function prefLoad(){
         if(USER_PREFS.defaultBaseMap === "osm" || USER_PREFS.defaultBaseMap === "chart"){
           USER_PREFS.defaultBaseMap = "satellite";
         }
+        if(typeof BASE_MAP_IDS !== "undefined" && BASE_MAP_IDS.indexOf(USER_PREFS.defaultBaseMap) < 0){
+          USER_PREFS.defaultBaseMap = "satellite";
+        }
       }
       if("autozoomPort" in saved)   USER_PREFS.autozoomPort   = !!saved.autozoomPort;
       if("persistLoran" in saved)   USER_PREFS.persistLoran   = !!saved.persistLoran;
@@ -12276,29 +12258,45 @@ function rulerRedraw(){
   }
 }
 
+const BASE_MAP_IDS = ["satellite", "ocean", "relief", "hardness"];
 function switchBase(val){
   if(val === "osm" || val === "chart") val = "satellite"; // removed basemaps
-  if(val !== "ocean") val = "satellite";
+  if(BASE_MAP_IDS.indexOf(val) < 0) val = "satellite";
   _activeBaseMap = val;
-  // Remove all base layers
-  [satelliteLayer,satelliteLabelsLayer,esriOceanLayer].forEach(l=>{
+  // Remove all base layers + structure overlays (relief/hardness are basemaps now)
+  [satelliteLayer, satelliteLabelsLayer, esriOceanLayer, reliefLayer, hardnessLayer].forEach(l=>{
     if(l && MAP.hasLayer(l)) MAP.removeLayer(l);
   });
   // Sync radio buttons (covers migrated osm/chart → satellite)
   document.querySelectorAll('input[name="base"]').forEach(r => {
     r.checked = (r.value === val);
   });
-  // Add the selected one
+  // Legend / opacity helpers still key off layerVis for these two.
+  layerVis.relief = (val === "relief");
+  layerVis.hardness = (val === "hardness");
+
   if(val === "ocean") {
     esriOceanLayer.addTo(MAP);
     if(typeof ensureOceanBathyForView === "function") ensureOceanBathyForView();
+  } else if(val === "relief") {
+    satelliteLayer.addTo(MAP);
+    satelliteLabelsLayer.addTo(MAP);
+    reliefLayer = window.buildReliefLayer(oceanOpacity.relief);
+    applyBathyLayer("relief");
+  } else if(val === "hardness") {
+    satelliteLayer.addTo(MAP);
+    satelliteLabelsLayer.addTo(MAP);
+    if(!hardnessLayer) hardnessLayer = window.buildHardnessLayer();
+    applyBathyLayer("hardness");
   } else {
     satelliteLayer.addTo(MAP);
     satelliteLabelsLayer.addTo(MAP);
   }
   scheduleHeatMaskRepaint();
   updateBlueTopoReliefControl();
-  if(typeof rebuildActiveBathyLayers === "function") rebuildActiveBathyLayers();
+  updateOpacityControl();
+  updateBathyAttribution();
+  if(typeof updateOceanLegend === "function") updateOceanLegend();
   // Auto-close the basemap modal after a selection so the user sees the
   // new map immediately. Short delay lets the radio animation finish.
   const m = document.getElementById("basemap-modal");
@@ -17069,6 +17067,9 @@ window.bwOnSignedIn = async function (user) {
           if("defaultBaseMap" in acct){
             USER_PREFS.defaultBaseMap = acct.defaultBaseMap || "satellite";
             if(USER_PREFS.defaultBaseMap === "osm" || USER_PREFS.defaultBaseMap === "chart"){
+              USER_PREFS.defaultBaseMap = "satellite";
+            }
+            if(typeof BASE_MAP_IDS !== "undefined" && BASE_MAP_IDS.indexOf(USER_PREFS.defaultBaseMap) < 0){
               USER_PREFS.defaultBaseMap = "satellite";
             }
           }
