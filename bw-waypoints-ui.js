@@ -917,9 +917,9 @@ function wpRenderPublic(){
     : "";
 
   const exportBtn = (premium && WP_state.chartedStatus === "live" && chartedExportN > 0) ? `
-    <div style="margin-bottom:14px">
-      <button class="wp-btn primary" onclick="wpExportChartedGPX()" style="width:100%">⬇ Export ${chartedExportN.toLocaleString()} charted waypoints to GPX</button>
-      <div style="font-size:11px;color:#9ec5e8;margin-top:6px;text-align:center">Exports charted database entries within range of <b>${displayPort}</b>. Adjust port/range in the Import / Export tab.</div>
+    <div class="wp-export-charted">
+      <button class="wp-btn primary wp-export-charted-btn" onclick="wpExportChartedGPX()">⬇ Export ${chartedExportN.toLocaleString()} charted waypoints to GPX</button>
+      <div class="wp-export-charted-hint">Exports charted database entries within range of <b>${displayPort}</b>. Adjust port/range in the Import / Export tab.</div>
     </div>
   ` : "";
 
