@@ -10082,61 +10082,22 @@ function traceLoranLine(tdValue, bounds, step, chain){
 
 let loranLayer = null;
 
-// Split a polyline with a short gap for an in-line TD label (Grease Chart
-// style — number sits in a break in the line, not a boxed badge).
-//
-// Label placement prefers the WESTERN / on-screen part of the arc. Geometric
-// midpoints of long 9960-Y hyperbolas sit far SE in deep water and "wall off"
-// the right side of the map (labels clustered away from Hatteras Canyon /
-// shelf fishing grounds). Returns { a, b, labelLatLng, angleDeg } or null.
+// Split a polyline at its midpoint with a short gap for an in-line TD label
+// (Grease Chart style — number sits in a break in the line, not a boxed badge).
+// Returns { a, b, labelLatLng, angleDeg } or null if the line is too short.
 function loranGapLabelSplit(poly){
   if(!poly || poly.length < 4) return null;
-
-  // Prefer the longest run currently inside the map viewport so the number
-  // sits where the captain is looking, not at the mid of a line that extends
-  // far offshore off-screen. Fall back to the full poly if nothing is in view.
-  let work = poly;
-  if(typeof MAP !== "undefined" && MAP && typeof MAP.getBounds === "function"){
-    const b = MAP.getBounds();
-    const south = b.getSouth(), north = b.getNorth(), west = b.getWest(), east = b.getEast();
-    const inView = (p) => p[0] >= south && p[0] <= north && p[1] >= west && p[1] <= east;
-    let best = null, bestLen = 0, cur = [];
-    const flush = () => {
-      if(cur.length >= 4){
-        let len = 0;
-        for(let i = 1; i < cur.length; i++){
-          const dLat = cur[i][0] - cur[i-1][0];
-          const dLng = (cur[i][1] - cur[i-1][1]) * Math.cos(cur[i][0] * Math.PI / 180);
-          len += Math.hypot(dLat, dLng);
-        }
-        if(len > bestLen){ bestLen = len; best = cur; }
-      }
-      cur = [];
-    };
-    for(let i = 0; i < poly.length; i++){
-      if(inView(poly[i])) cur.push(poly[i]);
-      else flush();
-    }
-    flush();
-    if(best) work = best;
-  }
-
   let total = 0;
   const segLen = [];
-  for(let i = 1; i < work.length; i++){
-    const dLat = work[i][0] - work[i-1][0];
-    const dLng = (work[i][1] - work[i-1][1]) * Math.cos(work[i][0] * Math.PI / 180);
+  for(let i = 1; i < poly.length; i++){
+    const dLat = poly[i][0] - poly[i-1][0];
+    const dLng = (poly[i][1] - poly[i-1][1]) * Math.cos(poly[i][0] * Math.PI / 180);
     const d = Math.hypot(dLat, dLng);
     segLen.push(d);
     total += d;
   }
   if(total < 0.08) return null; // ~5 nm minimum before labeling
-
-  // Bias toward the western end of the (visible) arc — coast / shelf side —
-  // so labels don't stack on the deep-water SE tip.
-  const westFirst = work[0][1] <= work[work.length - 1][1];
-  const labelFrac = 0.34;
-  const midTarget = total * (westFirst ? labelFrac : (1 - labelFrac));
+  const midTarget = total * 0.5;
   // Gap half-length in degrees (~0.035° ≈ 2 nm) so the five-digit TD fits.
   const gapHalf = 0.035;
   let acc = 0, midI = 1;
@@ -10144,10 +10105,10 @@ function loranGapLabelSplit(poly){
     if(acc + segLen[i] >= midTarget){ midI = i + 1; break; }
     acc += segLen[i];
   }
-  midI = Math.max(2, Math.min(work.length - 2, midI));
-  const mid = work[midI];
-  const prev = work[Math.max(0, midI - 1)];
-  const next = work[Math.min(work.length - 1, midI + 1)];
+  midI = Math.max(2, Math.min(poly.length - 2, midI));
+  const mid = poly[midI];
+  const prev = poly[Math.max(0, midI - 1)];
+  const next = poly[Math.min(poly.length - 1, midI + 1)];
   let ang = Math.atan2(next[0] - prev[0], next[1] - prev[1]) * 180 / Math.PI;
   // Keep text roughly upright (readable left→right along the coast-parallel line).
   if(ang > 90) ang -= 180;
@@ -10157,36 +10118,19 @@ function loranGapLabelSplit(poly){
   let aEnd = midI, bStart = midI;
   let dA = 0, dB = 0;
   while(aEnd > 1 && dA < gapHalf){
-    const dLat = work[aEnd][0] - work[aEnd-1][0];
-    const dLng = (work[aEnd][1] - work[aEnd-1][1]) * Math.cos(work[aEnd][0] * Math.PI / 180);
+    const dLat = poly[aEnd][0] - poly[aEnd-1][0];
+    const dLng = (poly[aEnd][1] - poly[aEnd-1][1]) * Math.cos(poly[aEnd][0] * Math.PI / 180);
     dA += Math.hypot(dLat, dLng);
     aEnd--;
   }
-  while(bStart < work.length - 2 && dB < gapHalf){
-    const dLat = work[bStart+1][0] - work[bStart][0];
-    const dLng = (work[bStart+1][1] - work[bStart][1]) * Math.cos(work[bStart][0] * Math.PI / 180);
+  while(bStart < poly.length - 2 && dB < gapHalf){
+    const dLat = poly[bStart+1][0] - poly[bStart][0];
+    const dLng = (poly[bStart+1][1] - poly[bStart][1]) * Math.cos(poly[bStart][0] * Math.PI / 180);
     dB += Math.hypot(dLat, dLng);
     bStart++;
   }
-
-  // Gap/label are computed on the (possibly viewport-clipped) work poly, but
-  // the drawn line must stay the full original polyline — splice the gap at
-  // the matching vertices on `poly`.
-  const samePt = (p, q) => Math.abs(p[0] - q[0]) < 1e-9 && Math.abs(p[1] - q[1]) < 1e-9;
-  let fullAEnd = -1, fullBStart = -1;
-  for(let i = 0; i < poly.length; i++){
-    if(fullAEnd < 0 && samePt(poly[i], work[aEnd])) fullAEnd = i;
-    if(samePt(poly[i], work[bStart])) fullBStart = i;
-  }
-  if(fullAEnd < 0 || fullBStart < 0 || fullAEnd >= fullBStart){
-    // Fallback: gap only within work poly (still correct if work === poly).
-    const a = work.slice(0, aEnd + 1);
-    const b = work.slice(bStart);
-    if(a.length < 2 || b.length < 2) return null;
-    return { a, b, labelLatLng: mid, angleDeg: ang };
-  }
-  const a = poly.slice(0, fullAEnd + 1);
-  const b = poly.slice(fullBStart);
+  const a = poly.slice(0, aEnd + 1);
+  const b = poly.slice(bStart);
   if(a.length < 2 || b.length < 2) return null;
   return { a, b, labelLatLng: mid, angleDeg: ang };
 }
@@ -10266,21 +10210,7 @@ function drawLoranLines(){
 
   loranLayer = featureGroup;
   loranLayer.addTo(MAP);
-  // Re-place in-line labels when the view settles so numbers stay on the
-  // western / on-screen part of each arc instead of drifting off to the SE.
-  if(!_loranViewBound && MAP){
-    _loranViewBound = true;
-    let t = null;
-    const schedule = () => {
-      if(!layerVis.loran) return;
-      clearTimeout(t);
-      t = setTimeout(() => { if(layerVis.loran) drawLoranLines(); }, 220);
-    };
-    MAP.on("moveend zoomend", schedule);
-  }
 }
-
-let _loranViewBound = false;
 
 // Depth Contours layer removed — Ocean Bathymetric basemap now uses NOAA
 // BlueTopo color elevation + hillshade for seafloor structure; tap the map
