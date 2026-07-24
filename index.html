@@ -1545,10 +1545,16 @@ body.modal-open #brief-toggle{
   letter-spacing:.02em;
   text-shadow:0 1px 3px rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.7);
 }
-/* Hillshade multiplies over depth color so relief shows without washing out blues */
+/* Hillshade multiplies over depth color so relief shows without washing out blues.
+   Must target tile imgs — the global img { mix-blend-mode:normal } seam fix
+   overrides layer-container multiply and flattens seafloor shading. */
 .leaflet-layer.bluetopo-hillshade,
 .leaflet-layer.bathy-relief-bluetopo{
   mix-blend-mode:multiply;
+}
+.leaflet-layer.bluetopo-hillshade img.leaflet-tile,
+.leaflet-layer.bathy-relief-bluetopo img.leaflet-tile{
+  mix-blend-mode:multiply !important;
 }
 .leaflet-pane.bathy img.leaflet-tile{
   mix-blend-mode:normal;
@@ -3618,7 +3624,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260722h"></script>
+<script src="bw-core.js?v=20260724a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

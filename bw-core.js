@@ -528,6 +528,13 @@ async function initMap(){
       className:"bluetopo-hillshade",
       attribution:'© NOAA OCS · BlueTopo CUDEM',errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
   );
+  blueTopoHillshadeLayer.on("add", function(){
+    const c = this.getContainer && this.getContainer();
+    if(c) c.style.mixBlendMode = "multiply";
+  });
+  blueTopoHillshadeLayer.on("tileload", function(ev){
+    if(ev.tile) ev.tile.style.mixBlendMode = "multiply";
+  });
   esriOceanLayer=L.layerGroup([
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
@@ -12299,10 +12306,12 @@ function applyBlueTopoRelief(val, persist){
   const t = Math.max(0, Math.min(1, Number(val)));
   if(!isFinite(t)) return;
   blueTopoRelief = t;
-  const hill = 0.18 + t * 0.67;   // ~0.18 … 0.85
-  const elev = 0.92 - t * 0.22;   // slightly more color when relief is light
-  if(blueTopoHillshadeLayer && typeof blueTopoHillshadeLayer.setOpacity === "function"){
-    blueTopoHillshadeLayer.setOpacity(hill);
+  const hill = 0.22 + t * 0.73;   // ~0.22 … 0.95 — wider range so the slider reads
+  const elev = 0.94 - t * 0.24;   // slightly more color when relief is light
+  if(blueTopoHillshadeLayer){
+    if(typeof blueTopoHillshadeLayer.setOpacity === "function") blueTopoHillshadeLayer.setOpacity(hill);
+    const hc = blueTopoHillshadeLayer.getContainer && blueTopoHillshadeLayer.getContainer();
+    if(hc) hc.style.mixBlendMode = "multiply";
   }
   if(blueTopoElevationLayer && typeof blueTopoElevationLayer.setOpacity === "function"){
     blueTopoElevationLayer.setOpacity(elev);
