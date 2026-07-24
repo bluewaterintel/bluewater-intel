@@ -709,9 +709,11 @@ async function initMap(){
     return L.layerGroup(layers);
   };
 
-  // Seafloor hardness: NOAA NOS multibeam acoustic backscatter where surveyed,
-  // plus NOS seabed substrate sample points everywhere else (patchy MBAB coverage).
-  // Each Leaflet tile requests exportImage/export for its Web-Mercator bbox.
+  // Seafloor hardness via NOAA NOS multibeam acoustic backscatter (ImageServer).
+  // Bright = harder/rockier return; dark = softer sediment. Coverage is patchy
+  // (survey footprints only) — areas with no surveys intentionally show nothing.
+  // Do NOT fall back to NOS seabed sample points: those are unlabeled MAP_COLOR
+  // dots that look like random confetti and are not a hardness scale.
   function _arcgisTileBbox(coords, layer){
     const bounds = layer._tileCoordsToBounds(coords);
     const sw = L.CRS.EPSG3857.project(bounds.getSouthWest());
@@ -732,36 +734,20 @@ async function initMap(){
         + `&renderingRule=${stretch}&interpolation=RSP_BilinearInterpolation`;
     }
   });
-  const ArcGisMapExportTileLayer = L.TileLayer.extend({
-    getTileUrl(coords){
-      const bbox = _arcgisTileBbox(coords, this);
-      const base = this.options.mapServerUrl;
-      const layers = this.options.exportLayers || "show:0";
-      return `${base}/export?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=256,256`
-        + `&format=png32&transparent=true&f=image&layers=${layers}`;
-    }
-  });
   window.buildHardnessLayer = function(opacity){
     const op = (typeof opacity === "number") ? opacity : oceanOpacity.hardness;
-    const common = {
+    return new ArcGisImageTileLayer("", {
       pane: "bathy",
       opacity: op,
       maxNativeZoom: 13,
       maxZoom: 18,
       minZoom: 0,
       className: "bathy-hardness-tile",
+      attribution: "© NOAA NOS / NCEI Multibeam Acoustic Backscatter",
       errorTileUrl: _BATHY_EMPTY,
-      crossOrigin: "anonymous",
-    };
-    const substrate = new ArcGisMapExportTileLayer("", Object.assign({}, common, {
-      mapServerUrl: "https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_seabed_dynamic/MapServer",
-      exportLayers: "show:0",
-    }));
-    const backscatter = new ArcGisImageTileLayer("", Object.assign({}, common, {
-      className: "bathy-hardness-tile bathy-hardness-backscatter",
       imageServerUrl: "https://gis.ngdc.noaa.gov/arcgis/rest/services/NOS_MBAB/NOS_MBAB_U8/ImageServer",
-    }));
-    return L.layerGroup([substrate, backscatter]);
+      crossOrigin: "anonymous",
+    });
   };
   reliefLayer = window.buildReliefLayer();
   hardnessLayer = window.buildHardnessLayer();
@@ -903,15 +889,18 @@ async function initMap(){
   // to the page keeps the user's zoom + position instead of snapping back to a
   // default. The active port still resolves from the saved default below.
   const savedView = loadMapView();
+  // Always frame the home port at HOME_PORT_ZOOM on a fresh open. Restoring a
+  // previously zoomed-in saved view made the app feel "stuck" tight on the pier
+  // and hid local fishing areas. Users can zoom in after; persistence still
+  // saves mid-session pans for reload only when autozoom is explicitly off.
   const autozoomHome = USER_PREFS.autozoomPort !== false;
   if (savedDefault && PORTS[savedDefault]) {
     activePort = savedDefault;
-    if (autozoomHome) {
+    if (autozoomHome || !savedView) {
       MAP.setView([PORTS[savedDefault].lat, PORTS[savedDefault].lng], HOME_PORT_ZOOM);
-    } else if (savedView) {
-      MAP.setView([savedView.lat, savedView.lng], savedView.zoom);
     } else {
-      MAP.setView([PORTS[savedDefault].lat, PORTS[savedDefault].lng], HOME_PORT_ZOOM);
+      // autozoom off: restore last view but never tighter than the home frame
+      MAP.setView([savedView.lat, savedView.lng], Math.min(savedView.zoom, HOME_PORT_ZOOM));
     }
     const portLbl = document.getElementById("port-name");
     if (portLbl) {
@@ -5541,10 +5530,10 @@ function nmBetween(lat1, lng1, lat2, lng2){
 // ════════════════════════════════════════════════════════════════════════════
 const HOME_PORT_RADIUS_NM = 200;
 const FALLBACK_HOME_PORT = "Oregon Inlet, NC";
-// Initial zoom level when centering on the home port. At zoom 7 the scale
-// bar reads roughly 50 nm; at 8 it's ~25 nm; at 6 it's ~100 nm. Picked to
-// frame the whole 200nm-radius fishable area on a typical phone screen.
-const HOME_PORT_ZOOM = 7;
+// Initial zoom level when centering on the home port. At zoom 6 the scale
+// bar reads roughly 100 nm — wide enough to see local fishing areas / canyon
+// tips around a home port. Zoom 7 (~50 nm) was still too tight on first open.
+const HOME_PORT_ZOOM = 6;
 
 function getHomePort(){
   // 1. Currently-active port — what the user is actually fishing this session
@@ -9060,7 +9049,7 @@ function openSubPanel(kind){
 // ════════════════════════════════════════════════════════════════════════════
 const BATHY_ATTRIB = {
   relief: "© GEBCO_2024 · NOAA NCEI Multibeam",
-  hardness: "© NOAA NOS Seabed Samples · NCEI Multibeam Backscatter",
+  hardness: "© NOAA NOS / NCEI Multibeam Acoustic Backscatter",
 };
 let _bathyAttribAdded = { relief: false, hardness: false };
 
@@ -11909,8 +11898,8 @@ function updateOceanLegend(){
           <span>Soft</span><span>Mixed</span><span>Hard</span>
         </div>
         ${detail(`<div style="font-size:13px;color:#9ec5e8;margin-top:6px;line-height:1.45">
-          Brighter ≈ harder bottom (sand, shell, rock); darker ≈ softer (mud/silt).
-          Uses NOAA multibeam <b style="color:#e7e5e4">backscatter</b> where surveyed, with NOS <b style="color:#e7e5e4">seabed substrate samples</b> elsewhere.
+          NOAA multibeam <b style="color:#e7e5e4">acoustic backscatter</b> — brighter ≈ harder bottom (sand, shell, rock); darker ≈ softer (mud/silt).
+          Only where surveys exist (patchy). Blank water means no survey — not soft bottom.
           Fishing reference — <b>not for navigation</b>.
         </div>`)}
       </div>`);
@@ -16432,8 +16421,10 @@ function selectPort(name, opts){
   const p = PORTS[name];
   if (p && MAP) {
     const curZoom = MAP.getZoom();
-    const frameHome = opts.frameHomeZoom
-      || (opts.isLoginRecenter && USER_PREFS.autozoomPort !== false);
+    // Login / explicit home frame: always open at HOME_PORT_ZOOM so local
+    // fishing areas are visible. Manual port picks preserve the user's zoom
+    // (only zoom IN if they're currently wider than the home frame).
+    const frameHome = opts.frameHomeZoom || opts.isLoginRecenter;
     const targetZoom = frameHome ? HOME_PORT_ZOOM : Math.max(curZoom, HOME_PORT_ZOOM);
     MAP.setView([p.lat, p.lng], targetZoom, { animate: opts.animate !== false && !opts.isLoginRecenter });
   }

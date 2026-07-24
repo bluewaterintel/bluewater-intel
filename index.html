@@ -3401,11 +3401,11 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="NOAA NOS multibeam acoustic backscatter — brighter = harder bottom (sand/shell/rock), darker = softer (mud). Patchy survey coverage. Not for navigation.">
+    <label class="layer-row" title="NOAA NOS multibeam acoustic backscatter — brighter = harder bottom (sand/shell/rock), darker = softer (mud). Only where surveys exist (patchy). Blank = no survey, not soft bottom. Not for navigation.">
       <input type="checkbox" id="chk-hardness" onchange="toggleLayer('hardness')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:linear-gradient(90deg,#0a0a0a 0%,#737373 50%,#f5f5f4 100%);width:18px;height:8px;border-radius:2px"></span>
-        <span>Bottom Hardness <span style="font-size:8px;color:#9ec5e8;opacity:.7">(backscatter · soft→hard)</span></span>
+        <span>Bottom Hardness <span style="font-size:8px;color:#9ec5e8;opacity:.7">(survey backscatter · soft→hard)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -3624,7 +3624,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260724a"></script>
+<script src="bw-core.js?v=20260724b"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
