@@ -11074,6 +11074,9 @@ function refreshSettingsModal(){
     if(USER_PREFS.defaultBaseMap === "osm" || USER_PREFS.defaultBaseMap === "chart"){
       USER_PREFS.defaultBaseMap = "satellite";
     }
+    if(typeof BASE_MAP_IDS !== "undefined" && BASE_MAP_IDS.indexOf(USER_PREFS.defaultBaseMap) < 0){
+      USER_PREFS.defaultBaseMap = "satellite";
+    }
     bmSel.value = USER_PREFS.defaultBaseMap;
   }
 
