@@ -16421,19 +16421,11 @@ function selectPort(name, opts){
   const p = PORTS[name];
   if (p && MAP) {
     const curZoom = MAP.getZoom();
-    // Login / first home-port frame: always open at HOME_PORT_ZOOM so local
-    // fishing areas are visible. Manual port picks preserve zoom, but still
-    // zoom OUT to the home frame when the user is tighter than that default
-    // (otherwise picking a port from a pier-level zoom leaves them stuck in).
+    // Login / explicit home frame: always open at HOME_PORT_ZOOM so local
+    // fishing areas are visible. Manual port picks preserve the user's zoom
+    // (only zoom IN if they're currently wider than the home frame).
     const frameHome = opts.frameHomeZoom || opts.isLoginRecenter;
-    let targetZoom;
-    if (frameHome) {
-      targetZoom = HOME_PORT_ZOOM;
-    } else if (USER_PREFS.autozoomPort !== false && curZoom > HOME_PORT_ZOOM) {
-      targetZoom = HOME_PORT_ZOOM;
-    } else {
-      targetZoom = Math.max(curZoom, HOME_PORT_ZOOM);
-    }
+    const targetZoom = frameHome ? HOME_PORT_ZOOM : Math.max(curZoom, HOME_PORT_ZOOM);
     MAP.setView([p.lat, p.lng], targetZoom, { animate: opts.animate !== false && !opts.isLoginRecenter });
   }
   drawCanyons();
