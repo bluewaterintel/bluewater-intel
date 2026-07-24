@@ -12378,7 +12378,7 @@ function updateLegend(){
 const MAP_CHROME_CLICK_SELECTOR =
   "#bite-banner, #ocean-legend, #ocean-legend-sheet, #predict-loading, " +
   "#mobile-controls-toggle, #waypoint-legend, #wp-legend-toggle, " +
-  "#bluetopo-relief-control, .map-time-pill, #radar-loop-control, #depth-readout, " +
+  "#bluetopo-relief-control, .map-time-pill, #radar-loop-control, #depth-readout, #wind-readout, " +
   ".leaflet-control, .leaflet-popup, .leaflet-tooltip, " +
   "#predict-explainer, #predict-explainer-backdrop";
 
