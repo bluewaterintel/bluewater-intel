@@ -14,7 +14,7 @@
 <script src="bw-config.js"></script>
 <script src="bw-data-source.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="bw-auth.js?v=20260719a"></script>
+<script src="bw-auth.js?v=20260728a"></script>
 <script src="bw-freshness.js"></script>
 <script src="bw-ocean.js?v=20260719j"></script>
 <script src="bw-wind.js?v=20260712c"></script>
@@ -4688,22 +4688,25 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 <div id="rp-post-overlay" style="display:none;position:fixed;inset:0;z-index:5100;background:rgba(5,12,22,.72);align-items:center;justify-content:center;padding:18px;font-family:'Segoe UI',Arial,sans-serif">
   <div style="width:100%;max-width:440px;max-height:90vh;overflow-y:auto;background:#0f2444;border:1px solid rgba(107,191,234,.25);border-radius:16px;padding:20px 20px 18px;box-shadow:0 24px 70px rgba(0,0,0,.55)">
     <div style="display:flex;align-items:center;margin-bottom:14px">
-      <div style="font-size:16px;font-weight:800;color:#f0f6ff;flex:1">✏️ Post a Fishing Report</div>
+      <div id="rp-post-title" style="font-size:16px;font-weight:800;color:#f0f6ff;flex:1">✏️ Post a Fishing Report</div>
       <button type="button" onclick="rpClosePost()" aria-label="Close" style="width:32px;height:32px;background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);color:#cfe5ff;border-radius:9px;cursor:pointer;font-size:16px">✕</button>
     </div>
     <div id="rp-post-msg" style="display:none;font-size:12px;margin-bottom:10px;padding:8px 10px;border-radius:8px"></div>
+
+    <label class="rp-post-label">Port fished from</label>
+    <select id="rp-post-port" class="rp-post-input" onchange="rpPostPortChanged()">
+      <option value="">— select port —</option>
+    </select>
+    <div class="rp-post-fine" style="color:#6bbfea;margin:-2px 0 8px">Pick the port you left from — helps other anglers and the Bite Map. Coordinates are rounded to ~6 nm.</div>
+
+    <label class="rp-post-label">Date fished</label>
+    <input id="rp-post-fished" type="date" class="rp-post-input" max=""/>
 
     <label class="rp-post-label">Region</label>
     <select id="rp-post-region" class="rp-post-input"></select>
 
     <label class="rp-post-label">Target species <span style="opacity:.6">(optional)</span></label>
     <select id="rp-post-species" class="rp-post-input"><option value="">— none —</option></select>
-
-    <label class="rp-post-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-      <input id="rp-post-useloc" type="checkbox" style="width:15px;height:15px"/>
-      <span>Include approximate location (helps the Bite Map) — uses current map center</span>
-    </label>
-    <div id="rp-post-loc-note" class="rp-post-fine" style="color:#6bbfea;margin:-2px 0 8px">Your exact spot is never published — coordinates are rounded to ~6 nm.</div>
 
     <label class="rp-post-label">Report</label>
     <textarea id="rp-post-body" class="rp-post-input" rows="4" maxlength="2000" placeholder="What's biting? Conditions, technique, what worked…"></textarea>
@@ -4762,6 +4765,13 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 .rp-src-CHARTER{background:rgba(16,185,129,.12);color:#34d399;border:1px solid rgba(16,185,129,.3)}
 .rp-src-FORUM  {background:rgba(168,85,247,.12);color:#c084fc;border:1px solid rgba(168,85,247,.3)}
 .rp-time{font-size:10px;color:#5d96c4;margin-left:auto;font-weight:500}
+.rp-fished{font-size:10px;color:#6bbfea;font-weight:600}
+.rp-edit-btn{
+  margin-left:8px;padding:4px 10px;border-radius:8px;cursor:pointer;
+  font-size:10px;font-weight:700;font-family:inherit;
+  background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.35);color:#7dd3fc;
+}
+.rp-edit-btn:hover{background:rgba(125,211,252,.22)}
 .rp-area{font-size:11px;color:#6bbfea;font-weight:600}
 .rp-port{font-size:9px;color:#5d96c4;letter-spacing:.05em}
 .rp-snippet{font-size:13px;color:#e8f4ff;line-height:1.6;margin-top:6px}
@@ -4823,7 +4833,7 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 }
 </style>
 
-<script src="bw-reports.js?v=20260719g"></script>
+<script src="bw-reports.js?v=20260728a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TERMINAL TACKLE — Knots, Crimps, Connections

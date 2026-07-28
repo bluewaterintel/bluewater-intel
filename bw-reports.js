@@ -694,6 +694,7 @@ function rpRender(){
   if(q) list = list.filter(r =>
     (r.snippet||"").toLowerCase().includes(q) ||
     (r.area || "").toLowerCase().includes(q) ||
+    (r.port || "").toLowerCase().includes(q) ||
     (r.srcName || "").toLowerCase().includes(q)
   );
   if(spFilter !== "all")   list = list.filter(r => (r.species || []).includes(spFilter));
@@ -738,9 +739,11 @@ function rpRender(){
         <div class="rp-card-head">
           <span class="rp-handle">${rpEsc(r.srcName)}</span>
           <div>
-            <div class="rp-area">📍 ${rpEsc(r.area || "—")}${r.lat!=null?` · ~${r.lat.toFixed(1)}, ${r.lng.toFixed(1)}`:""}</div>
+            <div class="rp-area">📍 ${rpEsc(r.port || r.area || "—")}</div>
+            ${r.fishedAt ? `<div class="rp-fished">🗓 Fished ${rpFmtDate(r.fishedAt)}</div>` : ""}
           </div>
           <span class="rp-time">${rpFmtTime(r.hoursAgo || 0)}</span>
+          ${r.isMine ? `<button type="button" class="rp-edit-btn" onclick="event.stopPropagation();rpOpenEdit('${r.id}')">Edit</button>` : ""}
         </div>
         <div class="rp-snippet">${rpEsc(r.snippet)}</div>
         <div class="rp-species">${spChips}</div>
@@ -748,58 +751,163 @@ function rpRender(){
     `;
   }).join("");
 }
-// ── Post a report ──
+// ── Post / edit a report ──
+let _rpEditingId = null;
+
+function rpTodayISO(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function rpPopulatePortSelect(selectedPort){
+  const sel = document.getElementById("rp-post-port");
+  if(!sel || typeof PORT_GROUPS === "undefined") return;
+  if(!sel.dataset.rpBuilt){
+    let html = '<option value="">— select port —</option>';
+    PORT_GROUPS.forEach(g => {
+      html += `<optgroup label="${rpEsc(g.label)}">`;
+      g.ports.forEach(p => { html += `<option value="${rpEsc(p)}">${rpEsc(p)}</option>`; });
+      html += "</optgroup>";
+    });
+    sel.innerHTML = html;
+    sel.dataset.rpBuilt = "1";
+  }
+  sel.value = selectedPort && [...sel.options].some(o => o.value === selectedPort) ? selectedPort : "";
+}
+
+function rpPostPortChanged(){
+  const port = document.getElementById("rp-post-port")?.value;
+  if(!port || typeof PORTS === "undefined" || !PORTS[port]) return;
+  const reg = (typeof regionFor === "function") ? regionFor(PORTS[port].lat, PORTS[port].lng) : null;
+  if(reg) document.getElementById("rp-post-region").value = reg;
+}
+
+function rpResetPostForm(){
+  _rpEditingId = null;
+  const title = document.getElementById("rp-post-title");
+  const btn = document.getElementById("rp-post-submit");
+  if(title) title.textContent = "✏️ Post a Fishing Report";
+  if(btn) btn.textContent = "Post Report";
+}
+
+function rpFillPostForm(opts){
+  opts = opts || {};
+  rpPopulatePortSelect(opts.port || "");
+  const regSel = document.getElementById("rp-post-region");
+  regSel.innerHTML = REGIONS.map(r => `<option value="${r.id}">${r.label}</option>`).join("");
+  let defRegion = opts.region;
+  if(!defRegion && (rpRegion !== "all")) defRegion = rpRegion;
+  if(!defRegion && typeof MAP !== "undefined" && MAP){
+    try { const c = MAP.getCenter(); defRegion = regionFor(c.lat, c.lng); } catch(e){}
+  }
+  if(defRegion) regSel.value = defRegion;
+  const spSel = document.getElementById("rp-post-species");
+  spSel.innerHTML = '<option value="">— none —</option>' +
+    SPECIES.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
+  if(opts.species) spSel.value = opts.species;
+  else if(typeof activeSpId !== "undefined" && activeSpId) spSel.value = activeSpId;
+  document.getElementById("rp-post-body").value = opts.body || "";
+  const fished = document.getElementById("rp-post-fished");
+  fished.max = rpTodayISO();
+  fished.value = opts.fishedAt || rpTodayISO();
+  const msg = document.getElementById("rp-post-msg");
+  msg.style.display = "none";
+}
+
 function rpOpenPost(){
   if(!(window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser())){
     showToast("Please sign in to post a report.", "warning");
     return;
   }
-  const regSel = document.getElementById("rp-post-region");
-  regSel.innerHTML = REGIONS.map(r => `<option value="${r.id}">${r.label}</option>`).join("");
-  // Default region: active tab, else derived from the current map center.
-  let def = (rpRegion !== "all") ? rpRegion : null;
-  if(!def && typeof MAP !== "undefined" && MAP){ try { const c = MAP.getCenter(); def = regionFor(c.lat, c.lng); } catch(e){} }
-  if(def) regSel.value = def;
-  const spSel = document.getElementById("rp-post-species");
-  spSel.innerHTML = '<option value="">— none —</option>' +
-    SPECIES.map(s => `<option value="${s.id}"${activeSpId===s.id?" selected":""}>${s.name}</option>`).join("");
-  document.getElementById("rp-post-body").value = "";
-  document.getElementById("rp-post-useloc").checked = false;
-  const msg = document.getElementById("rp-post-msg"); msg.style.display = "none";
+  rpResetPostForm();
+  rpFillPostForm({ port: (typeof activePort !== "undefined" && activePort) ? activePort : "" });
   document.getElementById("rp-post-overlay").style.display = "flex";
 }
-function rpClosePost(){ document.getElementById("rp-post-overlay").style.display = "none"; }
+
+async function rpOpenEdit(reportId){
+  if(!(window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser())){
+    showToast("Please sign in to edit your report.", "warning");
+    return;
+  }
+  if(!window.BW_AUTH.fetchMyReport){
+    showToast("Editing is not available yet.", "warning");
+    return;
+  }
+  try {
+    const row = await window.BW_AUTH.fetchMyReport(reportId);
+    _rpEditingId = reportId;
+    document.getElementById("rp-post-title").textContent = "✏️ Edit Fishing Report";
+    document.getElementById("rp-post-submit").textContent = "Save Changes";
+    rpFillPostForm({
+      port: row.port || "",
+      region: row.region,
+      species: row.species || "",
+      body: row.body || "",
+      fishedAt: row.fished_at || rpTodayISO(),
+    });
+    document.getElementById("rp-post-overlay").style.display = "flex";
+  } catch(e){
+    showToast((e && e.message) ? e.message : "Could not load report.", "warning");
+  }
+}
+
+function rpClosePost(){
+  document.getElementById("rp-post-overlay").style.display = "none";
+  rpResetPostForm();
+}
+
 async function rpSubmitPost(){
   const msg = document.getElementById("rp-post-msg");
   const showMsg = (t, ok) => { msg.textContent = t; msg.style.display = "block";
     msg.style.background = ok ? "rgba(16,185,129,.12)" : "rgba(220,38,38,.12)";
     msg.style.color = ok ? "#34d399" : "#fca5a5"; };
-  const region = document.getElementById("rp-post-region").value;
+  const port = document.getElementById("rp-post-port").value || null;
+  const fishedAt = document.getElementById("rp-post-fished").value || null;
+  let region = document.getElementById("rp-post-region").value;
   const species = document.getElementById("rp-post-species").value || null;
   const body = (document.getElementById("rp-post-body").value || "").trim();
-  if(!region){ showMsg("Pick a region.", false); return; }
-  if(!body){ showMsg("Write a short report.", false); return; }
+  if(!fishedAt){ showMsg("Pick the date you fished.", false); return; }
+  if(fishedAt > rpTodayISO()){ showMsg("Fishing date can't be in the future.", false); return; }
   let lat = null, lng = null;
-  if(document.getElementById("rp-post-useloc").checked){
-    let c = null;
-    if(pinLL) c = pinLL;
-    else if(typeof MAP !== "undefined" && MAP){ try { c = MAP.getCenter(); } catch(e){} }
-    if(c){ lat = +c.lat.toFixed(3); lng = +c.lng.toFixed(3); }
+  if(port && typeof PORTS !== "undefined" && PORTS[port]){
+    lat = PORTS[port].lat;
+    lng = PORTS[port].lng;
+    const autoReg = (typeof regionFor === "function") ? regionFor(lat, lng) : null;
+    if(autoReg) region = autoReg;
   }
+  if(!region){ showMsg("Pick a region or port.", false); return; }
+  if(!body){ showMsg("Write a short report.", false); return; }
   const btn = document.getElementById("rp-post-submit");
-  btn.disabled = true; btn.textContent = "Posting…";
+  const saving = _rpEditingId ? "Saving…" : "Posting…";
+  btn.disabled = true; btn.textContent = saving;
+  const payload = { region, species, port, lat, lng, body, fished_at: fishedAt };
   try {
-    await window.BW_AUTH.postReport({ region, species, lat, lng, body });
+    if(_rpEditingId && window.BW_AUTH.updateReport){
+      await window.BW_AUTH.updateReport(_rpEditingId, payload);
+    } else {
+      await window.BW_AUTH.postReport(payload);
+      rpRegion = region;
+    }
     rpClosePost();
-    rpRegion = region;
     if(typeof loadReports === "function") await loadReports();
     rpPopulateFilters();
     rpRender();
   } catch(e){
-    showMsg((e && e.message) ? e.message : "Could not post — try again.", false);
+    showMsg((e && e.message) ? e.message : "Could not save — try again.", false);
   } finally {
-    btn.disabled = false; btn.textContent = "Post Report";
+    btn.disabled = false;
+    btn.textContent = _rpEditingId ? "Save Changes" : "Post Report";
   }
+}
+
+function rpFmtDate(isoDate){
+  const d = new Date(isoDate + "T12:00:00");
+  const today = new Date(rpTodayISO() + "T12:00:00");
+  const diff = Math.round((today - d) / 86400000);
+  if(diff === 0) return "today";
+  if(diff === 1) return "yesterday";
+  if(diff > 1 && diff < 7) return `${diff} days ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 function rpFmtTime(hours){
   if(hours < 1) return "Just now";
