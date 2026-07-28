@@ -4686,34 +4686,34 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 
 <!-- ── POST A REPORT (modal) ── -->
 <div id="rp-post-overlay" style="display:none;position:fixed;inset:0;z-index:5100;background:rgba(5,12,22,.72);align-items:center;justify-content:center;padding:18px;font-family:'Segoe UI',Arial,sans-serif">
-  <div style="width:100%;max-width:440px;max-height:90vh;overflow-y:auto;background:#0f2444;border:1px solid rgba(107,191,234,.25);border-radius:16px;padding:20px 20px 18px;box-shadow:0 24px 70px rgba(0,0,0,.55)">
-    <div style="display:flex;align-items:center;margin-bottom:14px">
-      <div id="rp-post-title" style="font-size:16px;font-weight:800;color:#f0f6ff;flex:1">✏️ Post a Fishing Report</div>
-      <button type="button" onclick="rpClosePost()" aria-label="Close" style="width:32px;height:32px;background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);color:#cfe5ff;border-radius:9px;cursor:pointer;font-size:16px">✕</button>
+  <div class="rp-post-dialog">
+    <div class="rp-post-head">
+      <div id="rp-post-title" class="rp-post-title">✏️ Post a Fishing Report</div>
+      <button type="button" onclick="rpClosePost()" aria-label="Close" class="layers-close-btn">✕</button>
     </div>
     <div id="rp-post-msg" style="display:none;font-size:12px;margin-bottom:10px;padding:8px 10px;border-radius:8px"></div>
 
-    <label class="rp-post-label">Port fished from</label>
+    <label class="rp-post-label" for="rp-post-port">Port fished from</label>
     <select id="rp-post-port" class="rp-post-input" onchange="rpPostPortChanged()">
       <option value="">— select port —</option>
     </select>
-    <div id="rp-post-region-hint" class="rp-post-fine" style="color:#6bbfea;margin:-2px 0 4px;display:none"></div>
-    <div class="rp-post-fine" style="color:#6bbfea;margin:-2px 0 8px">Pick the port you left from — region is set automatically from the port.</div>
+    <div id="rp-post-region-hint" class="rp-post-fine" style="display:none"></div>
+    <div class="rp-post-fine">Pick the port you left from — region is set automatically from the port.</div>
 
-    <label class="rp-post-label">Date fished</label>
+    <label class="rp-post-label" for="rp-post-fished">Date fished</label>
     <input id="rp-post-fished" type="date" class="rp-post-input" max=""/>
 
-    <label class="rp-post-label">Target species <span style="opacity:.6">(optional)</span></label>
+    <label class="rp-post-label" for="rp-post-species">Target species <span style="opacity:.6">(optional)</span></label>
     <select id="rp-post-species" class="rp-post-input"><option value="">— none —</option></select>
 
-    <label class="rp-post-label">Report</label>
+    <label class="rp-post-label" for="rp-post-body">Report</label>
     <textarea id="rp-post-body" class="rp-post-input" rows="4" maxlength="2000" placeholder="What's biting? Conditions, technique, what worked…"></textarea>
 
-    <div class="rp-post-fine" style="margin:2px 0 12px">Posts are public under an anonymous handle. Your port, fishing date, species, and report text are visible to the community — no name or email is shown.</div>
+    <div class="rp-post-fine rp-post-privacy">Posts are public under an anonymous handle. Your port, fishing date, species, and report text are visible to the community — no name or email is shown.</div>
 
-    <div style="display:flex;gap:8px">
-      <button type="button" onclick="rpClosePost()" style="flex:1;background:transparent;border:1px solid rgba(107,191,234,.3);color:#cfe5ff;padding:11px;border-radius:9px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
-      <button type="button" id="rp-post-submit" onclick="rpSubmitPost()" style="flex:2;background:#2979b5;border:none;color:#fff;font-weight:700;padding:11px;border-radius:9px;font-size:13px;cursor:pointer;font-family:inherit">Post Report</button>
+    <div class="rp-post-actions">
+      <button type="button" class="rp-post-cancel" onclick="rpClosePost()">Cancel</button>
+      <button type="button" id="rp-post-submit" class="rp-post-submit" onclick="rpSubmitPost()">Post Report</button>
     </div>
   </div>
 </div>
@@ -4728,12 +4728,48 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 .rp-filter option{background:#0f2444;color:#f0f6ff}
 .rp-filter:focus{border-color:rgba(107,191,234,.5)}
 
-.rp-post-fine{font-size:10px;color:#9ec5e8;line-height:1.5}
-.rp-post-label{display:block;font-size:11px;font-weight:600;color:#9ec5e8;margin:10px 0 4px}
-.rp-post-input{width:100%;box-sizing:border-box;background:#0a1628;border:1px solid rgba(107,191,234,.28);color:#f0f6ff;padding:10px 12px;border-radius:9px;font-size:14px;font-family:inherit;outline:none}
+.rp-post-dialog{
+  width:100%;max-width:440px;max-height:90vh;overflow-y:auto;
+  background:#0f2444;border:1px solid rgba(107,191,234,.25);border-radius:16px;
+  padding:20px 20px 18px;box-shadow:0 24px 70px rgba(0,0,0,.55);
+  box-sizing:border-box;
+}
+.rp-post-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.rp-post-title{font-size:16px;font-weight:800;color:#f0f6ff;flex:1;min-width:0;line-height:1.25}
+.rp-post-fine{font-size:11px;color:#9ec5e8;line-height:1.45;margin:4px 0 8px}
+.rp-post-fine.rp-post-privacy{margin:8px 0 14px}
+#rp-post-region-hint.rp-post-fine{margin:4px 0 0;color:#6bbfea;font-weight:600}
+.rp-post-label{display:block;font-size:11px;font-weight:600;color:#9ec5e8;margin:12px 0 5px}
+.rp-post-input{
+  display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box;
+  background:#0a1628;border:1px solid rgba(107,191,234,.28);color:#f0f6ff;
+  padding:10px 12px;border-radius:9px;font-size:14px;font-weight:400;
+  font-family:inherit;outline:none;line-height:1.35;
+}
 .rp-post-input:focus{border-color:rgba(107,191,234,.55)}
 .rp-post-input option{background:#0f2444}
 textarea.rp-post-input{resize:vertical;min-height:80px}
+/* Native date controls often ignore width/font on iOS — force parity with selects. */
+input[type="date"].rp-post-input{
+  -webkit-appearance:none;appearance:none;
+  min-height:42px;
+}
+input[type="date"].rp-post-input::-webkit-date-and-time-value{
+  text-align:left;min-height:1.35em;
+}
+input[type="date"].rp-post-input::-webkit-calendar-picker-indicator{
+  opacity:.7;cursor:pointer;
+}
+.rp-post-actions{display:flex;gap:8px}
+.rp-post-cancel,.rp-post-submit{
+  border-radius:9px;font-family:inherit;cursor:pointer;padding:11px;font-size:13px;
+}
+.rp-post-cancel{
+  flex:1;background:transparent;border:1px solid rgba(107,191,234,.3);color:#cfe5ff;
+}
+.rp-post-submit{
+  flex:2;background:#2979b5;border:none;color:#fff;font-weight:700;
+}
 .rp-region-tab{font-size:11px;font-weight:600;padding:6px 12px;border-radius:18px;cursor:pointer;border:1px solid rgba(107,191,234,.25);background:rgba(255,255,255,.04);color:#9ec5e8;font-family:inherit}
 .rp-region-tab.active{background:#2979b5;border-color:#2979b5;color:#fff}
 .rp-handle{font-size:9px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:8px;white-space:nowrap;background:rgba(41,121,181,.15);color:#7dd3fc;border:1px solid rgba(41,121,181,.35)}
@@ -4775,10 +4811,19 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
   #rp-list{padding:12px}
   .rp-filter{min-width:110px;font-size:14px;padding:10px 12px}
   .rp-region-tab{font-size:13px;padding:8px 14px}
-  .rp-post-label{font-size:13px}
-  .rp-post-input{font-size:16px;padding:12px 14px}
-  #rp-post-overlay .rp-post-fine{font-size:13px !important;line-height:1.45 !important}
-  #rp-post-overlay button{font-size:15px !important;padding:12px !important}
+  .rp-post-dialog{padding:18px 16px 16px}
+  .rp-post-title{font-size:15px}
+  .rp-post-label{font-size:12px;margin:12px 0 6px}
+  .rp-post-fine{font-size:12px}
+  .rp-post-input{
+    font-size:16px;padding:12px 14px;min-height:46px;
+  }
+  input[type="date"].rp-post-input{min-height:46px;font-size:16px}
+  .rp-post-cancel,.rp-post-submit{font-size:15px;padding:12px}
+  #rp-post-overlay .layers-close-btn{
+    width:36px !important;height:36px !important;padding:0 !important;
+    font-size:18px !important;flex-shrink:0;
+  }
   #rp-stats{font-size:13px !important}
   .rp-area{font-size:13px}
   .rp-time{font-size:12px}
