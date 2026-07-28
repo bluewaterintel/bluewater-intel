@@ -1560,10 +1560,6 @@ body.modal-open #brief-toggle{
   mix-blend-mode:normal;
   image-rendering:auto;
 }
-/* Hardness (backscatter) reads as a grayscale wash over the basemap */
-.leaflet-layer.bathy-hardness-tile{
-  mix-blend-mode:normal;
-}
 /* BlueTopo relief strength — same vertical chrome as #ocean-opacity-control,
    parked on the right next to the map/layers icon column. Desktop only. */
 #bluetopo-relief-control{
@@ -3547,13 +3543,8 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
         <input type="radio" name="base" value="relief" onchange="switchBase(this.value)">
         <span>🏔 Seafloor Relief</span>
       </label>
-      <label class="layer-row" title="NOAA multibeam acoustic backscatter — brighter = harder bottom. Survey footprints only (patchy). Not for navigation.">
-        <input type="radio" name="base" value="hardness" onchange="switchBase(this.value)">
-        <span>⬛ Bottom Hardness</span>
-      </label>
       <div style="font-size:11px;color:#8fb4d0;line-height:1.45;margin:8px 2px 0;padding:0 2px">
-        Relief and hardness are fishing reference only — <b>not for navigation</b>.
-        Hardness coverage is patchy (survey footprints only).
+        Seafloor Relief is fishing reference only — <b>not for navigation</b>.
       </div>
     </div>
   </div>
@@ -3589,7 +3580,6 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
         <option value="satellite">🛰 Satellite</option>
         <option value="ocean">🌊 Ocean Bathymetric</option>
         <option value="relief">🏔 Seafloor Relief</option>
-        <option value="hardness">⬛ Bottom Hardness</option>
       </select>
 
       <hr class="layers-divider">
@@ -3615,7 +3605,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260728b"></script>
+<script src="bw-core.js?v=20260728c"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
