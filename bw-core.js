@@ -257,22 +257,29 @@ function regionFor(lat, lng){
 
 // Live community reports (empty until users post; populated from the backend).
 let SOCIAL = [];
+let _myReportIds = new Set();
 
 // Map a de-identified public report row into the app's internal report shape.
 function mapReport(r){
+  const fishedAt = r.fished_at || null;
+  const timeRef = fishedAt
+    ? new Date(fishedAt + "T12:00:00")
+    : (r.created_at ? new Date(r.created_at) : null);
   return {
     id: r.id,
     region: r.region,
     species: r.species ? [r.species] : [],
-    area: REGION_LABELS[r.region] || r.region,
-    port: null,
+    area: r.port || REGION_LABELS[r.region] || r.region,
+    port: r.port || null,
     lat: (r.lat == null ? null : r.lat),
     lng: (r.lng == null ? null : r.lng),
-    hoursAgo: r.created_at ? Math.max(0, (Date.now() - new Date(r.created_at).getTime()) / 3600000) : 999,
+    hoursAgo: timeRef ? Math.max(0, (Date.now() - timeRef.getTime()) / 3600000) : 999,
+    fishedAt,
+    createdAt: r.created_at,
     src: "USER",
     srcName: r.handle || "Angler",
     snippet: r.body || "",
-    createdAt: r.created_at,
+    isMine: _myReportIds.has(r.id),
   };
 }
 
@@ -286,6 +293,12 @@ async function loadReports(){
     ? `${SOCIAL.length}:${SOCIAL[0]?.hoursAgo ?? ""}:${SOCIAL[0]?.id ?? ""}`
     : "0";
   try {
+    if(window.BW_AUTH.fetchMyReportIds && window.BW_AUTH.getUser && window.BW_AUTH.getUser()){
+      const ids = await window.BW_AUTH.fetchMyReportIds();
+      _myReportIds = new Set(ids || []);
+    } else {
+      _myReportIds = new Set();
+    }
     const rows = await window.BW_AUTH.fetchReports({ sinceDays: 21, limit: 400 });
     SOCIAL = (rows || []).map(mapReport);
     const newReportSig = SOCIAL.length
@@ -11714,9 +11727,11 @@ async function catchShareAsReport(entry){
     const body = `Caught${sizeText} ${spName}.${noteText}`.trim();
     const res = await window.BW_AUTH.postReport({
       region, species: entry.species || null,
+      port: entry.port || null,
       lat: (entry.lat == null ? null : entry.lat),
       lng: (entry.lng == null ? null : entry.lng),
       body,
+      fished_at: entry.timestamp ? String(entry.timestamp).slice(0, 10) : null,
     });
     if(res && res.id){
       entry._reportId = res.id;

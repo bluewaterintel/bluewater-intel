@@ -210,16 +210,51 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   }
 
   // ── Community fishing reports (first-party forum) ──────────────────────────
-  async function postReport({ region, species, lat, lng, body }) {
+  async function postReport({ region, species, port, lat, lng, body, fished_at }) {
     const user = await requireUser();
     const { data, error } = await client.from("fishing_reports").insert({
       user_id: user.id,
       region,
       species: species || null,
+      port: port || null,
       lat: (lat == null ? null : lat),
       lng: (lng == null ? null : lng),
       body,
+      fished_at: fished_at || null,
     }).select("id").single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function updateReport(id, { region, species, port, lat, lng, body, fished_at }) {
+    const user = await requireUser();
+    const { data, error } = await client.from("fishing_reports").update({
+      region,
+      species: species || null,
+      port: port || null,
+      lat: (lat == null ? null : lat),
+      lng: (lng == null ? null : lng),
+      body,
+      fished_at: fished_at || null,
+    }).eq("user_id", user.id).eq("id", id).select("id").single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function fetchMyReportIds() {
+    const user = await requireUser();
+    const { data, error } = await client.from("fishing_reports").select("id").eq("user_id", user.id);
+    if (error) throw error;
+    return (data || []).map((r) => r.id);
+  }
+
+  async function fetchMyReport(id) {
+    const user = await requireUser();
+    const { data, error } = await client.from("fishing_reports")
+      .select("id, region, species, port, lat, lng, body, fished_at, created_at")
+      .eq("user_id", user.id)
+      .eq("id", id)
+      .single();
     if (error) throw error;
     return data;
   }
@@ -331,7 +366,10 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     fetchLog,
     saveLog,
     postReport,
+    updateReport,
     fetchReports,
+    fetchMyReportIds,
+    fetchMyReport,
     deleteReport,
     callBrief,
     onAuthChange,
