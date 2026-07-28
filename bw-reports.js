@@ -775,11 +775,28 @@ function rpPopulatePortSelect(selectedPort){
   sel.value = selectedPort && [...sel.options].some(o => o.value === selectedPort) ? selectedPort : "";
 }
 
-function rpPostPortChanged(){
+function rpRegionFromPort(port){
+  if(!port || typeof PORTS === "undefined" || !PORTS[port]) return null;
+  return (typeof regionFor === "function") ? regionFor(PORTS[port].lat, PORTS[port].lng) : null;
+}
+
+function rpUpdatePortRegionHint(){
   const port = document.getElementById("rp-post-port")?.value;
-  if(!port || typeof PORTS === "undefined" || !PORTS[port]) return;
-  const reg = (typeof regionFor === "function") ? regionFor(PORTS[port].lat, PORTS[port].lng) : null;
-  if(reg) document.getElementById("rp-post-region").value = reg;
+  const hint = document.getElementById("rp-post-region-hint");
+  if(!hint) return;
+  const reg = rpRegionFromPort(port);
+  if(reg){
+    const label = (typeof REGION_LABELS !== "undefined" && REGION_LABELS[reg]) ? REGION_LABELS[reg] : reg;
+    hint.textContent = `Region: ${label} (from port)`;
+    hint.style.display = "block";
+  } else {
+    hint.textContent = "";
+    hint.style.display = "none";
+  }
+}
+
+function rpPostPortChanged(){
+  rpUpdatePortRegionHint();
 }
 
 function rpResetPostForm(){
@@ -793,14 +810,7 @@ function rpResetPostForm(){
 function rpFillPostForm(opts){
   opts = opts || {};
   rpPopulatePortSelect(opts.port || "");
-  const regSel = document.getElementById("rp-post-region");
-  regSel.innerHTML = REGIONS.map(r => `<option value="${r.id}">${r.label}</option>`).join("");
-  let defRegion = opts.region;
-  if(!defRegion && (rpRegion !== "all")) defRegion = rpRegion;
-  if(!defRegion && typeof MAP !== "undefined" && MAP){
-    try { const c = MAP.getCenter(); defRegion = regionFor(c.lat, c.lng); } catch(e){}
-  }
-  if(defRegion) regSel.value = defRegion;
+  rpUpdatePortRegionHint();
   const spSel = document.getElementById("rp-post-species");
   spSel.innerHTML = '<option value="">— none —</option>' +
     SPECIES.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
@@ -840,7 +850,6 @@ async function rpOpenEdit(reportId){
     document.getElementById("rp-post-submit").textContent = "Save Changes";
     rpFillPostForm({
       port: row.port || "",
-      region: row.region,
       species: row.species || "",
       body: row.body || "",
       fishedAt: row.fished_at || rpTodayISO(),
@@ -863,19 +872,18 @@ async function rpSubmitPost(){
     msg.style.color = ok ? "#34d399" : "#fca5a5"; };
   const port = document.getElementById("rp-post-port").value || null;
   const fishedAt = document.getElementById("rp-post-fished").value || null;
-  let region = document.getElementById("rp-post-region").value;
   const species = document.getElementById("rp-post-species").value || null;
   const body = (document.getElementById("rp-post-body").value || "").trim();
+  if(!port){ showMsg("Pick the port you fished from.", false); return; }
   if(!fishedAt){ showMsg("Pick the date you fished.", false); return; }
   if(fishedAt > rpTodayISO()){ showMsg("Fishing date can't be in the future.", false); return; }
+  const region = rpRegionFromPort(port);
+  if(!region){ showMsg("Could not determine region for that port.", false); return; }
   let lat = null, lng = null;
-  if(port && typeof PORTS !== "undefined" && PORTS[port]){
+  if(typeof PORTS !== "undefined" && PORTS[port]){
     lat = PORTS[port].lat;
     lng = PORTS[port].lng;
-    const autoReg = (typeof regionFor === "function") ? regionFor(lat, lng) : null;
-    if(autoReg) region = autoReg;
   }
-  if(!region){ showMsg("Pick a region or port.", false); return; }
   if(!body){ showMsg("Write a short report.", false); return; }
   const btn = document.getElementById("rp-post-submit");
   const saving = _rpEditingId ? "Saving…" : "Posting…";

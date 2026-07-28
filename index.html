@@ -4697,13 +4697,11 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
     <select id="rp-post-port" class="rp-post-input" onchange="rpPostPortChanged()">
       <option value="">— select port —</option>
     </select>
-    <div class="rp-post-fine" style="color:#6bbfea;margin:-2px 0 8px">Pick the port you left from — helps other anglers and the Bite Map. Coordinates are rounded to ~6 nm.</div>
+    <div id="rp-post-region-hint" class="rp-post-fine" style="color:#6bbfea;margin:-2px 0 4px;display:none"></div>
+    <div class="rp-post-fine" style="color:#6bbfea;margin:-2px 0 8px">Pick the port you left from — region is set automatically from the port. Coordinates are rounded to ~6 nm.</div>
 
     <label class="rp-post-label">Date fished</label>
     <input id="rp-post-fished" type="date" class="rp-post-input" max=""/>
-
-    <label class="rp-post-label">Region</label>
-    <select id="rp-post-region" class="rp-post-input"></select>
 
     <label class="rp-post-label">Target species <span style="opacity:.6">(optional)</span></label>
     <select id="rp-post-species" class="rp-post-input"><option value="">— none —</option></select>
@@ -4832,7 +4830,7 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 }
 </style>
 
-<script src="bw-reports.js?v=20260728a"></script>
+<script src="bw-reports.js?v=20260728b"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TERMINAL TACKLE — Knots, Crimps, Connections
