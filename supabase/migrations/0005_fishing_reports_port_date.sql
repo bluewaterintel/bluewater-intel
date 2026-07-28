@@ -7,7 +7,10 @@ create index if not exists fishing_reports_fished_at_idx
   on public.fishing_reports (fished_at desc nulls last);
 
 -- Refresh de-identified public view (port + trip date are safe to expose).
-create or replace view public.fishing_reports_public as
+-- Must DROP first: CREATE OR REPLACE cannot insert columns before existing ones.
+drop view if exists public.fishing_reports_public;
+
+create view public.fishing_reports_public as
 select
   id,
   region,
