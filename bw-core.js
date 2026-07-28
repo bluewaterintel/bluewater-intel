@@ -1873,15 +1873,19 @@ async function ensureFreshestSatDates(){
   finally { _ensuringFreshDates = false; }
 }
 
-// Reports proximity boost — looks at SOCIAL feed if recent posts mention nearby canyons/spots
+// Reports proximity boost — SOCIAL feed near a cell (port-based location).
 function reportsBoost(lat, lng, speciesId){
-  // Real first-party community reports only (SOCIAL is loaded de-identified from
-  // the backend). Only reports that include an approximate location move the score;
-  // region-only forum chatter shows in the forum but carries no spatial signal.
+  // First-party community reports only. Prefer port coordinates; fall back to
+  // stored lat/lng for older posts. Reports without a usable location skip.
   if(!Array.isArray(SOCIAL) || !SOCIAL.length) return 0;
   let boost = 0;
   for(const p of SOCIAL){
-    if(p.lat == null || p.lng == null) continue;
+    let pLat = p.lat, pLng = p.lng;
+    if(p.port && typeof PORTS !== "undefined" && PORTS[p.port]){
+      pLat = PORTS[p.port].lat;
+      pLng = PORTS[p.port].lng;
+    }
+    if(pLat == null || pLng == null) continue;
     // Species match when the post specifies a species; species-less posts apply to all.
     if(p.species && p.species.length && speciesId && !p.species.includes(speciesId)) continue;
     // ── Recency decay (~8.3hr half-life): 2h ≈ full, 12h ≈ 37%, 24h ≈ 14%. ──
@@ -1889,8 +1893,8 @@ function reportsBoost(lat, lng, speciesId){
     if(hoursAgo > 72) continue;  // older than 3 days: no longer actionable
     const recency = Math.exp(-hoursAgo / 12);
     const distNm = (typeof nmBetween === "function")
-      ? nmBetween(lat, lng, p.lat, p.lng)
-      : Math.sqrt((p.lat-lat)**2 + (p.lng-lng)**2) * 60;  // fallback ~nm
+      ? nmBetween(lat, lng, pLat, pLng)
+      : Math.sqrt((pLat-lat)**2 + (pLng-lng)**2) * 60;  // fallback ~nm
     let contribution = 0;
     if(distNm < 24) contribution = 0.20;
     else if(distNm < 48) contribution = 0.10;
@@ -10263,15 +10267,6 @@ function loranGapLabelSplit(poly, opts){
   return { a, b, labelLatLng, angleDeg: ang };
 }
 
-function loranLongestPoly(polylines){
-  let labelPolyIdx = -1, labelPolyLen = 0;
-  polylines.forEach((poly, idx) => {
-    const { total } = loranPolySegLens(poly);
-    if(total > labelPolyLen){ labelPolyLen = total; labelPolyIdx = idx; }
-  });
-  return labelPolyIdx >= 0 ? polylines[labelPolyIdx] : null;
-}
-
 function drawLoranLines(){
   if(loranLayer){
     MAP.removeLayer(loranLayer);
@@ -14857,17 +14852,12 @@ function renderReports(){
       const sp = SPECIES.find(s => s.id === r);
       return sp ? `<span style="font-weight:bold;font-size:10px;color:${sp.color};margin-right:6px">${sp.name}</span>` : "";
     }).join("");
-    const srcColor = p.src === "THT"     ? "#dbeafe,#1d4ed8" :
-                     p.src === "FB"      ? "#dbeafe,#1d4ed8" :
-                     p.src === "REDDIT"  ? "#ffedd5,#9a3412" :
-                     p.src === "CHARTER" ? "#d1fae5,#065f46" :
-                                           "#ede9fe,#6d28d9";
-    const [bg, fg] = srcColor.split(",");
+    const place = p.port || p.area || "";
     const timeStr = p.hoursAgo < 1 ? "now" : p.hoursAgo < 24 ? `${Math.round(p.hoursAgo)}h ago` : `${Math.round(p.hoursAgo/24)}d ago`;
     return `<div class="rcard">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:4px">
-        <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:${bg};color:${fg};white-space:nowrap">${p.srcName}</span>
-        <span style="font-size:10px;color:#9ec5e8;font-weight:500;text-align:right;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.area || ""}</span>
+        <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:rgba(41,121,181,.15);color:#7dd3fc;white-space:nowrap">${p.srcName || "Angler"}</span>
+        <span style="font-size:10px;color:#9ec5e8;font-weight:500;text-align:right;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${place}</span>
         <span style="font-size:9px;color:#9ec5e8;font-weight:600;white-space:nowrap">${timeStr}</span>
       </div>
       <div style="font-size:12px;font-style:italic;color:#f0f6ff;line-height:1.6;margin:6px 0;padding:7px 10px;background:#fafaf5;border-radius:4px;border:1px solid #e8ddb8">"${p.snippet}"</div>

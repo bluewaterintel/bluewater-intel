@@ -2745,7 +2745,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
           <span class="nav-ico">📰</span>
           <span class="nav-row-body">
             <span class="nav-row-title">Fishing Reports</span>
-            <span class="nav-row-sub">Browse all reports from every port &amp; source</span>
+            <span class="nav-row-sub">Browse community reports by port &amp; region</span>
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
@@ -3615,7 +3615,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260728a"></script>
+<script src="bw-core.js?v=20260728b"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
@@ -4324,7 +4324,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       <div class="tut-data-icon">📍</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Recent catch reports</div>
-        <div class="tut-data-desc">Recent fishing reports for a species near a location bump up scores in that area. Reports decay with an ~8-hour half-life — a 2-hour-old report carries full weight, yesterday's much less. Only reports that include an approximate map location move the bite map (matched by lat/lng within ~24–90 nm); region-only forum posts show in the forum but do not shift scores.</div>
+        <div class="tut-data-desc">Recent fishing reports for a species near a location bump up scores in that area. Reports decay with an ~8-hour half-life — a 2-hour-old report carries full weight, yesterday's much less. Reports that include a port (matched within ~24–90 nm of that port) move the Bite Map; posts without a usable port show in the forum but do not shift scores. Recency uses the date fished when provided.</div>
       </div>
     </div>
 
@@ -4698,7 +4698,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       <option value="">— select port —</option>
     </select>
     <div id="rp-post-region-hint" class="rp-post-fine" style="color:#6bbfea;margin:-2px 0 4px;display:none"></div>
-    <div class="rp-post-fine" style="color:#6bbfea;margin:-2px 0 8px">Pick the port you left from — region is set automatically from the port. Coordinates are rounded to ~6 nm.</div>
+    <div class="rp-post-fine" style="color:#6bbfea;margin:-2px 0 8px">Pick the port you left from — region is set automatically from the port.</div>
 
     <label class="rp-post-label">Date fished</label>
     <input id="rp-post-fished" type="date" class="rp-post-input" max=""/>
@@ -4709,7 +4709,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
     <label class="rp-post-label">Report</label>
     <textarea id="rp-post-body" class="rp-post-input" rows="4" maxlength="2000" placeholder="What's biting? Conditions, technique, what worked…"></textarea>
 
-    <div class="rp-post-fine" style="margin:2px 0 12px">Posts are public to the community under an anonymous handle. No name or email is shown.</div>
+    <div class="rp-post-fine" style="margin:2px 0 12px">Posts are public under an anonymous handle. Your port, fishing date, species, and report text are visible to the community — no name or email is shown.</div>
 
     <div style="display:flex;gap:8px">
       <button type="button" onclick="rpClosePost()" style="flex:1;background:transparent;border:1px solid rgba(107,191,234,.3);color:#cfe5ff;padding:11px;border-radius:9px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
@@ -4742,7 +4742,7 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
   background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
   border:1px solid rgba(107,191,234,.13);
   border-radius:12px;padding:14px 16px;margin-bottom:10px;
-  transition:all .15s;cursor:pointer;
+  transition:all .15s;
   position:relative;
 }
 .rp-card:hover{
@@ -4752,16 +4752,6 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 .rp-card-head{
   display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;
 }
-.rp-src-pill{
-  font-size:9px;font-weight:700;letter-spacing:.08em;
-  padding:3px 8px;border-radius:8px;text-transform:uppercase;
-  white-space:nowrap;
-}
-.rp-src-THT    {background:rgba(220,38,38,.12);color:#f87171;border:1px solid rgba(220,38,38,.3)}
-.rp-src-FB     {background:rgba(41,121,181,.15);color:#7dd3fc;border:1px solid rgba(41,121,181,.35)}
-.rp-src-REDDIT {background:rgba(245,124,33,.12);color:#fdba74;border:1px solid rgba(245,124,33,.3)}
-.rp-src-CHARTER{background:rgba(16,185,129,.12);color:#34d399;border:1px solid rgba(16,185,129,.3)}
-.rp-src-FORUM  {background:rgba(168,85,247,.12);color:#c084fc;border:1px solid rgba(168,85,247,.3)}
 .rp-time{font-size:10px;color:#5d96c4;margin-left:auto;font-weight:500}
 .rp-fished{font-size:10px;color:#6bbfea;font-weight:600}
 .rp-edit-btn{
@@ -4771,7 +4761,6 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 }
 .rp-edit-btn:hover{background:rgba(125,211,252,.22)}
 .rp-area{font-size:11px;color:#6bbfea;font-weight:600}
-.rp-port{font-size:9px;color:#5d96c4;letter-spacing:.05em}
 .rp-snippet{font-size:13px;color:#e8f4ff;line-height:1.6;margin-top:6px}
 .rp-species{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
 .rp-sp-pill{
@@ -4830,7 +4819,7 @@ textarea.rp-post-input{resize:vertical;min-height:80px}
 }
 </style>
 
-<script src="bw-reports.js?v=20260728b"></script>
+<script src="bw-reports.js?v=20260728c"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TERMINAL TACKLE — Knots, Crimps, Connections
