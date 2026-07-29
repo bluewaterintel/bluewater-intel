@@ -9839,13 +9839,17 @@ function updateRadarLoopControlVisibility(){
 // ════════════════════════════════════════════════════════════════════════════
 // LORAN-C TD LINES — Grease Chart AC006 / AC007 / AC002 lattice
 //
-// Northeast US Chain 9960 (Seneca NY master):
-//   9960-Y Carolina Beach NC — primary Mid-Atlantic fishing TDs (39xxx–42xxx)
-//   9960-X Nantucket MA      — crossing family on AC006 (26xxx–27xxx)
-//   9960-W Caribou ME        — green family on AC007 Virginia (14xxx–16xxx)
+//   9960-Y (Seneca NY master → Carolina Beach NC) — the ONLY Mid-Atlantic
+//     family we draw. Offshore of both stations the TD varies almost purely
+//     with latitude, so these hyperbolas run roughly WEST→EAST (tilted ~20°
+//     down to the east) and their numbers increase NORTHWARD: ~40000 at Cape
+//     Hatteras up through ~42000+ off Baltimore Canyon.
+//   7980-Z (Malone FL master → Carolina Beach NC) — separate land-to-sea 45xxx
+//     family on Grease Chart AC002, drawn only south of Cape Fear.
 //
-// Southeast US Chain 7980-Z (Malone FL master, Carolina Beach secondary):
-//   Land-to-sea 45xxx family on Grease Chart AC002 (Cape Fear→Cape Romain).
+// Do NOT add the 9960-X (Nantucket) or 9960-W (Caribou) families here. Their
+// hyperbolas run near NORTH→SOUTH through this region, which is not the grid
+// captains read off AC006/AC007.
 //
 // ── CALIBRATION (9960-Y) ──
 // Printed Grease Chart anchors (NAD83 ≈ WGS84 here):
@@ -9854,9 +9858,13 @@ function updateRadarLoopControlVisibility(){
 //   AC007 Chesapeake mouth E≈ 41100
 //   AC007 37°N / 75.25°W    ≈ 41300
 //   Norfolk Canyon          ≈ 41550  ("the 550")
-// TD = geom + offset + kLng·lng  (scale=1; kLng is a light ASF easting term).
-// The old scale≈0.815 fit forced Norfolk=41550 by compressing spacing and
-// shoved Hatteras/Oregon Inlet ~500 µs too high (40800 on the beach).
+// TD = geom + offset + kLat·lat. The ASF term is on LATITUDE, which only
+// adjusts line spacing and leaves the west→east orientation intact.
+// Two earlier attempts were wrong and must not come back:
+//   • scale≈0.815 compressed spacing and pushed Hatteras/Oregon Inlet ~500 µs
+//     high (the 40800 line landed on the beach).
+//   • a kLng easting term rotated the whole family from a ~22° tilt to ~39°,
+//     swinging the lines toward vertical.
 // ════════════════════════════════════════════════════════════════════════════
 
 // Tunable shelf / drop-off trace for LORAN label placement. Each labeled
@@ -9888,8 +9896,8 @@ const LORAN_CHAINS = {
     master:    LORAN_MASTER_9960,
     secondary: {lat: 34.0626, lng: -77.9128},   // Carolina Beach NC
     scale: 1,
-    offset: 56073.44,
-    kLng: 185.6106, // ASF easting — fitted to AC006/AC007 anchors
+    offset: 39004.23,
+    kLat: 83.5915, // ASF on latitude — fitted to AC006/AC007 printed anchors
     useBounds: {south: 33.70, north: 38.85, west: -78.55, east: -73.20},
     tdMin: 39000, tdMax: 42650, step: 50,
     labelStep: 100,
@@ -9898,35 +9906,6 @@ const LORAN_CHAINS = {
     labelShelfAnchorPath: LORAN_SHELF_ANCHOR_PATH_9960Y,
     labelShelfPerpOffsetNm: LORAN_SHELF_LABEL.perpendicularOffsetNm,
     stationExcludeDeg: 0.18,
-  },
-  // 9960-X — crossing family on AC006 (magenta); Hatteras tip ≈ 27100
-  ne9960X: {
-    label: "9960-X",
-    master:    LORAN_MASTER_9960,
-    secondary: {lat: 41.253333, lng: -69.977778}, // Nantucket MA
-    scale: 1,
-    offset: 27145.05, // Cape Hatteras tip → 27100
-    useBounds: {south: 34.40, north: 38.85, west: -76.80, east: -73.20},
-    tdMin: 26600, tdMax: 27600, step: 50,
-    labelStep: 100,
-    color: "#e879f9",
-    labelColor: "#f0abfc",
-    stationExcludeDeg: 0.25,
-  },
-  // 9960-W — green family on AC007 Virginia (coast ~15800, Norfolk Cyn ~15100)
-  ne9960W: {
-    label: "9960-W",
-    master:    LORAN_MASTER_9960,
-    secondary: {lat: 46.807778, lng: -67.926944}, // Caribou ME
-    scale: 1,
-    offset: -14048.32,
-    kLng: -365.0236,
-    useBounds: {south: 35.80, north: 38.85, west: -76.80, east: -73.20},
-    tdMin: 14500, tdMax: 16200, step: 50,
-    labelStep: 100,
-    color: "#22c55e",
-    labelColor: "#86efac",
-    stationExcludeDeg: 0.25,
   },
   // 7980-Z — Grease Chart AC002 land-to-sea 45xxx (Cape Fear→Cape Romain)
   se7980Z: {
@@ -9963,9 +9942,10 @@ function loranTD(lat, lng, chain){
   const geom = (dS - dM) / LORAN_C_SPEED_M_PER_US;
   const scale = (typeof chain.scale === "number" && isFinite(chain.scale)) ? chain.scale : 1;
   const offset = (typeof chain.offset === "number" && isFinite(chain.offset)) ? chain.offset : 0;
-  // Optional longitude ASF term (Grease Chart printed TDs vs ASF-free geometry).
-  const kLng = (typeof chain.kLng === "number" && isFinite(chain.kLng)) ? chain.kLng : 0;
-  return geom * scale + offset + kLng * lng;
+  // ASF term on latitude only. A longitude term would rotate the family off
+  // its printed west→east orientation, so there is deliberately no kLng here.
+  const kLat = (typeof chain.kLat === "number" && isFinite(chain.kLat)) ? chain.kLat : 0;
+  return geom * scale + offset + kLat * lat;
 }
 
 // Marching-squares contour tracer for a specific chain
