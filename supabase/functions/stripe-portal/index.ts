@@ -17,6 +17,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20" });
 const APP_URL = (Deno.env.get("APP_URL") ?? "https://app.bluewaterintel.com").replace(/\/$/, "");
+const NATIVE_SCHEME = "com.bluewaterintel.app://";
 const PRICES = {
   monthly: Deno.env.get("STRIPE_PRICE_MONTHLY") ?? "",
   annual: Deno.env.get("STRIPE_PRICE_ANNUAL") ?? "",
@@ -91,6 +92,14 @@ async function ensurePortalConfiguration(): Promise<string> {
   return config.id;
 }
 
+function allowedReturnUrl(url: unknown, fallback: string): string {
+  if (typeof url !== "string" || !url) return fallback;
+  const trimmed = url.trim();
+  if (APP_URL && trimmed.startsWith(APP_URL)) return trimmed;
+  if (trimmed.startsWith(NATIVE_SCHEME)) return trimmed;
+  return fallback;
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
   const CORS = cors(origin);
@@ -104,6 +113,9 @@ Deno.serve(async (req) => {
   });
   const { data: { user }, error: uerr } = await supa.auth.getUser();
   if (uerr || !user) return json({ error: "Sign in required." }, 401);
+
+  let body: Record<string, unknown> = {};
+  try { body = await req.json(); } catch { /* empty body ok */ }
 
   const { data: prof } = await supa.from("profiles").select("stripe_customer_id, subscription_status").eq("id", user.id).maybeSingle();
   const customerId = prof?.stripe_customer_id as string | undefined;
@@ -119,9 +131,10 @@ Deno.serve(async (req) => {
 
   try {
     const configuration = await ensurePortalConfiguration();
+    const returnUrl = allowedReturnUrl(body.return_url, APP_URL);
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: APP_URL,
+      return_url: returnUrl,
       configuration,
     });
     return json({ url: session.url });

@@ -7,23 +7,40 @@
     "build:waypoints": "node scripts/build-waypoints.mjs",
     "build:ramps": "node scripts/build-ramps.mjs",
     "build:platforms": "node scripts/build-platforms-gom.mjs",
+    "build:ios": "node scripts/build-ios-www.mjs",
     "seed": "node supabase-m1/seed/load.mjs",
     "integrity": "node scripts/integrity-check.mjs",
     "config": "node scripts/generate-bw-config.mjs",
+    "config:native": "node scripts/generate-bw-config.mjs --native",
     "setup:backend": "node scripts/setup-backend.mjs",
     "patch:m3m4": "node scripts/apply-m3-m4-patches.mjs",
     "test:freshness": "node tests/freshness.test.mjs",
     "test:wind": "node tests/wind.test.mjs",
     "deploy:functions": "node scripts/deploy-m3-m4-functions.mjs",
     "deploy:health": "node scripts/deploy-health.mjs",
-    "deploy": "node scripts/generate-bw-config.mjs && netlify deploy --prod --dir=."
+    "deploy": "node scripts/generate-bw-config.mjs && netlify deploy --prod --dir=.",
+    "cap:sync": "npm run build:ios && npx cap sync ios",
+    "cap:open:ios": "npx cap open ios",
+    "ios:sync": "npm run cap:sync && npm run cap:open:ios"
   },
   "dependencies": {
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/browser": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/keyboard": "^7.0.0",
+    "@capacitor/splash-screen": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0",
+    "@revenuecat/purchases-capacitor": "^10.0.0",
     "@supabase/supabase-js": "^2.49.0",
     "pg": "^8.22.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
     "netlify-cli": "^23.0.0",
     "supabase": "^2.108.0"
+  },
+  "capacitor": {
+    "platforms": ["ios"]
   }
 }

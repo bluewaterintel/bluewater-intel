@@ -35,6 +35,7 @@ const PRO_CHECKOUT_BLURB =
 const TRIAL_CHECKOUT_BLURB =
   "Bluewater Intel Pro — 7-day free trial: full app access (Bite Map, charted waypoints, ocean & wind layers, fishing reports) plus 1 AI Captain's Brief for the trial. After 7 days, $12.99/mo unless you cancel first.";
 const APP_URL = (Deno.env.get("APP_URL") ?? "").replace(/\/$/, "");
+const NATIVE_SCHEME = "com.bluewaterintel.app://";
 const PRICES = {
   monthly: Deno.env.get("STRIPE_PRICE_MONTHLY") ?? "",
   annual: Deno.env.get("STRIPE_PRICE_ANNUAL") ?? "",
@@ -53,6 +54,14 @@ function cors(origin: string | null) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
+}
+
+function allowedReturnUrl(url: unknown, fallback: string): string {
+  if (typeof url !== "string" || !url) return fallback;
+  const trimmed = url.trim();
+  if (APP_URL && trimmed.startsWith(APP_URL)) return trimmed;
+  if (trimmed.startsWith(NATIVE_SCHEME)) return trimmed;
+  return fallback;
 }
 
 Deno.serve(async (req) => {
@@ -122,14 +131,17 @@ Deno.serve(async (req) => {
 
     const meta: Record<string, string> = { user_id: user.id, kind };
 
+    const successUrl = allowedReturnUrl(body.success_url, `${APP_URL}/?checkout=success`);
+    const cancelUrl = allowedReturnUrl(body.cancel_url, `${APP_URL}/?checkout=cancel`);
+
     const session = await stripe.checkout.sessions.create({
       mode,
       customer: customerId,
       client_reference_id: user.id,
       line_items: [{ price, quantity: 1 }],
       allow_promotion_codes: true,
-      success_url: `${APP_URL}/?checkout=success`,
-      cancel_url: `${APP_URL}/?checkout=cancel`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: meta,
       ...(kind === "subscription"
         ? {

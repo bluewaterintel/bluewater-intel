@@ -1,0 +1,39 @@
+{
+  "appId": "com.bluewaterintel.app",
+  "appName": "Bluewater Intel",
+  "webDir": "www",
+  "server": {
+    "allowNavigation": [
+      "cdnjs.cloudflare.com",
+      "cdn.jsdelivr.net",
+      "*.supabase.co",
+      "checkout.stripe.com",
+      "billing.stripe.com",
+      "app.bluewaterintel.com"
+    ]
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "scrollEnabled": false,
+    "backgroundColor": "#0a1628",
+    "scheme": "Bluewater Intel"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "launchAutoHide": true,
+      "backgroundColor": "#0a1628",
+      "showSpinner": false,
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0a1628"
+    },
+    "Keyboard": {
+      "resize": "body",
+      "resizeOnFullScreen": true
+    }
+  }
+}

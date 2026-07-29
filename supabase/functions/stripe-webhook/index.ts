@@ -60,6 +60,7 @@ async function applySubscription(sub: Stripe.Subscription) {
   await admin.from("profiles").upsert({
     id: userId,
     stripe_customer_id: customerId ?? undefined,
+    billing_source: "stripe",
     subscription_status: status,
     subscription_interval: interval,
     current_period_end: isoFromUnix(sub.current_period_end),

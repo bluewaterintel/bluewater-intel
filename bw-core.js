@@ -325,7 +325,7 @@ let pinLL=null;
 // the chosen hotspot cells; null for the normal single-spot brief (tap a spot).
 let _briefRunPlanSpots=null;
 let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
-let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, buoys:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false, relief:false};
+let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, buoys:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false, relief:false, contours:false};
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -340,7 +340,11 @@ let _predictGrid = null, _predictSpecies = null, _predictTooltip = null, _predic
 let _predictResultCache = null; // { key, heatGrid, hotspots, badges, gridStep, gridOriginLat, gridOriginLng }
 let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satelliteLayer=null, satelliteLabelsLayer=null, sstLayer=null, chlorLayer=null, radarLayer=null, reliefLayer=null;
 let blueTopoElevationLayer=null, blueTopoHillshadeLayer=null;
+let depthContoursLayer=null;
 let _activeBaseMap = "satellite";
+const CONTOURS_TILES_NATIVE_ZOOM = 9;
+const DEPTH_CONTOURS_OPACITY = 0.9;
+const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
 const BLUETOPO_RELIEF_KEY = "bwi.bluetopoRelief";
 let blueTopoRelief = 0.55; // maps to hillshade opacity ~0.20–0.85
@@ -375,7 +379,7 @@ try {
 } catch(e){}
 // Seafloor Relief is a basemap option (not a layer toggle).
 // layerVis.relief stays in sync with _activeBaseMap for legend + opacity helpers.
-const BATHY_LAYER_KEYS = ["relief"];
+const BATHY_LAYER_KEYS = ["relief", "contours"];
 const LAYER_VIS_KEY = "bwi_layer_vis";
 try {
   const savedVis = JSON.parse(localStorage.getItem(LAYER_VIS_KEY) || "null");
@@ -441,6 +445,34 @@ let layersPanelOpen=false;
   });
 })();
 
+function getContoursTilesBase(){
+  const cfg = window.BW_DATA_CONFIG || {};
+  const explicit = cfg.contoursTilesBaseUrl || cfg.chartTilesBaseUrl;
+  if(explicit && typeof explicit === "string" && explicit.trim() && !/YOURPROJECT/i.test(explicit)){
+    return explicit.trim().replace(/\/$/, "");
+  }
+  const url = (cfg.supabaseUrl || "").replace(/\/$/, "");
+  if(!url || /YOURPROJECT/i.test(url)) return null;
+  return url + "/storage/v1/object/public/chart-tiles";
+}
+
+function buildDepthContoursLayer(){
+  const base = getContoursTilesBase();
+  if(!base) return null;
+  const cfg = window.BW_DATA_CONFIG || {};
+  const ver = cfg.contoursTilesVersion || "v1";
+  const blank = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  return L.tileLayer(`${base}/contours/${ver}/{z}/{x}/{y}.png`, {
+    minZoom: 5, maxZoom: 14, maxNativeZoom: CONTOURS_TILES_NATIVE_ZOOM, tileSize: 256,
+    crossOrigin: "anonymous", opacity: DEPTH_CONTOURS_OPACITY, pane: "bathy",
+    attribution: BW_CONTOURS_ATTRIB, errorTileUrl: blank,
+  });
+}
+
+function contoursTilesAvailable(){
+  return !!getContoursTilesBase();
+}
+
 async function initMap(){
   // Restore saved preferences (default port, basemap, etc.) before any view
   // logic reads them, so the app opens with the user's chosen defaults.
@@ -452,6 +484,9 @@ async function initMap(){
     // gesture, so we disable it here and step exactly ONE level per gesture.
     scrollWheelZoom:false,
     zoomSnap:1, zoomDelta:1});
+  if(MAP.attributionControl){
+    MAP.attributionControl.addAttribution("Fishing reference only — not for navigation");
+  }
 
   // ── Custom trackpad / mouse-wheel zoom ────────────────────────────────────
   // One scroll gesture (a single notch on a mouse, or one swipe on a trackpad)
@@ -553,6 +588,9 @@ async function initMap(){
 
   esriOceanLayer.eachLayer(bindBasemapTileRefresh);
   applyBlueTopoRelief(blueTopoRelief, false);
+
+  // ── Depth contour overlay (Supabase-hosted static tiles) ──
+  depthContoursLayer = buildDepthContoursLayer();
 
   bathyLayer=esriOceanLayer; // alias for backward compat
 
@@ -5913,8 +5951,9 @@ const BasemapSampler = {
     if(brightness < 100 && b >= g - 5 && b > r + 5) return true;
     // BlueTopo hillshade on water: gray-blue where B still leads slightly
     if(b > r + 3 && b >= g - 18 && brightness > 70 && brightness < 300) return true;
-    // Very dark near-black: deep ocean in satellite imagery
+    // Very dark near-black: deep ocean in satellite imagery (#080F1E–#1E3A50)
     if(r < 50 && g < 70 && b < 90 && b > r) return true;
+    if(r < 45 && g < 55 && b < 80 && b >= g - 8 && b > r + 4) return true;
     // Default: not water
     return false;
   },
@@ -9038,8 +9077,9 @@ function openSubPanel(kind){
 // ════════════════════════════════════════════════════════════════════════════
 const BATHY_ATTRIB = {
   relief: "© GEBCO_2024 · NOAA NCEI Multibeam",
+  contours: BW_CONTOURS_ATTRIB,
 };
-let _bathyAttribAdded = { relief: false };
+let _bathyAttribAdded = { relief: false, contours: false };
 
 function saveBathyLayerVis(){
   // No-op: relief is a basemap choice, not a persisted layer toggle.
@@ -9176,6 +9216,22 @@ function toggleLayer(key){
   else if(key==="relief"){
     // Moved to Base Map picker — selecting the checkbox switches basemap.
     if(typeof switchBase === "function") switchBase(key);
+  }
+  else if(key==="contours"){
+    if(!depthContoursLayer){
+      if(typeof showToast === "function") showToast("Depth contours are not available yet — upload chart tiles to Supabase.", "info");
+      layerVis.contours = false;
+      const c = document.getElementById("chk-contours"); if(c) c.checked = false;
+      return;
+    }
+    if(layerVis.contours){
+      depthContoursLayer.setOpacity(DEPTH_CONTOURS_OPACITY);
+      depthContoursLayer.addTo(MAP);
+    } else if(MAP.hasLayer(depthContoursLayer)){
+      MAP.removeLayer(depthContoursLayer);
+    }
+    updateBathyAttribution();
+    scheduleHeatMaskRepaint();
   }
 }
 
@@ -9781,36 +9837,26 @@ function updateRadarLoopControlVisibility(){
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// LORAN-C TD LINES — Multi-Chain Mid-Atlantic / Southeast US Coverage
+// LORAN-C TD LINES — Grease Chart AC006 / AC007 / AC002 lattice
 //
-// Supports two LORAN-C chains:
+// Northeast US Chain 9960 (Seneca NY master):
+//   9960-Y Carolina Beach NC — primary Mid-Atlantic fishing TDs (39xxx–42xxx)
+//   9960-X Nantucket MA      — crossing family on AC006 (26xxx–27xxx)
+//   9960-W Caribou ME        — green family on AC007 Virginia (14xxx–16xxx)
 //
-//   9960 (Northeast US Chain) — Y-rate, Carolina Beach NC secondary
-//     Best in waters NORTH of Cape Fear (NC, VA, MD, DE). Captains call out
-//     positions like "on the 41550" (Norfolk Canyon area, Y-rate 41550).
-//     Matches BLACK diagonal lines on NOAA Grease Charts AC006, AC007.
+// Southeast US Chain 7980-Z (Malone FL master, Carolina Beach secondary):
+//   Land-to-sea 45xxx family on Grease Chart AC002 (Cape Fear→Cape Romain).
 //
-//   7980 (Southeast US Chain) — Y-rate, Jupiter FL secondary
-//     Best in SC, GA, FL east coast waters. Lines spread out properly
-//     here where 9960 hyperbolas degenerate near Carolina Beach station.
-//     Matches BLACK diagonal lines on NOAA Grease Chart AC002.
-//
-// The drawLoranLines function automatically draws each chain only in its
-// usable region, so users see one continuous LORAN grid across the
-// Carolinas without overlapping line confusion.
-//
-// ── CALIBRATION ──
-//   9960-Y: TD = geom*scale+offset. Anchored at Norfolk Canyon = 41550 (the
-//           "550 line") and at Big Rock / just-west-of-shelf Cape Lookout =
-//           40000 so the 39800–41000 family sits on the fishing grounds west
-//           of the continental shelf instead of walling off deep water east
-//           of the break (ASF-free geometry alone pushed those lines ~1.3°
-//           too far offshore). Isolines run coast-parallel (NE–SW).
-//   7980-Z: Grease Chart AC002 (Cape Fear→Cape Romain) land-to-sea (NW–SE)
-//           lines 45175…45575. Carolina Beach is the Z secondary. Raw ASF-free
-//           geometry is too steep near that station, so TD = geom*scale+offset
-//           is fitted to AC002 anchors (Oak Island≈45200, Cape Romain≈45550).
-//           Skip 45125/45150 — they collapse into short stubs at the secondary.
+// ── CALIBRATION (9960-Y) ──
+// Printed Grease Chart anchors (NAD83 ≈ WGS84 here):
+//   AC006 Cape Hatteras tip ≈ 40000
+//   AC007 VA Beach coast    ≈ 41000
+//   AC007 Chesapeake mouth E≈ 41100
+//   AC007 37°N / 75.25°W    ≈ 41300
+//   Norfolk Canyon          ≈ 41550  ("the 550")
+// TD = geom + offset + kLng·lng  (scale=1; kLng is a light ASF easting term).
+// The old scale≈0.815 fit forced Norfolk=41550 by compressing spacing and
+// shoved Hatteras/Oregon Inlet ~500 µs too high (40800 on the beach).
 // ════════════════════════════════════════════════════════════════════════════
 
 // Tunable shelf / drop-off trace for LORAN label placement. Each labeled
@@ -9833,41 +9879,67 @@ const LORAN_SHELF_LABEL = {
   gapHalfNm: 2,
 };
 
+const LORAN_MASTER_9960 = {lat: 42.7142, lng: -76.8253}; // Seneca NY
+
 const LORAN_CHAINS = {
-  // Northeast US Chain - 9960
+  // 9960-Y — Grease Chart AC006/AC007 primary lattice (orange)
   ne9960Y: {
     label: "9960-Y",
-    master:    {lat: 42.7142, lng: -76.8253},   // Seneca NY
+    master:    LORAN_MASTER_9960,
     secondary: {lat: 34.0626, lng: -77.9128},   // Carolina Beach NC
-    // Fit: Norfolk Canyon → 41550; Big Rock / shelf-west Cape Lookout → 40000.
-    scale: 0.815322,
-    offset: 42108.91,
-    // Coast-parallel Y-rate lines from VA/MD through Hatteras to Oak Island.
-    // East/north cover Baltimore (~42160) and Wilmington Canyon (~42350).
+    scale: 1,
+    offset: 56073.44,
+    kLng: 185.6106, // ASF easting — fitted to AC006/AC007 anchors
     useBounds: {south: 33.70, north: 38.85, west: -78.55, east: -73.20},
     tdMin: 39000, tdMax: 42650, step: 50,
     labelStep: 100,
+    color: "#f97316",
+    labelColor: "#fdba74",
     labelShelfAnchorPath: LORAN_SHELF_ANCHOR_PATH_9960Y,
     labelShelfPerpOffsetNm: LORAN_SHELF_LABEL.perpendicularOffsetNm,
-    // Tight exclude — default 0.45° stubbed 39xxx lines short of Oak Island.
     stationExcludeDeg: 0.18,
   },
-  // Southeast US Chain - 7980-Z (Malone FL master, Carolina Beach NC secondary)
-  // Land-to-sea (shore → offshore) hyperbolas on Grease Chart AC002. Do NOT
-  // draw the coast-parallel 27xxx set from that chart — only this 45xxx family.
+  // 9960-X — crossing family on AC006 (magenta); Hatteras tip ≈ 27100
+  ne9960X: {
+    label: "9960-X",
+    master:    LORAN_MASTER_9960,
+    secondary: {lat: 41.253333, lng: -69.977778}, // Nantucket MA
+    scale: 1,
+    offset: 27145.05, // Cape Hatteras tip → 27100
+    useBounds: {south: 34.40, north: 38.85, west: -76.80, east: -73.20},
+    tdMin: 26600, tdMax: 27600, step: 50,
+    labelStep: 100,
+    color: "#e879f9",
+    labelColor: "#f0abfc",
+    stationExcludeDeg: 0.25,
+  },
+  // 9960-W — green family on AC007 Virginia (coast ~15800, Norfolk Cyn ~15100)
+  ne9960W: {
+    label: "9960-W",
+    master:    LORAN_MASTER_9960,
+    secondary: {lat: 46.807778, lng: -67.926944}, // Caribou ME
+    scale: 1,
+    offset: -14048.32,
+    kLng: -365.0236,
+    useBounds: {south: 35.80, north: 38.85, west: -76.80, east: -73.20},
+    tdMin: 14500, tdMax: 16200, step: 50,
+    labelStep: 100,
+    color: "#22c55e",
+    labelColor: "#86efac",
+    stationExcludeDeg: 0.25,
+  },
+  // 7980-Z — Grease Chart AC002 land-to-sea 45xxx (Cape Fear→Cape Romain)
   se7980Z: {
     label: "7980-Z",
     master:    {lat: 30.99414, lng: -85.16915}, // Malone FL
     secondary: {lat: 34.0626, lng: -77.9128},   // Carolina Beach NC
     scale: 0.401127,
     offset: 46135.87,
-    // Cape Fear / Oak Island through Myrtle Beach to Cape Romain, extended
-    // NE offshore so land-to-sea lines meet the 9960-Y grid without a hole.
     useBounds: {south: 32.45, north: 34.35, west: -80.05, east: -76.45},
-    // Every 25 µs from 45175 (drop 45125/45150 stubs near Carolina Beach).
     tdMin: 45175, tdMax: 45600, step: 25,
     labelStep: 25,
-    // Tight exclude — 0.45° punched gaps through 45175–45225 over Long Bay.
+    color: "#f97316",
+    labelColor: "#fdba74",
     stationExcludeDeg: 0.18,
   },
 };
@@ -9889,10 +9961,11 @@ function loranTD(lat, lng, chain){
   const dM = loranDistMeters(lat, lng, chain.master.lat, chain.master.lng);
   const dS = loranDistMeters(lat, lng, chain.secondary.lat, chain.secondary.lng);
   const geom = (dS - dM) / LORAN_C_SPEED_M_PER_US;
-  // Optional scale compresses geometry to match printed Grease Chart TDs where
-  // ASF-free hyperbolas run too steep near a secondary (7980-Z / AC002).
   const scale = (typeof chain.scale === "number" && isFinite(chain.scale)) ? chain.scale : 1;
-  return geom * scale + chain.offset;
+  const offset = (typeof chain.offset === "number" && isFinite(chain.offset)) ? chain.offset : 0;
+  // Optional longitude ASF term (Grease Chart printed TDs vs ASF-free geometry).
+  const kLng = (typeof chain.kLng === "number" && isFinite(chain.kLng)) ? chain.kLng : 0;
+  return geom * scale + offset + kLng * lng;
 }
 
 // Marching-squares contour tracer for a specific chain
@@ -10221,21 +10294,20 @@ function drawLoranLines(){
   }
   if(!layerVis.loran) return;
 
-  // Step size for the marching-squares grid: ~2.4 nm. Same for both chains.
+  // Step size for the marching-squares grid: ~2.4 nm.
   const step = 0.04;
 
   const featureGroup = L.featureGroup();
-  // Major lines (every 100µs) — slightly thicker and more opaque
-  const majorStyle = {color: "#f97316", weight: 2.5, opacity: 0.95, dashArray: "6 4", interactive: false};
-  // Half-lines (50µs increments) — thinner and dimmer for visual hierarchy
-  const halfStyle  = {color: "#f97316", weight: 1.6, opacity: 0.65, dashArray: "3 5", interactive: false};
-  // In-line gap label (no box). pointer-events:none so touches pan the map.
-  const gapLabelStyle = "color:#fdba74;font-size:12px;font-weight:800;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;text-shadow:0 0 3px #060e1a,0 1px 2px #060e1a,-1px 0 2px #060e1a,1px 0 2px #060e1a;white-space:nowrap;pointer-events:none;line-height:1";
 
-  // Iterate over every chain defined in LORAN_CHAINS. Each chain only draws
-  // within its useBounds rectangle. 9960-Y owns Hatteras→Oak Island; 7980-Z
-  // starts south of that band so the AC001 parallel lines stay unambiguous.
+  // Iterate over every chain in LORAN_CHAINS. Each draws only inside useBounds.
+  // Colors follow Grease Chart convention: Y orange, X magenta, W green.
   Object.values(LORAN_CHAINS).forEach(chain => {
+    const color = chain.color || "#f97316";
+    const labelColor = chain.labelColor || "#fdba74";
+    const majorStyle = {color, weight: 2.5, opacity: 0.95, dashArray: "6 4", interactive: false};
+    const halfStyle  = {color, weight: 1.6, opacity: 0.65, dashArray: "3 5", interactive: false};
+    const gapLabelStyle = `color:${labelColor};font-size:12px;font-weight:800;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;text-shadow:0 0 3px #060e1a,0 1px 2px #060e1a,-1px 0 2px #060e1a,1px 0 2px #060e1a;white-space:nowrap;pointer-events:none;line-height:1`;
+
     const tdValues = [];
     for(let td = chain.tdMin; td <= chain.tdMax; td += chain.step){
       tdValues.push(td);
@@ -10245,8 +10317,6 @@ function drawLoranLines(){
     const shelfPath = chain.labelShelfAnchorPath;
 
     tdValues.forEach(td => {
-      // traceLoranLine now returns an array of polylines (each one is an
-      // array of [lat,lng] points along the same connected hyperbola arc).
       const polylines = traceLoranLine(td, chain.useBounds, step, chain);
       const isMajor = (td % labelStep === 0);
       const style = isMajor ? majorStyle : halfStyle;
@@ -11158,7 +11228,10 @@ function refreshSettingsModal(){
   // ── Base map default ──
   const bmSel = document.getElementById("pref-basemap");
   if(bmSel){
-    if(USER_PREFS.defaultBaseMap === "osm" || USER_PREFS.defaultBaseMap === "chart"){
+    if(USER_PREFS.defaultBaseMap === "osm"){
+      USER_PREFS.defaultBaseMap = "satellite";
+    }
+    if(USER_PREFS.defaultBaseMap === "chart" || USER_PREFS.defaultBaseMap === "bwchart"){
       USER_PREFS.defaultBaseMap = "satellite";
     }
     if(typeof BASE_MAP_IDS !== "undefined" && BASE_MAP_IDS.indexOf(USER_PREFS.defaultBaseMap) < 0){
@@ -11252,14 +11325,27 @@ function openCatchesFilterPopup(){
   catchSyncFilterControls();
   const popup = document.getElementById("catches-filter-popup");
   const backdrop = document.getElementById("catches-filter-backdrop");
-  const btn = document.getElementById("catches-filter-btn");
-  if(popup && btn){
-    const r = btn.getBoundingClientRect();
-    const top = Math.min(r.bottom + 8, window.innerHeight - 80);
-    popup.style.left = "20px";
-    popup.style.right = "auto";
-    popup.style.top = Math.max(12, top) + "px";
-    popup.style.transform = "none";
+  if(popup){
+    if(typeof isPhoneView === "function" && isPhoneView()){
+      const top = viewportPanelTopPx(4);
+      popup.style.left = "0";
+      popup.style.right = "0";
+      popup.style.width = "100%";
+      popup.style.maxWidth = "100%";
+      popup.style.borderRadius = "0 0 14px 14px";
+      popup.style.top = top + "px";
+      popup.style.maxHeight = Math.max(200, window.innerHeight - top - 12) + "px";
+      popup.style.transform = "none";
+    } else {
+      const btn = document.getElementById("catches-filter-btn");
+      const r = btn ? btn.getBoundingClientRect() : { bottom: 80, left: 20 };
+      const top = Math.min(r.bottom + 8, window.innerHeight - 80);
+      popup.style.left = "20px";
+      popup.style.right = "auto";
+      popup.style.width = "min(420px,calc(100% - 40px))";
+      popup.style.top = Math.max(12, top) + "px";
+      popup.style.transform = "none";
+    }
   }
   if(popup) popup.style.display = "block";
   if(backdrop) backdrop.style.display = "block";
@@ -12337,7 +12423,7 @@ function rulerRedraw(){
 
 const BASE_MAP_IDS = ["satellite", "ocean", "relief"];
 function switchBase(val){
-  if(val === "osm" || val === "chart" || val === "hardness") val = "satellite"; // removed basemaps
+  if(val === "osm" || val === "hardness" || val === "chart" || val === "bwchart") val = "satellite"; // removed basemaps
   if(BASE_MAP_IDS.indexOf(val) < 0) val = "satellite";
   _activeBaseMap = val;
   // Remove all base layers + structure overlays (relief is a basemap now)
@@ -15911,21 +15997,7 @@ function toggleDd(){
 
     const isPortraitPhone = window.innerWidth <= 680;
     if(isPortraitPhone){
-      // Bottom drawer style on phones
-      dd.style.cssText=`
-        position:fixed !important;
-        bottom:0 !important; left:0 !important; right:0 !important;
-        top:auto !important;
-        width:100% !important; max-width:100% !important;
-        border-radius:14px 14px 0 0 !important;
-        max-height:65vh !important;
-        box-shadow:0 -8px 32px rgba(0,0,0,.7) !important;
-        background:#0f2444 !important;
-        border:1px solid rgba(107,191,234,.25) !important;
-        overflow-y:auto !important;
-        z-index:100000 !important;
-        display:block !important;
-      `;
+      dd.style.cssText = phoneTopSheetInlineStyle();
     } else {
       // Anchored dropdown below the button on tablet/desktop
       const rect=btn.getBoundingClientRect();
@@ -16421,20 +16493,7 @@ function togglePortDd(){
 
     const isPortraitPhone = window.innerWidth <= 680;
     if(isPortraitPhone){
-      dd.style.cssText=`
-        position:fixed !important;
-        bottom:0 !important; left:0 !important; right:0 !important;
-        top:auto !important;
-        width:100% !important; max-width:100% !important;
-        border-radius:14px 14px 0 0 !important;
-        max-height:65vh !important;
-        box-shadow:0 -8px 32px rgba(0,0,0,.7) !important;
-        background:#0f2444 !important;
-        border:1px solid rgba(107,191,234,.25) !important;
-        overflow-y:auto !important;
-        z-index:100000 !important;
-        display:block !important;
-      `;
+      dd.style.cssText = phoneTopSheetInlineStyle();
     } else {
       const rect=btn.getBoundingClientRect();
       dd.style.cssText=`
@@ -17004,17 +17063,39 @@ function navOpenFromMenu(openFn){
 }
 
 function navBack(closeFn){
-  // Reopen the menu under the overlay, then dismiss the overlay — so the
-  // chart never flashes between the two states. A one-tick guard prevents the
-  // same click from bubbling to the document outside-click handler.
+  // Close the overlay first, then reopen the nav menu beneath it.
+  if(typeof closeFn === "function") closeFn();
   _navBackGuard = true;
   document.body.classList.add("nav-open");
   const m = document.getElementById("nav-menu");
-  if(m) m.style.display = "block";
-  if(typeof closeFn === "function") closeFn();
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => { _navBackGuard = false; });
-  });
+  if(m){
+    m.style.display = "block";
+    syncNavMenuPosition();
+    // Above feature overlays (z-index 5000) so the menu is tappable on iOS.
+    m.style.zIndex = "6000";
+  }
+  // iOS WebView can deliver the outside-click handler after onclick; hold the guard.
+  setTimeout(() => { _navBackGuard = false; }, 350);
+}
+
+function phoneTopSheetInlineStyle(){
+  const top = viewportPanelTopPx(4);
+  const maxH = Math.max(200, window.innerHeight - top - 12);
+  return `
+    position:fixed !important;
+    top:${top}px !important;
+    bottom:auto !important;
+    left:0 !important; right:0 !important;
+    width:100% !important; max-width:100% !important;
+    border-radius:0 0 14px 14px !important;
+    max-height:${maxH}px !important;
+    box-shadow:0 8px 32px rgba(0,0,0,.7) !important;
+    background:#0f2444 !important;
+    border:1px solid rgba(107,191,234,.25) !important;
+    overflow-y:auto !important;
+    z-index:100000 !important;
+    display:block !important;
+  `;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -17201,6 +17282,20 @@ window.bwOnSignedIn = async function (user) {
 // ════════════════════════════════════════════════════════════════════════════
 // NAV MENU
 // ════════════════════════════════════════════════════════════════════════════
+function syncNavMenuPosition(){
+  const m = document.getElementById("nav-menu");
+  if(!m) return;
+  // Let CSS safe-area rules drive placement; clear stale inline geometry.
+  m.style.top = "";
+  m.style.left = "";
+  m.style.right = "";
+  m.style.width = "";
+  m.style.maxHeight = "";
+  if(typeof isPhoneView === "function" && isPhoneView()){
+    m.style.zIndex = "6000";
+  }
+}
+
 function toggleNav(){
   const m=document.getElementById('nav-menu');
   const opening = m.style.display==='none';
@@ -17212,6 +17307,7 @@ function toggleNav(){
   // Refresh the account section every time the menu opens so it reflects
   // any state changes (sign-in/out) since last open.
   if(opening){
+    syncNavMenuPosition();
     m.scrollLeft = 0;
     m.scrollTop = 0;
     renderAccountSection();
@@ -17224,9 +17320,21 @@ function closeNav(){
   document.body.classList.remove('nav-open');
 }
 
+// Menu overlay back buttons — capture phase so iOS WebView reliably receives taps.
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".nav-back-btn");
+  if(!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const name = btn.getAttribute("data-nav-close");
+  const closeFn = name && typeof window[name] === "function" ? window[name] : null;
+  navBack(closeFn);
+}, true);
+
 // Close nav on outside click
 document.addEventListener('click',e=>{
   if(_navBackGuard) return;
+  if(e.target.closest(".nav-back-btn")) return;
   if(!e.target.closest('#nav-btn')&&!e.target.closest('#nav-menu')){
     closeNav();
   }

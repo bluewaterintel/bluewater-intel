@@ -12,6 +12,8 @@
 <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="bw-config.js"></script>
+<script src="bw-capacitor.js"></script>
+<script src="bw-iap.js"></script>
 <script src="bw-data-source.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bw-auth.js?v=20260728a"></script>
@@ -388,18 +390,18 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   .nav-bar{width:20px;height:2.5px}
   .nav-label{display:none}
   #nav-menu{
-    /* left+right define width — avoid 100vw (wider than layout viewport on iOS
-       and causes accidental horizontal scroll / "slack" while scrolling). */
+    /* Top-anchored sheet from safe area — same as other full-screen panels on iOS */
     left:8px !important;
     right:8px !important;
     width:auto !important;
     max-width:none !important;
-    max-height:calc(100dvh - var(--bw-hdr-h, 100px) - 12px) !important;
-    top:calc(env(safe-area-inset-top, 0px) + var(--bw-hdr-h, 100px) + 4px) !important;
+    top:env(safe-area-inset-top, 0px) !important;
+    max-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 8px) !important;
     overflow-x:hidden !important;
     overflow-y:auto !important;
     overscroll-behavior:contain;
     touch-action:pan-y;
+    padding-bottom:env(safe-area-inset-bottom, 0px);
   }
 }
 
@@ -440,6 +442,12 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     gap:6px;
     flex-shrink:0;
   }
+  #nav-menu{
+    left:0 !important;
+    right:0 !important;
+    width:100% !important;
+    border-radius:0 0 16px 16px !important;
+  }
   /* Map — fill remaining viewport */
   #map{flex:1;min-height:0}
   /* Bottom panel adjustments */
@@ -450,30 +458,32 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   }
   #ptabs{height:42px}
   .tbtn{padding:0 10px;font-size:11px}
-  /* Species + Port dropdowns — full-width bottom-sheet overlays */
+  /* Species + Port dropdowns — full-width panel anchored below header */
   #sp-dd, #port-dd{
     position:fixed !important;
-    top:auto !important;
-    bottom:0 !important;
+    top:calc(env(safe-area-inset-top, 0px) + var(--bw-hdr-h, 100px) + 4px) !important;
+    bottom:auto !important;
     left:0 !important;
     right:0 !important;
     width:100% !important;
     max-width:100% !important;
-    border-radius:18px 18px 0 0 !important;
-    max-height:65vh !important;
-    box-shadow:0 -8px 32px rgba(0,0,0,.7) !important;
+    border-radius:0 0 14px 14px !important;
+    max-height:calc(100dvh - var(--bw-hdr-h, 100px) - env(safe-area-inset-top, 0px) - 12px) !important;
+    box-shadow:0 8px 32px rgba(0,0,0,.7) !important;
     z-index:99999 !important;
   }
-  /* Centered modals → bottom sheets for thumb reach */
+  /* Map modals (layers, basemap, settings, log catch) — top-anchored below header */
   #layers-modal,#basemap-modal,#settings-modal,#catch-modal{
-    align-items:flex-end !important;
+    align-items:flex-start !important;
+    justify-content:flex-start !important;
     padding:0 !important;
+    padding-top:calc(env(safe-area-inset-top, 0px) + var(--bw-hdr-h, 100px) + 4px) !important;
   }
   #layers-body,.modal-dialog,#catch-modal-dialog{
     max-width:100% !important;
     width:100% !important;
-    max-height:88dvh !important;
-    border-radius:18px 18px 0 0 !important;
+    max-height:calc(100dvh - var(--bw-hdr-h, 100px) - env(safe-area-inset-top, 0px) - 12px) !important;
+    border-radius:0 0 18px 18px !important;
     margin:0 !important;
   }
   /* ── Ocean/weather legend — ~3/4 width, centered under header ── */
@@ -1001,9 +1011,10 @@ body.modal-open #brief-toggle{
 #layers-modal.open, #basemap-modal.open, #settings-modal.open{display:flex}
 @media (max-width:680px){
   #layers-modal,#basemap-modal,#settings-modal,#catch-modal{
-    align-items:flex-end;
+    align-items:flex-start;
+    justify-content:flex-start;
     padding:0;
-    padding-bottom:env(safe-area-inset-bottom,0px);
+    padding-top:calc(env(safe-area-inset-top, 0px) + var(--bw-hdr-h, 100px) + 4px);
   }
 }
 #layers-body, .modal-dialog{
@@ -1319,19 +1330,20 @@ body.modal-open #brief-toggle{
   overscroll-behavior:contain;
 }
 #ocean-legend .ocean-legend-toggle{pointer-events:auto}
-/* Ocean legend detail sheet — mobile bottom drawer for "How to read" content */
+/* Ocean legend detail sheet — mobile panel below header */
 #ocean-legend-sheet{
   display:none;position:fixed;inset:0;z-index:100002;
   background:rgba(0,0,0,.55);
   -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
-  align-items:flex-end;padding:0;
+  align-items:flex-start;justify-content:flex-start;padding:0;
+  padding-top:calc(env(safe-area-inset-top, 0px) + var(--bw-hdr-h, 100px) + 4px);
 }
 #ocean-legend-sheet.open{display:flex}
 .ocean-legend-sheet-card{
-  width:100%;max-height:72dvh;
+  width:100%;max-height:calc(100dvh - var(--bw-hdr-h, 100px) - env(safe-area-inset-top, 0px) - 12px);
   background:#0f2444;border:1px solid rgba(107,191,234,.28);
-  border-radius:18px 18px 0 0;
-  box-shadow:0 -10px 40px rgba(0,0,0,.65);
+  border-radius:0 0 18px 18px;
+  box-shadow:0 8px 32px rgba(0,0,0,.65);
   display:flex;flex-direction:column;overflow:hidden;
 }
 .ocean-legend-sheet-hdr{
@@ -2079,9 +2091,55 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
   font-size:11px;color:#93a4b8;margin-top:1px;line-height:1.3;
   overflow-wrap:anywhere;word-break:break-word;
 }
-#nav-menu{overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y}
+#nav-menu{
+  display:none;
+  position:fixed;
+  top:70px;
+  right:14px;
+  background:#0f2444;
+  border:1px solid rgba(107,191,234,.25);
+  border-radius:12px;
+  box-shadow:0 16px 48px rgba(0,0,0,.7);
+  width:310px;
+  max-height:calc(100vh - 80px);
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  touch-action:pan-y;
+  z-index:2000;
+}
 #nav-menu .nav-group,
 #nav-menu .nav-row{max-width:100%}
+/* Overlay back buttons — reliable taps on iOS WebView */
+.nav-back-btn{
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:rgba(125,211,252,.15);
+  cursor:pointer;
+}
+/* Full-screen menu pages (Fishing Reports, My Catches, etc.) — iOS safe areas */
+.menu-page-overlay{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top, 0px);
+  padding-bottom:env(safe-area-inset-bottom, 0px);
+}
+.menu-page-hdr{flex-shrink:0}
+@media (max-width:680px){
+  .menu-page-hdr{
+    padding:10px 12px !important;
+    gap:10px !important;
+    align-items:center !important;
+  }
+  .menu-page-hdr .overlay-page-sub,
+  .menu-page-hdr .catches-sub.overlay-page-sub,
+  .menu-page-hdr .wp-page-sub{
+    display:none !important;
+  }
+  .menu-page-hdr #rp-status-pill{display:none !important}
+}
+body.nav-open .leaflet-control-attribution{
+  opacity:0 !important;
+  pointer-events:none !important;
+}
 /* Trailing chevron */
 .nav-chevron{
   flex-shrink:0;opacity:.5;
@@ -2688,23 +2746,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
   </div>
 
   <!-- ── NAV POPOUT (opens from MENU button) ── -->
-  <div id="nav-menu" style="
-    display:none;
-    position:fixed;
-    top:70px;
-    right:14px;
-    background:#0f2444;
-    border:1px solid rgba(107,191,234,.25);
-    border-radius:12px;
-    box-shadow:0 16px 48px rgba(0,0,0,.7);
-    width:310px;
-    max-height:calc(100vh - 80px);
-    overflow-x:hidden;
-    overflow-y:auto;
-    overscroll-behavior:contain;
-    touch-action:pan-y;
-    z-index:2000;
-  ">
+  <div id="nav-menu">
     <div style="padding:14px 18px 10px;border-bottom:1px solid rgba(107,191,234,.12);position:sticky;top:0;background:#0f2444;z-index:1">
       <div style="font-size:12px;font-weight:700;color:#6bbfea;letter-spacing:.14em">BLUEWATER INTEL</div>
       <div style="font-size:9px;color:#5d96c4;letter-spacing:.12em;margin-top:2px;text-transform:uppercase">Navigation</div>
@@ -3315,11 +3357,22 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="LORAN-C TD lines: 9960-Y coast-parallel (MD→Hatteras→Oak Island, AC001) and 7980-Z land-to-sea 45xxx (Cape Fear→Cape Romain, AC002).">
+    <label class="layer-row" title="LORAN-C TD lattice matched to Grease Charts AC006/AC007/AC002: 9960-Y (orange), 9960-X (magenta), 9960-W (green), plus 7980-Z on SC.">
       <input type="checkbox" id="chk-loran" onchange="toggleLayer('loran')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:transparent;border:1px dashed #f97316;border-radius:0"></span>
-        <span>LORAN-C Lines <span style="font-size:8px;color:#9ec5e8;opacity:.7">(Y/Z-rate)</span></span>
+        <span>LORAN-C Lines <span style="font-size:8px;color:#9ec5e8;opacity:.7">(9960 W/X/Y)</span></span>
+      </span>
+      <span class="lyr-toggle"></span>
+    </label>
+
+    <!-- BATHYMETRY — transparent contour overlay -->
+    <div class="layers-section">BATHYMETRY</div>
+    <label class="layer-row" title="Transparent fathom depth contours from Bluewater's proprietary chart. Works on any basemap — especially useful over Satellite.">
+      <input type="checkbox" id="chk-contours" onchange="toggleLayer('contours')">
+      <span class="lyr-label">
+        <span class="layer-swatch" style="background:linear-gradient(135deg,#1E3A50,#8FD3E4);border:1px solid #8FD3E4;border-radius:2px;width:10px;height:10px"></span>
+        <span>Depth Contours <span style="font-size:8px;color:#9ec5e8;opacity:.7">(fathoms)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -3605,26 +3658,26 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260728c"></script>
+<script src="bw-core.js?v=20260729a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
      ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="enc-overlay" style="
+<div id="enc-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   font-family:'Segoe UI',Arial,sans-serif;
 ">
   <!-- Header -->
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeEncyclopedia)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeEncyclopedia" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;
@@ -3764,21 +3817,21 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 <!-- ═══════════════════════════════════════════════════════════════════════════
      AI CATCH MEASURE — fully offline-capable
      ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="cm-overlay" style="
+<div id="cm-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   font-family:'Segoe UI',Arial,sans-serif;
 ">
   <!-- Header -->
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeCatchMeasure)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeCatchMeasure" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;
@@ -3923,21 +3976,21 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
      VIRTUAL TACKLE BOX — smart lure/bait recommendations
      Fully offline. Recommendations driven by species + conditions matchscoring.
      ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="tb-overlay" style="
+<div id="tb-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   font-family:'Segoe UI',Arial,sans-serif;
 ">
   <!-- Header -->
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeTackleBox)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeTackleBox" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;
@@ -4077,21 +4130,21 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TUTORIAL — how to use the app + what data drives predictions
      ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="tut-overlay" style="
+<div id="tut-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   font-family:'Segoe UI',Arial,sans-serif;
 ">
   <!-- Header -->
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeTutorial)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeTutorial" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;
@@ -4159,7 +4212,7 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
       <div class="tut-step-body">
         <div class="tut-step-title">Use the right-side icon column</div>
         <div class="tut-step-desc" style="line-height:1.7">
-          <div style="margin:6px 0"><span class="tut-icon">🗺</span> <b>Base Map</b> — switch between Satellite and <b>Ocean Bathymetric</b> (NOAA BlueTopo seafloor + hillshade for ledges/structure). Tap the map for depth in feet and fathoms.</div>
+          <div style="margin:6px 0"><span class="tut-icon">🗺</span> <b>Base Map</b> — switch between <b>Satellite</b>, <b>Ocean Bathymetric</b> (NOAA BlueTopo), or <b>Seafloor Relief</b>. Toggle <b>Depth Contours</b> in Layers as a transparent overlay on any basemap.</div>
           <div style="margin:6px 0"><span class="tut-icon">◆</span> <b>Layers</b> — iOS-style toggles grouped into Predictions, Map Markers, Ocean Data, and an Advanced section. Toggle the <b>Bite Map</b> (the color-coded bite forecast for your target species), <b>Major Fishing Areas</b> (canyons, wrecks, reefs, lumps and ledges — the 15 closest to your port), ports, your catches, satellite <b>SST &amp; Chlorophyll</b>, animated <b>Wind</b>, <b>Front Convergence (SSH)</b>, and ocean currents. Closures and LORAN-C live under Advanced.</div>
           <div style="margin:6px 0"><span class="tut-icon">📏</span> <b>Ruler</b> — tap to measure distance in nautical miles. Drop multiple points to plot a route.</div>
           <div style="margin:6px 0"><span class="tut-icon">⚙</span> <b>Settings</b> — set defaults like home port, species, base map, and account preferences.</div>
@@ -4348,21 +4401,21 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 <!-- ═══════════════════════════════════════════════════════════════════════════
      MY CATCHES — personal catch log page
      ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="catches-overlay" style="
+<div id="catches-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   font-family:'Segoe UI',Arial,sans-serif;
 ">
   <!-- Header -->
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeMyCatches)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeMyCatches" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;
@@ -4453,21 +4506,21 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 <!-- ═══════════════════════════════════════════════════════════════════════════
      REGULATIONS — federal & state agency links, sanctuary info, disclaimer
      ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="regs-overlay" style="
+<div id="regs-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   font-family:'Segoe UI',Arial,sans-serif;
 ">
   <!-- Header -->
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeRegulations)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeRegulations" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;
@@ -4495,19 +4548,19 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 <!-- ═══════════════════════════════════════════════════════════════════════════
      OWNER ADMIN — profiles & subscription management
      ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="admin-overlay" style="
+<div id="admin-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:100006;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
 ">
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeAdmin)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeAdmin" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;
@@ -4556,21 +4609,21 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
      Boilerplate liability limitation. NOT legal advice — must be reviewed by an
      attorney before public/app-store launch (see in-document notice).
      ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="legal-overlay" style="
+<div id="legal-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   font-family:'Segoe UI',Arial,sans-serif;
 ">
   <!-- Header -->
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeLegal)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeLegal" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;
@@ -4606,21 +4659,21 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 <!-- ═══════════════════════════════════════════════════════════════════════════
      FISHING REPORTS — full browsing page with filters
      ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="rp-overlay" style="
+<div id="rp-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   font-family:'Segoe UI',Arial,sans-serif;
 ">
   <!-- Header -->
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeReports)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeReports" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;
@@ -4859,20 +4912,20 @@ input[type="date"].rp-post-input::-webkit-calendar-picker-indicator{
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TERMINAL TACKLE — Knots, Crimps, Connections
      ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="kn-overlay" style="
+<div id="kn-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   font-family:'Segoe UI',Arial,sans-serif;
 ">
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeKnots)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeKnots" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;
@@ -5203,20 +5256,20 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
      WAYPOINTS & STRUCTURE — curated public POIs + user uploads
      ═══════════════════════════════════════════════════════════════════════════ -->
 <!-- ── DOWNLOAD MY TRIP overlay ── -->
-<div id="dt-overlay" style="
+<div id="dt-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   font-family:'Segoe UI',Arial,sans-serif;
 ">
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeDownloadTrip)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeDownloadTrip" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;
@@ -5230,21 +5283,21 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
   <div id="dt-body" style="max-width:560px;margin:0 auto"></div>
 </div>
 
-<div id="wp-overlay" style="
+<div id="wp-overlay" class="menu-page-overlay" style="
   display:none;position:fixed;inset:0;z-index:5000;
   background:#0a1a2e;color:#e8f4ff;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   font-family:'Segoe UI',Arial,sans-serif;
 ">
   <!-- Header -->
-  <div style="
+  <div class="menu-page-hdr" style="
     position:sticky;top:0;z-index:10;
     background:linear-gradient(180deg,#0a1a2e,#0f2444);
     border-bottom:1px solid rgba(107,191,234,.18);
     padding:12px 16px;display:flex;align-items:center;gap:12px;
     box-shadow:0 4px 16px rgba(0,0,0,.5);
   ">
-    <button onclick="navBack(closeWaypoints)" aria-label="Back to menu" style="
+    <button type="button" class="nav-back-btn" data-nav-close="closeWaypoints" aria-label="Back to menu" style="
       width:38px;height:38px;flex-shrink:0;
       background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
       color:#cfe5ff;border-radius:10px;

@@ -62,10 +62,15 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     return data.user;
   }
 
-  const EMAIL_CONFIRM_REDIRECT = "https://app.bluewaterintel.com/?confirmed=1";
-  const PASSWORD_RECOVERY_REDIRECT = (typeof window !== "undefined" && window.location && /^https?:\/\/(localhost|127\.0\.0\.1)/.test(window.location.origin))
-    ? (window.location.origin + "/?recovery=1")
-    : "https://app.bluewaterintel.com/?recovery=1";
+  function authRedirectUrl(query) {
+    if (window.BW_NATIVE) return "com.bluewaterintel.app://?" + query;
+    if (typeof window !== "undefined" && window.location && /^https?:\/\/(localhost|127\.0\.0\.1)/.test(window.location.origin)) {
+      return window.location.origin + "/?" + query;
+    }
+    return "https://app.bluewaterintel.com/?" + query;
+  }
+  const EMAIL_CONFIRM_REDIRECT = authRedirectUrl("confirmed=1");
+  const PASSWORD_RECOVERY_REDIRECT = authRedirectUrl("recovery=1");
 
   async function signUp(email, password, meta) {
     const { data, error } = await client.auth.signUp({

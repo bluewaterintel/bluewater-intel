@@ -64,6 +64,20 @@ Required function secrets (set in the Supabase dashboard): `STRIPE_SECRET_KEY`,
 `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `APP_URL`,
 `ALLOWED_ORIGINS`, and the Anthropic API key for the brief function.
 
+## iOS App (Capacitor)
+
+The same web app ships as a native iOS app via [Capacitor](https://capacitorjs.com/).
+See **[docs/IOS.md](docs/IOS.md)** for setup, Xcode workflow, Supabase redirect URLs,
+and App Store checklist.
+
+```bash
+npm install
+npm run build:ios
+npx cap add ios          # first time only
+npm run cap:sync
+npm run cap:open:ios
+```
+
 ## A caution about agentic deploys
 
 Hold any automated tooling to two rules:

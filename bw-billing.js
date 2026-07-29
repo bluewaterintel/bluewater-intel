@@ -20,6 +20,36 @@
     const cfg = window.BW_SUPABASE_CONFIG || {};
     return { "Content-Type":"application/json", Authorization:`Bearer ${session.access_token}`, apikey: cfg.supabaseAnonKey || "" };
   }
+  function openBillingUrl(url){
+    if(window.BW_CAPACITOR && window.BW_CAPACITOR.openExternalUrl) return window.BW_CAPACITOR.openExternalUrl(url);
+    window.location.href = url;
+  }
+  function billingReturnUrl(query){
+    const q = String(query || "").replace(/^\?/, "");
+    if(window.BW_NATIVE) return "com.bluewaterintel.app://?" + q;
+    const origin = (typeof location !== "undefined" && location.origin) ? location.origin : "https://app.bluewaterintel.com";
+    return origin + "/?" + q;
+  }
+  window.bwSubscribe = async function(interval, opts){
+    const msg = document.getElementById("pricing-msg") || document.getElementById("plan-gate-msg");
+    const showErr = (t) => { if(msg){ msg.textContent = t; msg.style.display = "block"; msg.style.color = "#fca5a5"; } };
+    if(window.BW_NATIVE && window.BW_IAP && window.BW_IAP.available){
+      try {
+        await window.BW_IAP.purchase(interval);
+        closePricing();
+        if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
+        if(typeof showToast === "function") showToast("Pro unlocked — tight lines!", "success");
+        if(typeof window.renderNavPlan === "function") window.renderNavPlan();
+      } catch(e){
+        if(e && (e.userCancelled || /cancel/i.test(String(e.message||"")))) return;
+        showErr(e.message || "Purchase could not be completed.");
+      }
+      return;
+    }
+    const kind = "subscription";
+    const intervalKey = interval === "year" ? "year" : "month";
+    return window.bwCheckout(kind, { interval: intervalKey, ...(opts||{}) });
+  };
   window.openPricing = async function(){
     const m = document.getElementById("pricing-modal"); if(!m) return;
     const msg = document.getElementById("pricing-msg"); if(msg) msg.style.display="none";
@@ -287,11 +317,16 @@
   window.bwCheckout = async function(kind, opts){
     const msg = document.getElementById("pricing-msg") || document.getElementById("plan-gate-msg");
     try {
-      const body = { kind, ...(opts||{}) };
+      const body = {
+        kind,
+        ...(opts||{}),
+        success_url: billingReturnUrl("checkout=success"),
+        cancel_url: billingReturnUrl("checkout=cancel"),
+      };
       const res = await fetch(`${fnBase()}/stripe-checkout`, { method:"POST", headers: await authHeaders(), body: JSON.stringify(body) });
       const j = await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(j.error || `Checkout failed (${res.status})`);
-      if(j.url) window.location.href = j.url;
+      if(j.url) openBillingUrl(j.url);
     } catch(e){
       const text = e.message || "Could not start checkout.";
       if(msg){ msg.textContent = text; msg.style.display="block"; msg.style.color = "#fca5a5"; }
@@ -300,11 +335,30 @@
   };
   window.bwManageBilling = async function(){
     const msg = document.getElementById("pricing-msg");
+    if(window.BW_NATIVE){
+      try {
+        const s = sb();
+        if(s){
+          const { data:p } = await s.from("profiles").select("billing_source, subscription_status").maybeSingle();
+          if(p && p.billing_source === "stripe" && ["active","trialing"].includes(p.subscription_status)){
+            const note = "You subscribed on our website. Manage billing at app.bluewaterintel.com in Safari.";
+            if(msg){ msg.textContent = note; msg.style.display = "block"; }
+            else if(typeof showToast === "function") showToast(note, "info");
+            return;
+          }
+        }
+        if(window.BW_IAP && window.BW_IAP.openAppStoreSubscriptions) window.BW_IAP.openAppStoreSubscriptions();
+      } catch(e){
+        if(window.BW_IAP && window.BW_IAP.openAppStoreSubscriptions) window.BW_IAP.openAppStoreSubscriptions();
+      }
+      return;
+    }
     try {
-      const res = await fetch(`${fnBase()}/stripe-portal`, { method:"POST", headers: await authHeaders() });
+      const body = { return_url: billingReturnUrl("portal=return") };
+      const res = await fetch(`${fnBase()}/stripe-portal`, { method:"POST", headers: await authHeaders(), body: JSON.stringify(body) });
       const j = await res.json();
       if(!res.ok) throw new Error(j.error || "Could not open billing portal.");
-      if(j.url) window.location.href = j.url;
+      if(j.url) openBillingUrl(j.url);
     } catch(e){ if(msg){ msg.textContent = e.message || "Could not open billing portal."; msg.style.display="block"; } }
   };
   // Renders the plan status + Upgrade/Manage buttons inside the nav account block.

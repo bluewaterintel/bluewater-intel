@@ -1,0 +1,19 @@
+<!-- Merge these keys into ios/App/App/Info.plist after `npx cap add ios`.
+     Xcode → App target → Info → Custom iOS Target Properties, or edit the plist directly. -->
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLName</key>
+    <string>com.bluewaterintel.app</string>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>com.bluewaterintel.app</string>
+    </array>
+  </dict>
+</array>
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Bluewater Intel uses your location to center the fishing map on your position.</string>
+<key>NSCameraUsageDescription</key>
+<string>Take a photo of your catch for length and weight estimation.</string>
+<key>NSPhotoLibraryUsageDescription</key>
+<string>Select a catch photo for measurement.</string>

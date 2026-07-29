@@ -8,4 +8,13 @@ node_modules/
 _incoming/
 bluewater-intel_9_4_1_4.html
 bw-config.js
+www/
+ios/App/Pods/
+ios/App/App/public/
 data/tmp-*/
+chart-basemap/tiles*/
+chart-basemap/*.mbtiles
+chart-basemap/.env
+chart-basemap/__pycache__/
+chart-basemap/*.nc
+chart-basemap/bluetopo_work/
