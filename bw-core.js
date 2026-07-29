@@ -9837,13 +9837,15 @@ function updateRadarLoopControlVisibility(){
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// LORAN-C TD LINES — Grease Chart AC006 / AC007 / AC002 lattice
+// LORAN-C TD LINES — Grease Chart AC001 / AC006 / AC007 / AC002 lattice
 //
 //   9960-Y (Seneca NY master → Carolina Beach NC) — the ONLY Mid-Atlantic
 //     family we draw. Offshore of both stations the TD varies almost purely
-//     with latitude, so these hyperbolas run roughly WEST→EAST (tilted ~20°
-//     down to the east) and their numbers increase NORTHWARD: ~40000 at Cape
-//     Hatteras up through ~42000+ off Baltimore Canyon.
+//     with latitude, so these hyperbolas run roughly WEST→EAST and their numbers
+//     increase NORTHWARD: ~39000 off Cape Fear, 40200 at Hatteras Inlet, 41500 at
+//     Norfolk Canyon, ~42265 off Baltimore Canyon. The tilt below due-east
+//     steepens southward — about 8° off Baltimore Canyon, 28° at Hatteras, 45°
+//     down toward Cape Fear — because the family wraps the Carolina Beach end.
 //   7980-Z (Malone FL master → Carolina Beach NC) — separate land-to-sea 45xxx
 //     family on Grease Chart AC002, drawn only south of Cape Fear.
 //
@@ -9852,24 +9854,43 @@ function updateRadarLoopControlVisibility(){
 // captains read off AC006/AC007.
 //
 // ── CALIBRATION (9960-Y) ──
-// Printed Grease Chart anchors (NAD83 ≈ WGS84 here):
-//   AC006 Cape Hatteras tip ≈ 40000
-//   AC007 VA Beach coast    ≈ 41000
-//   AC007 Chesapeake mouth E≈ 41100
-//   AC007 37°N / 75.25°W    ≈ 41300
-//   Norfolk Canyon          ≈ 41550  ("the 550")
-// TD = geom + offset + kLat·lat. The ASF term is on LATITUDE, which only
-// adjusts line spacing and leaves the west→east orientation intact.
-// Two earlier attempts were wrong and must not come back:
+//   TD = geom + 42207.70.  No ASF term — pure hyperbolic geometry.
+//
+// Calibrated on two anchors read off the charts by the skipper:
+//   Hatteras Inlet ≈ 40200  → implies offset 42229.9
+//   Norfolk Canyon ≈ 41500  → implies offset 42185.5
+// Those two independently agree to 44 µs, and the mean lands both within 22 µs
+// (about 2 nm). Two points 1.9° of latitude apart agreeing that closely is the
+// whole argument for using no correction term: any ASF fit good enough to
+// matter would have shown up as disagreement here.
+//
+// One model with one offset spans AC001/AC006/AC007, so the family is seamless
+// across the chart edges by construction — there is nothing to stitch.
+//
+// Three earlier attempts were wrong and must not come back. All three were fit
+// to TD digits I tried to read out of low-resolution chart scans, where the
+// glyphs are ~5 px tall and six rates overlap in the same gray ink — those
+// reads were simply wrong, and every "correction" derived from them bent a
+// family that was already the right shape:
 //   • scale≈0.815 compressed spacing and pushed Hatteras/Oregon Inlet ~500 µs
 //     high (the 40800 line landed on the beach).
-//   • a kLng easting term rotated the whole family from a ~22° tilt to ~39°,
-//     swinging the lines toward vertical.
+//   • a kLng easting term rotated the family from a ~22° tilt to ~39°,
+//     swinging the printed west→east lines toward vertical.
+//   • a kLat term steepened the latitude gradient, putting Hatteras Inlet at
+//     39916 instead of 40200.
+// If these lines ever need to move again, calibrate against known TDs on the
+// water, not against pixels.
 // ════════════════════════════════════════════════════════════════════════════
 
 // Tunable shelf / drop-off trace for LORAN label placement. Each labeled
 // hyperbola gets its number where it crosses this path (or nearest point).
 // Edit these [lat, lng] points to nudge the label row along the shelf edge.
+// Runs from the VA capes down past Hatteras, then bends WSW below Cape Lookout
+// to follow the coast toward Cape Fear. The bend matters: the lowest TDs sit off
+// Cape Fear / Frying Pan, so a path that kept heading due south would leave the
+// 390xx lines unlabeled. TDs along these vertices decrease monotonically
+// 41142 -> 39059, so every labeled line in that span picks up its number here.
+// Lines outside that span still get labels, just placed mid-arc instead.
 const LORAN_SHELF_ANCHOR_PATH_9960Y = [
   [36.52, -74.85], // NE — off VA capes shelf break
   [36.18, -74.96],
@@ -9880,6 +9901,10 @@ const LORAN_SHELF_ANCHOR_PATH_9960Y = [
   [34.48, -75.36],
   [34.14, -75.50], // Cape Lookout shelf
   [33.82, -75.66],
+  [33.66, -76.02], // AC001 — bend WSW below Cape Lookout
+  [33.52, -76.44],
+  [33.42, -76.86], // off Frying Pan Shoals
+  [33.34, -77.28],
 ];
 
 const LORAN_SHELF_LABEL = {
@@ -9896,10 +9921,13 @@ const LORAN_CHAINS = {
     master:    LORAN_MASTER_9960,
     secondary: {lat: 34.0626, lng: -77.9128},   // Carolina Beach NC
     scale: 1,
-    offset: 39004.23,
-    kLat: 83.5915, // ASF on latitude — fitted to AC006/AC007 printed anchors
-    useBounds: {south: 33.70, north: 38.85, west: -78.55, east: -73.20},
-    tdMin: 39000, tdMax: 42650, step: 50,
+    offset: 42207.70,
+    // South bound covers Grease Chart AC001 (Cape Lookout→Cape Fear), whose
+    // footprint is 33.31–35.15N / 78.03–75.39W. The old 33.70 cut off
+    // everything below Cape Lookout. tdMin/tdMax bracket the 38982–42714 range
+    // the model spans inside these bounds.
+    useBounds: {south: 33.25, north: 38.85, west: -78.55, east: -73.20},
+    tdMin: 38950, tdMax: 42750, step: 50,
     labelStep: 100,
     color: "#f97316",
     labelColor: "#fdba74",
@@ -9942,10 +9970,9 @@ function loranTD(lat, lng, chain){
   const geom = (dS - dM) / LORAN_C_SPEED_M_PER_US;
   const scale = (typeof chain.scale === "number" && isFinite(chain.scale)) ? chain.scale : 1;
   const offset = (typeof chain.offset === "number" && isFinite(chain.offset)) ? chain.offset : 0;
-  // ASF term on latitude only. A longitude term would rotate the family off
-  // its printed west→east orientation, so there is deliberately no kLng here.
-  const kLat = (typeof chain.kLat === "number" && isFinite(chain.kLat)) ? chain.kLat : 0;
-  return geom * scale + offset + kLat * lat;
+  // Deliberately no lat/lng ASF terms: they rotate or shear the family away
+  // from its printed orientation. See the calibration notes above.
+  return geom * scale + offset;
 }
 
 // Marching-squares contour tracer for a specific chain
@@ -10280,7 +10307,6 @@ function drawLoranLines(){
   const featureGroup = L.featureGroup();
 
   // Iterate over every chain in LORAN_CHAINS. Each draws only inside useBounds.
-  // Colors follow Grease Chart convention: Y orange, X magenta, W green.
   Object.values(LORAN_CHAINS).forEach(chain => {
     const color = chain.color || "#f97316";
     const labelColor = chain.labelColor || "#fdba74";
