@@ -349,7 +349,9 @@ const CONTOURS_TILES_NATIVE_ZOOM = 13;
 //   r2 — filled holes where partial BlueTopo coverage left blank tiles
 //   r3 — 2 fm inner-shelf contours at z11 and 5 fm at z10, so broad shallow
 //        shelves like Raleigh Bay no longer read as failed tiles
-const CONTOURS_TILES_REVISION = "r3";
+//   r4 — pulled z11 back to 5 fm: on ETOPO's ~1.8 km grid a 2 fm step contours
+//        the quantization itself, which reads as noise. z10's 5 fm pass stands.
+const CONTOURS_TILES_REVISION = "r4";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
@@ -452,6 +454,41 @@ let layersPanelOpen=false;
   });
 })();
 
+// Esri World Imagery has no offshore imagery past z13, and rather than 404 it
+// answers with a flat grey "Map data not yet available" placeholder. Leaflet sees
+// HTTP 200 and treats that as a real tile, so zooming past z13 in blue water
+// tiles the screen with the notice. Capping the layer's zoom is not an option:
+// inshore the imagery is good to z18, which is where it earns its keep.
+//
+// The placeholder is byte-identical everywhere and neutral grey (#CCC, R==G==B).
+// Real imagery is never exactly neutral across the whole tile, so downsample to
+// 8x8 and require every cell to be flat grey before hiding it.
+let _esriProbe = null;
+function hideIfEsriNoData(img){
+  if(!img || img.dataset.bwNoData === "0") return false;
+  try{
+    if(!_esriProbe){
+      _esriProbe = document.createElement("canvas");
+      _esriProbe.width = _esriProbe.height = 8;
+    }
+    const ctx = _esriProbe.getContext("2d", { willReadFrequently: true });
+    ctx.clearRect(0, 0, 8, 8);
+    ctx.drawImage(img, 0, 0, 8, 8);
+    const d = ctx.getImageData(0, 0, 8, 8).data;
+    for(let i = 0; i < d.length; i += 4){
+      if(d[i] !== d[i+1] || d[i+1] !== d[i+2]) { img.dataset.bwNoData = "0"; return false; }
+      if(d[i] < 190 || d[i] > 250)             { img.dataset.bwNoData = "0"; return false; }
+    }
+  }catch(err){
+    // Canvas read blocked (tainted / CORS). Better to show the tile than to
+    // blank real imagery on a guess.
+    img.dataset.bwNoData = "0";
+    return false;
+  }
+  img.style.display = "none";
+  return true;
+}
+
 function getContoursTilesBase(){
   const cfg = window.BW_DATA_CONFIG || {};
   const explicit = cfg.contoursTilesBaseUrl || cfg.chartTilesBaseUrl;
@@ -541,8 +578,9 @@ async function initMap(){
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     {maxZoom:18,minZoom:0,crossOrigin:'anonymous',attribution:'© Esri · Maxar · Earthstar Geographics'}
   ).addTo(MAP);
-  satelliteLayer.on('tileload',()=>{
+  satelliteLayer.on('tileload',(e)=>{
     tileStats.loaded++;
+    if(hideIfEsriNoData(e.tile)) return;  // don't count a placeholder as imagery
     scheduleHeatMaskRepaint();
   });
   satelliteLayer.on('tileerror',()=>{tileStats.errored++; if(tileStats.errored>=4&&tileStats.loaded===0)showDemoNotice();});
