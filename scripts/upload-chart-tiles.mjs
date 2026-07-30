@@ -3,11 +3,17 @@
  * Upload XYZ chart/contour tiles to Supabase Storage (chart-tiles bucket).
  * Uses Management API for a valid service_role JWT when .env key is stale.
  *
+ * Retries each tile with backoff, keeps going past individual failures, and
+ * records successes to .upload-<prefix>.log so an interrupted run resumes
+ * instead of re-sending everything. Safe to re-run: uploads are upsert, and a
+ * repeat run only retries what the log doesn't already list.
+ *
  * Usage:
- *   node scripts/upload-chart-tiles.mjs --src ~/Downloads/bluewater-basemap-conus/tiles_conus --prefix chart/v1
- *   node scripts/upload-chart-tiles.mjs --src ~/Downloads/bluewater-basemap-conus/tiles_overlay --prefix contours/v1
+ *   node scripts/upload-chart-tiles.mjs --src chart-basemap/tiles_overlay --prefix contours/v2 --workers 32
  */
-import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import {
+  readFileSync, existsSync, readdirSync, statSync, createWriteStream,
+} from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
@@ -72,19 +78,45 @@ async function fetchServiceRoleKey(accessToken) {
   return sr.api_key;
 }
 
-async function uploadBatch(supabase, prefix, batch) {
+async function uploadOne(supabase, prefix, { local, key }, attempts = 5) {
+  const storagePath = `${prefix}/${key}`;
+  for (let attempt = 1; ; attempt++) {
+    const { error } = await supabase.storage.from(BUCKET).upload(storagePath, readFileSync(local), {
+      contentType: "image/png",
+      // Seconds only. Supabase prepends "public, max-age=" itself, so passing a
+      // full directive string yields "public, max-age=public, max-age=..." —
+      // an unparseable header that can defeat caching entirely, and tile egress
+      // is the dominant cost here. One year; tiles are versioned by prefix.
+      cacheControl: "31536000",
+      upsert: true,
+    });
+    if (!error) return null;
+    if (attempt >= attempts) return `${storagePath}: ${error.message}`;
+    // Transient 5xx / socket resets are routine across this many requests.
+    await new Promise((r) => setTimeout(r, 250 * 2 ** (attempt - 1) + Math.random() * 250));
+  }
+}
+
+/**
+ * Pull from a shared queue with a fixed pool of workers. A lockstep
+ * batch-and-await lets one slow file idle the whole batch, which costs hours
+ * over hundreds of thousands of tiles.
+ */
+async function runPool(supabase, prefix, tiles, workers, onDone) {
+  let next = 0;
+  const failures = [];
   await Promise.all(
-    batch.map(async ({ local, key }) => {
-      const body = readFileSync(local);
-      const storagePath = `${prefix}/${key}`;
-      const { error } = await supabase.storage.from(BUCKET).upload(storagePath, body, {
-        contentType: "image/png",
-        cacheControl: "public, max-age=31536000, immutable",
-        upsert: true,
-      });
-      if (error) throw new Error(`${storagePath}: ${error.message}`);
+    Array.from({ length: workers }, async () => {
+      while (true) {
+        const i = next++;
+        if (i >= tiles.length) return;
+        const err = await uploadOne(supabase, prefix, tiles[i]);
+        if (err) failures.push(err);
+        else onDone(tiles[i].key);
+      }
     })
   );
+  return failures;
 }
 
 async function main() {
@@ -101,26 +133,53 @@ async function main() {
     process.exit(1);
   }
 
-  const tiles = gatherTiles(src);
+  const all = gatherTiles(src);
+
+  // Resume support: re-uploading a quarter-million tiles from zero because the
+  // run died near the end is not acceptable. Every success is appended here,
+  // and a restart skips whatever is already listed.
+  const logPath = join(root, `.upload-${prefix.replace(/\//g, "-")}.log`);
+  const uploaded = new Set(
+    existsSync(logPath)
+      ? readFileSync(logPath, "utf8").split("\n").filter(Boolean)
+      : []
+  );
+  const tiles = all.filter((t) => !uploaded.has(t.key));
   console.log(`Uploading ${tiles.length} tiles from ${src} → ${BUCKET}/${prefix}/`);
+  if (uploaded.size) console.log(`  (resuming; ${uploaded.size} already uploaded)`);
+  if (!tiles.length) {
+    console.log("Nothing to do.");
+    return;
+  }
 
   const serviceRole = await fetchServiceRoleKey(accessToken);
   const supabase = createClient(url, serviceRole, { auth: { persistSession: false } });
 
+  const logStream = createWriteStream(logPath, { flags: "a" });
   let done = 0;
   const started = Date.now();
-  for (let i = 0; i < tiles.length; i += workers) {
-    const batch = tiles.slice(i, i + workers);
-    await uploadBatch(supabase, prefix, batch);
-    done += batch.length;
-    if (done % 100 === 0 || done === tiles.length) {
-      const elapsed = ((Date.now() - started) / 1000).toFixed(0);
-      console.log(`  ${done}/${tiles.length} (${elapsed}s)`);
+  const failures = await runPool(supabase, prefix, tiles, workers, (key) => {
+    logStream.write(key + "\n");
+    if (++done % 2000 === 0 || done === tiles.length) {
+      const secs = (Date.now() - started) / 1000;
+      const rate = done / secs;
+      const eta = ((tiles.length - done) / rate / 60).toFixed(0);
+      console.log(
+        `  ${done}/${tiles.length}  ${rate.toFixed(0)}/s  ETA ${eta}m`
+      );
     }
-  }
+  });
+  logStream.end();
 
   const base = `${url.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${prefix}`;
-  console.log(`\nDone — ${done} tiles at ${base}/{z}/{x}/{y}.png`);
+  console.log(`\nUploaded ${done} tiles at ${base}/{z}/{x}/{y}.png`);
+  if (failures.length) {
+    console.error(`\n${failures.length} tiles failed after retries:`);
+    for (const f of failures.slice(0, 20)) console.error("  " + f);
+    if (failures.length > 20) console.error(`  … and ${failures.length - 20} more`);
+    console.error(`\nRe-run the same command to retry just these.`);
+    process.exit(1);
+  }
 }
 
 main().catch((err) => {

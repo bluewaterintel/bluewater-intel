@@ -18,3 +18,4 @@ chart-basemap/.env
 chart-basemap/__pycache__/
 chart-basemap/*.nc
 chart-basemap/bluetopo_work/
+.upload-*.log
