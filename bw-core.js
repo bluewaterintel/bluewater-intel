@@ -342,9 +342,9 @@ let osmLayer=null, seaLayer=null, bathyLayer=null, esriOceanLayer=null, satellit
 let blueTopoElevationLayer=null, blueTopoHillshadeLayer=null;
 let depthContoursLayer=null;
 let _activeBaseMap = "satellite";
-const CONTOURS_TILES_NATIVE_ZOOM = 9;
+const CONTOURS_TILES_NATIVE_ZOOM = 13;
 const DEPTH_CONTOURS_OPACITY = 0.9;
-const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI / GEBCO";
+const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
 const BLUETOPO_RELIEF_KEY = "bwi.bluetopoRelief";
 let blueTopoRelief = 0.55; // maps to hillshade opacity ~0.20–0.85
@@ -463,7 +463,7 @@ function buildDepthContoursLayer(){
   const ver = cfg.contoursTilesVersion || "v1";
   const blank = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
   return L.tileLayer(`${base}/contours/${ver}/{z}/{x}/{y}.png`, {
-    minZoom: 5, maxZoom: 14, maxNativeZoom: CONTOURS_TILES_NATIVE_ZOOM, tileSize: 256,
+    minZoom: 5, maxZoom: 16, maxNativeZoom: CONTOURS_TILES_NATIVE_ZOOM, tileSize: 256,
     crossOrigin: "anonymous", opacity: DEPTH_CONTOURS_OPACITY, pane: "bathy",
     attribution: BW_CONTOURS_ATTRIB, errorTileUrl: blank,
   });

@@ -3,3 +3,9 @@
 __pycache__/
 *.pyc
 .DS_Store
+bluetopo_work/
+bluetopo/*_fetch/
+.venv-bw/
+tiles_conus/
+tiles_overlay/
+*.mbtiles

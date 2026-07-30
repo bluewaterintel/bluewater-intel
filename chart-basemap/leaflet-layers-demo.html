@@ -36,10 +36,10 @@
   // --- Overlays -----------------------------------------------------------
   // Depth contours: transparent tiles, toggle over ANY basemap
   const depthContours = L.tileLayer(
-    `${SB}/contours/v1/{z}/{x}/{y}.png`,
-    { minZoom: 5, maxZoom: 14, maxNativeZoom: 9, tileSize: 256,
+    `${SB}/contours/v2/{z}/{x}/{y}.png`,
+    { minZoom: 5, maxZoom: 16, maxNativeZoom: 13, tileSize: 256,
       opacity: 0.9,
-      attribution: 'Contours © Bluewater Intel · NOAA NCEI / GEBCO' }
+      attribution: 'Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO' }
   ).addTo(map);
 
   // SST / chlorophyll / Bite Map heat layers slot in here as more overlays.

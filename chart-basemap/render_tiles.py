@@ -14,10 +14,12 @@ Usage:
 """
 
 import argparse
+import io
 import math
 import os
 
 import numpy as np
+from PIL import Image
 import matplotlib
 
 matplotlib.use("Agg")
@@ -39,7 +41,7 @@ STYLE = {
     "land": "#232823",
     "coastline": "#5C6E5C",
     # contour lines
-    "minor_line": "#3E7E93",
+    "minor_line": "#4E93A8",
     "mid_line": "#5FA8BC",
     "major_line": "#8FD3E4",
     # signature: the 100-fathom shelf-break curve, brightest thing on the chart
@@ -48,25 +50,58 @@ STYLE = {
     "label_halo": "#08101C",
 }
 
-# contour sets by zoom (fathoms)
-MINOR_FM = [10, 20, 30, 40, 60, 80]
-MID_FM = [50, 75, 250, 750, 1500]  # 50 & 75 = mid-shelf structure pair
+# ---------------------------------------------------------------- contour ladder
+# Anchor curves captains steer by: brightest, always drawn, always labeled.
 MAJOR_FM = [100, 200, 500, 1000, 2000]
-SHELFBREAK_FM = 100  # emphasized + always labeled
+SHELFBREAK_FM = 100  # the shelf break: signature line of the whole chart
+# Emphasis lines. Every value sits ON the minor ladder for its zoom, so
+# emphasis never introduces an off-step line crowding its neighbours.
+LEGACY_MID_FM = [50, 75, 250, 750, 1500]   # z<=10, unchanged from v1
+FINE_MID_FM = [50, 75, 300, 400, 1500]     # z>=11
+
+def _ladder(start, stop, step):
+    return list(range(start, stop + 1, step))
 
 def contour_levels_for_zoom(z):
+    """(minor, mid, major) fathom levels for one zoom.
+
+    Shelf steps tighten as you zoom because that's where the lumps, ledges and
+    terraces live; slope steps stay wider so the lines don't merge into a solid
+    band down the drop-off. Steps finer than 10 fm appear only at z>=11, where
+    BlueTopo backs them — ETOPO is 1 arc-min (~1.8 km) and at 5 fm it would just
+    draw smooth interpolation artifacts instead of real structure.
+    """
     if z <= 6:
         return [], [500, 1500], [100, 1000, 2000]
     if z <= 8:
-        return [], [50, 75, 250, 750, 1500], MAJOR_FM
-    return MINOR_FM, MID_FM, MAJOR_FM
+        return [], LEGACY_MID_FM, MAJOR_FM
+    if z == 9:
+        # ETOPO tier — keep v1's spacing rather than regress a working look.
+        minor, mid = [10, 20, 30, 40, 60, 80], LEGACY_MID_FM
+    elif z == 10:
+        minor, mid = _ladder(10, 90, 10) + _ladder(150, 450, 50), LEGACY_MID_FM
+    else:
+        # BlueTopo tier: 5 fm shelf, 20 fm slope, 100 fm below the slope.
+        minor = (_ladder(5, 95, 5) + _ladder(120, 480, 20)
+                 + _ladder(600, 1900, 100))
+        mid = FINE_MID_FM
+    # A depth in an emphasis set must not also be drawn as a hairline.
+    drop = set(mid) | set(MAJOR_FM)
+    return [v for v in minor if v not in drop], mid, MAJOR_FM
 
 def label_levels_for_zoom(z):
+    """Which levels get a number. Deliberately sparser than the line set —
+    every 5-fm line labeled would bury the chart in digits."""
     if z <= 6:
         return [100, 1000]
     if z <= 8:
         return [50, 75, 100, 500, 1000, 2000]
-    return [10, 20, 30, 50, 75, 100, 200, 500, 1000, 1500, 2000]
+    if z <= 10:
+        return [10, 20, 30, 40, 50, 60, 75, 80, 100,
+                150, 200, 250, 300, 400, 500, 750, 1000, 1500, 2000]
+    # z>=11: label the 10s across the shelf, then the anchors below it.
+    return (_ladder(10, 90, 10)
+            + [100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500, 2000])
 
 # ---------------------------------------------------------------- mercator math
 R = 6378137.0
@@ -120,6 +155,125 @@ def make_ocean_cmap():
 def fmt_fm(v):
     return f"{int(round(v))}"
 
+TILE_PALETTE_COLORS = 64
+
+def _save_tile(fig, path, transparent):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=100, transparent=transparent)
+    buf.seek(0)
+    img = Image.open(buf)
+    if transparent:
+        # Overlay tiles are flat-colour line art — a few line colours, their
+        # halos, and the antialiased blend between them. A 64-entry palette is
+        # visually lossless here and cuts them to roughly a fifth of 32-bit
+        # RGBA, which is what pays for the finer contour ladder. FASTOCTREE is
+        # the one Pillow quantizer that preserves the alpha channel.
+        out = img.convert("RGBA").quantize(colors=TILE_PALETTE_COLORS,
+                                           method=Image.FASTOCTREE)
+    else:
+        # Basemap tiles carry a smooth depth gradient, which visibly bands at a
+        # small palette. Leave them truecolour.
+        out = img.convert("RGB")
+    out.save(path, optimize=True)
+    buf.close()
+
+def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
+                     max_depth_fm=None):
+    """Render one tile from a Web-Mercator elevation grid (BlueTopo path)."""
+    x0, y0, x1, y1 = tile_bounds_merc(z, xt, yt)
+
+    depth_fm = np.where(elev_m < 0, -elev_m / M_PER_FATHOM, np.nan)
+    land = elev_m >= 0
+    if land.all():
+        return False
+
+    water = depth_fm[~np.isnan(depth_fm)]
+    if water.size == 0:
+        return False
+    if max_depth_fm is not None and np.nanmin(water) > max_depth_fm:
+        return False  # abyssal tile — skip
+
+    fig = plt.figure(figsize=(2.56, 2.56), dpi=100)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(x0, x1)
+    ax.set_ylim(y0, y1)
+    ax.axis("off")
+
+    # Overlay tiles ride on satellite imagery, so every line needs a dark halo
+    # to stay legible. Size it from the line it wraps — a fixed wide stroke
+    # visually swallows the thin 5-fathom hairlines.
+    def halo_for(lw):
+        if not overlay:
+            return None
+        return [matplotlib.patheffects.withStroke(
+            linewidth=lw + 0.9, foreground="#000000CC")]
+    if overlay:
+        fig.patch.set_alpha(0)
+    else:
+        shade = np.sqrt(np.clip(depth_fm, 0, 2600) / 2600.0)
+        ax.pcolormesh(Xm, Ym, np.ma.masked_invalid(shade),
+                      cmap=cmap, vmin=0, vmax=1, shading="gouraud",
+                      rasterized=True)
+        if land.any():
+            ax.contourf(Xm, Ym, land.astype(float), levels=[0.5, 1.5],
+                        colors=[STYLE["land"]])
+            ax.contour(Xm, Ym, elev_m, levels=[0], colors=[STYLE["coastline"]],
+                       linewidths=0.9)
+
+    minor, mid, major = contour_levels_for_zoom(z)
+    def haloed(cs, lw):
+        fx = halo_for(lw)
+        if fx:
+            cs.set_path_effects(fx)
+        return cs
+
+    # Only contour levels this tile actually spans. With a 5-fm shelf ladder
+    # that's ~19 candidate levels, and an abyssal tile would otherwise pay for
+    # 19 empty contour passes.
+    lo, hi = float(np.nanmin(water)), float(np.nanmax(water))
+    def spanned(levels):
+        return sorted(v for v in levels if lo <= v <= hi)
+
+    drawn = []
+    minor_lv = spanned(minor)
+    if minor_lv:
+        drawn.append(haloed(ax.contour(Xm, Ym, depth_fm, levels=minor_lv,
+                     colors=[STYLE["minor_line"]], linewidths=0.7), 0.7))
+    mid_lv = spanned(mid)
+    if mid_lv:
+        drawn.append(haloed(ax.contour(Xm, Ym, depth_fm, levels=mid_lv,
+                     colors=[STYLE["mid_line"]], linewidths=1.0), 1.0))
+    major_lv = spanned(v for v in major if v != SHELFBREAK_FM)
+    if major_lv:
+        drawn.append(haloed(ax.contour(Xm, Ym, depth_fm, levels=major_lv,
+                     colors=[STYLE["major_line"]], linewidths=1.3), 1.3))
+    if lo <= SHELFBREAK_FM <= hi:
+        drawn.append(haloed(ax.contour(Xm, Ym, depth_fm, levels=[SHELFBREAK_FM],
+                     colors=[STYLE["shelfbreak_line"]], linewidths=1.9), 1.9))
+
+    if not drawn and overlay:
+        plt.close(fig)
+        return False  # transparent overlay with no line on it — skip the tile
+
+    lbl_levels = set(label_levels_for_zoom(z))
+    for cs in drawn:
+        lv = [l for l in cs.levels if l in lbl_levels]
+        if not lv:
+            continue
+        texts = ax.clabel(cs, levels=lv, fmt=fmt_fm, fontsize=5.4,
+                          inline=True, inline_spacing=2)
+        for t in texts:
+            t.set_color(STYLE["label_color"])
+            t.set_path_effects([
+                matplotlib.patheffects.withStroke(
+                    linewidth=1.6, foreground=STYLE["label_halo"])])
+
+    d = os.path.join(out_dir, str(z), str(xt))
+    os.makedirs(d, exist_ok=True)
+    _save_tile(fig, os.path.join(d, f"{yt}.png"), transparent=overlay)
+    plt.close(fig)
+    return True
+
 def render_tile(lon, lat, depth_m, z, xt, yt, out_dir, cmap, overlay=False):
     x0, y0, x1, y1 = tile_bounds_merc(z, xt, yt)
     pad = (x1 - x0) * 0.30  # sample beyond tile so contours don't clip at edges
@@ -142,80 +296,8 @@ def render_tile(lon, lat, depth_m, z, xt, yt, out_dir, cmap, overlay=False):
 
     LonG, LatG = np.meshgrid(sub_lon, sub_lat)
     Xm, Ym = lonlat_to_merc(LonG, LatG)
-
-    depth_fm = np.where(sub_z < 0, -sub_z / M_PER_FATHOM, np.nan)  # positive fathoms
-    land = sub_z >= 0
-    if land.all():
-        return False  # pure-land tile: nothing to chart
-
-    fig = plt.figure(figsize=(2.56, 2.56), dpi=100)
-    ax = fig.add_axes([0, 0, 1, 1])
-    ax.set_xlim(x0, x1)
-    ax.set_ylim(y0, y1)
-    ax.axis("off")
-
-    halo = []
-    if overlay:
-        # transparent overlay: contour lines only, haloed for satellite legibility
-        fig.patch.set_alpha(0)
-        halo = [matplotlib.patheffects.withStroke(
-            linewidth=2.6, foreground="#000000CC")]
-    else:
-        # ocean depth shading (sqrt ramp so shelf detail isn't crushed by abyss)
-        shade = np.sqrt(np.clip(depth_fm, 0, 2600) / 2600.0)
-        ax.pcolormesh(Xm, Ym, np.ma.masked_invalid(shade),
-                      cmap=cmap, vmin=0, vmax=1, shading="gouraud",
-                      rasterized=True)
-        if land.any():
-            ax.contourf(Xm, Ym, land.astype(float), levels=[0.5, 1.5],
-                        colors=[STYLE["land"]])
-            ax.contour(Xm, Ym, sub_z, levels=[0], colors=[STYLE["coastline"]],
-                       linewidths=0.9)
-
-    minor, mid, major = contour_levels_for_zoom(z)
-    def haloed(cs):
-        if halo:
-            cs.set_path_effects(halo)  # mpl>=3.8: ContourSet is a single artist
-        return cs
-
-    if minor:
-        haloed(ax.contour(Xm, Ym, depth_fm, levels=sorted(minor),
-                   colors=[STYLE["minor_line"]], linewidths=0.45, alpha=0.85))
-    if mid:
-        haloed(ax.contour(Xm, Ym, depth_fm, levels=sorted(mid),
-                   colors=[STYLE["mid_line"]], linewidths=0.7, alpha=0.95))
-
-    major_plain = sorted(v for v in major if v != SHELFBREAK_FM)
-    cs_major = None
-    if major_plain:
-        cs_major = haloed(ax.contour(Xm, Ym, depth_fm, levels=major_plain,
-                              colors=[STYLE["major_line"]], linewidths=1.0))
-    # signature line: the 100-fathom shelf break
-    cs_shelf = haloed(ax.contour(Xm, Ym, depth_fm, levels=[SHELFBREAK_FM],
-                          colors=[STYLE["shelfbreak_line"]], linewidths=1.6))
-
-    # depth labels (fathoms) on labeled levels for this zoom
-    lbl_levels = set(label_levels_for_zoom(z))
-    for cs in (cs_major, cs_shelf):
-        if cs is None:
-            continue
-        lv = [l for l in cs.levels if l in lbl_levels]
-        if not lv:
-            continue
-        texts = ax.clabel(cs, levels=lv, fmt=fmt_fm, fontsize=5.4,
-                          inline=True, inline_spacing=2)
-        for t in texts:
-            t.set_color(STYLE["label_color"])
-            t.set_path_effects([
-                matplotlib.patheffects.withStroke(
-                    linewidth=1.6, foreground=STYLE["label_halo"])])
-
-    d = os.path.join(out_dir, str(z), str(xt))
-    os.makedirs(d, exist_ok=True)
-    fig.savefig(os.path.join(d, f"{yt}.png"), dpi=100,
-                transparent=overlay)
-    plt.close(fig)
-    return True
+    return render_tile_merc(Xm, Ym, sub_z, z, xt, yt, out_dir, cmap,
+                            overlay=overlay)
 
 # ---------------------------------------------------------------- main
 def main():

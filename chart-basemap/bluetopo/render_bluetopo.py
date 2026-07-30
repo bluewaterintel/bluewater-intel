@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""
+Render styled XYZ tiles from a BlueTopo GeoTIFF (EPSG:3857).
+
+Merges z10–z13 detail into the existing ETOPO tile dirs (tiles_conus /
+tiles_overlay) by z/x/y — same style as render_tiles.py. Skips abyssal
+tiles where the shallowest water is deeper than MAX_DEPTH_FM.
+
+Usage:
+  python3 render_bluetopo.py --tif ../bluetopo_work/hatteras_3857.tif \\
+      --out ../tiles_overlay --overlay --zmin 10 --zmax 13
+"""
+
+import argparse
+import math
+import os
+import sys
+from pathlib import Path
+
+import numpy as np
+
+# Import shared style + tile math from the base renderer (parent dir).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from render_tiles import (  # noqa: E402
+    lonlat_to_tile,
+    make_ocean_cmap,
+    merc_to_lat,
+    merc_to_lon,
+    render_tile_merc,
+    tile_bounds_merc,
+)
+from zones import MAX_DEPTH_FM  # noqa: E402
+
+try:
+    from osgeo import gdal
+except ImportError:
+    sys.exit(
+        "GDAL Python bindings required.\n"
+        "  conda create -n bw -c conda-forge 'gdal>=3.4' numpy scipy matplotlib -y"
+    )
+
+gdal.UseExceptions()
+
+SAMPLE_PX = 192  # grid points per tile edge (+ padding) for contouring
+
+
+def sample_tile(ds, z, xt, yt, pad_frac=0.30):
+    """Warp a padded window around one XYZ tile into a Mercator grid."""
+    x0, y0, x1, y1 = tile_bounds_merc(z, xt, yt)
+    dx, dy = x1 - x0, y1 - y0
+    bx0, bx1 = x0 - dx * pad_frac, x1 + dx * pad_frac
+    by0, by1 = y0 - dy * pad_frac, y1 + dy * pad_frac
+
+    mem = gdal.Warp(
+        "",
+        ds,
+        format="MEM",
+        outputBounds=(bx0, by0, bx1, by1),
+        width=SAMPLE_PX,
+        height=SAMPLE_PX,
+        resampleAlg="bilinear",
+        dstSRS="EPSG:3857",
+    )
+    if mem is None:
+        return None
+
+    band = mem.GetRasterBand(1)
+    elev = band.ReadAsArray().astype(np.float64)
+    nodata = band.GetNoDataValue()
+    if nodata is not None:
+        elev = np.where(elev == nodata, np.nan, elev)
+
+    gt = mem.GetGeoTransform()
+    xs = gt[0] + gt[1] * (np.arange(SAMPLE_PX) + 0.5)
+    ys = gt[3] + gt[5] * (np.arange(SAMPLE_PX) + 0.5)
+    Xm, Ym = np.meshgrid(xs, ys)
+    mem = None
+    return Xm, Ym, elev
+
+
+def tile_bbox_from_tif(ds_path, zmin, zmax):
+    """XYZ tile index range covering the GeoTIFF footprint."""
+    ds = gdal.Open(str(ds_path))
+    if ds is None:
+        raise FileNotFoundError(ds_path)
+    gt = ds.GetGeoTransform()
+    w, h = ds.RasterXSize, ds.RasterYSize
+    corners_x = [gt[0], gt[0] + gt[1] * w, gt[0] + gt[1] * w, gt[0]]
+    corners_y = [gt[3], gt[3], gt[3] + gt[5] * h, gt[3] + gt[5] * h]
+    lons = [merc_to_lon(x) for x in corners_x]
+    lats = [merc_to_lat(y) for y in corners_y]
+    ds = None
+    return min(lons), min(lats), max(lons), max(lats)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--tif", required=True, help="EPSG:3857 BlueTopo GeoTIFF")
+    ap.add_argument("--out", default="../tiles_conus")
+    ap.add_argument("--zmin", type=int, default=10)
+    ap.add_argument("--zmax", type=int, default=13)
+    ap.add_argument("--overlay", action="store_true",
+                    help="transparent contour-only tiles")
+    ap.add_argument("--max-depth-fm", type=float, default=MAX_DEPTH_FM,
+                    help="skip tiles shallower than this (default: shelf mask)")
+    ap.add_argument("--bw", type=float, default=None)
+    ap.add_argument("--be", type=float, default=None)
+    ap.add_argument("--bs", type=float, default=None)
+    ap.add_argument("--bn", type=float, default=None)
+    args = ap.parse_args()
+
+    tif = Path(args.tif)
+    if not tif.is_file():
+        sys.exit(f"missing {tif}")
+
+    ds = gdal.Open(str(tif))
+    if ds is None:
+        sys.exit(f"cannot open {tif}")
+
+    auto = tile_bbox_from_tif(tif, args.zmin, args.zmax)
+    bb_w = args.bw if args.bw is not None else auto[0]
+    bb_s = args.bs if args.bs is not None else auto[1]
+    bb_e = args.be if args.be is not None else auto[2]
+    bb_n = args.bn if args.bn is not None else auto[3]
+
+    cmap = make_ocean_cmap()
+    print(f"render {tif.name} -> {args.out}/  z{args.zmin}-{args.zmax}"
+          f"  bbox {bb_w:.2f},{bb_s:.2f},{bb_e:.2f},{bb_n:.2f}"
+          f"  max_depth={args.max_depth_fm} fm")
+
+    total = 0
+    skipped = 0
+    for z in range(args.zmin, args.zmax + 1):
+        xt0, yt1 = lonlat_to_tile(bb_w, bb_s, z)
+        xt1, yt0 = lonlat_to_tile(bb_e, bb_n, z)
+        n = 0
+        for xt in range(xt0, xt1 + 1):
+            for yt in range(yt0, yt1 + 1):
+                sampled = sample_tile(ds, z, xt, yt)
+                if sampled is None:
+                    skipped += 1
+                    continue
+                Xm, Ym, elev = sampled
+                if render_tile_merc(Xm, Ym, elev, z, xt, yt, args.out, cmap,
+                                    overlay=args.overlay,
+                                    max_depth_fm=args.max_depth_fm):
+                    n += 1
+                else:
+                    skipped += 1
+        print(f"z{z}: {n} tiles")
+        total += n
+
+    ds = None
+    print(f"done: {total} tiles written, {skipped} skipped -> {args.out}/")
+
+
+if __name__ == "__main__":
+    main()

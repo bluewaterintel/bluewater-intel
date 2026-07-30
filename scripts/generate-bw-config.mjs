@@ -41,7 +41,7 @@ window.BW_DATA_CONFIG = {
   queryTimeoutMs: 8000,${native ? `
   revenueCatIosApiKey: ${JSON.stringify(rcKey || 'YOUR_REVENUECAT_IOS_KEY')},` : ''}
   contoursTilesBaseUrl: ${JSON.stringify(url && !url.includes('YOURPROJECT') ? `${url.replace(/\/$/, '')}/storage/v1/object/public/chart-tiles` : '')},
-  contoursTilesVersion: 'v1',
+  contoursTilesVersion: 'v2',
 };
 `;
 
