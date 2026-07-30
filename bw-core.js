@@ -347,7 +347,9 @@ const CONTOURS_TILES_NATIVE_ZOOM = 13;
 // one-year max-age, so a browser holding the old bytes would otherwise keep
 // them for a year; a new URL is the only way to reach an already-cached client.
 //   r2 — filled holes where partial BlueTopo coverage left blank tiles
-const CONTOURS_TILES_REVISION = "r2";
+//   r3 — 2 fm inner-shelf contours at z11 and 5 fm at z10, so broad shallow
+//        shelves like Raleigh Bay no longer read as failed tiles
+const CONTOURS_TILES_REVISION = "r3";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
