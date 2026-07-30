@@ -343,6 +343,11 @@ let blueTopoElevationLayer=null, blueTopoHillshadeLayer=null;
 let depthContoursLayer=null;
 let _activeBaseMap = "satellite";
 const CONTOURS_TILES_NATIVE_ZOOM = 13;
+// Bump when tile CONTENT changes without a new version prefix. Tiles carry a
+// one-year max-age, so a browser holding the old bytes would otherwise keep
+// them for a year; a new URL is the only way to reach an already-cached client.
+//   r2 — filled holes where partial BlueTopo coverage left blank tiles
+const CONTOURS_TILES_REVISION = "r2";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
@@ -462,7 +467,7 @@ function buildDepthContoursLayer(){
   const cfg = window.BW_DATA_CONFIG || {};
   const ver = cfg.contoursTilesVersion || "v1";
   const blank = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-  return L.tileLayer(`${base}/contours/${ver}/{z}/{x}/{y}.png`, {
+  return L.tileLayer(`${base}/contours/${ver}/{z}/{x}/{y}.png?${CONTOURS_TILES_REVISION}`, {
     minZoom: 5, maxZoom: 16, maxNativeZoom: CONTOURS_TILES_NATIVE_ZOOM, tileSize: 256,
     crossOrigin: "anonymous", opacity: DEPTH_CONTOURS_OPACITY, pane: "bathy",
     attribution: BW_CONTOURS_ATTRIB, errorTileUrl: blank,
@@ -607,6 +612,10 @@ async function initMap(){
   MAP.createPane("bathy");
   MAP.getPane("bathy").style.zIndex = 250;
   MAP.getPane("bathy").style.pointerEvents = "none";
+
+  // Draw contours on open if Settings asks for it. Must follow the pane above —
+  // the layer declares pane "bathy" and Leaflet throws if it doesn't exist yet.
+  applyDefaultContours();
 
   // ── Dedicated pane for satellite ocean overlays ──
   // SST and Chlorophyll go in their own pane so the BasemapSampler (which
@@ -10944,6 +10953,7 @@ const USER_PREFS = {
   defaultPort:       null,    // e.g. "Oregon Inlet, NC"
   defaultSpecies:    null,    // species id, e.g. "yellowfin"
   defaultBaseMap:    "satellite",
+  defaultContours:   false,   // draw Depth Contours on open
   autozoomPort:      true,
   persistLoran:      false,
   // Account state — null when logged out. When signed in, becomes
@@ -10970,6 +10980,34 @@ function prefSet(key, val){
     // Don't switch the current map — the user is just setting the default
     // for next session. (If they want to switch now, they use the map icon.)
   }
+  if(key === "defaultContours"){
+    // Unlike the basemap default, act now as well: a checkbox that appears to
+    // do nothing until the next launch reads as broken.
+    if(typeof applyDefaultContours === "function") applyDefaultContours();
+  }
+}
+
+// Sync the Depth Contours overlay to USER_PREFS.defaultContours. Used both at
+// startup and when the Settings checkbox changes.
+function applyDefaultContours(){
+  const want = !!(typeof USER_PREFS !== "undefined" && USER_PREFS.defaultContours);
+  if(!MAP || !depthContoursLayer){
+    // Tiles unavailable or map not up yet — remember the intent, don't fight it.
+    if(typeof layerVis !== "undefined") layerVis.contours = want && !!depthContoursLayer;
+    return;
+  }
+  if(layerVis.contours === want) return;
+  layerVis.contours = want;
+  const chk = document.getElementById("chk-contours");
+  if(chk) chk.checked = want;
+  if(want){
+    depthContoursLayer.setOpacity(DEPTH_CONTOURS_OPACITY);
+    depthContoursLayer.addTo(MAP);
+  } else if(MAP.hasLayer(depthContoursLayer)){
+    MAP.removeLayer(depthContoursLayer);
+  }
+  updateBathyAttribution();
+  if(typeof scheduleHeatMaskRepaint === "function") scheduleHeatMaskRepaint();
 }
 // Persist preferences. localStorage is the durable store on this device; when
 // the account backend is wired, prefs also sync to the user's profile so they
@@ -10980,6 +11018,7 @@ function prefSave(){
     defaultPort:    USER_PREFS.defaultPort,
     defaultSpecies: USER_PREFS.defaultSpecies,
     defaultBaseMap: USER_PREFS.defaultBaseMap,
+    defaultContours: USER_PREFS.defaultContours,
     autozoomPort:   USER_PREFS.autozoomPort,
     persistLoran:   USER_PREFS.persistLoran,
   };
@@ -11025,6 +11064,7 @@ function prefLoad(){
           USER_PREFS.defaultBaseMap = "satellite";
         }
       }
+      if("defaultContours" in saved) USER_PREFS.defaultContours = !!saved.defaultContours;
       if("autozoomPort" in saved)   USER_PREFS.autozoomPort   = !!saved.autozoomPort;
       if("persistLoran" in saved)   USER_PREFS.persistLoran   = !!saved.persistLoran;
     }
@@ -11199,6 +11239,7 @@ function prefResetAll(){
   USER_PREFS.defaultPort = null;
   USER_PREFS.defaultSpecies = null;
   USER_PREFS.defaultBaseMap = "satellite";
+  USER_PREFS.defaultContours = false;
   USER_PREFS.autozoomPort = true;
   USER_PREFS.persistLoran = false;
   prefSave();
@@ -11244,6 +11285,18 @@ function refreshSettingsModal(){
       USER_PREFS.defaultBaseMap = "satellite";
     }
     bmSel.value = USER_PREFS.defaultBaseMap;
+  }
+
+  // ── Default map layers ──
+  const contoursChk = document.getElementById("pref-contours");
+  if(contoursChk){
+    contoursChk.checked = !!USER_PREFS.defaultContours;
+    // No tiles configured means the toggle can't do anything — say so instead
+    // of offering a control that silently fails.
+    const available = typeof contoursTilesAvailable !== "function" || contoursTilesAvailable();
+    contoursChk.disabled = !available;
+    const row = contoursChk.closest(".layer-row");
+    if(row) row.style.opacity = available ? "" : ".5";
   }
 
   if(typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
@@ -17226,6 +17279,7 @@ window.bwOnSignedIn = async function (user) {
               USER_PREFS.defaultBaseMap = "satellite";
             }
           }
+          if("defaultContours" in acct) USER_PREFS.defaultContours = !!acct.defaultContours;
           if("autozoomPort"   in acct) USER_PREFS.autozoomPort   = !!acct.autozoomPort;
           if("persistLoran"   in acct) USER_PREFS.persistLoran   = !!acct.persistLoran;
         }

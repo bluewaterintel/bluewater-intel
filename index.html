@@ -3636,6 +3636,18 @@ body.nav-open .leaflet-control-attribution{
       </select>
 
       <hr class="layers-divider">
+      <div class="layers-section">DEFAULT MAP LAYERS</div>
+      <label class="layer-row" title="Draw the fathom depth contour overlay every time the app opens, on whichever base map you use.">
+        <input type="checkbox" id="pref-contours" onchange="prefSet('defaultContours', this.checked)">
+        <span class="lyr-label">
+          <span class="layer-swatch" style="background:linear-gradient(135deg,#1E3A50,#8FD3E4);border:1px solid #8FD3E4;border-radius:2px;width:10px;height:10px"></span>
+          <span>Depth Contours <span style="font-size:8px;color:#9ec5e8;opacity:.7">(fathoms)</span></span>
+        </span>
+        <span class="lyr-toggle"></span>
+      </label>
+      <div class="pref-hint">Turns on now and every time you open the app. Zoom in for 5-fathom shelf steps and 20-fathom slope steps.</div>
+
+      <hr class="layers-divider">
       <div class="layers-section">AI CAPTAIN'S BRIEF</div>
       <button type="button" id="settings-recent-briefs-btn" data-paid="1" onclick="openRecentBriefs()" style="
         width:100%;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);
@@ -3658,7 +3670,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260729a"></script>
+<script src="bw-core.js?v=20260730a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
