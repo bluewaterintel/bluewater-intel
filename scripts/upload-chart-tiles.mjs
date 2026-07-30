@@ -185,12 +185,15 @@ async function main() {
   const serviceRole = await fetchServiceRoleKey(accessToken);
   const supabase = createClient(url, serviceRole, { auth: { persistSession: false } });
 
-  // Manifest keys are already in the log; re-appending them only bloats it.
-  const logStream = manifest ? null : createWriteStream(logPath, { flags: "a" });
+  // Log manifest runs too. A repair can create tiles that never existed, and
+  // leaving those out makes the log stop matching what is actually published —
+  // which reads as an upload gap when auditing later. Duplicate keys are
+  // harmless; the log is read into a Set.
+  const logStream = createWriteStream(logPath, { flags: "a" });
   let done = 0;
   const started = Date.now();
   const failures = await runPool(supabase, prefix, tiles, workers, (key) => {
-    logStream?.write(key + "\n");
+    logStream.write(key + "\n");
     if (++done % 2000 === 0 || done === tiles.length) {
       const secs = (Date.now() - started) / 1000;
       const rate = done / secs;
@@ -200,7 +203,7 @@ async function main() {
       );
     }
   });
-  logStream?.end();
+  logStream.end();
 
   const base = `${url.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${prefix}`;
   console.log(`\nUploaded ${done} tiles at ${base}/{z}/{x}/{y}.png`);

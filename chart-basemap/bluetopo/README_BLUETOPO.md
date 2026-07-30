@@ -70,15 +70,24 @@ Set in `contour_levels_for_zoom()` in `../render_tiles.py`. Emphasis levels are
 kept ON each ladder so an emphasized line never crowds its neighbours, and a
 depth is never drawn twice.
 
-| Zoom | Source | Shelf (0–100 fm) | Slope (100–500 fm) | Below 500 fm |
-|------|--------|------------------|--------------------|--------------|
-| ≤8 | ETOPO | majors only | 250 | 750 / 1500 |
-| 9 | ETOPO | 10 fm | 200 / 250 | 750 / 1500 |
-| 10 | BlueTopo | 10 fm | 50 fm | 750 / 1500 |
-| 11–13 | BlueTopo | **5 fm** | **20 fm** | 100 fm |
+| Zoom | Source | Inside 30 fm | Shelf (30–100 fm) | Slope (100–500 fm) | Below 500 fm |
+|------|--------|--------------|-------------------|--------------------|--------------|
+| ≤8 | ETOPO | majors only | majors only | 250 | 750 / 1500 |
+| 9 | ETOPO | 10 fm | 10 fm | 200 / 250 | 750 / 1500 |
+| 10 | BlueTopo | **5 fm** | 10 fm | 50 fm | 750 / 1500 |
+| 11–13 | BlueTopo | **2 fm** | **5 fm** | **20 fm** | 100 fm |
 
 z≤9 deliberately keeps v1's spacing — those tiles already look right, and
 re-rendering them to a finer ladder would only add noise.
+
+The inner-shelf column is finer than the rest because a broad, gently sloping
+shelf defeats an evenly-spaced ladder. Behind Hatteras the sound sits at a
+near-uniform 3 fm and the mid-shelf climbs 8–24 fm over ~45 km: on a 5 fm ladder
+a z11 tile there catches one contour or none, and the area reads as tiles that
+failed to load rather than as flat ground. 2 fm inside 30 fm fills it without
+crowding the drop-off. z10 stops at 5 fm — its tiles are ~8 km across, and 2 fm
+is below what ETOPO can resolve there without turning quantization steps into
+false terraces.
 
 ### Size
 

@@ -70,6 +70,19 @@ def contour_levels_for_zoom(z):
     band down the drop-off. Steps finer than 10 fm appear only at z>=11, where
     BlueTopo backs them — ETOPO is 1 arc-min (~1.8 km) and at 5 fm it would just
     draw smooth interpolation artifacts instead of real structure.
+
+    Inside 30 fm the step halves again at z>=11. A 5 fm step is 30 ft of depth
+    change, and across a broad gently-sloping inner shelf that can be miles of
+    horizontal distance between lines: off Oregon Inlet the water runs 0.5-21 fm,
+    so a 5 fm ladder can only ever draw four curves and leaves most of the area
+    genuinely blank. 2 fm restores structure there without crowding the slope.
+
+    z11 rather than z12 because that is the zoom the inner shelf is actually read
+    at. Behind Hatteras the sound sits at a near-uniform 3 fm and the mid-shelf
+    climbs 8-24 fm over ~45 km, so at 5 fm steps a z11 tile catches one line or
+    none and the whole area reads as failed tiles. z10 goes to 5 fm for the same
+    reason, but no finer: its tiles are ~8 km and 2 fm there is below what ETOPO
+    can draw without turning quantization steps into false terraces.
     """
     if z <= 6:
         return [], [500, 1500], [100, 1000, 2000]
@@ -79,11 +92,14 @@ def contour_levels_for_zoom(z):
         # ETOPO tier — keep v1's spacing rather than regress a working look.
         minor, mid = [10, 20, 30, 40, 60, 80], LEGACY_MID_FM
     elif z == 10:
-        minor, mid = _ladder(10, 90, 10) + _ladder(150, 450, 50), LEGACY_MID_FM
+        minor, mid = (_ladder(5, 30, 5) + _ladder(40, 90, 10)
+                      + _ladder(150, 450, 50)), LEGACY_MID_FM
     else:
-        # BlueTopo tier: 5 fm shelf, 20 fm slope, 100 fm below the slope.
-        minor = (_ladder(5, 95, 5) + _ladder(120, 480, 20)
-                 + _ladder(600, 1900, 100))
+        # z>=11: 2 fm inside 30 fm. A clean even ladder rather than 5 fm with
+        # 2 fm interleaved — mixing them puts pairs of lines 1 fm apart, which
+        # reads as a smudge. 10, 20 and 30 survive as the round anchors.
+        minor = (_ladder(2, 30, 2) + _ladder(35, 95, 5)
+                 + _ladder(120, 480, 20) + _ladder(600, 1900, 100))
         mid = FINE_MID_FM
     # A depth in an emphasis set must not also be drawn as a hairline.
     drop = set(mid) | set(MAJOR_FM)
