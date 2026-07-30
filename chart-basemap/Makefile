@@ -75,11 +75,21 @@ bluetopo-all:
 # shelf zones; this fills everywhere else (and the >350 fm holes inside them)
 # with coarse ETOPO contours. --ignore-existing is load-bearing: BlueTopo detail
 # must never be clobbered by the ETOPO version of the same tile.
+#
+# But --ignore-existing decides by existence alone, so a BlueTopo tile the
+# survey only partly covers still wins and keeps its blank region — a hole with
+# a hard straight edge where the survey ended. repair_gaps.py finds those and
+# swaps in the ETOPO tile, so run it as part of the merge, not as an afterthought.
 contours-fill:
 	python3 render_tiles.py --nc etopo_conus.nc --out bluetopo_work/etopo_fill \
 	    --overlay --zmin 10 --zmax 13
 	rsync -a --ignore-existing bluetopo_work/etopo_fill/ tiles_overlay/
+	python3 repair_gaps.py --apply --manifest repair_manifest.txt
 	@echo "merged ETOPO gap-fill; tileset now $$(du -sh tiles_overlay | cut -f1)"
+	@echo "if v2 is already published, re-upload just the repairs:"
+	@echo "  node ../scripts/upload-chart-tiles.mjs --src chart-basemap/tiles_overlay \\"
+	@echo "      --prefix contours/v2 --manifest chart-basemap/repair_manifest.txt"
+	@echo "and bump CONTOURS_TILES_REVISION in bw-core.js so cached clients refetch."
 
 # Run AFTER bluetopo-all and contours-fill.
 bluetopo-upload-v2:

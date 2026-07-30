@@ -9,3 +9,4 @@ bluetopo/*_fetch/
 tiles_conus/
 tiles_overlay/
 *.mbtiles
+repair_manifest.txt

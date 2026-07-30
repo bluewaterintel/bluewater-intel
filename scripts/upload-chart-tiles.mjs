@@ -10,6 +10,10 @@
  *
  * Usage:
  *   node scripts/upload-chart-tiles.mjs --src chart-basemap/tiles_overlay --prefix contours/v2 --workers 32
+ *
+ * Pass --manifest <file> (one z/x/y.png per line) to re-send just those tiles.
+ * Needed for repairs: the resume log lists every tile as already sent, so a
+ * plain re-run would upload nothing.
  */
 import {
   readFileSync, existsSync, readdirSync, statSync, createWriteStream,
@@ -39,16 +43,18 @@ function parseArgs() {
   let src = null;
   let prefix = "chart/v1";
   let workers = 16;
+  let manifest = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--src") src = args[++i];
     else if (args[i] === "--prefix") prefix = args[++i];
     else if (args[i] === "--workers") workers = Number(args[++i]) || 16;
+    else if (args[i] === "--manifest") manifest = args[++i];
   }
   if (!src) {
-    console.error("Usage: node scripts/upload-chart-tiles.mjs --src <tiles-dir> [--prefix chart/v1] [--workers 16]");
+    console.error("Usage: node scripts/upload-chart-tiles.mjs --src <tiles-dir> [--prefix chart/v1] [--workers 16] [--manifest <file>]");
     process.exit(1);
   }
-  return { src: resolve(src.replace(/^~/, process.env.HOME || "")), prefix, workers };
+  return { src: resolve(src.replace(/^~/, process.env.HOME || "")), prefix, workers, manifest };
 }
 
 function gatherTiles(src) {
@@ -63,6 +69,23 @@ function gatherTiles(src) {
         if (f.endsWith(".png")) files.push({ local: join(xp, f), key: `${z}/${x}/${f}` });
       }
     }
+  }
+  return files;
+}
+
+function readManifest(src, manifestPath) {
+  const keys = readFileSync(manifestPath, "utf8").split("\n")
+    .map((s) => s.trim()).filter(Boolean);
+  const files = [];
+  const absent = [];
+  for (const key of keys) {
+    const local = join(src, key);
+    if (existsSync(local)) files.push({ local, key });
+    else absent.push(key);
+  }
+  if (absent.length) {
+    console.error(`${absent.length} manifest entries missing under ${src}, e.g. ${absent[0]}`);
+    process.exit(1);
   }
   return files;
 }
@@ -121,7 +144,7 @@ async function runPool(supabase, prefix, tiles, workers, onDone) {
 
 async function main() {
   const env = loadEnv();
-  const { src, prefix, workers } = parseArgs();
+  const { src, prefix, workers, manifest } = parseArgs();
   const url = env.SUPABASE_URL;
   const accessToken = env.SUPABASE_ACCESS_TOKEN;
   if (!url || !accessToken) {
@@ -133,8 +156,6 @@ async function main() {
     process.exit(1);
   }
 
-  const all = gatherTiles(src);
-
   // Resume support: re-uploading a quarter-million tiles from zero because the
   // run died near the end is not acceptable. Every success is appended here,
   // and a restart skips whatever is already listed.
@@ -144,9 +165,18 @@ async function main() {
       ? readFileSync(logPath, "utf8").split("\n").filter(Boolean)
       : []
   );
-  const tiles = all.filter((t) => !uploaded.has(t.key));
-  console.log(`Uploading ${tiles.length} tiles from ${src} → ${BUCKET}/${prefix}/`);
-  if (uploaded.size) console.log(`  (resuming; ${uploaded.size} already uploaded)`);
+
+  // A manifest names tiles whose content changed, so the resume log must not
+  // filter them out — every one of them is already listed in it.
+  let tiles;
+  if (manifest) {
+    tiles = readManifest(src, manifest);
+    console.log(`Re-uploading ${tiles.length} tiles named in ${manifest} → ${BUCKET}/${prefix}/`);
+  } else {
+    tiles = gatherTiles(src).filter((t) => !uploaded.has(t.key));
+    console.log(`Uploading ${tiles.length} tiles from ${src} → ${BUCKET}/${prefix}/`);
+    if (uploaded.size) console.log(`  (resuming; ${uploaded.size} already uploaded)`);
+  }
   if (!tiles.length) {
     console.log("Nothing to do.");
     return;
@@ -155,11 +185,12 @@ async function main() {
   const serviceRole = await fetchServiceRoleKey(accessToken);
   const supabase = createClient(url, serviceRole, { auth: { persistSession: false } });
 
-  const logStream = createWriteStream(logPath, { flags: "a" });
+  // Manifest keys are already in the log; re-appending them only bloats it.
+  const logStream = manifest ? null : createWriteStream(logPath, { flags: "a" });
   let done = 0;
   const started = Date.now();
   const failures = await runPool(supabase, prefix, tiles, workers, (key) => {
-    logStream.write(key + "\n");
+    logStream?.write(key + "\n");
     if (++done % 2000 === 0 || done === tiles.length) {
       const secs = (Date.now() - started) / 1000;
       const rate = done / secs;
@@ -169,7 +200,7 @@ async function main() {
       );
     }
   });
-  logStream.end();
+  logStream?.end();
 
   const base = `${url.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${prefix}`;
   console.log(`\nUploaded ${done} tiles at ${base}/{z}/{x}/{y}.png`);
