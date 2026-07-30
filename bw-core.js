@@ -351,7 +351,9 @@ const CONTOURS_TILES_NATIVE_ZOOM = 13;
 //        shelves like Raleigh Bay no longer read as failed tiles
 //   r4 — pulled z11 back to 5 fm: on ETOPO's ~1.8 km grid a 2 fm step contours
 //        the quantization itself, which reads as noise. z10's 5 fm pass stands.
-const CONTOURS_TILES_REVISION = "r4";
+//   r5 — 200/500/1000/2000 fm recoloured to a cooler blue so 100 fm is the only
+//        white line and the shelf break is unambiguous
+const CONTOURS_TILES_REVISION = "r5";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).

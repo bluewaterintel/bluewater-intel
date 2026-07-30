@@ -43,7 +43,10 @@ STYLE = {
     # contour lines
     "minor_line": "#4E93A8",
     "mid_line": "#5FA8BC",
-    "major_line": "#8FD3E4",
+    # Cooler and darker than the shelfbreak on purpose. At #8FD3E4 the 200 fm
+    # line read as white, so the slope showed two white lines side by side with
+    # nothing to say which one was the shelf break. 100 fm is the only white.
+    "major_line": "#62BEE8",
     # signature: the 100-fathom shelf-break curve, brightest thing on the chart
     "shelfbreak_line": "#C4F0FA",
     "label_color": "#AFE3EF",
