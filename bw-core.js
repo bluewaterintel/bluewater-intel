@@ -9959,7 +9959,7 @@ const LORAN_SHELF_ANCHOR_PATH_9960Y = [
 ];
 
 const LORAN_SHELF_LABEL = {
-  perpendicularOffsetNm: 1.5, // beside line, offshore of shelf path
+  perpendicularOffsetNm: 0, // on the line in the gap — a shelf-side offset reads as off-center
   gapHalfNm: 2,
 };
 
@@ -10363,7 +10363,7 @@ function drawLoranLines(){
     const labelColor = chain.labelColor || "#fdba74";
     const majorStyle = {color, weight: 2.5, opacity: 0.95, dashArray: "6 4", interactive: false};
     const halfStyle  = {color, weight: 1.6, opacity: 0.65, dashArray: "3 5", interactive: false};
-    const gapLabelStyle = `color:${labelColor};font-size:12px;font-weight:800;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;text-shadow:0 0 3px #060e1a,0 1px 2px #060e1a,-1px 0 2px #060e1a,1px 0 2px #060e1a;white-space:nowrap;pointer-events:none;line-height:1`;
+    const gapLabelStyle = `color:${labelColor};font-size:12px;font-weight:800;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;text-shadow:0 0 3px #060e1a,0 1px 2px #060e1a,-1px 0 2px #060e1a,1px 0 2px #060e1a;white-space:nowrap;pointer-events:none;line-height:1;display:flex;align-items:center;justify-content:center;width:100%;height:100%`;
 
     const tdValues = [];
     for(let td = chain.tdMin; td <= chain.tdMax; td += chain.step){
@@ -10405,8 +10405,8 @@ function drawLoranLines(){
               icon: L.divIcon({
                 className: "loran-label",
                 html: `<div style="${gapLabelStyle};transform:rotate(${(-split.angleDeg).toFixed(1)}deg)">${td}</div>`,
-                iconSize: [56, 16],
-                iconAnchor: [28, 8],
+                iconSize: [56, 18],
+                iconAnchor: [28, 9],
               }),
               interactive: false,
               keyboard: false,
