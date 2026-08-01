@@ -1889,8 +1889,15 @@ async function resolveFreshestGibsDate(layerId, tileSet, ext, maxBack){
 // date the moment it's toggled on (toggleLayer reuses the stored layer object).
 function refreshSatLayerDate(which){
   const visible = (typeof layerVis !== "undefined") && layerVis[which];
+  // Observed SST uses the canvas local-scale layer — never re-point the GIBS
+  // tile layer or it will cover the canvas with the baked global 0–32°C palette
+  // (legend stuck at 74–88°F, no 1–2°F break detail).
+  if(which === "sst"){
+    if(visible && typeof syncSstOverlayMode === "function"){ syncSstOverlayMode(); return; }
+    if(typeof window.buildSstLayer === "function") sstLayer = window.buildSstLayer(satDayOffset);
+    return;
+  }
   if(visible && typeof crossfadeLayer === "function"){ crossfadeLayer(which); return; }
-  if(which === "sst"   && typeof window.buildSstLayer   === "function") sstLayer   = window.buildSstLayer(satDayOffset);
   if(which === "chlor" && typeof window.buildChlorLayer === "function") chlorLayer = window.buildChlorLayer(satDayOffset);
 }
 // Probe SST (MUR L4 1km) + chlor (VIIRS NOAA-20), tighten SAT_FRESH_BACK/DATE to
@@ -7512,13 +7519,15 @@ const SstForecastLayer = L.Layer.extend({
 
 function syncSstOverlayMode(){
   if(!MAP) return;
-  // Canvas SST for observed AND forecast: adaptive local P5–P95 stretch so
-  // 1–2°F breaks stay visible (GIBS global scale makes NC summer look flat red).
+  // Canvas SST for observed AND forecast: adaptive local stretch so 1–2°F
+  // breaks stay visible. GIBS must stay OFF — its baked global palette makes
+  // NC summer look flat red and was racing back on via refreshSatLayerDate.
   if(layerVis.sst){
+    // Strip every GIBS SST instance (including a mid-crossfade replacement).
+    if(sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
     if(!sstForecastLayer) sstForecastLayer = new SstForecastLayer();
     if(!MAP.hasLayer(sstForecastLayer)) sstForecastLayer.addTo(MAP);
     else sstForecastLayer.refresh();
-    if(sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
   } else {
     if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
     SST_FORECAST_GRID = null;
@@ -9334,29 +9343,29 @@ function toggleLayer(key){
 // layer so the imagery updates in place. Forward dates are impossible (observed
 // data), so satDayOffset only ever increases the days-back.
 function rebuildSatelliteLayers(){
-  if(oceanOverlayForecastHour() > 0 && layerVis.sst){
-    if(typeof syncSstOverlayMode === "function") syncSstOverlayMode();
-    updateSatDateDisplay();
-    return;
+  // SST always uses the canvas local-scale path (observed MUR + forecast RTOFS).
+  // Crossfading GIBS SST here used to win a race against syncSstOverlayMode —
+  // ensureFreshestSatDates / the date slider would drop global-palette tiles on
+  // top of the canvas and the legend would freeze at the 74–88°F defaults.
+  if(layerVis.sst && typeof syncSstOverlayMode === "function"){
+    syncSstOverlayMode();
   }
-  // Crossfade SST + chlorophyll to the current satDayOffset. Instead of removing
-  // the visible layer and showing blank while tiles load, we build the new-date
-  // layer at opacity 0 UNDER the current one, wait for its tiles, then fade the
-  // new one in and the old one out — so the user sees a smooth change, not a
-  // flash of nothing.
-  if(layerVis.sst)  crossfadeLayer("sst");
+  // Chlorophyll still uses dated GIBS tiles — crossfade those when the day steps.
   if(layerVis.chlor) crossfadeLayer("chlor");
   updateSatDateDisplay();
   updateOpacityControl();
-  // Belt-and-suspenders: once the swap settles, make sure the live layers carry
-  // the user's chosen opacity (covers any path that adds a layer without going
-  // through the crossfade fade-in).
   setTimeout(applyOceanOpacity, 1300);
 }
 
 let _fadeTokens = { sst:0, chlor:0 };
 function crossfadeLayer(which){
   const isSst = which === "sst";
+  // SST display is canvas-only. A GIBS crossfade here would cover the local
+  // stretch with the global palette — refuse and keep the canvas path.
+  if(isSst){
+    if(typeof syncSstOverlayMode === "function") syncSstOverlayMode();
+    return;
+  }
   const oldLayer = isSst ? sstLayer : chlorLayer;
   const targetOpacity = isSst ? oceanOpacity.sst : oceanOpacity.chlor;
   const next = isSst ? window.buildSstLayer(satDayOffset) : window.buildChlorLayer(satDayOffset);
@@ -9400,6 +9409,13 @@ function updateSatDateDisplay(){
   if(el){
     if(oceanOverlayForecastHour() > 0 && layerVis.sst){
       el.textContent = `Model +${oceanOverlayForecastHour()}h · ${forecastTimeDisplay()}`;
+    } else if(layerVis.sst && SST_FORECAST_GRID && SST_FORECAST_GRID.observedAtMs){
+      // Canvas MUR date — not the GIBS slider offset (those diverged and made
+      // it look like historical GIBS was on when the local canvas was freshest).
+      const d = new Date(SST_FORECAST_GRID.observedAtMs);
+      const back = Math.max(0, Math.round((Date.now() - SST_FORECAST_GRID.observedAtMs) / 86400000));
+      const age = back <= 0 ? "today" : back === 1 ? "1 day ago" : back + " days ago";
+      el.textContent = `Observed ${d.toLocaleDateString(undefined, {month:"short", day:"numeric"})} · ${age}`;
     } else {
       const back = satCurrentDaysBack();
       const age = back <= 0 ? "today" : back === 1 ? "1 day ago" : back + " days ago";
