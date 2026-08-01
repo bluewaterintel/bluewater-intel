@@ -7161,24 +7161,53 @@ let _sstFcFetchSeq = 0;
 
 // Adaptive SST display range (°F). GIBS MUR tiles bake a global ~0–32°C
 // palette, so summer Mid-Atlantic water (all ~78–86°F) looks uniformly red.
-// Canvas SST stretches the local viewport (P5–P95) across the full rainbow so
-// 1–2°F breaks read like Rutgers coolers. Updated whenever the SST grid paints.
+// Canvas SST stretches the *visible* viewport (P10–P90) across the full rainbow
+// so 1–2°F breaks read like Rutgers coolers. Updated whenever the SST grid paints.
+//
+// Important: range is taken from the on-screen map bounds, not the padded fetch
+// box. The fetch pad pulls in Gulf Stream / cool-shelf extremes just off-screen,
+// and using those made every Mid-Atlantic view land on the 74–88°F fallback and
+// crush the 79–84°F fishing band into one orange smear.
 let _sstColorLo = 74;
 let _sstColorHi = 88;
 
-function computeSstDisplayRangeFromGrid(g){
+function computeSstDisplayRangeFromGrid(g, viewBounds){
   if(!g || !g.val) return {lo: 74, hi: 88};
   const vals = [];
-  for(let i = 0; i < g.val.length; i++){
-    const v = g.val[i];
-    if(typeof v === "number" && isFinite(v) && v > 28 && v < 100) vals.push(v);
+  const step = g.step || 0.05;
+  const nLng = g.nLng || 0;
+  const nLat = g.nLat || 0;
+  // Prefer cells inside the visible map. Fall back to the whole grid only when
+  // we don't have a viewport yet (first paint before the map is ready).
+  const useView = !!(viewBounds && nLat > 0 && nLng > 0
+    && typeof g.minLat === "number" && typeof g.minLng === "number");
+  if(useView){
+    const s = viewBounds.getSouth(), n = viewBounds.getNorth();
+    const w = viewBounds.getWest(), e = viewBounds.getEast();
+    for(let i = 0; i < nLat; i++){
+      const lat = g.minLat + i * step;
+      if(lat < s || lat > n) continue;
+      for(let j = 0; j < nLng; j++){
+        const lng = g.minLng + j * step;
+        if(lng < w || lng > e) continue;
+        const v = g.val[i * nLng + j];
+        if(typeof v === "number" && isFinite(v) && v > 28 && v < 100) vals.push(v);
+      }
+    }
+  } else {
+    for(let i = 0; i < g.val.length; i++){
+      const v = g.val[i];
+      if(typeof v === "number" && isFinite(v) && v > 28 && v < 100) vals.push(v);
+    }
   }
   if(vals.length < 30) return {lo: 74, hi: 88};
   vals.sort((a, b) => a - b);
   const at = q => vals[Math.min(vals.length - 1, Math.max(0, Math.round(q * (vals.length - 1))))];
-  let lo = at(0.05), hi = at(0.95);
-  const MIN_SPAN = 6;   // avoid posterizing a flat field
-  const MAX_SPAN = 18;  // keep contrast when a cold eddy enters the box
+  // P10–P90 (was P5–P95): drop the Stream-core / cold-eddy tails so the color
+  // budget stays on the water captains actually fish.
+  let lo = at(0.10), hi = at(0.90);
+  const MIN_SPAN = 5;   // avoid posterizing a flat field
+  const MAX_SPAN = 10;  // ~79–84°F band gets real contrast; was 18 and looked global
   if(hi - lo < MIN_SPAN){
     const mid = (lo + hi) / 2;
     lo = mid - MIN_SPAN / 2;
@@ -7289,7 +7318,7 @@ function _sstIsOceanCell(lat, lng){
   return true;
 }
 
-function _sstFcBuildSmallCanvas(g){
+function _sstFcBuildSmallCanvas(g, viewBounds){
   // Bilinear-interpolate TEMPERATURE into a denser grid, then colorize.
   // Land/sound cells are cleared first so the wash never paints over terrain.
   const scale = (g.step <= 0.025) ? 3 : 4;
@@ -7302,8 +7331,12 @@ function _sstFcBuildSmallCanvas(g){
       if(!_sstIsOceanCell(lat, lng)) filled[i * g.nLng + j] = NaN;
     }
   }
-  // Range from ocean cells only — land temps must not skew the local stretch.
-  const range = computeSstDisplayRangeFromGrid({ val: filled });
+  // Range from *visible* ocean cells only — land temps and off-screen Stream /
+  // shelf extremes must not skew the local stretch.
+  const range = computeSstDisplayRangeFromGrid({
+    val: filled, step: g.step, nLat: g.nLat, nLng: g.nLng,
+    minLat: g.minLat, minLng: g.minLng,
+  }, viewBounds);
   _sstColorLo = range.lo;
   _sstColorHi = range.hi;
   const c = document.createElement("canvas");
@@ -7408,7 +7441,11 @@ const SstForecastLayer = L.Layer.extend({
     const tl = this._map.containerPointToLayerPoint([0, 0]);
     L.DomUtil.setPosition(this._canvas, tl);
     this._canvas.width = size.x; this._canvas.height = size.y;
+    // View settled — rebuild the palette from the new visible bounds so the
+    // local stretch follows the water on screen (not the padded fetch box).
+    this._smallFor = null;
     this._draw();
+    if(typeof updateOceanLegend === "function") updateOceanLegend();
     // Only hit the network when the view leaves cached coverage (or zoom tier changes).
     if(this._gridCoversView()) return;
     clearTimeout(this._refetchTimer);
@@ -7439,9 +7476,9 @@ const SstForecastLayer = L.Layer.extend({
       // so the global 0–32°C palette doesn't wash out summer Mid-Atlantic breaks.
       if(typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
       updateSatDateDisplay();
-      if(typeof updateOceanLegend === "function") updateOceanLegend();
       this._smallFor = null; // rebuild palette for the new local range
-      this._draw();
+      this._draw(); // sets _sstColorLo/Hi — legend must refresh *after* that
+      if(typeof updateOceanLegend === "function") updateOceanLegend();
     });
   },
   _draw: function(){
@@ -7450,7 +7487,12 @@ const SstForecastLayer = L.Layer.extend({
     ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
     const g = SST_FORECAST_GRID;
     if(!g) return;
-    if(this._smallFor !== g){ this._small = _sstFcBuildSmallCanvas(g); this._smallFor = g; }
+    if(this._smallFor !== g){
+      let viewBounds = null;
+      try { viewBounds = this._map.getBounds(); } catch(e){}
+      this._small = _sstFcBuildSmallCanvas(g, viewBounds);
+      this._smallFor = g;
+    }
     const north = g.bounds.n + g.step * 0.5, south = g.bounds.s - g.step * 0.5;
     const west = g.bounds.w - g.step * 0.5, east = g.bounds.e + g.step * 0.5;
     const pTL = this._map.latLngToContainerPoint([north, west]);
