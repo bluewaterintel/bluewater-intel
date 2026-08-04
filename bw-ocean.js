@@ -370,9 +370,13 @@
       if (typeof stepDeg === "number" && isFinite(stepDeg)) {
         params.set("stepDeg", String(stepDeg));
       }
+      // MUR pulls off this ERDDAP host measure 14–30 s and the edge function now
+      // waits up to 45 s for them, so a 30 s client budget would abort the very
+      // requests that were about to succeed. The overlay keeps GIBS tiles on
+      // screen while this is in flight, so the longer wait costs nothing visible.
       const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: fetchTimeout(30000),
+        signal: fetchTimeout(55000),
       });
       if (!res.ok) return null;
       const data = await res.json();

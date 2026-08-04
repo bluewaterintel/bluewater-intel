@@ -1311,13 +1311,27 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
 //
 // opts.targetDeg — grid spacing override (map overlay requests denser steps when
 //   zoomed in). Clamped to [0.01, 0.10].
+// Per-instance cache of assembled sstgrid overlay responses. MUR is a daily
+// product, so a few hours of reuse costs nothing in freshness and saves a very
+// expensive upstream call on every pan within a warm instance.
+const SSTGRID_TTL_MS = 3 * 60 * 60 * 1000;
+const sstGridCache = new Map<string, { body: unknown; atMs: number }>();
+
 // opts.lookback — daily slices to search for freshest non-fill per cell.
+// opts.timeoutMs — abort budget for the ERDDAP call. The default is deliberately
+//   tight because the scoring assembly runs this inside a ~50 s client budget.
+//   The map overlay passes a longer one: measured against this host, successful
+//   MUR pulls take 14–30 s and the latency is NOT proportional to payload (305
+//   KiB took 30 s while 914 KiB took 14 s), so a 20 s abort was killing roughly
+//   half of the pulls that would have succeeded. Latency here is upstream load,
+//   not data volume, so waiting longer is the only thing that helps.
+// opts.retries — extra attempts on timeout/5xx; the host stalls intermittently.
 async function fetchSstRows(
   latMin: number,
   latMax: number,
   lngMin: number,
   lngMax: number,
-  opts: { targetDeg?: number; lookback?: number } = {},
+  opts: { targetDeg?: number; lookback?: number; timeoutMs?: number; retries?: number } = {},
 ) {
   const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
   const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
@@ -1334,9 +1348,20 @@ async function fetchSstRows(
   const url = `${SST_ERDDAP}/${SST_DATASET}.json`
     + `?${SST_VAR}${timeIdx}${altIdx}`
     + `%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
+  const timeoutMs = Math.max(5000, Math.min(60000,
+    (typeof opts.timeoutMs === "number" && isFinite(opts.timeoutMs)) ? opts.timeoutMs : 20000));
+  const retries = Math.max(0, Math.min(2, opts.retries ?? 0));
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(20000), headers: ERDDAP_HEADERS });
-    if (!r.ok) return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
+    let r: Response | null = null;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers: ERDDAP_HEADERS });
+        if (res.ok) { r = res; break; }
+        // 5xx from the ERDDAP proxy is worth another try; 4xx is not.
+        if (res.status < 500) return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
+      } catch { /* timeout / network — this host stalls intermittently, retry */ }
+    }
+    if (!r) return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
     const d = await r.json();
     const cols: string[] = d?.table?.columnNames ?? [];
     const rawRows: unknown[][] = d?.table?.rows ?? [];
@@ -1798,22 +1823,41 @@ export const handler = async (req: Request): Promise<Response> => {
       // Map overlay may request denser stepDeg when zoomed; lookback=2 keeps
       // the ERDDAP pull light so pans stay snappy (scoring still uses default 4).
       const reqStep = num(u.searchParams.get("stepDeg"));
+      const ck = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${reqStep ?? "auto"}`;
+      const cached = sstGridCache.get(ck);
+      if (cached && Date.now() - cached.atMs < SSTGRID_TTL_MS) {
+        return new Response(JSON.stringify(cached.body), {
+          headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
+        });
+      }
       const mur = await fetchSstRows(latMin, latMax, lngMin, lngMax, {
         targetDeg: reqStep ?? undefined,
         lookback: 2,
+        // MUR is daily and this host routinely needs 14–30 s; a 20 s abort was
+        // discarding good pulls and the overlay then had nothing to draw.
+        timeoutMs: 45000,
+        retries: 1,
       });
       const rows = (mur.rows as number[][]).filter((r) => r && r[2] != null);
       if (!rows.length) return json({ error: "MUR SST unavailable" }, cors, 502);
       let freshest = 0;
       for (const r of rows) if (r[3] && r[3] > freshest) freshest = r[3] as number;
-      return new Response(JSON.stringify({
+      const body = {
         stepDeg: mur.stepDeg,
         rows,
         observedAtMs: freshest || null,
         forecastHour: 0,
         source: SST_DATASET,
         _forecast: false,
-      }), {
+      };
+      // Warm instances then serve pans over the same water instantly, which
+      // matters a lot when a cold pull costs half a minute.
+      sstGridCache.set(ck, { body, atMs: Date.now() });
+      if (sstGridCache.size > 48) {
+        const oldest = sstGridCache.keys().next().value;
+        if (oldest != null) sstGridCache.delete(oldest);
+      }
+      return new Response(JSON.stringify(body), {
         headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
       });
     }

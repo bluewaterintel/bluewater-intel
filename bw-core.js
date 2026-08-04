@@ -7390,6 +7390,52 @@ function _sstStepForZoom(z){
   return 0.08;
 }
 
+// ERDDAP refuses / times out on large MUR pulls, and the failure mode is a 502
+// with no rows — which used to leave the ocean empty. Measured on the live
+// function: a 2.6°x2.2° box at 0.05° returns fine (~2.1k cells), 0.03° over the
+// same box fails, and 5°x5° at 0.05° fails. So the real constraint is total
+// cells requested, not zoom. Coarsen the step until the box fits the budget.
+const SST_CELL_BUDGET = 6000;
+const SST_STEP_MAX = 0.10;   // server clamps targetDeg here too
+
+function _sstStepForBox(bx, z){
+  let step = _sstStepForZoom(z);
+  const dLat = Math.abs(bx.n - bx.s), dLng = Math.abs(bx.e - bx.w);
+  for(let i = 0; i < 24; i++){
+    const cells = (dLat / step) * (dLng / step);
+    if(cells <= SST_CELL_BUDGET || step >= SST_STEP_MAX) break;
+    step = Math.min(SST_STEP_MAX, Math.round((step + 0.01) * 100) / 100);
+  }
+  return step;
+}
+
+// True when even the coarsest allowed step can't cover the view. Beyond this the
+// canvas can't help and GIBS tiles stand in (global palette, honestly labeled).
+function _sstBoxTooBig(bx){
+  const dLat = Math.abs(bx.n - bx.s), dLng = Math.abs(bx.e - bx.w);
+  return (dLat / SST_STEP_MAX) * (dLng / SST_STEP_MAX) > SST_CELL_BUDGET * 1.35;
+}
+
+// "local" = canvas P10–P90 stretch. "global" = GIBS tiles standing in because
+// the view is too wide for a MUR pull. Drives the legend + the date-pill hint so
+// the UI never claims local scale while showing global-palette tiles.
+let _sstScaleMode = "local";
+
+function _sstShowGibsFallback(){
+  if(typeof sstLayer === "undefined" || !sstLayer || !MAP) return;
+  _sstScaleMode = "global";
+  if(!MAP.hasLayer(sstLayer)){
+    sstLayer.setOpacity((typeof oceanOpacity !== "undefined" && typeof oceanOpacity.sst === "number")
+      ? oceanOpacity.sst : 0.82);
+    sstLayer.addTo(MAP);
+  }
+}
+
+function _sstHideGibsFallback(){
+  _sstScaleMode = "local";
+  if(typeof sstLayer !== "undefined" && sstLayer && MAP && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
+}
+
 const SstForecastLayer = L.Layer.extend({
   onAdd: function(map){
     this._map = map;
@@ -7465,28 +7511,69 @@ const SstForecastLayer = L.Layer.extend({
     let b;
     try { b = MAP.getBounds(); } catch(e){ return; }
     const z = MAP.getZoom();
-    const stepDeg = _sstStepForZoom(z);
-    // Modest pad — enough to pan a bit without refetch, not a huge ERDDAP box.
-    const pad = 0.18;
+    // Pad shrinks as the view widens: at low zoom the pad alone can push the box
+    // past what ERDDAP will serve, and losing the whole field costs more than
+    // an extra refetch after a pan.
+    const pad = z >= 8 ? 0.18 : z >= 6 ? 0.08 : 0.02;
     const bx = {
       s: b.getSouth() - (b.getNorth() - b.getSouth()) * pad,
       n: b.getNorth() + (b.getNorth() - b.getSouth()) * pad,
       w: b.getWest() - (b.getEast() - b.getWest()) * pad,
       e: b.getEast() + (b.getEast() - b.getWest()) * pad,
     };
-    BW_OCEAN.fetchSstGrid(bx.s, bx.n, bx.w, bx.e, hours, stepDeg).then(data => {
-      if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
-      if((typeof oceanOverlayForecastHour === "function" ? oceanOverlayForecastHour() : 0) !== hours) return;
-      applySstForecastGrid(data);
-      if(SST_FORECAST_GRID) SST_FORECAST_GRID._requestStep = stepDeg;
-      // Canvas SST (observed + forecast) with adaptive local scale. Hide GIBS
-      // so the global 0–32°C palette doesn't wash out summer Mid-Atlantic breaks.
-      if(typeof sstLayer !== "undefined" && sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
+    if(_sstBoxTooBig(bx)){
+      // Zoomed out past what a MUR pull can cover — show tiles rather than an
+      // empty ocean, and say so in the legend.
+      _sstShowGibsFallback();
+      SST_FORECAST_GRID = null;
+      this._smallFor = null;
+      this._draw();
       updateSatDateDisplay();
-      this._smallFor = null; // rebuild palette for the new local range
-      this._draw(); // sets _sstColorLo/Hi — legend must refresh *after* that
       if(typeof updateOceanLegend === "function") updateOceanLegend();
-    });
+      return;
+    }
+    // MUR pulls fail intermittently rather than by size. Measured live against
+    // the same box: 0.05° / 4.2k cells timed out once and returned in 13s the
+    // next try, while 0.08° / 1.6k cells timed out. Every failure was a ~20s
+    // ERDDAP stall, so the fix is to try again — coarsening does not help and
+    // only costs resolution. Retry at the same step with a short backoff, and
+    // fall back to tiles only once the retries are spent.
+    const stepDeg = _sstStepForBox(bx, z);
+    const giveUp = () => {
+      // Keep SST on screen via GIBS instead of blanking the ocean, which read
+      // as "SST isn't loading".
+      _sstShowGibsFallback();
+      this._smallFor = null;
+      this._draw();
+      updateSatDateDisplay();
+      if(typeof updateOceanLegend === "function") updateOceanLegend();
+    };
+    const attempt = (triesLeft) => {
+      if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
+      BW_OCEAN.fetchSstGrid(bx.s, bx.n, bx.w, bx.e, hours, stepDeg).then(data => {
+        if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
+        if((typeof oceanOverlayForecastHour === "function" ? oceanOverlayForecastHour() : 0) !== hours) return;
+        applySstForecastGrid(data);
+        if(!SST_FORECAST_GRID){
+          if(triesLeft > 0){ setTimeout(() => attempt(triesLeft - 1), 900); return; }
+          giveUp();
+          return;
+        }
+        SST_FORECAST_GRID._requestStep = stepDeg;
+        // Canvas carries the local stretch — drop GIBS so its baked global
+        // 0–32°C palette can't wash out summer Mid-Atlantic breaks.
+        _sstHideGibsFallback();
+        updateSatDateDisplay();
+        this._smallFor = null; // rebuild palette for the new local range
+        this._draw(); // sets _sstColorLo/Hi — legend must refresh *after* that
+        if(typeof updateOceanLegend === "function") updateOceanLegend();
+      }).catch(() => {
+        if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
+        if(triesLeft > 0){ setTimeout(() => attempt(triesLeft - 1), 900); return; }
+        giveUp();
+      });
+    };
+    attempt(2);
   },
   _draw: function(){
     if(!this._canvas || !this._map) return;
@@ -7523,14 +7610,19 @@ function syncSstOverlayMode(){
   // breaks stay visible. GIBS must stay OFF — its baked global palette makes
   // NC summer look flat red and was racing back on via refreshSatLayerDate.
   if(layerVis.sst){
-    // Strip every GIBS SST instance (including a mid-crossfade replacement).
-    if(sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
+    // Strip every GIBS SST instance (including a mid-crossfade replacement),
+    // but only once the canvas actually has a field to draw. Removing it while
+    // the MUR pull is still in flight — or when the view is too wide for one —
+    // leaves a blank ocean, which reads as SST failing to load.
     if(!sstForecastLayer) sstForecastLayer = new SstForecastLayer();
     if(!MAP.hasLayer(sstForecastLayer)) sstForecastLayer.addTo(MAP);
     else sstForecastLayer.refresh();
+    if(SST_FORECAST_GRID) _sstHideGibsFallback();
+    else _sstShowGibsFallback();
   } else {
     if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
     SST_FORECAST_GRID = null;
+    _sstScaleMode = "local";
     if(sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
   }
   updateSatDateDisplay();
@@ -12104,8 +12196,12 @@ function updateOceanLegend(){
       ? `SST FORECAST (+${oceanOverlayForecastHour()}h)`
       : "SST (°F)";
     // Legend ticks follow the adaptive local stretch (not the old global 50–86).
-    const lo = (typeof _sstColorLo === "number") ? _sstColorLo : 74;
-    const hi = (typeof _sstColorHi === "number") ? _sstColorHi : 88;
+    // When the view is too wide for a MUR pull we are showing GIBS tiles on their
+    // own baked palette, so say "global" rather than claim a local stretch.
+    const sstGlobal = (typeof _sstScaleMode !== "undefined" && _sstScaleMode === "global");
+    const lo = sstGlobal ? 50 : ((typeof _sstColorLo === "number") ? _sstColorLo : 74);
+    const hi = sstGlobal ? 86 : ((typeof _sstColorHi === "number") ? _sstColorHi : 88);
+    const sstScaleTag = sstGlobal ? "global · zoom in for local scale" : "local";
     const nTicks = phone ? 5 : 7;
     const sstTicks = [];
     for(let i = 0; i < nTicks; i++){
@@ -12113,7 +12209,7 @@ function updateOceanLegend(){
     }
     parts.push(`
       <div style="${gap()}">
-        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle} <span style="font-weight:500;letter-spacing:0;color:#9ec5e8;text-transform:none">local</span></div>
+        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle} <span style="font-weight:500;letter-spacing:0;color:#9ec5e8;text-transform:none">${sstScaleTag}</span></div>
         <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#082460 0%,#0e5aaa 12%,#28aac8 24%,#5ac878 36%,#dcd232 50%,#ebb028 62%,#eb7823 74%,#be281f 88%,#8c1432 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:1px">
           ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}°</span>`).join("")}
