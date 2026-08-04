@@ -140,7 +140,7 @@ A captain should be able to:
 | Thermal break | `tBreak` magnitude |
 | Convergence | SST break + chlor edge coincidence (altimetry-assisted) |
 | Structure | `bottomStructureStrengthAt` — slope/canyon detector |
-| Season | `REGIONAL_SEASONS` (44/50 species) or lat-shifted default |
+| Season | `REGIONAL_SEASONS` (46/50 species) or lat-shifted default |
 | Out-of-range guard | Regional table exists but cell outside → seasonScore ≈ 0.04 |
 | Pressure / solunar / tide / moon | Real buoy + deterministic astronomy |
 | Fishing reports | **Additive only** via `reportsBoost`, max +0.18 |
@@ -163,7 +163,9 @@ These were past bug classes — confirm they're fully resolved or still leaking:
 
 ### Species coverage gaps (lower priority unless review finds issues)
 
-No `REGIONAL_SEASONS` yet: `tilefish`, `bluelinetile`, `croaker`, `cod`, `haddock`, `pollock`.
+No `REGIONAL_SEASONS` yet: `croaker`, `cod`, `haddock`, `pollock`. All four have curves that dip, so the season gate can still suppress them; what they lack is the geographic out-of-range guard. `cod`/`haddock`/`pollock` are bounded by `SPECIES_LAT_RANGE [40, 45]`, so only `croaker` is ungated in both dimensions.
+
+**A flat season curve on a species with no regional table is a silent 95%-everywhere bug.** `seasonScore` pins at 1.00, the season gate stays ×1.00, and with no table there is no out-of-range guard either — so the species outranks everything that is genuinely peaking, in every month and every port. This is what golden tilefish and haddock were both doing. `node tests/bite-score-audit.mjs` fails this class out; run it after touching any season data.
 
 ---
 

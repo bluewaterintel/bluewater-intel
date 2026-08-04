@@ -325,14 +325,89 @@ const REGIONAL_SEASONS = {
   ],
 
   // ── BLUELINE TILEFISH ────────────────────────────────────────────────
-  // Mid-Atlantic shelf winter/spring staple (Norfolk/Hatteras ledges); Gulf
-  // hard-bottom a longer season. Without this table July cells used the generic
-  // peak curve and overstated a summer blueline bite off VA/NC.
+  // Blueline is the one deep-drop species on this coast with a HARD recreational
+  // season, and the season differs either side of the NC/VA border (~36°33'N),
+  // which is the boundary between the two councils that manage it:
+  //   • South of the line (SAFMC — Oregon Inlet, Hatteras, Carolinas):
+  //     open May 1 – Aug 31, closed Sep 1 – Apr 30.  50 CFR 622.183(b)(7)
+  //   • North of the line (MAFMC — Norfolk Canyon, VA/MD/DE/NJ/NY):
+  //     open May 15 – Nov 14, closed Nov 15 – May 14.  50 CFR 648.296(b)
+  //   • Gulf: no seasonal closure, year-round hard-bottom fishery.
+  // The previous single VA/NC region had this inverted — it peaked blueline
+  // Nov-Apr and scored Jun-Sep at 1 ("slow"), so out of Oregon Inlet the app
+  // read FAIR during the four months the fishery is actually open and EXCELLENT
+  // during the months it is illegal to keep one. Regions are split at the border
+  // and sized so the nearest one dominates the inverse-distance blend.
   bluelinetile: [
-    {centerLat: 36.5, centerLng: -75.5, radiusNm: 130, label: "Mid-Atlantic shelf (VA/NC)",
-     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:1,Jul:1,Aug:1,Sep:1,Oct:2,Nov:3,Dec:3}},
-    {centerLat: 28.5, centerLng: -88.5, radiusNm: 220, label: "Gulf deep ledges",
+    {centerLat: 35.2, centerLng: -75.0, radiusNm: 85, label: "Hatteras / Oregon Inlet ledges (SAFMC)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:3,Jun:3,Jul:3,Aug:3,Sep:0,Oct:0,Nov:0,Dec:0}},
+    {centerLat: 33.4, centerLng: -76.8, radiusNm: 170, label: "Carolinas shelf edge (SAFMC)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:3,Jun:3,Jul:3,Aug:3,Sep:0,Oct:0,Nov:0,Dec:0}},
+    {centerLat: 37.4, centerLng: -74.7, radiusNm: 110, label: "Norfolk Canyon / VA-MD shelf (MAFMC)",
+     // May and Nov are half-months either side of the May 15 / Nov 14 dates.
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
+    {centerLat: 39.2, centerLng: -73.2, radiusNm: 160, label: "NJ / NY canyon lips (MAFMC)",
+     // Same season, thinner fishery — blueline are a bycatch-grade target this
+     // far north, so the ceiling is "good" rather than "peak".
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 30.0, centerLng: -80.2, radiusNm: 200, label: "GA / FL east shelf edge (SAFMC)",
+     // Same May-Aug SAFMC season, thinner than the NC ledges.
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:2,Jun:2,Jul:2,Aug:2,Sep:0,Oct:0,Nov:0,Dec:0}},
+    {centerLat: 28.5, centerLng: -88.5, radiusNm: 300, label: "Gulf deep ledges",
+     // No closed season in the Gulf. Radius reaches the TX shelf edge and the
+     // shelf edge west of Tampa, both of which the old 220 nm circle missed.
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
+  ],
+
+  // ── GOLDEN TILEFISH ──────────────────────────────────────────────────
+  // Golden tile had NO regional table and a flat all-3 default curve, which made
+  // it the only species in the app that could never be suppressed: seasonScore
+  // was pinned at 1.00 (peak) in every month, the season gate stayed at x1.00,
+  // and with no table there was no out-of-range guard either. Being bottom:true
+  // it is also exempt from the bluewater depth gate and is scored on modelled
+  // bottom temperature, which sits inside its 48-60°F ideal band at every depth
+  // it lives at. Net effect: a flat 95% from Maine to Texas, 365 days a year,
+  // outranking species that were genuinely peaking. That is what made golden
+  // read 95% against blueline's 55% out of Oregon Inlet in August.
+  //
+  // Unlike blueline there is no closed season (recreationally open year-round,
+  // 50 CFR 648.296(a)), and the fish are burrow-bound and non-migratory — so the
+  // shape here is not a run-timing curve. It encodes the two things that do vary:
+  // how concentrated the fishery is in each area, and whether a 60-100 nm run to
+  // 600-1,200 ft is realistic in that month. NOAA puts the fishery's centre of
+  // mass between Hudson and Veatch canyons, Nantucket south to Cape May, so the
+  // Outer Banks is the southern margin of it, not the core — and south of the
+  // NC/VA line the bag drops to one fish per angler inside a 3-fish
+  // grouper/tilefish aggregate. Those areas top out at "good", never "peak".
+  // The core fishery is a BAND along the shelf edge, not a disc, so it is covered
+  // by a chain of canyon-belt regions rather than one big circle. A single circle
+  // wide enough to reach Cape May also swallowed the Gulf of Maine and scored
+  // golden tile at 95% off Portland, where the fishery does not exist — they are
+  // a slope species and GOM boats fish 100-300 ft ledges.
+  tilefish: [
+    {centerLat: 40.0, centerLng: -70.2, radiusNm: 110, label: "Veatch/Atlantis — SE of Nantucket",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 39.3, centerLng: -72.3, radiusNm: 120, label: "Hudson/Toms/Carteret — NY Bight",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 38.2, centerLng: -73.6, radiusNm: 110, label: "Wilmington/Baltimore canyons — MD/DE",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 37.4, centerLng: -74.6, radiusNm: 95, label: "Norfolk Canyon / VA mud",
+     seasons:{Jan:2,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+    {centerLat: 35.2, centerLng: -75.0, radiusNm: 85, label: "NC Outer Banks — southern margin",
+     // Caps at 2: a real fishery out of Oregon Inlet/Hatteras, but outside the
+     // documented concentration and a 1-fish SAFMC bag. Winter drops to 1 —
+     // nothing stops you but the seas on a 60+ nm run.
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:1}},
+    {centerLat: 30.5, centerLng: -79.5, radiusNm: 300, label: "SE Atlantic shelf edge (SC/GA/FL)",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 25.3, centerLng: -80.3, radiusNm: 150, label: "SE FL / Keys deep drop",
+     // Islamorada/Key West golden tile in 600-800 ft — a year-round charter
+     // fishery, and winter is the easy-weather half of it down here.
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 28.0, centerLng: -90.0, radiusNm: 360, label: "Gulf of Mexico deep mud",
+     // Wide enough to reach the TX shelf edge off Galveston and the shelf edge
+     // west of Tampa; stops well short of the FL Atlantic side.
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
   ],
 
   // ── BLUEFISH ─────────────────────────────────────────────────────────

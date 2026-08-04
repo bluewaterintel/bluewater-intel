@@ -5025,7 +5025,16 @@ const SPECIES_LAT_RANGE = {
   // shelf), this keeps blackfin realistic.
   blackfin:      [24.0, 35.7],
   // ── MID-ATLANTIC + NEW ENGLAND ───────────────────────────────────────
-  bluelinetile:  [33.0, 40.5],   // Mid-Atlantic deepwater specialist
+  // Blueline tilefish: TWO populations, and the flat [33.0, 40.5] band this
+  // replaces silently excluded one of them. That band hard-excluded everything
+  // south of 33°N on both coasts, so the "Gulf deep ledges" region in
+  // REGIONAL_SEASONS.bluelinetile could never be reached — the species was
+  // gone before the season table was consulted. It also clipped Charleston
+  // (32.8°N) even though the Carolinas region covers it.
+  //  - Atlantic: S. FL up through NY. SAFMC manages them NC through FL,
+  //    MAFMC from the NC/VA border north; they thin out past ~40.5°N.
+  //  - Gulf: northern/eastern Gulf hard bottom, TX shelf edge through FL.
+  bluelinetile:  {atlantic: [28.0, 40.5], gulf: [25.0, 30.5]},
   bonito:        [33.0, 44.5],   // Mid-Atlantic + New England
   falsealbacore: [25.0, 44.0],   // FL through New England — Cape Cod albie run to Carolinas/FL
   // Bluefin tuna: TWO disconnected populations.

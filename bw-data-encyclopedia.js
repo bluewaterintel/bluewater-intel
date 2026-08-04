@@ -380,8 +380,12 @@ const ENC_SPECIES = [
   {
     id:"tilefish", name:"Golden Tilefish", color:"#a83010", cat:"offshore",
     snippet:"Deep-water mud-bottom fish — 250-450 ft in Mid-Atlantic canyons, and 600-1,200+ ft on deeper shelf and Gulf mud. Excellent table fare; year-round bottom fishing.",
-    facts:{ size:"5-50 lbs", record:"66 lbs (NJ)", legal:"24\" total length; 5 fish bag limit", season:"Year-round" },
-    seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3},
+    facts:{ size:"5-50 lbs", record:"66 lbs (NJ)", legal:"No size limit; 8/angler north of the NC/VA line, 1/angler south inside the 3-fish grouper-tile aggregate — check MAFMC/SAFMC", season:"Year-round (winter is weather-limited)" },
+    // Open year-round and the fish are burrow-bound, so this is an access curve,
+    // not a run-timing curve: the limiter on a 60-100 nm run to 600-1,200 ft is
+    // the sea state. Was flat all-3, which pinned golden tile at "peak" in every
+    // month everywhere and let it outrank species that were genuinely peaking.
+    seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
     where:"Green mud bottom — classic Mid-Atlantic canyon fishery at 250-450 ft (Hudson, Wilmington, Norfolk, Hatteras), plus deeper shelf-edge and Gulf drops at 600-1,200+ ft. Canyons are world-class but not required; look for mud burrows on the bottom machine.",
     tackle:[
       "Heavy-duty deep-drop electric reels (or 80-class manual 2-speed)",
@@ -404,9 +408,13 @@ const ENC_SPECIES = [
   },
   {
     id:"bluelinetile", name:"Blueline Tilefish", color:"#3a6080", cat:"offshore",
-    snippet:"The 'other' tilefish — smaller, shallower, harder-fighting cousin of the golden. 240-820 ft on hard-bottom ledges along the shelf edge. NC/VA winter staple.",
-    facts:{ size:"3-25 lbs", record:"26 lbs (NC)", legal:"Atlantic: 16\" min, 5/day; closed certain months — check NOAA/SAFMC", season:"Winter/Spring peak in NC/VA" },
-    seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:1,Aug:1,Sep:1,Oct:2,Nov:3,Dec:3},
+    snippet:"The 'other' tilefish — smaller, shallower, harder-fighting cousin of the golden. 240-820 ft on hard-bottom ledges along the shelf edge. The NC/VA summer deep-drop target.",
+    facts:{ size:"3-25 lbs", record:"26 lbs (NC)", legal:"No size limit; 2/angler South Atlantic, 3-7/angler Mid-Atlantic depending on vessel permit — hard closed season, check SAFMC/MAFMC", season:"May-Aug south of the NC/VA line; May 15-Nov 14 north" },
+    // Hard recreational closures, and they differ by council: SAFMC (Oregon
+    // Inlet/Hatteras south) is open May 1-Aug 31 only; MAFMC (Norfolk Canyon and
+    // north) May 15-Nov 14. This national bar shows the union; REGIONAL_SEASONS
+    // splits it at the NC/VA border for scoring.
+    seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:2,Nov:1,Dec:0},
     where:"Hard-bottom ledges 240-820 ft along the shelf edge — canyon lips are hot spots but not required. Strongest fishery is Hatteras / Norfolk shelf breaks and out to ~50 miles. Also Gulf coast deep ledges.",
     tackle:[
       "Lighter than golden tilefish — they don't live as deep",
@@ -422,8 +430,9 @@ const ENC_SPECIES = [
     tips:[
       "Find them on HARD bottom — they like rocky ledges, not the mud of golden tilefish",
       "Bites are softer than golden tile — watch the rod tip for subtle taps",
-      "Shelf-edge ledges at 300-500 ft are prime winter water — you don't have to run to a named canyon",
-      "Strict bag limits and seasonal closures — check SAFMC/MAFMC before keeping",
+      "Shelf-edge ledges at 300-500 ft fish as well as any named canyon — you don't have to run to one",
+      "Know which side of the NC/VA line you're on: south of it the season is May-Aug only, north of it May 15-Nov 14",
+      "Strict bag limits and hard seasonal closures — check SAFMC/MAFMC before keeping",
       "Excellent eating — milder and slightly sweeter than golden tilefish"],
   },
   {
@@ -623,8 +632,13 @@ const ENC_SPECIES = [
   {
     id:"haddock", name:"Haddock", color:"#8a7050", cat:"nearshore",
     snippet:"The most reliable Northeast groundfish keep. Open most of the year, generous bag limit, excellent eating. The backbone of New England party-boat fishing.",
-    facts:{ size:"2-8 lbs (12+ possible)", record:"14 lbs 15 oz (NJ)", legal:"17\" Gulf of Maine; 15 fish bag", season:"Year-round in GOM (with brief spring closure)" },
-    seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3},
+    facts:{ size:"2-8 lbs (12+ possible)", record:"14 lbs 15 oz (NJ)", legal:"17\" Gulf of Maine; 15 fish bag", season:"Year-round in GOM except March (closed Mar 1-31)" },
+    // Was flat all-3, the same defect golden tilefish had: with no regional table
+    // to supply an out-of-range guard, a curve that never dips means the season
+    // gate is stuck at x1.00 and haddock reads "peak" every day of the year —
+    // including the month it is closed. Open May 1-Feb 28/29 and Apr 1-30 in the
+    // GOM mesh area, closed all of March (50 CFR 648.89).
+    seasons:{Jan:2,Feb:2,Mar:0,Apr:3,May:3,Jun:3,Jul:3,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2},
     where:"Jeffrey's Ledge, Stellwagen Bank, Cashes Ledge, Platts Bank, GOM ledges 100-300 ft. Often mixed in with cod and pollock.",
     tackle:[
       "Medium 6-7 ft conventional rods",

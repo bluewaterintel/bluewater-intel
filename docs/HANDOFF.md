@@ -41,7 +41,8 @@ Encyclopedia copy: `bw-data-encyclopedia.js`
 ### Recently completed (do not redo)
 
 - **Tilefish depth bands** (`40b608e`): golden `[[75,140],[175,420]]` m; blueline `[[70,250]]` m. Encyclopedia aligned. Shelf ledges no longer cold from depth floor.
-- **Regional seasons:** 44/50 species have `REGIONAL_SEASONS`. **Still without:** `tilefish`, `bluelinetile`, `croaker`, `cod`, `haddock`, `pollock` (intentionally OK for now).
+- **Regional seasons:** 46/50 species have `REGIONAL_SEASONS`. **Still without:** `croaker`, `cod`, `haddock`, `pollock` — these only lack the geographic out-of-range guard; all four have curves that dip, and cod/haddock/pollock are bounded by `SPECIES_LAT_RANGE [40, 45]`.
+- **Tilefish season overhaul:** golden tilefish had a flat all-3 default curve AND no regional table, so its `seasonScore` was pinned at 1.00 and the season gate at ×1.00 — it read 95% coast-wide, every month, and could not be suppressed by anything. It now has a canyon-belt regional table. Blueline's table had the season **inverted** (peak Nov–Apr, "slow" Jun–Sep) when the recreational season is May 1–Aug 31 south of the NC/VA border and May 15–Nov 14 north of it; it is now split at that border. Haddock had the identical flat-all-3 defect and now reflects its March closure. Verify with `node tests/bite-score-audit.mjs` — do not reintroduce a flat curve on a species with no regional table.
 
 ---
 
@@ -118,7 +119,6 @@ Improve how **community fishing reports** influence Bite Map scores. Reports sho
 
 - Scraping third-party report sites
 - ML sentiment on report text
-- `REGIONAL_SEASONS` for tilefish/blueline (separate task)
 
 ---
 
