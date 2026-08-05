@@ -6,13 +6,14 @@ data covered only part of it. The result is a tile with a blank region and a
 hard straight edge where the survey ended, while the ETOPO fill tile for the
 same spot has continuous contours.
 
-A tile is only replaced when BOTH hold, so that legitimately-sparser BlueTopo
-tiles (real flat bottom, where ETOPO's interpolation invents wiggle) are kept:
+A tile is replaced when ANY of these hold:
 
-  1. it carries less than --ratio of the fill tile's ink, and
-  2. at least --cells blocks of the tile are blank while the fill tile draws
-     there, which is what an actual hole looks like as opposed to slightly
-     fewer lines.
+  1. missing — no served tile but ETOPO fill has contours
+  2. survey_edge — ink is cut off by a straight boundary (partial BlueTopo
+     survey footprint mid-tile). These often carry MORE ink than the ETOPO fill
+     on the covered half, so the old ratio-only rule never caught them.
+  3. sparse hole — served ink < --ratio of fill AND ≥ --cells blank blocks
+     where fill draws (classic partial-coverage hole)
 
 Writes the repaired keys to a manifest so only those tiles get re-uploaded.
 """
@@ -49,6 +50,37 @@ def cell_counts(mask):
     return mask.reshape(GRID, CELL, GRID, CELL).sum(axis=(1, 3))
 
 
+def survey_edge_vs_fill(served, fill):
+    """True when served ink is cut off but ETOPO fill draws on the blank side.
+
+    Shelf tiles legitimately concentrate contours on one half (shallow shelf
+    vs empty deep water). Only flag when the fill tile proves the blank region
+    should have had lines — i.e. a partial BlueTopo survey footprint.
+    """
+    si = int(served.sum())
+    if si < 800:
+        return False
+    h, w = served.shape
+    for s_proj, f_proj in ((served.sum(axis=1), fill.sum(axis=1)),
+                           (served.sum(axis=0), fill.sum(axis=0))):
+        length = len(s_proj)
+        total_s = float(s_proj.sum())
+        if total_s < 800:
+            continue
+        lo, hi = length // 5, 4 * length // 5
+        for split in range(lo, hi):
+            s_left, s_right = float(s_proj[:split].sum()), float(s_proj[split:].sum())
+            f_left, f_right = float(f_proj[:split].sum()), float(f_proj[split:].sum())
+            # Served heavy left, nearly blank right, but fill draws on the right.
+            if (s_left > total_s * 0.62 and s_right < total_s * 0.06
+                    and f_right > 350 and f_right > f_left * 0.25):
+                return True
+            if (s_right > total_s * 0.62 and s_left < total_s * 0.06
+                    and f_left > 350 and f_left > f_right * 0.25):
+                return True
+    return False
+
+
 def inspect(rel):
     """Return (rel, verdict, served_ink, fill_ink, deficit_cells)."""
     sp, fp = SERVED / rel, FILL / rel
@@ -68,6 +100,9 @@ def inspect(rel):
     si = int(sm.sum())
     fc, sc = cell_counts(fm), cell_counts(sm)
     deficit = int(((fc > 0) & (sc == 0)).sum())
+    edge = survey_edge_vs_fill(sm, fm)
+    if edge:
+        return (rel, "survey_edge", si, fi, deficit)
     return (rel, "ok", si, fi, deficit)
 
 
@@ -121,6 +156,9 @@ def main():
                 inspect, rels, chunksize=256):
             verdicts[verdict] += 1
             if verdict == "missing":
+                repair.append(rel)
+                by_zoom[rel.split("/")[0]] += 1
+            elif verdict == "survey_edge":
                 repair.append(rel)
                 by_zoom[rel.split("/")[0]] += 1
             elif verdict == "ok" and si < args.ratio * fi and deficit >= args.cells:

@@ -65,45 +65,35 @@ FINE_MID_FM = [50, 75, 300, 400, 1500]     # z>=11
 def _ladder(start, stop, step):
     return list(range(start, stop + 1, step))
 
-def contour_levels_for_zoom(z):
+def contour_levels_for_zoom(z, source="etopo"):
     """(minor, mid, major) fathom levels for one zoom.
 
-    Shelf steps tighten as you zoom because that's where the lumps, ledges and
-    terraces live; slope steps stay wider so the lines don't merge into a solid
-    band down the drop-off. Steps finer than 10 fm appear only at z>=11, where
-    BlueTopo backs them — ETOPO is 1 arc-min (~1.8 km) and at 5 fm it would just
-    draw smooth interpolation artifacts instead of real structure.
+    source="bluetopo" — survey-grade grid; may use 5 fm shelf / 20 fm slope.
+    source="etopo"    — 1 arc-min (~1.8 km); finer steps draw interpolation
+                        artifacts (the jagged "V canyon" and comb streaks).
 
-    5 fm is the floor on ETOPO-backed ground. A 2 fm inner-shelf ladder was tried
-    at z11 and pulled back: on a broad flat shelf ETOPO's ~1.8 km cells quantize
-    into terraces, and contouring them every 2 fm draws that quantization as a
-    comb of false streaks rather than as structure. It reads as too much detail
-    precisely where there is least real information.
-
-    z10 does gain 5 fm inside 30 fm, which is what the inner shelf actually
-    needed. Behind Hatteras the sound sits at a near-uniform 3 fm and the
-    mid-shelf climbs 8-24 fm over ~45 km, so a 10 fm ladder drew almost nothing
-    there and the area read as tiles that had failed to load.
-
-    Going finer than 5 fm is worth revisiting only where BlueTopo backs it, which
-    means deciding the step from the source raster rather than from the zoom.
+    Anchor majors (100/200/500/1000/2000) are always in MAJOR_FM and drawn
+    separately as the shelfbreak line at every zoom ≥ 6.
     """
     if z <= 6:
         return [], [500, 1500], [100, 1000, 2000]
     if z <= 8:
         return [], LEGACY_MID_FM, MAJOR_FM
     if z == 9:
-        # ETOPO tier — keep v1's spacing rather than regress a working look.
         minor, mid = [10, 20, 30, 40, 60, 80], LEGACY_MID_FM
-    elif z == 10:
-        minor, mid = (_ladder(5, 30, 5) + _ladder(40, 90, 10)
-                      + _ladder(150, 450, 50)), LEGACY_MID_FM
-    else:
-        # BlueTopo tier: 5 fm shelf, 20 fm slope, 100 fm below the slope.
+    elif source == "bluetopo" and z >= 10:
+        # Same ladder at z10–z13 so zooming in doesn't redraw the shelf break.
         minor = (_ladder(5, 95, 5) + _ladder(120, 480, 20)
                  + _ladder(600, 1900, 100))
         mid = FINE_MID_FM
-    # A depth in an emphasis set must not also be drawn as a hairline.
+    elif z >= 10:
+        # ETOPO gap-fill at z10–z13: medium spacing only. Using the BlueTopo
+        # ladder here was the main source of false canyon geometry off NE and
+        # the mid-Atlantic — ETOPO cannot honestly resolve 20 fm steps.
+        minor, mid = (_ladder(5, 30, 5) + _ladder(40, 90, 10)
+                      + _ladder(150, 450, 50)), LEGACY_MID_FM
+    else:
+        minor, mid = [10, 20, 30, 40, 60, 80], LEGACY_MID_FM
     drop = set(mid) | set(MAJOR_FM)
     return [v for v in minor if v not in drop], mid, MAJOR_FM
 
@@ -196,7 +186,7 @@ def _save_tile(fig, path, transparent):
     buf.close()
 
 def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
-                     max_depth_fm=None):
+                     max_depth_fm=None, source="etopo"):
     """Render one tile from a Web-Mercator elevation grid (BlueTopo path)."""
     x0, y0, x1, y1 = tile_bounds_merc(z, xt, yt)
 
@@ -238,7 +228,7 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
             ax.contour(Xm, Ym, elev_m, levels=[0], colors=[STYLE["coastline"]],
                        linewidths=0.9)
 
-    minor, mid, major = contour_levels_for_zoom(z)
+    minor, mid, major = contour_levels_for_zoom(z, source=source)
     def haloed(cs, lw):
         fx = halo_for(lw)
         if fx:

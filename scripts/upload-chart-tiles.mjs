@@ -101,6 +101,40 @@ async function fetchServiceRoleKey(accessToken) {
   return sr.api_key;
 }
 
+function resolveServiceRoleKey(env) {
+  const direct = env.SUPABASE_SERVICE_ROLE_KEY;
+  // Storage API requires a JWT (eyJ…). The newer sb_secret_… dashboard keys are
+  // not accepted — every upload fails with "Invalid Compact JWS" and, because
+  // failures retry, the run looks hung with no progress lines.
+  if (direct?.startsWith("eyJ")) return Promise.resolve(direct);
+
+  const accessToken = env.SUPABASE_ACCESS_TOKEN;
+  if (accessToken) return fetchServiceRoleKey(accessToken);
+
+  const hint = direct?.startsWith("sb_secret_")
+    ? "SUPABASE_SERVICE_ROLE_KEY is sb_secret_… which Storage rejects.\n"
+      + "  Fix: Supabase Dashboard → Account → Access Tokens → create token,\n"
+      + "  put it in .env as SUPABASE_ACCESS_TOKEN=… and re-run.\n"
+      + "  Or paste the legacy service_role JWT (starts with eyJ) into .env."
+    : "Set SUPABASE_ACCESS_TOKEN (Account → Access Tokens) or a JWT service_role key.";
+  throw new Error(hint);
+}
+
+async function probeUpload(supabase, prefix, tile) {
+  const storagePath = `${prefix}/${tile.key}`;
+  const { error } = await supabase.storage.from(BUCKET).upload(storagePath, readFileSync(tile.local), {
+    contentType: "image/png",
+    cacheControl: "31536000",
+    upsert: true,
+  });
+  if (error) {
+    throw new Error(
+      `Probe upload failed for ${storagePath}: ${error.message}\n`
+      + "Storage needs a JWT service_role key — see auth hints above."
+    );
+  }
+}
+
 async function uploadOne(supabase, prefix, { local, key }, attempts = 5) {
   const storagePath = `${prefix}/${key}`;
   for (let attempt = 1; ; attempt++) {
@@ -146,9 +180,12 @@ async function main() {
   const env = loadEnv();
   const { src, prefix, workers, manifest } = parseArgs();
   const url = env.SUPABASE_URL;
-  const accessToken = env.SUPABASE_ACCESS_TOKEN;
-  if (!url || !accessToken) {
-    console.error("Missing SUPABASE_URL or SUPABASE_ACCESS_TOKEN in .env");
+  if (!url) {
+    console.error("Missing SUPABASE_URL in .env");
+    process.exit(1);
+  }
+  if (!env.SUPABASE_SERVICE_ROLE_KEY && !env.SUPABASE_ACCESS_TOKEN) {
+    console.error("Missing SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ACCESS_TOKEN in .env");
     process.exit(1);
   }
   if (!existsSync(src)) {
@@ -182,8 +219,19 @@ async function main() {
     return;
   }
 
-  const serviceRole = await fetchServiceRoleKey(accessToken);
+  const serviceRole = await resolveServiceRoleKey(env);
+  if (env.SUPABASE_SERVICE_ROLE_KEY?.startsWith("eyJ")) {
+    console.log("  auth: using JWT service_role from .env");
+  } else {
+    console.log("  auth: fetched JWT service_role via Management API");
+  }
   const supabase = createClient(url, serviceRole, { auth: { persistSession: false } });
+
+  const progressEvery = manifest ? 250 : 2000;
+  console.log(`  starting ${workers} workers (progress every ${progressEvery} tiles)…`);
+  console.log(`  probe upload ${tiles[0].key}…`);
+  await probeUpload(supabase, prefix, tiles[0]);
+  console.log("  probe ok — uploading remainder");
 
   // Log manifest runs too. A repair can create tiles that never existed, and
   // leaving those out makes the log stop matching what is actually published —
@@ -194,12 +242,13 @@ async function main() {
   const started = Date.now();
   const failures = await runPool(supabase, prefix, tiles, workers, (key) => {
     logStream.write(key + "\n");
-    if (++done % 2000 === 0 || done === tiles.length) {
+    done++;
+    if (done === 1 || done % progressEvery === 0 || done === tiles.length) {
       const secs = (Date.now() - started) / 1000;
-      const rate = done / secs;
-      const eta = ((tiles.length - done) / rate / 60).toFixed(0);
+      const rate = done / Math.max(secs, 0.001);
+      const eta = ((tiles.length - done) / Math.max(rate, 0.001) / 60).toFixed(0);
       console.log(
-        `  ${done}/${tiles.length}  ${rate.toFixed(0)}/s  ETA ${eta}m`
+        `  ${done}/${tiles.length}  ${rate.toFixed(1)}/s  ETA ${eta}m`
       );
     }
   });

@@ -74,8 +74,14 @@ depth is never drawn twice.
 |------|--------|--------------|-------------------|--------------------|--------------|
 | ≤8 | ETOPO | majors only | majors only | 250 | 750 / 1500 |
 | 9 | ETOPO | 10 fm | 10 fm | 200 / 250 | 750 / 1500 |
-| 10 | BlueTopo | **5 fm** | 10 fm | 50 fm | 750 / 1500 |
-| 11–13 | BlueTopo | **2 fm** | **5 fm** | **20 fm** | 100 fm |
+| 10 | BlueTopo or ETOPO | **5 fm** | 10 fm | 50 fm | 750 / 1500 |
+| 11–13 BlueTopo | survey grid | **5 fm** | **5 fm** | **20 fm** | 100 fm |
+| 11–13 ETOPO fill | 1 arc-min | **5 fm** inner | **10 fm** | **50 fm** | 750 / 1500 |
+
+The ladder is **source-aware**, not zoom-only: ETOPO gap-fill never gets the
+20 fm BlueTopo slope steps — on ~1.8 km cells that draws false canyon geometry
+(the jagged "V" and comb streaks). BlueTopo tiles at z10–z13 share one ladder
+so zooming in does not redraw the shelf break.
 
 z≤9 deliberately keeps v1's spacing — those tiles already look right, and
 re-rendering them to a finer ladder would only add noise.

@@ -353,7 +353,9 @@ const CONTOURS_TILES_NATIVE_ZOOM = 13;
 //        the quantization itself, which reads as noise. z10's 5 fm pass stands.
 //   r5 — 200/500/1000/2000 fm recoloured to a cooler blue so 100 fm is the only
 //        white line and the shelf break is unambiguous
-const CONTOURS_TILES_REVISION = "r5";
+//   r6 — ETOPO gap-fill at z11–13 uses medium ladder only; partial BlueTopo tiles
+//        with survey cutoffs replaced (false canyon geometry coast-wide)
+const CONTOURS_TILES_REVISION = "r6";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).

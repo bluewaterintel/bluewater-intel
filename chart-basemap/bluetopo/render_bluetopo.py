@@ -42,6 +42,29 @@ except ImportError:
 gdal.UseExceptions()
 
 SAMPLE_PX = 192  # grid points per tile edge (+ padding) for contouring
+# BlueTopo survey footprints often end mid-tile. Contouring the covered half
+# and leaving the other blank produces the hard horizontal/vertical seams seen
+# off NE canyons — worse than drawing the whole tile from ETOPO.
+MIN_TILE_COVERAGE = 0.92   # fraction of water pixels with valid elevation
+
+
+def core_tile_mask(shape, pad_frac=0.30):
+    """Boolean mask for the nominal tile interior (excludes contour padding)."""
+    h, w = shape
+    margin = int(min(h, w) * pad_frac / (1 + 2 * pad_frac))
+    out = np.zeros(shape, dtype=bool)
+    out[margin:h - margin, margin:w - margin] = True
+    return out
+
+
+def water_coverage(elev, pad_frac=0.30):
+    """Share of in-tile water cells that carry valid bathymetry."""
+    core = core_tile_mask(elev.shape, pad_frac)
+    water = core & (elev < 0) & np.isfinite(elev)
+    denom = int(core.sum())
+    if denom == 0:
+        return 0.0
+    return float(water.sum()) / denom
 
 
 def sample_tile(ds, z, xt, yt, pad_frac=0.30):
@@ -141,9 +164,13 @@ def main():
                     skipped += 1
                     continue
                 Xm, Ym, elev = sampled
+                if water_coverage(elev) < MIN_TILE_COVERAGE:
+                    skipped += 1
+                    continue
                 if render_tile_merc(Xm, Ym, elev, z, xt, yt, args.out, cmap,
                                     overlay=args.overlay,
-                                    max_depth_fm=args.max_depth_fm):
+                                    max_depth_fm=args.max_depth_fm,
+                                    source="bluetopo"):
                     n += 1
                 else:
                     skipped += 1
