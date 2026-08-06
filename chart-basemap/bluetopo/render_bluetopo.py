@@ -41,7 +41,7 @@ except ImportError:
 
 gdal.UseExceptions()
 
-SAMPLE_PX = 192  # grid points per tile edge (+ padding) for contouring
+SAMPLE_PX = 256  # contour grid; was 192 — coarser z10 tiles need more points
 # BlueTopo survey footprints often end mid-tile. Contouring the covered half
 # and leaving the other blank produces the hard horizontal/vertical seams seen
 # off NE canyons — worse than drawing the whole tile from ETOPO.
@@ -67,8 +67,12 @@ def water_coverage(elev, pad_frac=0.30):
     return float(water.sum()) / denom
 
 
-def sample_tile(ds, z, xt, yt, pad_frac=0.30):
+def sample_tile(ds, z, xt, yt, pad_frac=None):
     """Warp a padded window around one XYZ tile into a Mercator grid."""
+    if pad_frac is None:
+        # Wider pad at high zoom so shelf-break tiles that sit mostly on the
+        # slope still sample shallow grid cells from inshore neighbours.
+        pad_frac = 0.35 if z <= 10 else (0.45 if z == 11 else 0.55)
     x0, y0, x1, y1 = tile_bounds_merc(z, xt, yt)
     dx, dy = x1 - x0, y1 - y0
     bx0, bx1 = x0 - dx * pad_frac, x1 + dx * pad_frac
@@ -120,7 +124,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tif", required=True, help="EPSG:3857 BlueTopo GeoTIFF")
     ap.add_argument("--out", default="../tiles_conus")
-    ap.add_argument("--zmin", type=int, default=10)
+    ap.add_argument("--zmin", type=int, default=9)
     ap.add_argument("--zmax", type=int, default=13)
     ap.add_argument("--overlay", action="store_true",
                     help="transparent contour-only tiles")

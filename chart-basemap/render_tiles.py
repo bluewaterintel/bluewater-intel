@@ -20,6 +20,7 @@ import os
 
 import numpy as np
 from PIL import Image
+from scipy.ndimage import gaussian_filter
 import matplotlib
 
 matplotlib.use("Agg")
@@ -68,34 +69,77 @@ def _ladder(start, stop, step):
 def contour_levels_for_zoom(z, source="etopo"):
     """(minor, mid, major) fathom levels for one zoom.
 
-    source="bluetopo" — survey-grade grid; may use 5 fm shelf / 20 fm slope.
-    source="etopo"    — 1 arc-min (~1.8 km); finer steps draw interpolation
-                        artifacts (the jagged "V canyon" and comb streaks).
+    source="bluetopo" — survey-grade grid.
+    source="etopo"    — 1 arc-min (~1.8 km).
 
-    Anchor majors (100/200/500/1000/2000) are always in MAJOR_FM and drawn
-    separately as the shelfbreak line at every zoom ≥ 6.
+    BlueTopo at z≤10 uses the medium/overview ladder. Fine 5 fm hairlines on
+    an ~8 km tile make the shelf look jagged when zoomed out; z11+ keeps detail.
     """
     if z <= 6:
         return [], [500, 1500], [100, 1000, 2000]
     if z <= 8:
         return [], LEGACY_MID_FM, MAJOR_FM
     if z == 9:
-        minor, mid = [10, 20, 30, 40, 60, 80], LEGACY_MID_FM
-    elif source == "bluetopo" and z >= 10:
-        # Same ladder at z10–z13 so zooming in doesn't redraw the shelf break.
+        # Overview zoom: sparser minors so ETOPO/BlueTopo doesn't comb the shelf.
+        minor, mid = [10, 20, 30, 40, 50, 60, 80], LEGACY_MID_FM
+    elif source == "bluetopo" and z >= 11:
         minor = (_ladder(5, 95, 5) + _ladder(120, 480, 20)
                  + _ladder(600, 1900, 100))
         mid = FINE_MID_FM
     elif z >= 10:
-        # ETOPO gap-fill at z10–z13: medium spacing only. Using the BlueTopo
-        # ladder here was the main source of false canyon geometry off NE and
-        # the mid-Atlantic — ETOPO cannot honestly resolve 20 fm steps.
+        # ETOPO gap-fill AND BlueTopo overview (z10): medium spacing only.
         minor, mid = (_ladder(5, 30, 5) + _ladder(40, 90, 10)
                       + _ladder(150, 450, 50)), LEGACY_MID_FM
     else:
         minor, mid = [10, 20, 30, 40, 60, 80], LEGACY_MID_FM
     drop = set(mid) | set(MAJOR_FM)
     return [v for v in minor if v not in drop], mid, MAJOR_FM
+
+
+def _tile_core_depth_range(Xm, Ym, depth_fm, z, xt, yt):
+    """Min/max depth (fm) over the nominal tile interior, not the contour pad."""
+    x0, y0, x1, y1 = tile_bounds_merc(z, xt, yt)
+    core = ((Xm >= x0) & (Xm <= x1) & (Ym >= y0) & (Ym <= y1)
+            & np.isfinite(depth_fm))
+    c = depth_fm[core]
+    if c.size == 0:
+        return None, None
+    return float(np.nanmin(c)), float(np.nanmax(c))
+
+
+def should_draw_shelfbreak(Xm, Ym, depth_fm, z, xt, yt):
+    """Whether the 100 fm curve should appear on this tile.
+
+    Padded samples made z11 canyon tiles look like they span the shelf break
+    (32–1500 fm) even when the tile interior is all deep water — that produced
+    gaps next to z10 tiles still showing a spurious shelf line from ETOPO.
+    """
+    lo, hi = _tile_core_depth_range(Xm, Ym, depth_fm, z, xt, yt)
+    if lo is None:
+        return False
+    return lo <= SHELFBREAK_FM <= hi
+
+
+SHELF_COARSE_PX = 64  # overview shelf geometry decoupled from hairline grid
+
+
+def _coarsen_grid(Xm, Ym, field, target=SHELF_COARSE_PX):
+    h, w = field.shape
+    if min(h, w) <= target:
+        return Xm, Ym, field
+    sy = max(1, h // target)
+    sx = max(1, w // target)
+    return Xm[::sy, ::sx], Ym[::sy, ::sx], field[::sy, ::sx]
+
+
+def _shelfbreak_grid(Xm, Ym, depth_fm, z):
+    """Grid for the 100 fm signature line — coarser at overview zooms."""
+    field = depth_fm.astype(float)
+    if z <= 10:
+        Xm, Ym, field = _coarsen_grid(Xm, Ym, field)
+        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=1.2)
+    return Xm, Ym, field
+
 
 def label_levels_for_zoom(z):
     """Which levels get a number. Deliberately sparser than the line set —
@@ -169,18 +213,21 @@ def _save_tile(fig, path, transparent):
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=100, transparent=transparent)
     buf.seek(0)
-    img = Image.open(buf)
+    img = Image.open(buf).convert("RGBA")
     if transparent:
-        # Overlay tiles are flat-colour line art — a few line colours, their
-        # halos, and the antialiased blend between them. A 64-entry palette is
-        # visually lossless here and cuts them to roughly a fifth of 32-bit
-        # RGBA, which is what pays for the finer contour ladder. FASTOCTREE is
-        # the one Pillow quantizer that preserves the alpha channel.
-        out = img.convert("RGBA").quantize(colors=TILE_PALETTE_COLORS,
-                                           method=Image.FASTOCTREE)
+        # FASTOCTREE can merge the shelfbreak white into cyan hairlines when a
+        # tile carries many 5 fm steps. Pin shelfbreak pixels to pure white
+        # before quantize so 100 fm survives on z11+ tiles.
+        data = np.array(img)
+        shelf = ((data[:, :, 0] >= 185) & (data[:, :, 0] <= 215)
+                 & (data[:, :, 1] >= 228) & (data[:, :, 2] >= 240)
+                 & (data[:, :, 3] > 80))
+        if shelf.any():
+            data[shelf, 0:3] = 255
+            img = Image.fromarray(data)
+        out = img.quantize(colors=TILE_PALETTE_COLORS,
+                           method=Image.FASTOCTREE)
     else:
-        # Basemap tiles carry a smooth depth gradient, which visibly bands at a
-        # small palette. Leave them truecolour.
         out = img.convert("RGB")
     out.save(path, optimize=True)
     buf.close()
@@ -255,9 +302,16 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
     if major_lv:
         drawn.append(haloed(ax.contour(Xm, Ym, depth_fm, levels=major_lv,
                      colors=[STYLE["major_line"]], linewidths=1.3), 1.3))
-    if lo <= SHELFBREAK_FM <= hi:
-        drawn.append(haloed(ax.contour(Xm, Ym, depth_fm, levels=[SHELFBREAK_FM],
-                     colors=[STYLE["shelfbreak_line"]], linewidths=1.9), 1.9))
+    shelf_X, shelf_Y, shelf_field = _shelfbreak_grid(Xm, Ym, depth_fm, z)
+    draw_shelf = should_draw_shelfbreak(Xm, Ym, depth_fm, z, xt, yt)
+    if draw_shelf:
+        # Dark underlay for contrast; skip path_effects halo — it ate the white
+        # core at z11+ after palette quantize.
+        ax.contour(shelf_X, shelf_Y, shelf_field, levels=[SHELFBREAK_FM],
+                   colors=["#000000AA"], linewidths=3.4, zorder=9)
+        cs = ax.contour(shelf_X, shelf_Y, shelf_field, levels=[SHELFBREAK_FM],
+                        colors=[STYLE["shelfbreak_line"]], linewidths=2.4, zorder=10)
+        drawn.append(cs)
 
     if not drawn and overlay:
         plt.close(fig)
@@ -265,7 +319,7 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
 
     lbl_levels = set(label_levels_for_zoom(z))
     for cs in drawn:
-        lv = [l for l in cs.levels if l in lbl_levels]
+        lv = [l for l in cs.levels if l in lbl_levels and l != SHELFBREAK_FM]
         if not lv:
             continue
         texts = ax.clabel(cs, levels=lv, fmt=fmt_fm, fontsize=5.4,
@@ -275,6 +329,17 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
             t.set_path_effects([
                 matplotlib.patheffects.withStroke(
                     linewidth=1.6, foreground=STYLE["label_halo"])])
+    # Shelf-break label on its own — inline clabel was erasing the 100 fm curve.
+    if draw_shelf and SHELFBREAK_FM in lbl_levels:
+        shelf_cs = [cs for cs in drawn if SHELFBREAK_FM in cs.levels]
+        if shelf_cs:
+            texts = ax.clabel(shelf_cs[0], levels=[SHELFBREAK_FM], fmt=fmt_fm,
+                              fontsize=5.8, inline=False)
+            for t in texts:
+                t.set_color(STYLE["label_color"])
+                t.set_path_effects([
+                    matplotlib.patheffects.withStroke(
+                        linewidth=1.6, foreground=STYLE["label_halo"])])
 
     d = os.path.join(out_dir, str(z), str(xt))
     os.makedirs(d, exist_ok=True)

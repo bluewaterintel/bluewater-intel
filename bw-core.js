@@ -355,7 +355,7 @@ const CONTOURS_TILES_NATIVE_ZOOM = 13;
 //        white line and the shelf break is unambiguous
 //   r6 — ETOPO gap-fill at z11–13 uses medium ladder only; partial BlueTopo tiles
 //        with survey cutoffs replaced (false canyon geometry coast-wide)
-const CONTOURS_TILES_REVISION = "r6";
+const CONTOURS_TILES_REVISION = "r7";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
