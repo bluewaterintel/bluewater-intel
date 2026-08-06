@@ -68,7 +68,17 @@ SHALLOW_MASK_FM = 40
 # Shelf-break grid uses a wider shallow cut — keeps the 100 fm curve offshore.
 SHELFBREAK_SHALLOW_FM = 55
 SHELFBREAK_SHALLOW_DILATE = 2  # grid cells; eats ETOPO deep pockets in sounds
+# Overview zoom: 20 fm shelf steps — enough detail without the 70/80/90 fm
+# comb artifacts ETOPO draws when hairlines are spaced at 10 fm.
+OVERVIEW_MINOR_FM = [20, 40, 60, 80]
 NEAR_SHELF_FM = 15   # draw shelf when core comes within this many fm of 100
+# WGS84 bboxes (west, south, east, north) where ETOPO carries false deep pockets
+# in sounds — 100 fm shelf segments here are always spurious.
+SOUND_SHELF_EXCLUSIONS = [
+    (-77.2, 34.7, -75.3, 36.0),   # Pamlico / Albemarle / Roanoke sounds
+    (-76.8, 36.8, -75.8, 37.5),   # Chesapeake mouth / lower bay
+    (-76.5, 38.8, -75.2, 39.6),   # Delaware Bay
+]
 
 def _ladder(start, stop, step):
     return list(range(start, stop + 1, step))
@@ -81,23 +91,24 @@ def contour_levels_for_zoom(z, source="etopo"):
 
     ETOPO cannot resolve 5–10 fm hairlines; drawing them at z8–z10 produces
     the jagged 70/80/90 fm artifacts off Nantucket and Hatteras. Overview
-    zooms stick to anchor + emphasis lines only.
+    zooms use 20 fm shelf steps plus coarsened grid smoothing instead.
     """
     if z <= 6:
         return [], [500, 1500], [100, 1000, 2000]
     if z <= 8:
-        # Way zoomed out: shelf anchors only.
         return [], [50, 75], MAJOR_FM
     if z == 9:
-        return [], [50, 75], MAJOR_FM
+        drop = set([50, 75]) | set(MAJOR_FM)
+        minor = [v for v in OVERVIEW_MINOR_FM if v not in drop]
+        return minor, [50, 75], MAJOR_FM
     if source == "bluetopo" and z >= 11:
         minor = (_ladder(5, 95, 5) + _ladder(120, 480, 20)
                  + _ladder(600, 1900, 100))
         mid = FINE_MID_FM
     elif z == 10:
-        # Overview z10 (ETOPO + BlueTopo): no 40–90 fm hairlines — they comb
-        # into the jagged false structure off Nantucket and Hatteras.
-        return [], LEGACY_MID_FM, MAJOR_FM
+        drop = set(LEGACY_MID_FM) | set(MAJOR_FM)
+        minor = [v for v in OVERVIEW_MINOR_FM if v not in drop]
+        return minor, LEGACY_MID_FM, MAJOR_FM
     elif z >= 11:
         # ETOPO gap-fill at z11–13.
         minor, mid = (_ladder(5, 30, 5) + _ladder(40, 90, 10)
@@ -142,12 +153,7 @@ def _shelf_contour_hits_tile(Xm, Ym, depth_fm, z, xt, yt, margin_frac=0.02):
     my = (y1 - y0) * margin_frac
     bx0, bx1 = x0 + mx, x1 - mx
     by0, by1 = y0 + my, y1 - my
-    Xs, Ys, field = _shelfbreak_grid(Xm, Ym, depth_fm, z)
-    fig = plt.figure(figsize=(1, 1))
-    ax = fig.add_axes([0, 0, 1, 1])
-    cs = ax.contour(Xs, Ys, field, levels=[SHELFBREAK_FM])
-    plt.close(fig)
-    for seg in cs.allsegs[0]:
+    for seg in _shelfbreak_segments(Xm, Ym, depth_fm, z):
         for px, py in seg:
             if bx0 <= px <= bx1 and by0 <= py <= by1:
                 return True
@@ -171,8 +177,11 @@ def should_draw_shelfbreak(Xm, Ym, depth_fm, z, xt, yt):
     return False
 
 
-SHELF_COARSE_PX = 64  # overview shelf geometry decoupled from hairline grid
+SHELF_COARSE_PX = 96  # only used at z<=8 — z9+ keeps full-res shelf break
 OVERVIEW_COARSE_PX = 64
+SHELF_TILE_MAX_FM = 350  # coarsen contour grid only on shelf/slope tiles
+SHELF_SEGMENT_MIN_FM = 75   # drop shelf segments sampling shallower than this
+SHELF_SEGMENT_OFFSHORE_FRAC = 0.55
 
 
 def _coarsen_grid(Xm, Ym, field, target=SHELF_COARSE_PX):
@@ -185,20 +194,86 @@ def _coarsen_grid(Xm, Ym, field, target=SHELF_COARSE_PX):
 
 
 def _shelfbreak_grid(Xm, Ym, depth_fm, z):
-    """Grid for the 100 fm signature line — coarser at overview zooms."""
+    """Grid for the 100 fm signature line.
+
+    Never coarsen at z9+ — doing so was erasing the shelf-break curve entirely.
+    Low zoom (z<=8) may coarsen lightly so the line stays smooth, not jagged.
+    """
     field = _offshore_field_for_shelf(depth_fm)
-    if z <= 10:
-        Xm, Ym, field = _coarsen_grid(Xm, Ym, field)
-        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=1.4)
+    if z <= 8:
+        Xm, Ym, field = _coarsen_grid(Xm, Ym, field, target=SHELF_COARSE_PX)
+        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=0.8)
     return Xm, Ym, field
+
+
+def _segment_offshore_fraction(seg, Xm, Ym, depth_fm, min_fm=SHELF_SEGMENT_MIN_FM):
+    """Share of polyline vertices sampling water at least min_fm deep."""
+    if len(seg) == 0:
+        return 0.0
+    ok = 0
+    for px, py in seg:
+        dist = (Xm - px) ** 2 + (Ym - py) ** 2
+        i, j = np.unravel_index(np.argmin(dist), dist.shape)
+        d = depth_fm[i, j]
+        if np.isfinite(d) and d >= min_fm:
+            ok += 1
+    return ok / len(seg)
+
+
+def _segment_in_sound_exclusion(seg):
+    """True when most of a shelf segment sits inside a known sound/inlet."""
+    if len(seg) == 0:
+        return False
+    inside = 0
+    for px, py in seg:
+        lon = merc_to_lon(px)
+        lat = merc_to_lat(py)
+        for w, s, e, n in SOUND_SHELF_EXCLUSIONS:
+            if w <= lon <= e and s <= lat <= n:
+                inside += 1
+                break
+    return inside / len(seg) >= 0.35
+
+
+def _shelfbreak_segments(Xm, Ym, depth_fm, z):
+    """100 fm curve segments kept only where bathymetry is offshore."""
+    shelf_X, shelf_Y, shelf_field = _shelfbreak_grid(Xm, Ym, depth_fm, z)
+    fig = plt.figure(figsize=(1, 1))
+    ax = fig.add_axes([0, 0, 1, 1])
+    cs = ax.contour(shelf_X, shelf_Y, shelf_field, levels=[SHELFBREAK_FM])
+    plt.close(fig)
+    kept = []
+    for seg in cs.allsegs[0]:
+        if len(seg) < 2:
+            continue
+        if _segment_in_sound_exclusion(seg):
+            continue
+        if _segment_offshore_fraction(seg, shelf_X, shelf_Y, depth_fm) >= SHELF_SEGMENT_OFFSHORE_FRAC:
+            kept.append(np.asarray(seg))
+    return kept
+
+
+def _draw_shelfbreak(ax, Xm, Ym, depth_fm, z):
+    """Draw filtered 100 fm segments; return True if anything was stroked."""
+    segs = _shelfbreak_segments(Xm, Ym, depth_fm, z)
+    for seg in segs:
+        ax.plot(seg[:, 0], seg[:, 1], color="#000000AA", linewidth=3.4,
+                solid_capstyle="round", zorder=9)
+        ax.plot(seg[:, 0], seg[:, 1], color=STYLE["shelfbreak_line"], linewidth=2.4,
+                solid_capstyle="round", zorder=10)
+    return bool(segs)
 
 
 def _contour_grid(Xm, Ym, depth_fm, z, source):
     """Bathymetry grid for general contour lines."""
     field = _mask_shallow(depth_fm)
-    if z <= 10:
+    finite = field[np.isfinite(field)]
+    lo = float(np.nanmin(finite)) if finite.size else np.inf
+    # Coarsen only on shelf/slope tiles. Abyssal tiles (canyon floor) kept at
+    # full resolution so 500/1000/2000 fm lines still render — fixes blank strips.
+    if lo < SHELF_TILE_MAX_FM and z <= 10:
         Xm, Ym, field = _coarsen_grid(Xm, Ym, field, target=OVERVIEW_COARSE_PX)
-        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=1.1)
+        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=1.0)
     elif z <= 8:
         Xm, Ym, field = _coarsen_grid(Xm, Ym, field, target=OVERVIEW_COARSE_PX)
         field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=1.0)
@@ -368,18 +443,17 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
     if major_lv:
         drawn.append(haloed(ax.contour(cX, cY, cField, levels=major_lv,
                      colors=[STYLE["major_line"]], linewidths=1.3), 1.3))
-    shelf_X, shelf_Y, shelf_field = _shelfbreak_grid(Xm, Ym, depth_fm_raw, z)
     draw_shelf = should_draw_shelfbreak(Xm, Ym, depth_fm_raw, z, xt, yt)
+    shelf_segs = []
     if draw_shelf:
-        # Dark underlay for contrast; skip path_effects halo — it ate the white
-        # core at z11+ after palette quantize.
-        ax.contour(shelf_X, shelf_Y, shelf_field, levels=[SHELFBREAK_FM],
-                   colors=["#000000AA"], linewidths=3.4, zorder=9)
-        cs = ax.contour(shelf_X, shelf_Y, shelf_field, levels=[SHELFBREAK_FM],
-                        colors=[STYLE["shelfbreak_line"]], linewidths=2.4, zorder=10)
-        drawn.append(cs)
+        shelf_segs = _shelfbreak_segments(Xm, Ym, depth_fm_raw, z)
+        for seg in shelf_segs:
+            ax.plot(seg[:, 0], seg[:, 1], color="#000000AA", linewidth=3.4,
+                    solid_capstyle="round", zorder=9)
+            ax.plot(seg[:, 0], seg[:, 1], color=STYLE["shelfbreak_line"], linewidth=2.4,
+                    solid_capstyle="round", zorder=10)
 
-    if not drawn and overlay:
+    if not drawn and not shelf_segs and overlay:
         plt.close(fig)
         return False  # transparent overlay with no line on it — skip the tile
 
@@ -395,17 +469,14 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
             t.set_path_effects([
                 matplotlib.patheffects.withStroke(
                     linewidth=1.6, foreground=STYLE["label_halo"])])
-    # Shelf-break label on its own — inline clabel was erasing the 100 fm curve.
-    if draw_shelf and SHELFBREAK_FM in lbl_levels:
-        shelf_cs = [cs for cs in drawn if SHELFBREAK_FM in cs.levels]
-        if shelf_cs:
-            texts = ax.clabel(shelf_cs[0], levels=[SHELFBREAK_FM], fmt=fmt_fm,
-                              fontsize=5.8, inline=False)
-            for t in texts:
-                t.set_color(STYLE["label_color"])
-                t.set_path_effects([
-                    matplotlib.patheffects.withStroke(
-                        linewidth=1.6, foreground=STYLE["label_halo"])])
+    # Shelf-break label on the longest offshore segment — inline clabel erases the curve.
+    if shelf_segs and SHELFBREAK_FM in lbl_levels:
+        longest = max(shelf_segs, key=lambda s: len(s))
+        mid = longest[len(longest) // 2]
+        ax.text(mid[0], mid[1], fmt_fm(SHELFBREAK_FM), fontsize=5.8,
+                color=STYLE["label_color"], ha="center", va="center", zorder=11,
+                path_effects=[matplotlib.patheffects.withStroke(
+                    linewidth=1.6, foreground=STYLE["label_halo"])])
 
     d = os.path.join(out_dir, str(z), str(xt))
     os.makedirs(d, exist_ok=True)

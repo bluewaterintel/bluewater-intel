@@ -358,7 +358,8 @@ const CONTOURS_TILES_NATIVE_ZOOM = 13;
 //   r7 — 100 fm shelf break only when tile interior spans it; coarser overview geometry
 //   r8 — (superseded) partial sound-mask pass
 //   r9 — offshore 100 fm mask strips Pamlico/Hatteras loops; z10 drops 40–90 fm hairlines
-const CONTOURS_TILES_REVISION = "r9";
+//   r10 — restore z9/z10 shelf contours; stop coarsening that erased the 100 fm line
+const CONTOURS_TILES_REVISION = "r10";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
