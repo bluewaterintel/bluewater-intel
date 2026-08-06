@@ -27,7 +27,7 @@ def main():
     ap.add_argument("--zone", help="zone name from zones.py (requires fetched tif)")
     ap.add_argument("--tif", help="EPSG:3857 GeoTIFF path")
     ap.add_argument("--label", default=None, help="manifest label prefix")
-    ap.add_argument("--zmin", type=int, default=9)
+    ap.add_argument("--zmin", type=int, default=8)
     ap.add_argument("--zmax", type=int, default=13)
     ap.add_argument("--out", default=str(WORK / "zone_refresh"))
     ap.add_argument("--apply", action="store_true")

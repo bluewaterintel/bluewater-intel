@@ -124,7 +124,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tif", required=True, help="EPSG:3857 BlueTopo GeoTIFF")
     ap.add_argument("--out", default="../tiles_conus")
-    ap.add_argument("--zmin", type=int, default=9)
+    ap.add_argument("--zmin", type=int, default=8)
     ap.add_argument("--zmax", type=int, default=13)
     ap.add_argument("--overlay", action="store_true",
                     help="transparent contour-only tiles")

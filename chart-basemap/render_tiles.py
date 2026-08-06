@@ -20,7 +20,7 @@ import os
 
 import numpy as np
 from PIL import Image
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import binary_dilation, gaussian_filter
 import matplotlib
 
 matplotlib.use("Agg")
@@ -62,6 +62,13 @@ SHELFBREAK_FM = 100  # the shelf break: signature line of the whole chart
 # emphasis never introduces an off-step line crowding its neighbours.
 LEGACY_MID_FM = [50, 75, 250, 750, 1500]   # z<=10, unchanged from v1
 FINE_MID_FM = [50, 75, 300, 400, 1500]     # z>=11
+# Sound / inlet cells shallower than this are masked before contouring so the
+# 100 fm shelf line doesn't loop through Pamlico, Chesapeake, etc.
+SHALLOW_MASK_FM = 40
+# Shelf-break grid uses a wider shallow cut — keeps the 100 fm curve offshore.
+SHELFBREAK_SHALLOW_FM = 55
+SHELFBREAK_SHALLOW_DILATE = 2  # grid cells; eats ETOPO deep pockets in sounds
+NEAR_SHELF_FM = 15   # draw shelf when core comes within this many fm of 100
 
 def _ladder(start, stop, step):
     return list(range(start, stop + 1, step))
@@ -72,28 +79,49 @@ def contour_levels_for_zoom(z, source="etopo"):
     source="bluetopo" — survey-grade grid.
     source="etopo"    — 1 arc-min (~1.8 km).
 
-    BlueTopo at z≤10 uses the medium/overview ladder. Fine 5 fm hairlines on
-    an ~8 km tile make the shelf look jagged when zoomed out; z11+ keeps detail.
+    ETOPO cannot resolve 5–10 fm hairlines; drawing them at z8–z10 produces
+    the jagged 70/80/90 fm artifacts off Nantucket and Hatteras. Overview
+    zooms stick to anchor + emphasis lines only.
     """
     if z <= 6:
         return [], [500, 1500], [100, 1000, 2000]
     if z <= 8:
-        return [], LEGACY_MID_FM, MAJOR_FM
+        # Way zoomed out: shelf anchors only.
+        return [], [50, 75], MAJOR_FM
     if z == 9:
-        # Overview zoom: sparser minors so ETOPO/BlueTopo doesn't comb the shelf.
-        minor, mid = [10, 20, 30, 40, 50, 60, 80], LEGACY_MID_FM
-    elif source == "bluetopo" and z >= 11:
+        return [], [50, 75], MAJOR_FM
+    if source == "bluetopo" and z >= 11:
         minor = (_ladder(5, 95, 5) + _ladder(120, 480, 20)
                  + _ladder(600, 1900, 100))
         mid = FINE_MID_FM
-    elif z >= 10:
-        # ETOPO gap-fill AND BlueTopo overview (z10): medium spacing only.
+    elif z == 10:
+        # Overview z10 (ETOPO + BlueTopo): no 40–90 fm hairlines — they comb
+        # into the jagged false structure off Nantucket and Hatteras.
+        return [], LEGACY_MID_FM, MAJOR_FM
+    elif z >= 11:
+        # ETOPO gap-fill at z11–13.
         minor, mid = (_ladder(5, 30, 5) + _ladder(40, 90, 10)
                       + _ladder(150, 450, 50)), LEGACY_MID_FM
     else:
-        minor, mid = [10, 20, 30, 40, 60, 80], LEGACY_MID_FM
+        minor, mid = [], [50, 75]
     drop = set(mid) | set(MAJOR_FM)
     return [v for v in minor if v not in drop], mid, MAJOR_FM
+
+
+def _mask_shallow(depth_fm, cutoff_fm=SHALLOW_MASK_FM):
+    """Drop estuary / inlet cells so contours stay offshore."""
+    out = depth_fm.astype(float)
+    out[out < cutoff_fm] = np.nan
+    return out
+
+
+def _offshore_field_for_shelf(depth_fm):
+    """Bathymetry for the 100 fm signature — strips sound/inlet pockets."""
+    field = _mask_shallow(depth_fm, cutoff_fm=SHELFBREAK_SHALLOW_FM)
+    shallow = np.isfinite(depth_fm) & (depth_fm < SHELFBREAK_SHALLOW_FM)
+    if SHELFBREAK_SHALLOW_DILATE > 0 and shallow.any():
+        field[binary_dilation(shallow, iterations=SHELFBREAK_SHALLOW_DILATE)] = np.nan
+    return field
 
 
 def _tile_core_depth_range(Xm, Ym, depth_fm, z, xt, yt):
@@ -107,20 +135,44 @@ def _tile_core_depth_range(Xm, Ym, depth_fm, z, xt, yt):
     return float(np.nanmin(c)), float(np.nanmax(c))
 
 
-def should_draw_shelfbreak(Xm, Ym, depth_fm, z, xt, yt):
-    """Whether the 100 fm curve should appear on this tile.
+def _shelf_contour_hits_tile(Xm, Ym, depth_fm, z, xt, yt, margin_frac=0.02):
+    """True when the 100 fm curve crosses the tile viewport (coarse check)."""
+    x0, y0, x1, y1 = tile_bounds_merc(z, xt, yt)
+    mx = (x1 - x0) * margin_frac
+    my = (y1 - y0) * margin_frac
+    bx0, bx1 = x0 + mx, x1 - mx
+    by0, by1 = y0 + my, y1 - my
+    Xs, Ys, field = _shelfbreak_grid(Xm, Ym, depth_fm, z)
+    fig = plt.figure(figsize=(1, 1))
+    ax = fig.add_axes([0, 0, 1, 1])
+    cs = ax.contour(Xs, Ys, field, levels=[SHELFBREAK_FM])
+    plt.close(fig)
+    for seg in cs.allsegs[0]:
+        for px, py in seg:
+            if bx0 <= px <= bx1 and by0 <= py <= by1:
+                return True
+    return False
 
-    Padded samples made z11 canyon tiles look like they span the shelf break
-    (32–1500 fm) even when the tile interior is all deep water — that produced
-    gaps next to z10 tiles still showing a spurious shelf line from ETOPO.
-    """
+
+def should_draw_shelfbreak(Xm, Ym, depth_fm, z, xt, yt):
+    """Whether the 100 fm curve should appear on this tile."""
     lo, hi = _tile_core_depth_range(Xm, Ym, depth_fm, z, xt, yt)
     if lo is None:
         return False
-    return lo <= SHELFBREAK_FM <= hi
+    if lo <= SHELFBREAK_FM <= hi:
+        return True
+    if hi < 45 or lo > 250:
+        return False
+    # Core comes within NEAR_SHELF_FM of 100 — contour may graze the tile edge
+    # (fixes gaps off NY where core max reads 85–99 fm but the shelf clips in).
+    if (lo <= SHELFBREAK_FM + NEAR_SHELF_FM
+            and hi >= SHELFBREAK_FM - NEAR_SHELF_FM):
+        return _shelf_contour_hits_tile(Xm, Ym, depth_fm, z, xt, yt)
+    return False
 
 
 SHELF_COARSE_PX = 64  # overview shelf geometry decoupled from hairline grid
+OVERVIEW_COARSE_PX = 64
 
 
 def _coarsen_grid(Xm, Ym, field, target=SHELF_COARSE_PX):
@@ -134,10 +186,22 @@ def _coarsen_grid(Xm, Ym, field, target=SHELF_COARSE_PX):
 
 def _shelfbreak_grid(Xm, Ym, depth_fm, z):
     """Grid for the 100 fm signature line — coarser at overview zooms."""
-    field = depth_fm.astype(float)
+    field = _offshore_field_for_shelf(depth_fm)
     if z <= 10:
         Xm, Ym, field = _coarsen_grid(Xm, Ym, field)
-        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=1.2)
+        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=1.4)
+    return Xm, Ym, field
+
+
+def _contour_grid(Xm, Ym, depth_fm, z, source):
+    """Bathymetry grid for general contour lines."""
+    field = _mask_shallow(depth_fm)
+    if z <= 10:
+        Xm, Ym, field = _coarsen_grid(Xm, Ym, field, target=OVERVIEW_COARSE_PX)
+        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=1.1)
+    elif z <= 8:
+        Xm, Ym, field = _coarsen_grid(Xm, Ym, field, target=OVERVIEW_COARSE_PX)
+        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=1.0)
     return Xm, Ym, field
 
 
@@ -237,7 +301,8 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
     """Render one tile from a Web-Mercator elevation grid (BlueTopo path)."""
     x0, y0, x1, y1 = tile_bounds_merc(z, xt, yt)
 
-    depth_fm = np.where(elev_m < 0, -elev_m / M_PER_FATHOM, np.nan)
+    depth_fm_raw = np.where(elev_m < 0, -elev_m / M_PER_FATHOM, np.nan)
+    depth_fm = _mask_shallow(depth_fm_raw)
     land = elev_m >= 0
     if land.all():
         return False
@@ -276,6 +341,7 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
                        linewidths=0.9)
 
     minor, mid, major = contour_levels_for_zoom(z, source=source)
+    cX, cY, cField = _contour_grid(Xm, Ym, depth_fm, z, source)
     def haloed(cs, lw):
         fx = halo_for(lw)
         if fx:
@@ -292,18 +358,18 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
     drawn = []
     minor_lv = spanned(minor)
     if minor_lv:
-        drawn.append(haloed(ax.contour(Xm, Ym, depth_fm, levels=minor_lv,
+        drawn.append(haloed(ax.contour(cX, cY, cField, levels=minor_lv,
                      colors=[STYLE["minor_line"]], linewidths=0.7), 0.7))
     mid_lv = spanned(mid)
     if mid_lv:
-        drawn.append(haloed(ax.contour(Xm, Ym, depth_fm, levels=mid_lv,
+        drawn.append(haloed(ax.contour(cX, cY, cField, levels=mid_lv,
                      colors=[STYLE["mid_line"]], linewidths=1.0), 1.0))
     major_lv = spanned(v for v in major if v != SHELFBREAK_FM)
     if major_lv:
-        drawn.append(haloed(ax.contour(Xm, Ym, depth_fm, levels=major_lv,
+        drawn.append(haloed(ax.contour(cX, cY, cField, levels=major_lv,
                      colors=[STYLE["major_line"]], linewidths=1.3), 1.3))
-    shelf_X, shelf_Y, shelf_field = _shelfbreak_grid(Xm, Ym, depth_fm, z)
-    draw_shelf = should_draw_shelfbreak(Xm, Ym, depth_fm, z, xt, yt)
+    shelf_X, shelf_Y, shelf_field = _shelfbreak_grid(Xm, Ym, depth_fm_raw, z)
+    draw_shelf = should_draw_shelfbreak(Xm, Ym, depth_fm_raw, z, xt, yt)
     if draw_shelf:
         # Dark underlay for contrast; skip path_effects halo — it ate the white
         # core at z11+ after palette quantize.
