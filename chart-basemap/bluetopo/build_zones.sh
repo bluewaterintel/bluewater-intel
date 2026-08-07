@@ -28,8 +28,18 @@ for zone in "$@"; do
   fi
 
   echo "--- render $zone ---"
+  before=$(find $OUT -name '*.png' 2>/dev/null | wc -l)
   $PY render_bluetopo.py --tif "$tif" --out "$OUT" --overlay \
       --zmin 10 --zmax 13 --jobs "$JOBS" || { echo "RENDER FAILED: $zone"; continue; }
+  after=$(find $OUT -name '*.png' 2>/dev/null | wc -l)
+
+  # A zone that draws nothing means the source raster was empty, not that the
+  # region has no bathymetry. Keep the raster so it can be diagnosed instead of
+  # deleting the only evidence.
+  if [ "$after" -le "$before" ]; then
+    echo "RENDER EMPTY: $zone produced 0 tiles — keeping $tif for diagnosis"
+    continue
+  fi
 
   echo "--- cleanup $zone ---"
   rm -rf "$WORK/${zone}_fetch"

@@ -65,10 +65,16 @@ FINE_MID_FM = [50, 75, 300, 400, 1500]     # z>=11
 OVERVIEW_MINOR_FM = [20, 40, 60, 80]   # z9 shelf steps
 # WGS84 bboxes (west, south, east, north) where ETOPO carries false deep pockets
 # in sounds — 100 fm shelf segments here are always spurious.
+# Boxes must stay west of the barrier islands. Off Cape Hatteras the shelf break
+# closes to within ~20 nm of the beach — the 100 fm line sits at -75.5 by 34.8°N —
+# so a single rectangle over the sounds also covers open Atlantic, and the
+# per-tile segment test then discards the real shelf break there. Splitting at
+# the Ocracoke/Hatteras island line keeps the sounds covered without reaching it.
 SOUND_SHELF_EXCLUSIONS = [
-    (-77.2, 34.7, -75.3, 36.0),   # Pamlico / Albemarle / Roanoke sounds
-    (-76.8, 36.8, -75.8, 37.5),   # Chesapeake mouth / lower bay
-    (-76.5, 38.8, -75.2, 39.6),   # Delaware Bay
+    (-77.2, 35.05, -75.4, 36.0),   # Pamlico / Albemarle / Roanoke sounds
+    (-77.2, 34.6, -76.2, 35.05),   # Core / Back sounds, inside Cape Lookout
+    (-76.8, 36.8, -75.8, 37.5),    # Chesapeake mouth / lower bay
+    (-76.5, 38.8, -75.2, 39.6),    # Delaware Bay
 ]
 
 def _ladder(start, stop, step):

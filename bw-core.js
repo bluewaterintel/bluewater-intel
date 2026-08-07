@@ -363,7 +363,12 @@ const CONTOURS_TILES_NATIVE_ZOOM = 13;
 //         which had been fabricating ~1/3 of all overview contour lines along
 //         mask edges. Shallow cut now guards only the 100 fm line, so the inner
 //         shelf is back, and the per-tile shelf-break gate is gone.
-const CONTOURS_TILES_REVISION = "r11";
+//   r12 — z11–z13 rebuilt on all nine BlueTopo zones. The three Gulf zones had
+//         been warping to 100% nodata off a truncated overview pyramid, so they
+//         carried no survey detail at all. The Pamlico exclusion box also
+//         reached into open Atlantic, which erased the 100 fm line off Cape
+//         Hatteras where the shelf break runs within ~20 nm of the beach.
+const CONTOURS_TILES_REVISION = "r12";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).

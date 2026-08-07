@@ -51,11 +51,56 @@ def find_mosaic_sources(project_dir):
     )
 
 
+def purge_unreadable_overviews(src_paths):
+    """Delete .ovr sidecars that can't be read.
+
+    An interrupted mosaic leaves a truncated overview file behind. GDAL then
+    downsamples from it silently, so a warp to a coarser grid returns nodata
+    for every pixel while still exiting 0 — a whole zone renders as zero tiles
+    with no error anywhere. Reading at reduced resolution is what trips the
+    corrupt IFD, so that's the probe.
+    """
+    from osgeo import gdal
+
+    gdal.UseExceptions()
+    for src in src_paths:
+        ovr = Path(f"{src}.ovr")
+        if not ovr.exists():
+            continue
+        try:
+            ds = gdal.Open(src)
+            ds.GetRasterBand(1).ReadAsArray(buf_xsize=64, buf_ysize=64)
+        except RuntimeError as exc:
+            print(f"  corrupt overview, removing {ovr.name}: {exc}".split("\n")[0])
+            ovr.unlink()
+
+
+def assert_has_data(tif):
+    """Fail loudly if a warped raster came out entirely nodata."""
+    from osgeo import gdal
+    import numpy as np
+
+    gdal.UseExceptions()
+    ds = gdal.Open(str(tif))
+    band = ds.GetRasterBand(1)
+    arr = band.ReadAsArray(buf_xsize=1024, buf_ysize=1024).astype("float64")
+    nodata = band.GetNoDataValue()
+    if nodata is not None:
+        arr = np.where(arr == nodata, np.nan, arr)
+    finite = np.isfinite(arr)
+    if not finite.any():
+        raise RuntimeError(
+            f"{tif} warped to 100% nodata — source mosaic or its overviews are bad"
+        )
+    print(f"  validated {tif.name}: {finite.mean():.1%} of sampled pixels have data")
+
+
 def warp_to_3857(src_paths, dst_tif, bbox):
     """Merge source rasters and warp to EPSG:3857, clipped to WGS84 bbox."""
     w, s, e, n = bbox
     dst_tif = Path(dst_tif)
     dst_tif.parent.mkdir(parents=True, exist_ok=True)
+    purge_unreadable_overviews(src_paths)
     # Pin the output grid to 15 m pixels in Web Mercator. Without -tr, gdalwarp
     # inherits the finest source survey resolution (sub-metre in places) and
     # writes a raster orders of magnitude larger than anything z13 can show —
@@ -68,6 +113,10 @@ def warp_to_3857(src_paths, dst_tif, bbox):
         "-te", str(w), str(s), str(e), str(n),
         "-tr", "15", "15",
         "-r", "bilinear",
+        # Downsample from full resolution. Overviews are the only thing GDAL
+        # reads when the target grid is coarser than the source, so a stale or
+        # truncated pyramid would otherwise decide the entire output.
+        "-ovr", "NONE",
         "-multi",
         "-wo", "NUM_THREADS=ALL_CPUS",
         "-dstnodata", "-9999",
@@ -80,6 +129,7 @@ def warp_to_3857(src_paths, dst_tif, bbox):
     ]
     print("gdalwarp:", " ".join(cmd))
     subprocess.run(cmd, check=True)
+    assert_has_data(dst_tif)
     print("wrote", dst_tif)
 
 
