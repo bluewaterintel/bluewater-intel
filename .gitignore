@@ -18,4 +18,9 @@ chart-basemap/.env
 chart-basemap/__pycache__/
 chart-basemap/*.nc
 chart-basemap/bluetopo_work/
+# Render staging dirs — regenerable output, and large enough to bloat the repo
+# (one overview pass is ~6k PNGs).
+chart-basemap/etopo_overview_refresh/
+chart-basemap/etopo_fill*/
+chart-basemap/*.venv/
 .upload-*.log
