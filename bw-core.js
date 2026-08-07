@@ -368,7 +368,13 @@ const CONTOURS_TILES_NATIVE_ZOOM = 13;
 //         carried no survey detail at all. The Pamlico exclusion box also
 //         reached into open Atlantic, which erased the 100 fm line off Cape
 //         Hatteras where the shelf break runs within ~20 nm of the beach.
-const CONTOURS_TILES_REVISION = "r12";
+//   r13 — z5–z9 rebuilt off a grid with BlueTopo averaged onto ETOPO's cells.
+//         ETOPO puts the 100 fm line 2.1 nm inshore of survey at 35.05N, then
+//         jumps 0.11 deg to catch up, which drew a chevron across the 40–100 fm
+//         bundle at Hatteras Canyon. It was bad data rather than coarse data:
+//         BlueTopo on that same 1 arcmin grid steps a near-constant 0.053 deg,
+//         so smoothing only rounded the corner while leaving the line misplaced.
+const CONTOURS_TILES_REVISION = "r13";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
@@ -6054,14 +6060,10 @@ const BasemapSampler = {
 // Basemap tiles loaded or switched → refresh the heat-map land/water mask.
 function scheduleHeatMaskRepaint(){
   BasemapSampler.invalidate();
-  if(!BasemapSampler._repaintScheduled){
-    BasemapSampler._repaintScheduled = true;
-    requestAnimationFrame(() => {
-      BasemapSampler._repaintScheduled = false;
-      if(_heatLayer && typeof _heatLayer._scheduleReset === "function"){
-        _heatLayer._scheduleReset();
-      }
-    });
+  // Debounced inside the layer. Repainting per tile used to mean dozens of full
+  // field renders during a single pan.
+  if(_heatLayer && typeof _heatLayer._onBasemapChanged === "function"){
+    _heatLayer._onBasemapChanged();
   }
 }
 
@@ -6118,20 +6120,23 @@ const HeatCanvasLayer = L.Layer.extend({
       this._canvas.style.willChange = 'transform';
     }
     map.getPanes().overlayPane.appendChild(this._canvas);
-    // PERFORMANCE: the heat field is expensive to repaint (per-pixel field
-    // render + basemap snapshot). Two changes keep zoom/pan smooth:
-    //   1. During a zoom GESTURE we hide the stale canvas (zoomstart) and let
-    //      Leaflet animate the basemap alone; we repaint once at zoomend. This
-    //      removes the jank of Leaflet trying to scale/transform a full-screen
-    //      canvas every animation frame.
-    //   2. moveend/zoomend/resize redraws are coalesced into a single
-    //      requestAnimationFrame so stacked events repaint at most once a frame.
+    // PERFORMANCE: the field is expensive to paint — every 4x4 block costs a
+    // bathymetry lookup, a habitat classify and a basemap sample — so it is
+    // painted ONCE into an offscreen bitmap held in projected pixel space
+    // (_bake) and merely blitted to the viewport afterwards (_blit). Pan and
+    // zoom then cost a single drawImage instead of a full field render, which
+    // is what made the bite map unusable alongside SST. The bake is deliberately
+    // larger than the viewport so ordinary panning stays inside it; it is only
+    // rebuilt when the view leaves it, the zoom drifts too far to upscale
+    // cleanly, or the data itself changes.
     map.on('moveend zoomend viewreset resize', this._scheduleReset, this);
     map.on('zoomstart', this._onZoomStart, this);
     this._reset();
   },
   onRemove: function(map){
     if(this._rafId){ cancelAnimationFrame(this._rafId); this._rafId = null; }
+    if(this._bakeTimer){ clearTimeout(this._bakeTimer); this._bakeTimer = null; }
+    this._invalidateBake();
     if(this._canvas && this._canvas.parentNode){
       this._canvas.parentNode.removeChild(this._canvas);
     }
@@ -6154,6 +6159,69 @@ const HeatCanvasLayer = L.Layer.extend({
       }
     });
   },
+  // How far outside the viewport the bake reaches, in viewport widths per side.
+  // 0.5 makes the bitmap twice the viewport in each direction, so a pan of up to
+  // half a screen needs no repaint at all.
+  _bakePad: 0.5,
+  // Ceiling on either bake dimension. On a large window the padding is trimmed
+  // instead of letting the bitmap grow without bound.
+  _bakeMaxDim: 2600,
+  // Zoom levels the view may drift from the bake before the upscale is worth
+  // repainting for. The field is interpolated off a 0.1-0.25 degree grid, so
+  // stretching it 2x is not visibly softer than rendering it fresh.
+  _bakeZoomDrift: 1,
+
+  _invalidateBake: function(){
+    this._bakeCanvas = null;
+    this._bakeNW = null;
+    this._bakeProvisional = false;
+  },
+
+  _bakeUsable: function(){
+    if(!this._bakeCanvas || !this._bakeNW || !this._map) return false;
+    const map = this._map;
+    if(Math.abs(map.getZoom() - this._bakeZoom) > this._bakeZoomDrift) return false;
+    // A bake taken before the basemap tiles were readable had to mask off
+    // polygons; redo it. Only set when the sampler may still succeed, so a
+    // CORS-blocked basemap can't pin us into repainting on every move.
+    if(this._bakeProvisional) return false;
+    const scale = map.getZoomScale(map.getZoom(), this._bakeZoom);
+    const nw = map.latLngToContainerPoint(this._bakeNW);
+    const size = map.getSize();
+    return nw.x <= 0 && nw.y <= 0 &&
+           nw.x + this._bakeCanvas.width * scale >= size.x &&
+           nw.y + this._bakeCanvas.height * scale >= size.y;
+  },
+
+  // Mercator is conformal and the bake was rasterized on the projected pixel
+  // grid, so placing it is a uniform scale plus a translation.
+  _blit: function(){
+    if(!this._canvas || !this._map) return;
+    const ctx = this._canvas.getContext('2d');
+    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+    if(!this._bakeCanvas || !this._bakeNW) return;
+    const map = this._map;
+    const scale = map.getZoomScale(map.getZoom(), this._bakeZoom);
+    const nw = map.latLngToContainerPoint(this._bakeNW);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this._bakeCanvas, nw.x, nw.y,
+                  this._bakeCanvas.width * scale, this._bakeCanvas.height * scale);
+  },
+
+  // Basemap tiles arrived or the base layer changed, so the land mask may have
+  // shifted. Rebuild only once the tiles stop streaming: during a pan every
+  // single tile fires this, and repainting per tile was the other half of what
+  // made the layer slow.
+  _onBasemapChanged: function(){
+    if(this._bakeTimer) clearTimeout(this._bakeTimer);
+    this._bakeTimer = setTimeout(() => {
+      this._bakeTimer = null;
+      if(!this._map) return;
+      this._invalidateBake();
+      this._scheduleReset();
+    }, 700);
+  },
+
   _reset: function(){
     if(!this._map) return;
     const size = this._map.getSize();
@@ -6161,16 +6229,30 @@ const HeatCanvasLayer = L.Layer.extend({
     L.DomUtil.setPosition(this._canvas, topLeft);
     this._canvas.width = size.x;
     this._canvas.height = size.y;
-    this._redraw();
+    if(!this._bakeUsable()) this._bake();
+    this._blit();
   },
-  _redraw: function(){
-    if(!this._canvas || !this._map) return;
-    const ctx = this._canvas.getContext('2d');
-    const w = this._canvas.width;
-    const h = this._canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
+  // Rasterize the field into the offscreen bitmap. Everything below works in
+  // bake coordinates, which are the viewport's own pixel grid shifted by the
+  // padding — so the basemap sampler still lines up over the on-screen part.
+  _bake: function(){
+    if(!this._map) return;
+    this._invalidateBake();
     if(this._points.length === 0) return;
+
+    const _size = this._map.getSize();
+    const _zoom = this._map.getZoom();
+    const padX = Math.round(Math.max(0, Math.min(_size.x * this._bakePad, (this._bakeMaxDim - _size.x) / 2)));
+    const padY = Math.round(Math.max(0, Math.min(_size.y * this._bakePad, (this._bakeMaxDim - _size.y) / 2)));
+    const w = _size.x + padX * 2;
+    const h = _size.y + padY * 2;
+    if(w <= 0 || h <= 0) return;
+    const p0 = this._map.getPixelBounds().min.subtract([padX, padY]);
+
+    const bakeCanvas = document.createElement('canvas');
+    bakeCanvas.width = w;
+    bakeCanvas.height = h;
+    const ctx = bakeCanvas.getContext('2d');
 
     // ════════════════════════════════════════════════════════════════════════
     // BILINEAR FIELD RENDERING (SatFish-style)
@@ -6261,8 +6343,11 @@ const HeatCanvasLayer = L.Layer.extend({
     // That's O(w/stride + h/stride) projection calls instead of O(w·h/stride²) —
     // typically a ~100× reduction — for a visually identical result (the field is
     // itself a smooth 0.25° interpolation, so sub-pixel projection error is moot).
-    const _llLeft  = map.containerPointToLatLng([0, 0]);
-    const _llRight = map.containerPointToLatLng([w, 0]);
+    // Unproject off the bake's own pixel origin rather than the container, so
+    // the bitmap is tied to geography instead of to wherever the view happens
+    // to sit when it is built.
+    const _llLeft  = map.unproject(p0, _zoom);
+    const _llRight = map.unproject(L.point(p0.x + w, p0.y), _zoom);
     const _lngAtX = new Float64Array(w + PIX_STRIDE);
     for(let x = 0; x <= w; x += PIX_STRIDE){
       const fx = w === 0 ? 0 : x / w;
@@ -6272,7 +6357,7 @@ const HeatCanvasLayer = L.Layer.extend({
     // each sampled row (cheap: h/stride calls) rather than assuming linearity.
     const _latAtY = new Float64Array(h + PIX_STRIDE);
     for(let y = 0; y <= h; y += PIX_STRIDE){
-      _latAtY[y] = map.containerPointToLatLng([0, y]).lat;
+      _latAtY[y] = map.unproject(L.point(p0.x, p0.y + y), _zoom).lat;
     }
 
     for(let y = 0; y < h; y += PIX_STRIDE){
@@ -6309,7 +6394,10 @@ const HeatCanvasLayer = L.Layer.extend({
         // often classifies shelf pixels as land).
         let isWater = null;
         if(!bathyWater && useBasemap){
-          isWater = BasemapSampler.isWater(x, y);
+          // Bake pixels are container pixels shifted by the padding. Anything
+          // in the padded skirt falls outside the snapshot, where isWater
+          // returns null and the polygon check below takes over.
+          isWater = BasemapSampler.isWater(x - padX, y - padY);
         }
         if(isWater === false){
           // Definitive land from the basemap → transparent
@@ -6414,7 +6502,7 @@ const HeatCanvasLayer = L.Layer.extend({
       const snap = document.createElement("canvas");
       snap.width = w; snap.height = h;
       const sctx = snap.getContext("2d");
-      sctx.drawImage(this._canvas, 0, 0);   // crisp masked field (keeps its alpha)
+      sctx.drawImage(bakeCanvas, 0, 0);     // crisp masked field (keeps its alpha)
 
       ctx.clearRect(0, 0, w, h);
       ctx.imageSmoothingEnabled = true;
@@ -6430,6 +6518,15 @@ const HeatCanvasLayer = L.Layer.extend({
       ctx.drawImage(snap, 0, 0);
       ctx.globalCompositeOperation = "source-over";
     }
+
+    this._bakeCanvas = bakeCanvas;
+    this._bakeNW = _llLeft;
+    this._bakeZoom = _zoom;
+    // Without a usable basemap snapshot the mask came from polygons only, so
+    // flag this bake to be retaken once tiles are readable — unless the sampler
+    // has permanently fallen back, in which case polygons are all we will ever
+    // get and retaking would just repaint forever.
+    this._bakeProvisional = !useBasemap && !BasemapSampler.hasFallenBack();
   },
   // Helper: paint a PIX_STRIDE×PIX_STRIDE block of pixels with the same RGBA.
   // This is how the 2x performance saving from PIX_STRIDE is realized — each
@@ -6446,9 +6543,12 @@ const HeatCanvasLayer = L.Layer.extend({
       }
     }
   },
+  // New scores (or a new species/grid) mean the baked bitmap is stale — this is
+  // the one path that must repaint rather than reposition.
   setPoints: function(points){
     this._points = points || [];
-    this._redraw();
+    this._invalidateBake();
+    this._reset();
   },
 });
 
