@@ -10154,6 +10154,12 @@ const LORAN_CHAINS = {
     useBounds: {south: 33.25, north: 38.85, west: -78.55, east: -73.20},
     tdMin: 38950, tdMax: 42750, step: 50,
     labelStep: 100,
+    // Empirical southward correction, Oak Island to Cape May: the family plots
+    // with the right shape and spacing but 1.3 nm north of the positions read
+    // off the water. Applied as a translation of the traced line rather than a
+    // change to offset/scale, because those bend the family — the calibration
+    // notes above list three earlier attempts that did exactly that.
+    latShiftNm: -1.3,
     color: "#f97316",
     labelColor: "#fdba74",
     labelShelfAnchorPath: LORAN_SHELF_ANCHOR_PATH_9960Y,
@@ -10519,6 +10525,15 @@ function loranGapLabelSplit(poly, opts){
   return { a, b, labelLatLng, angleDeg: ang };
 }
 
+// Translate traced hyperbolas in latitude. Shifting the geometry keeps every
+// curve identical and moves labels with their line, since label placement runs
+// off these same points downstream.
+function loranShiftPolylines(polylines, latShiftNm){
+  if(!latShiftNm) return polylines;
+  const dLat = latShiftNm / 60;
+  return polylines.map(poly => poly.map(([lat, lng]) => [lat + dLat, lng]));
+}
+
 function drawLoranLines(){
   if(loranLayer){
     MAP.removeLayer(loranLayer);
@@ -10548,7 +10563,8 @@ function drawLoranLines(){
     const shelfPath = chain.labelShelfAnchorPath;
 
     tdValues.forEach(td => {
-      const polylines = traceLoranLine(td, chain.useBounds, step, chain);
+      const polylines = loranShiftPolylines(
+        traceLoranLine(td, chain.useBounds, step, chain), chain.latShiftNm);
       const isMajor = (td % labelStep === 0);
       const style = isMajor ? majorStyle : halfStyle;
 

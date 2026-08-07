@@ -31,6 +31,22 @@ const envPath = join(root, ".env");
 const BUCKET = "chart-tiles";
 const PROJECT_REF = "mealpzwbjamkjdrsszqe";
 
+// The client fetches contours/<contoursTilesVersion>/{z}/{x}/{y}.png, so the
+// prefix has to track bw-config.js. A hardcoded default silently published a
+// full rebuild to a path nothing reads: every upload reported success, the live
+// map kept serving the tiles it already had, and the only way to notice was
+// diffing published bytes against local ones.
+function defaultPrefix() {
+  const cfg = join(root, "bw-config.js");
+  const m = existsSync(cfg)
+    && readFileSync(cfg, "utf8").match(/contoursTilesVersion\s*:\s*['"]([^'"]+)['"]/);
+  if (!m) {
+    console.error("Cannot read contoursTilesVersion from bw-config.js — pass --prefix explicitly");
+    process.exit(1);
+  }
+  return `contours/${m[1]}`;
+}
+
 function loadEnv() {
   const env = { ...process.env };
   if (!existsSync(envPath)) return env;
@@ -45,7 +61,7 @@ function loadEnv() {
 function parseArgs() {
   const args = process.argv.slice(2);
   let src = null;
-  let prefix = "chart/v1";
+  let prefix = defaultPrefix();
   let workers = 16;
   let manifest = null;
   let deleteList = null;
@@ -57,7 +73,7 @@ function parseArgs() {
     else if (args[i] === "--delete") deleteList = args[++i];
   }
   if (!src && !deleteList) {
-    console.error("Usage: node scripts/upload-chart-tiles.mjs --src <tiles-dir> [--prefix chart/v1] [--workers 16] [--manifest <file>] [--delete <file>]");
+    console.error("Usage: node scripts/upload-chart-tiles.mjs --src <tiles-dir> [--prefix contours/v2] [--workers 16] [--manifest <file>] [--delete <file>]");
     process.exit(1);
   }
   return {
