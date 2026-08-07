@@ -15,6 +15,7 @@ import argparse
 import math
 import os
 import sys
+from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
@@ -120,9 +121,39 @@ def tile_bbox_from_tif(ds_path, zmin, zmax):
     return min(lons), min(lats), max(lons), max(lats)
 
 
+_W = {}
+
+
+def _init_worker(tif, out, overlay, max_depth_fm):
+    """Each worker opens its own dataset — GDAL handles don't survive fork."""
+    _W["ds"] = gdal.Open(str(tif))
+    _W["cmap"] = make_ocean_cmap()
+    _W.update(out=out, overlay=overlay, max_depth_fm=max_depth_fm)
+
+
+def _render_one(job):
+    z, xt, yt = job
+    try:
+        sampled = sample_tile(_W["ds"], z, xt, yt)
+        if sampled is None:
+            return z, False
+        Xm, Ym, elev = sampled
+        if water_coverage(elev) < MIN_TILE_COVERAGE:
+            return z, False
+        ok = render_tile_merc(Xm, Ym, elev, z, xt, yt, _W["out"], _W["cmap"],
+                              overlay=_W["overlay"],
+                              max_depth_fm=_W["max_depth_fm"],
+                              source="bluetopo")
+        return z, bool(ok)
+    except Exception:
+        return z, False
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tif", required=True, help="EPSG:3857 BlueTopo GeoTIFF")
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="parallel worker processes")
     ap.add_argument("--out", default="../tiles_conus")
     ap.add_argument("--zmin", type=int, default=8)
     ap.add_argument("--zmax", type=int, default=13)
@@ -155,33 +186,33 @@ def main():
           f"  bbox {bb_w:.2f},{bb_s:.2f},{bb_e:.2f},{bb_n:.2f}"
           f"  max_depth={args.max_depth_fm} fm")
 
-    total = 0
-    skipped = 0
+    jobs = []
     for z in range(args.zmin, args.zmax + 1):
         xt0, yt1 = lonlat_to_tile(bb_w, bb_s, z)
         xt1, yt0 = lonlat_to_tile(bb_e, bb_n, z)
-        n = 0
         for xt in range(xt0, xt1 + 1):
             for yt in range(yt0, yt1 + 1):
-                sampled = sample_tile(ds, z, xt, yt)
-                if sampled is None:
-                    skipped += 1
-                    continue
-                Xm, Ym, elev = sampled
-                if water_coverage(elev) < MIN_TILE_COVERAGE:
-                    skipped += 1
-                    continue
-                if render_tile_merc(Xm, Ym, elev, z, xt, yt, args.out, cmap,
-                                    overlay=args.overlay,
-                                    max_depth_fm=args.max_depth_fm,
-                                    source="bluetopo"):
-                    n += 1
-                else:
-                    skipped += 1
-        print(f"z{z}: {n} tiles")
-        total += n
-
+                jobs.append((z, xt, yt))
     ds = None
+    print(f"  {len(jobs):,} candidate tiles, {args.jobs} worker(s)")
+
+    per_zoom = {}
+    total = skipped = 0
+    initargs = (tif, args.out, args.overlay, args.max_depth_fm)
+    with Pool(max(1, args.jobs), initializer=_init_worker,
+              initargs=initargs) as pool:
+        for i, (z, ok) in enumerate(
+                pool.imap_unordered(_render_one, jobs, chunksize=32), 1):
+            if ok:
+                per_zoom[z] = per_zoom.get(z, 0) + 1
+                total += 1
+            else:
+                skipped += 1
+            if i % 5000 == 0:
+                print(f"  {i:,}/{len(jobs):,}  {total:,} drawn", flush=True)
+
+    for z in sorted(per_zoom):
+        print(f"z{z}: {per_zoom[z]} tiles")
     print(f"done: {total} tiles written, {skipped} skipped -> {args.out}/")
 
 

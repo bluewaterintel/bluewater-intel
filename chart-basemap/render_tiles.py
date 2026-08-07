@@ -20,7 +20,7 @@ import os
 
 import numpy as np
 from PIL import Image
-from scipy.ndimage import binary_dilation, gaussian_filter
+from scipy.ndimage import gaussian_filter
 import matplotlib
 
 matplotlib.use("Agg")
@@ -62,16 +62,7 @@ SHELFBREAK_FM = 100  # the shelf break: signature line of the whole chart
 # emphasis never introduces an off-step line crowding its neighbours.
 LEGACY_MID_FM = [50, 75, 250, 750, 1500]   # z<=10, unchanged from v1
 FINE_MID_FM = [50, 75, 300, 400, 1500]     # z>=11
-# Sound / inlet cells shallower than this are masked before contouring so the
-# 100 fm shelf line doesn't loop through Pamlico, Chesapeake, etc.
-SHALLOW_MASK_FM = 40
-# Shelf-break grid uses a wider shallow cut — keeps the 100 fm curve offshore.
-SHELFBREAK_SHALLOW_FM = 55
-SHELFBREAK_SHALLOW_DILATE = 2  # grid cells; eats ETOPO deep pockets in sounds
-# Overview zoom: 20 fm shelf steps — enough detail without the 70/80/90 fm
-# comb artifacts ETOPO draws when hairlines are spaced at 10 fm.
-OVERVIEW_MINOR_FM = [20, 40, 60, 80]
-NEAR_SHELF_FM = 15   # draw shelf when core comes within this many fm of 100
+OVERVIEW_MINOR_FM = [20, 40, 60, 80]   # z9 shelf steps
 # WGS84 bboxes (west, south, east, north) where ETOPO carries false deep pockets
 # in sounds — 100 fm shelf segments here are always spurious.
 SOUND_SHELF_EXCLUSIONS = [
@@ -106,9 +97,9 @@ def contour_levels_for_zoom(z, source="etopo"):
                  + _ladder(600, 1900, 100))
         mid = FINE_MID_FM
     elif z == 10:
-        drop = set(LEGACY_MID_FM) | set(MAJOR_FM)
-        minor = [v for v in OVERVIEW_MINOR_FM if v not in drop]
-        return minor, LEGACY_MID_FM, MAJOR_FM
+        # One step coarser than z11 so zooming in adds lines rather than
+        # redrawing the shelf with different geometry.
+        minor, mid = _ladder(10, 90, 10) + _ladder(150, 450, 50), LEGACY_MID_FM
     elif z >= 11:
         # ETOPO gap-fill at z11–13.
         minor, mid = (_ladder(5, 30, 5) + _ladder(40, 90, 10)
@@ -119,69 +110,12 @@ def contour_levels_for_zoom(z, source="etopo"):
     return [v for v in minor if v not in drop], mid, MAJOR_FM
 
 
-def _mask_shallow(depth_fm, cutoff_fm=SHALLOW_MASK_FM):
-    """Drop estuary / inlet cells so contours stay offshore."""
-    out = depth_fm.astype(float)
-    out[out < cutoff_fm] = np.nan
-    return out
-
-
-def _offshore_field_for_shelf(depth_fm):
-    """Bathymetry for the 100 fm signature — strips sound/inlet pockets."""
-    field = _mask_shallow(depth_fm, cutoff_fm=SHELFBREAK_SHALLOW_FM)
-    shallow = np.isfinite(depth_fm) & (depth_fm < SHELFBREAK_SHALLOW_FM)
-    if SHELFBREAK_SHALLOW_DILATE > 0 and shallow.any():
-        field[binary_dilation(shallow, iterations=SHELFBREAK_SHALLOW_DILATE)] = np.nan
-    return field
-
-
-def _tile_core_depth_range(Xm, Ym, depth_fm, z, xt, yt):
-    """Min/max depth (fm) over the nominal tile interior, not the contour pad."""
-    x0, y0, x1, y1 = tile_bounds_merc(z, xt, yt)
-    core = ((Xm >= x0) & (Xm <= x1) & (Ym >= y0) & (Ym <= y1)
-            & np.isfinite(depth_fm))
-    c = depth_fm[core]
-    if c.size == 0:
-        return None, None
-    return float(np.nanmin(c)), float(np.nanmax(c))
-
-
-def _shelf_contour_hits_tile(Xm, Ym, depth_fm, z, xt, yt, margin_frac=0.02):
-    """True when the 100 fm curve crosses the tile viewport (coarse check)."""
-    x0, y0, x1, y1 = tile_bounds_merc(z, xt, yt)
-    mx = (x1 - x0) * margin_frac
-    my = (y1 - y0) * margin_frac
-    bx0, bx1 = x0 + mx, x1 - mx
-    by0, by1 = y0 + my, y1 - my
-    for seg in _shelfbreak_segments(Xm, Ym, depth_fm, z):
-        for px, py in seg:
-            if bx0 <= px <= bx1 and by0 <= py <= by1:
-                return True
-    return False
-
-
-def should_draw_shelfbreak(Xm, Ym, depth_fm, z, xt, yt):
-    """Whether the 100 fm curve should appear on this tile."""
-    lo, hi = _tile_core_depth_range(Xm, Ym, depth_fm, z, xt, yt)
-    if lo is None:
-        return False
-    if lo <= SHELFBREAK_FM <= hi:
-        return True
-    if hi < 45 or lo > 250:
-        return False
-    # Core comes within NEAR_SHELF_FM of 100 — contour may graze the tile edge
-    # (fixes gaps off NY where core max reads 85–99 fm but the shelf clips in).
-    if (lo <= SHELFBREAK_FM + NEAR_SHELF_FM
-            and hi >= SHELFBREAK_FM - NEAR_SHELF_FM):
-        return _shelf_contour_hits_tile(Xm, Ym, depth_fm, z, xt, yt)
-    return False
-
-
 SHELF_COARSE_PX = 96  # only used at z<=8 — z9+ keeps full-res shelf break
 OVERVIEW_COARSE_PX = 64
-SHELF_TILE_MAX_FM = 350  # coarsen contour grid only on shelf/slope tiles
-SHELF_SEGMENT_MIN_FM = 75   # drop shelf segments sampling shallower than this
-SHELF_SEGMENT_OFFSHORE_FRAC = 0.55
+# ETOPO invents isolated deep cells inside estuaries, which contour as small
+# closed rings. The real shelf break is a long open curve, so reject by shape
+# instead of by depth masking — masking ate the curve wherever the slope is steep.
+SHELF_RING_MAX_SPAN_M = 12000
 
 
 def _coarsen_grid(Xm, Ym, field, target=SHELF_COARSE_PX):
@@ -193,31 +127,48 @@ def _coarsen_grid(Xm, Ym, field, target=SHELF_COARSE_PX):
     return Xm[::sy, ::sx], Ym[::sy, ::sx], field[::sy, ::sx]
 
 
+def _smooth_masked(field, sigma):
+    """Gaussian smooth that keeps masked cells masked.
+
+    Filling NaN with a sentinel before smoothing makes the field leap from real
+    depth to the sentinel across every mask edge (land, the shallow cut, BlueTopo
+    nodata footprints). The tracer then draws EVERY level in between along that
+    edge — the false right-angle line bundles seen offshore. Normalising by a
+    smoothed validity mask keeps the blur inside real data.
+    """
+    valid = np.isfinite(field)
+    if not valid.any():
+        return field
+    num = gaussian_filter(np.where(valid, field, 0.0), sigma=sigma)
+    den = gaussian_filter(valid.astype(float), sigma=sigma)
+    out = np.divide(num, den, out=np.full(num.shape, np.nan), where=den > 1e-6)
+    out[~valid] = np.nan
+    return out
+
+
 def _shelfbreak_grid(Xm, Ym, depth_fm, z):
     """Grid for the 100 fm signature line.
 
-    Never coarsen at z9+ — doing so was erasing the shelf-break curve entirely.
-    Low zoom (z<=8) may coarsen lightly so the line stays smooth, not jagged.
+    Contours the true bathymetry. Any masking here changes the curve's geometry,
+    and because each zoom samples a different window it changed it by a different
+    amount — that is what made the shelf break disagree between zoom levels.
     """
-    field = _offshore_field_for_shelf(depth_fm)
+    field = depth_fm.astype(float)
     if z <= 8:
         Xm, Ym, field = _coarsen_grid(Xm, Ym, field, target=SHELF_COARSE_PX)
-        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=0.8)
+        field = _smooth_masked(field, sigma=0.8)
     return Xm, Ym, field
 
 
-def _segment_offshore_fraction(seg, Xm, Ym, depth_fm, min_fm=SHELF_SEGMENT_MIN_FM):
-    """Share of polyline vertices sampling water at least min_fm deep."""
-    if len(seg) == 0:
-        return 0.0
-    ok = 0
-    for px, py in seg:
-        dist = (Xm - px) ** 2 + (Ym - py) ** 2
-        i, j = np.unravel_index(np.argmin(dist), dist.shape)
-        d = depth_fm[i, j]
-        if np.isfinite(d) and d >= min_fm:
-            ok += 1
-    return ok / len(seg)
+def _is_small_ring(seg):
+    """Closed loop too small to be the shelf break — an ETOPO estuary artifact."""
+    if len(seg) < 4:
+        return False
+    closed = (abs(seg[0][0] - seg[-1][0]) < 1.0 and abs(seg[0][1] - seg[-1][1]) < 1.0)
+    if not closed:
+        return False
+    span = max(np.ptp(seg[:, 0]), np.ptp(seg[:, 1]))
+    return span < SHELF_RING_MAX_SPAN_M
 
 
 def _segment_in_sound_exclusion(seg):
@@ -236,7 +187,7 @@ def _segment_in_sound_exclusion(seg):
 
 
 def _shelfbreak_segments(Xm, Ym, depth_fm, z):
-    """100 fm curve segments kept only where bathymetry is offshore."""
+    """The 100 fm curve, minus ETOPO's estuary artifacts."""
     shelf_X, shelf_Y, shelf_field = _shelfbreak_grid(Xm, Ym, depth_fm, z)
     fig = plt.figure(figsize=(1, 1))
     ax = fig.add_axes([0, 0, 1, 1])
@@ -244,39 +195,26 @@ def _shelfbreak_segments(Xm, Ym, depth_fm, z):
     plt.close(fig)
     kept = []
     for seg in cs.allsegs[0]:
+        seg = np.asarray(seg)
         if len(seg) < 2:
             continue
-        if _segment_in_sound_exclusion(seg):
+        if _segment_in_sound_exclusion(seg) or _is_small_ring(seg):
             continue
-        if _segment_offshore_fraction(seg, shelf_X, shelf_Y, depth_fm) >= SHELF_SEGMENT_OFFSHORE_FRAC:
-            kept.append(np.asarray(seg))
+        kept.append(seg)
     return kept
 
 
-def _draw_shelfbreak(ax, Xm, Ym, depth_fm, z):
-    """Draw filtered 100 fm segments; return True if anything was stroked."""
-    segs = _shelfbreak_segments(Xm, Ym, depth_fm, z)
-    for seg in segs:
-        ax.plot(seg[:, 0], seg[:, 1], color="#000000AA", linewidth=3.4,
-                solid_capstyle="round", zorder=9)
-        ax.plot(seg[:, 0], seg[:, 1], color=STYLE["shelfbreak_line"], linewidth=2.4,
-                solid_capstyle="round", zorder=10)
-    return bool(segs)
-
-
 def _contour_grid(Xm, Ym, depth_fm, z, source):
-    """Bathymetry grid for general contour lines."""
-    field = _mask_shallow(depth_fm)
-    finite = field[np.isfinite(field)]
-    lo = float(np.nanmin(finite)) if finite.size else np.inf
-    # Coarsen only on shelf/slope tiles. Abyssal tiles (canyon floor) kept at
-    # full resolution so 500/1000/2000 fm lines still render — fixes blank strips.
-    if lo < SHELF_TILE_MAX_FM and z <= 10:
+    """Bathymetry grid for general contour lines.
+
+    Contour the real grid. Smoothing at z9–z10 was dropping ~45% of legitimate
+    lines, which is what emptied the chart when zoomed out; only the far
+    overview zooms, where a tile spans many cells, get any blur at all.
+    """
+    field = depth_fm.astype(float)
+    if z <= 8:
         Xm, Ym, field = _coarsen_grid(Xm, Ym, field, target=OVERVIEW_COARSE_PX)
-        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=1.0)
-    elif z <= 8:
-        Xm, Ym, field = _coarsen_grid(Xm, Ym, field, target=OVERVIEW_COARSE_PX)
-        field = gaussian_filter(np.nan_to_num(field, nan=1e6), sigma=1.0)
+        field = _smooth_masked(field, sigma=0.8)
     return Xm, Ym, field
 
 
@@ -376,8 +314,9 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
     """Render one tile from a Web-Mercator elevation grid (BlueTopo path)."""
     x0, y0, x1, y1 = tile_bounds_merc(z, xt, yt)
 
-    depth_fm_raw = np.where(elev_m < 0, -elev_m / M_PER_FATHOM, np.nan)
-    depth_fm = _mask_shallow(depth_fm_raw)
+    # Real bathymetry. The shallow cut belongs to the 100 fm shelf line alone —
+    # applying it to every level erased the whole inner shelf (5–30 fm).
+    depth_fm = np.where(elev_m < 0, -elev_m / M_PER_FATHOM, np.nan)
     land = elev_m >= 0
     if land.all():
         return False
@@ -443,15 +382,15 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
     if major_lv:
         drawn.append(haloed(ax.contour(cX, cY, cField, levels=major_lv,
                      colors=[STYLE["major_line"]], linewidths=1.3), 1.3))
-    draw_shelf = should_draw_shelfbreak(Xm, Ym, depth_fm_raw, z, xt, yt)
-    shelf_segs = []
-    if draw_shelf:
-        shelf_segs = _shelfbreak_segments(Xm, Ym, depth_fm_raw, z)
-        for seg in shelf_segs:
-            ax.plot(seg[:, 0], seg[:, 1], color="#000000AA", linewidth=3.4,
-                    solid_capstyle="round", zorder=9)
-            ax.plot(seg[:, 0], seg[:, 1], color=STYLE["shelfbreak_line"], linewidth=2.4,
-                    solid_capstyle="round", zorder=10)
+    # No per-tile gate: the segment filter already yields nothing when 100 fm
+    # isn't in the tile. Gating on top of it is what broke the line into
+    # dashes, with neighbouring tiles disagreeing about whether to draw.
+    shelf_segs = _shelfbreak_segments(Xm, Ym, depth_fm, z)
+    for seg in shelf_segs:
+        ax.plot(seg[:, 0], seg[:, 1], color="#000000AA", linewidth=3.4,
+                solid_capstyle="round", zorder=9)
+        ax.plot(seg[:, 0], seg[:, 1], color=STYLE["shelfbreak_line"], linewidth=2.4,
+                solid_capstyle="round", zorder=10)
 
     if not drawn and not shelf_segs and overlay:
         plt.close(fig)

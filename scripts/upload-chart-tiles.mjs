@@ -14,6 +14,10 @@
  * Pass --manifest <file> (one z/x/y.png per line) to re-send just those tiles.
  * Needed for repairs: the resume log lists every tile as already sent, so a
  * plain re-run would upload nothing.
+ *
+ * Pass --delete <file> to remove the listed keys instead of uploading. A
+ * re-render can legitimately drop a tile to empty; without this the previous
+ * version stays published and keeps drawing contours that no longer exist.
  */
 import {
   readFileSync, existsSync, readdirSync, statSync, createWriteStream,
@@ -44,17 +48,22 @@ function parseArgs() {
   let prefix = "chart/v1";
   let workers = 16;
   let manifest = null;
+  let deleteList = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--src") src = args[++i];
     else if (args[i] === "--prefix") prefix = args[++i];
     else if (args[i] === "--workers") workers = Number(args[++i]) || 16;
     else if (args[i] === "--manifest") manifest = args[++i];
+    else if (args[i] === "--delete") deleteList = args[++i];
   }
-  if (!src) {
-    console.error("Usage: node scripts/upload-chart-tiles.mjs --src <tiles-dir> [--prefix chart/v1] [--workers 16] [--manifest <file>]");
+  if (!src && !deleteList) {
+    console.error("Usage: node scripts/upload-chart-tiles.mjs --src <tiles-dir> [--prefix chart/v1] [--workers 16] [--manifest <file>] [--delete <file>]");
     process.exit(1);
   }
-  return { src: resolve(src.replace(/^~/, process.env.HOME || "")), prefix, workers, manifest };
+  return {
+    src: src ? resolve(src.replace(/^~/, process.env.HOME || "")) : null,
+    prefix, workers, manifest, deleteList,
+  };
 }
 
 function gatherTiles(src) {
@@ -176,9 +185,24 @@ async function runPool(supabase, prefix, tiles, workers, onDone) {
   return failures;
 }
 
+async function deleteKeys(supabase, prefix, keys) {
+  let removed = 0;
+  const failures = [];
+  for (let i = 0; i < keys.length; i += 100) {
+    const batch = keys.slice(i, i + 100).map((k) => `${prefix}/${k}`);
+    const { error } = await supabase.storage.from(BUCKET).remove(batch);
+    if (error) failures.push(`${batch[0]} (+${batch.length - 1}): ${error.message}`);
+    else removed += batch.length;
+    if (removed % 500 === 0 || i + 100 >= keys.length) {
+      console.log(`  removed ${removed}/${keys.length}`);
+    }
+  }
+  return { removed, failures };
+}
+
 async function main() {
   const env = loadEnv();
-  const { src, prefix, workers, manifest } = parseArgs();
+  const { src, prefix, workers, manifest, deleteList } = parseArgs();
   const url = env.SUPABASE_URL;
   if (!url) {
     console.error("Missing SUPABASE_URL in .env");
@@ -187,6 +211,21 @@ async function main() {
   if (!env.SUPABASE_SERVICE_ROLE_KEY && !env.SUPABASE_ACCESS_TOKEN) {
     console.error("Missing SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ACCESS_TOKEN in .env");
     process.exit(1);
+  }
+  if (deleteList) {
+    const keys = readFileSync(deleteList, "utf8").split("\n")
+      .map((s) => s.trim()).filter(Boolean);
+    console.log(`Deleting ${keys.length} tiles from ${BUCKET}/${prefix}/`);
+    const supabase = createClient(url, await resolveServiceRoleKey(env),
+      { auth: { persistSession: false } });
+    const { removed, failures } = await deleteKeys(supabase, prefix, keys);
+    console.log(`\nRemoved ${removed} tiles.`);
+    if (failures.length) {
+      console.error(`${failures.length} batches failed:`);
+      for (const f of failures.slice(0, 10)) console.error("  " + f);
+      process.exit(1);
+    }
+    return;
   }
   if (!existsSync(src)) {
     console.error(`Source not found: ${src}`);

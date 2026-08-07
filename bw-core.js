@@ -359,7 +359,11 @@ const CONTOURS_TILES_NATIVE_ZOOM = 13;
 //   r8 — (superseded) partial sound-mask pass
 //   r9 — offshore 100 fm mask strips Pamlico/Hatteras loops; z10 drops 40–90 fm hairlines
 //   r10 — restore z9/z10 shelf contours; stop coarsening that erased the 100 fm line
-const CONTOURS_TILES_REVISION = "r10";
+//   r11 — z5–z10 rebuilt: smoothing no longer fills masked cells with a sentinel,
+//         which had been fabricating ~1/3 of all overview contour lines along
+//         mask edges. Shallow cut now guards only the 100 fm line, so the inner
+//         shelf is back, and the per-tile shelf-break gate is gone.
+const CONTOURS_TILES_REVISION = "r11";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
