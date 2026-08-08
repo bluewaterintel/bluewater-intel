@@ -152,8 +152,8 @@ function renderCatchInsights(speciesFilter){
     const remaining = a.need - a.n;
     return `
       <div style="margin-top:16px;background:rgba(107,191,234,.05);border:1px dashed rgba(107,191,234,.25);border-radius:12px;padding:16px">
-        <div style="font-size:11px;font-weight:700;color:#6bbfea;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">📈 ${heading}</div>
-        <div style="font-size:12px;color:#cdd9e8;line-height:1.5">
+        <div class="catch-pat-head" style="font-size:13px;font-weight:700;color:#6bbfea;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">📈 ${heading}</div>
+        <div class="catch-pat-body" style="font-size:13px;color:#cdd9e8;line-height:1.5">
           Log <b>${remaining}</b> more ${spName ? spName+" " : ""}catch${remaining===1?"":"es"} to unlock pattern analysis.
           The app studies the moon phase, tide, barometric trend, wind, water temp, and time of day behind your catches to find what's working for you.
         </div>
@@ -163,9 +163,9 @@ function renderCatchInsights(speciesFilter){
   // Build the insight chips
   const chips = a.insights.map(ins => `
     <div style="background:rgba(15,36,68,.6);border:1px solid rgba(107,191,234,.18);border-radius:10px;padding:10px 12px;min-width:0">
-      <div style="font-size:9px;font-weight:700;color:#6bbfea;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">${ins.icon} ${ins.label}</div>
-      <div style="font-size:14px;font-weight:700;color:#f0f6ff;line-height:1.2">${ins.value}</div>
-      <div style="font-size:9px;color:#8aa;margin-top:3px">${ins.pct}% of catches · ${ins.count} fish</div>
+      <div class="catch-pat-label" style="font-size:11.5px;font-weight:700;color:#6bbfea;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">${ins.icon} ${ins.label}</div>
+      <div class="catch-pat-value" style="font-size:17px;font-weight:700;color:#f0f6ff;line-height:1.2">${ins.value}</div>
+      <div class="catch-pat-sub" style="font-size:12px;color:#9db4cc;margin-top:3px">${ins.pct}% of catches · ${ins.count} fish</div>
     </div>`).join("");
 
   const summaryBits = [];
@@ -174,14 +174,14 @@ function renderCatchInsights(speciesFilter){
 
   return `
     <div style="margin-top:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:700;color:#6bbfea;letter-spacing:.1em;text-transform:uppercase">📈 ${heading}</div>
-        <div style="font-size:9px;color:#8aa">from ${a.n} catches</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+        <div class="catch-pat-head" style="font-size:13px;font-weight:700;color:#6bbfea;letter-spacing:.1em;text-transform:uppercase">📈 ${heading}</div>
+        <div class="catch-pat-count" style="font-size:11.5px;color:#9db4cc;white-space:nowrap">from ${a.n} catches</div>
       </div>
-      ${chips ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">${chips}</div>`
-              : `<div style="font-size:12px;color:#9ca3af;padding:4px 0">No strong patterns yet — your catches are spread evenly across conditions. Keep logging.</div>`}
-      ${summaryBits.length ? `<div style="font-size:11px;color:#aab8c8;margin-top:10px;line-height:1.5">${summaryBits.join(" &nbsp;·&nbsp; ")}</div>` : ""}
-      <div style="font-size:9px;color:#667;margin-top:8px;font-style:italic">Patterns reflect your logged data only — more catches sharpen them. Conditions are from the same model driving the Bite Map.</div>
+      ${chips ? `<div class="catch-pat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:8px">${chips}</div>`
+              : `<div class="catch-pat-body" style="font-size:13px;color:#9ca3af;padding:4px 0">No strong patterns yet — your catches are spread evenly across conditions. Keep logging.</div>`}
+      ${summaryBits.length ? `<div class="catch-pat-summary" style="font-size:13px;color:#aab8c8;margin-top:10px;line-height:1.5">${summaryBits.join(" &nbsp;·&nbsp; ")}</div>` : ""}
+      <div class="catch-pat-note" style="font-size:11.5px;color:#8b9cb0;margin-top:8px;font-style:italic;line-height:1.45">Patterns reflect your logged data only — more catches sharpen them. Conditions are from the same model driving the Bite Map.</div>
     </div>`;
 }
 

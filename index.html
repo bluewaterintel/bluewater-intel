@@ -586,7 +586,7 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   #catches-overlay .catches-sub{ font-size:13px !important; }
   #catches-overlay .catches-log-btn{ font-size:14px !important; padding:10px 16px !important; }
   #catches-overlay .rp-filter{ font-size:14px !important; padding:10px 14px !important; }
-  #catches-overlay .catch-stat-label{ font-size:11px !important; }
+  #catches-overlay .catch-stat-label{ font-size:12px !important; }
   #catches-overlay .catch-stat-value{ font-size:22px !important; }
   #catches-overlay .catch-card-name{ font-size:17px !important; }
   #catches-overlay .catch-card-size{ font-size:14px !important; }
@@ -596,6 +596,19 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   #catches-overlay .catch-card-delete{ font-size:13px !important; padding:6px 12px !important; }
   #catches-overlay .catch-empty-title{ font-size:18px !important; }
   #catches-overlay .catch-empty-sub{ font-size:14px !important; }
+
+  /* Your Patterns analytics panel. This markup carried no class hooks, so it
+     sat at its 9-11px base on every screen while the cards below it were
+     bumped — the reason the panel read as unreadably small. */
+  #catches-overlay .catch-pat-head{ font-size:14px !important; }
+  #catches-overlay .catch-pat-count{ font-size:12px !important; }
+  #catches-overlay .catch-pat-label{ font-size:12px !important; }
+  #catches-overlay .catch-pat-value{ font-size:18px !important; }
+  #catches-overlay .catch-pat-sub{ font-size:12.5px !important; }
+  #catches-overlay .catch-pat-summary{ font-size:14px !important; }
+  #catches-overlay .catch-pat-body{ font-size:13.5px !important; }
+  #catches-overlay .catch-pat-note{ font-size:12px !important; }
+  #catches-overlay .catch-pat-grid{ grid-template-columns:repeat(auto-fill,minmax(180px,1fr)) !important; }
 
   /* Waypoints & Structure — match My Catches desktop sizing. */
   #wp-overlay .wp-page-title{ font-size:22px !important; }
@@ -4905,7 +4918,16 @@ input[type="date"].rp-post-input::-webkit-calendar-picker-indicator{
   #catches-overlay .catch-card-cond{font-size:11px !important}
   #catches-overlay .catch-card-notes{font-size:14px !important}
   #catches-overlay .catch-card-delete{font-size:13px !important;padding:7px 12px !important}
-  #catches-overlay .catch-stat-label{font-size:11px !important}
+  #catches-overlay .catch-stat-label{font-size:12px !important}
+  #catches-overlay .catch-pat-head{font-size:13px !important}
+  #catches-overlay .catch-pat-count{font-size:11.5px !important}
+  #catches-overlay .catch-pat-label{font-size:11.5px !important}
+  #catches-overlay .catch-pat-value{font-size:17px !important}
+  #catches-overlay .catch-pat-sub{font-size:12px !important}
+  #catches-overlay .catch-pat-summary{font-size:13px !important}
+  #catches-overlay .catch-pat-body{font-size:13px !important}
+  #catches-overlay .catch-pat-note{font-size:11.5px !important}
+  #catches-overlay .catch-pat-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr)) !important}
   #regs-overlay [style*="font-size:10px"],
   #legal-overlay [style*="font-size:10px"],
   #kn-overlay [style*="font-size:10px"],
@@ -4924,7 +4946,7 @@ input[type="date"].rp-post-input::-webkit-calendar-picker-indicator{
 }
 </style>
 
-<script src="bw-reports.js?v=20260728c"></script>
+<script src="bw-reports.js?v=20260808a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TERMINAL TACKLE — Knots, Crimps, Connections
