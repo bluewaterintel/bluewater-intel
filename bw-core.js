@@ -10421,9 +10421,18 @@ function loranExtendPolyEndpoints(poly, keepPt){
   if(poly.length < 2) return poly;
   const maxNm = 12;
   const maxDeg = maxNm / 60;
+  // Only extend tips that stopped just east of the OBX shore cut — not the open-
+  // ocean end (west fallback there draws a visible spur off lines like 40150).
+  const tipNeedsShore = (tip) => {
+    const lat = tip[0], lng = tip[1];
+    if(!keepPt(tip)) return false;
+    if(lat < 34.55 || lat > 36.05 || lng <= -76.0) return false;
+    const gapDeg = lng - barrierCoastLng(lat);
+    return gapDeg > 0.008 && gapDeg < 0.22;
+  };
   const extendTip = (tipIdx) => {
     const tip = poly[tipIdx];
-    if(!keepPt(tip)) return;
+    if(!tipNeedsShore(tip)) return;
     const adj = poly[tipIdx + (tipIdx === 0 ? 1 : -1)];
     let dLat = tip[0] - adj[0], dLng = tip[1] - adj[1];
     let segLen = Math.hypot(dLat, dLng);
@@ -10447,9 +10456,9 @@ function loranExtendPolyEndpoints(poly, keepPt){
       return (Math.abs(a[0] - tip[0]) > 1e-5 || Math.abs(a[1] - tip[1]) > 1e-5) ? a : null;
     };
     let shore = march(dLat, dLng);
-    // OBX/Hatteras: thin barrier + hyperbola stops short in open water — march
-    // west (9960-Y tilt has a north component here, so bias NW slightly).
-    if(!shore && tip[0] >= 34.55 && tip[0] <= 36.05 && tip[1] > -76.0){
+    // OBX/Hatteras: hyperbola tangent may not reach the barrier — march west
+    // only when the segment already trends shoreward (west component).
+    if(!shore && dLng < -0.15){
       shore = march(-0.12, -1);
       if(!shore) shore = march(0, -1);
     }
