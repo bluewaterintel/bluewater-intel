@@ -7459,15 +7459,90 @@ function _sstFcFillGaps(val, nLat, nLng){
   return out;
 }
 
-// Open-ocean only for the SST wash. MUR often returns values over land and
-// inside barrier sounds; those tint farmland green/yellow in the overlay.
-function _sstIsOceanCell(lat, lng){
-  if(typeof isOnLand === "function" && isOnLand(lat, lng)) return false;
-  // OBX / Bogue: west of the Atlantic barrier is Pamlico / Core / Bogue Sound.
-  if(typeof barrierCoastLng === "function" && lat >= 33.80 && lat <= 36.60){
-    if(lng < barrierCoastLng(lat)) return false;
+// ── LAND MASK FOR THE SST WASH ───────────────────────────────────────────────
+// Open-ocean only. MUR returns values over land and inside the barrier sounds,
+// and those tint farmland green/yellow in the overlay.
+//
+// The boundary is painted as a shape rather than tested per pixel. isOnLand
+// walks 223 vertices across 7 polygons, and the supersampled bitmap covers ~74k
+// pixels at zoom 9, so the scalar version measured 340 ms of a 348 ms rebuild —
+// 1.3 s on a phone, paid on every pan. Rasterizing the same polygons costs well
+// under a millisecond because that is what the 2D engine is for. The coast comes
+// out feathered instead of stepped, which the upscale to the viewport was going
+// to smooth anyway.
+//
+// Each polygon is filled on its own path with the even-odd rule, so the result
+// is the union of exactly the per-polygon tests isOnLand ORs together.
+const SST_BARRIER_LAT_S = 33.80;
+const SST_BARRIER_LAT_N = 36.60;
+
+function _sstPaintLandShapes(cx, toX, toY, westLng){
+  if(typeof LAND_POLYGONS !== "undefined"){
+    for(const poly of LAND_POLYGONS){
+      cx.beginPath();
+      for(let i = 0; i < poly.length; i++){
+        const x = toX(poly[i][1]), y = toY(poly[i][0]);
+        if(i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+      }
+      cx.closePath();
+      cx.fill("evenodd");
+    }
   }
-  return true;
+  // Everything west of the Atlantic barrier is Pamlico / Core / Bogue Sound.
+  // barrierCoastLng steps with latitude, so walk it north as a true staircase
+  // (corner, then across) and close the shape off the west edge of the bitmap.
+  if(typeof barrierCoastLng !== "function") return;
+  // Probe finer than the narrowest band in barrierCoastLng (0.10° at Ocracoke)
+  // so no step is skipped, then bisect onto the exact breakpoint latitude. A
+  // step placed on the probe grid instead of the real breakpoint leaves a
+  // sliver of sound painted as ocean along the far side of each corner.
+  let prev = barrierCoastLng(SST_BARRIER_LAT_S);
+  cx.beginPath();
+  cx.moveTo(toX(prev), toY(SST_BARRIER_LAT_S));
+  const probe = 0.005;
+  for(let lat = SST_BARRIER_LAT_S + probe; lat <= SST_BARRIER_LAT_N; lat += probe){
+    const lng = barrierCoastLng(lat);
+    if(lng === prev) continue;
+    let lo = lat - probe, hi = lat;
+    for(let k = 0; k < 30; k++){
+      const mid = (lo + hi) / 2;
+      if(barrierCoastLng(mid) === prev) lo = mid; else hi = mid;
+    }
+    cx.lineTo(toX(prev), toY(hi));
+    cx.lineTo(toX(lng), toY(hi));
+    prev = lng;
+  }
+  cx.lineTo(toX(prev), toY(SST_BARRIER_LAT_N));
+  cx.lineTo(toX(westLng), toY(SST_BARRIER_LAT_N));
+  cx.lineTo(toX(westLng), toY(SST_BARRIER_LAT_S));
+  cx.closePath();
+  cx.fill();
+}
+
+// Same shapes rasterized at grid resolution, as a 1-per-cell flag. Land has to
+// be dropped BEFORE the display range is computed or MUR's land temperatures
+// drag the P10–P90 window off the water.
+function _sstLandMaskAtGrid(g){
+  const mask = new Uint8Array(g.nLat * g.nLng);
+  const c = document.createElement("canvas");
+  c.width = g.nLng; c.height = g.nLat;
+  const cx = c.getContext("2d", { willReadFrequently: true });
+  if(!cx) return mask;
+  cx.fillStyle = "#fff";
+  _sstPaintLandShapes(
+    cx,
+    lng => (lng - g.minLng) / g.step,
+    lat => (g.nLat - 1) - (lat - g.minLat) / g.step,
+    g.minLng - 1,
+  );
+  const d = cx.getImageData(0, 0, g.nLng, g.nLat).data;
+  for(let i = 0; i < g.nLat; i++){
+    const y = (g.nLat - 1) - i;
+    for(let j = 0; j < g.nLng; j++){
+      if(d[(y * g.nLng + j) * 4 + 3] > 127) mask[i * g.nLng + j] = 1;
+    }
+  }
+  return mask;
 }
 
 function _sstFcBuildSmallCanvas(g, viewBounds){
@@ -7476,13 +7551,8 @@ function _sstFcBuildSmallCanvas(g, viewBounds){
   const scale = (g.step <= 0.025) ? 3 : 4;
   const w = g.nLng * scale, h = g.nLat * scale;
   const filled = _sstFcFillGaps(g.val, g.nLat, g.nLng);
-  for(let i = 0; i < g.nLat; i++){
-    const lat = g.minLat + i * g.step;
-    for(let j = 0; j < g.nLng; j++){
-      const lng = g.minLng + j * g.step;
-      if(!_sstIsOceanCell(lat, lng)) filled[i * g.nLng + j] = NaN;
-    }
-  }
+  const landAtGrid = _sstLandMaskAtGrid(g);
+  for(let k = 0; k < filled.length; k++) if(landAtGrid[k]) filled[k] = NaN;
   // Range from *visible* ocean cells only — land temps and off-screen Stream /
   // shelf extremes must not skew the local stretch.
   const range = computeSstDisplayRangeFromGrid({
@@ -7500,16 +7570,12 @@ function _sstFcBuildSmallCanvas(g, viewBounds){
     const i = Math.min(g.nLat - 1, Math.max(0, Math.floor(i0)));
     const i1 = Math.min(g.nLat - 1, i + 1);
     const fi = i0 - i;
-    const lat = g.minLat + i0 * g.step;
     for(let x = 0; x < w; x++){
       const j0 = x / scale;
       const j = Math.min(g.nLng - 1, Math.max(0, Math.floor(j0)));
       const j1 = Math.min(g.nLng - 1, j + 1);
       const fj = j0 - j;
-      const lng = g.minLng + j0 * g.step;
       const o = (y * w + x) * 4;
-      // Per-pixel land mask stops bilinear bleed from ocean cells onto the beach.
-      if(!_sstIsOceanCell(lat, lng)){ img.data[o + 3] = 0; continue; }
       const v00 = filled[i * g.nLng + j], v10 = filled[i1 * g.nLng + j];
       const v01 = filled[i * g.nLng + j1], v11 = filled[i1 * g.nLng + j1];
       let v = NaN, sw = 0, acc = 0;
@@ -7525,6 +7591,19 @@ function _sstFcBuildSmallCanvas(g, viewBounds){
     }
   }
   cx.putImageData(img, 0, 0);
+  // Cut the coastline out of the finished field in one pass. Bilinear bleed
+  // from ocean cells onto the beach is removed here rather than being avoided
+  // per pixel.
+  cx.save();
+  cx.globalCompositeOperation = "destination-out";
+  cx.fillStyle = "#000";
+  _sstPaintLandShapes(
+    cx,
+    lng => (lng - g.minLng) / g.step * scale,
+    lat => (h - 1) - (lat - g.minLat) / g.step * scale,
+    g.minLng - 1,
+  );
+  cx.restore();
   return c;
 }
 
