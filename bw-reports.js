@@ -389,13 +389,20 @@ function renderCatchCard(c){
   const tackleBits = [];
   if(c.tackleType === "bait") tackleBits.push("Bait");
   else if(c.tackleType === "artificial") tackleBits.push("Artificial");
+  if(c.lure) tackleBits.push(escapeHtml(c.lure));
   if(c.lureColor) tackleBits.push(typeof catchLureColorLabel === "function" ? catchLureColorLabel(c.lureColor) : c.lureColor);
   const cond = c.conditions || {};
   const condBits = [];
-  if(cond.sst != null)    condBits.push(`<span style="color:#fbbf24">SST ${cond.sst}°</span>`);
-  if(cond.moon)           condBits.push(`<span style="color:#a78bfa">${cond.moon}</span>`);
-  if(cond.tide)           condBits.push(`<span style="color:#34d399">${cond.tide}</span>`);
-  if(cond.pressureTrend)  condBits.push(`<span style="color:#9ec5e8">${cond.pressureTrend}</span>`);
+  if(cond.sst != null)         condBits.push(`<span style="color:#fbbf24">SST ${cond.sst}°</span>`);
+  if(cond.windKt != null || cond.windDir != null){
+    const wd = cond.windDir != null && typeof catchWindDirName === "function" ? catchWindDirName(cond.windDir) : null;
+    const w = [wd, cond.windKt != null ? `${cond.windKt}kt` : null].filter(Boolean).join(" ");
+    if(w) condBits.push(`<span style="color:#60a5fa">${w}</span>`);
+  }
+  if(cond.cloud)              condBits.push(`<span style="color:#cbd5e1">${typeof catchCloudLabel === "function" ? catchCloudLabel(cond.cloud) : cond.cloud}</span>`);
+  if(cond.moon)               condBits.push(`<span style="color:#a78bfa">${cond.moon}</span>`);
+  if(cond.tide)               condBits.push(`<span style="color:#34d399">${cond.tide}</span>`);
+  if(cond.pressureTrend)      condBits.push(`<span style="color:#9ec5e8">${cond.pressureTrend}</span>`);
   return `
     <div class="catch-card" style="background:rgba(15,36,68,.55);border:1px solid rgba(107,191,234,.15);border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;gap:14px">
       ${c.photo ? `<img src="${c.photo}" alt="" style="width:72px;height:72px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#0a1a2e"/>` : `<div style="width:72px;height:72px;border-radius:8px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);display:flex;align-items:center;justify-content:center;font-size:34px;flex-shrink:0">🐟</div>`}

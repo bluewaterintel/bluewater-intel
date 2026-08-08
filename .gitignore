@@ -24,3 +24,7 @@ chart-basemap/etopo_overview_refresh/
 chart-basemap/etopo_fill*/
 chart-basemap/*.venv/
 .upload-*.log
+CLIENT_PATCH.md
+chart-basemap/*_manifest.txt
+chart-basemap/band_repaired.txt
+chart-basemap/diag.html

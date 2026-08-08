@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 /**
- * @deprecated Use scripts/delete-stale-tile-prefixes.mjs (also removes contours/v1).
- * Delete chart basemap tiles from Supabase Storage (chart/ prefix only).
+ * Remove superseded tile prefixes from Supabase Storage (chart-tiles bucket).
+ * The live app reads contours/v2 only — chart/, chart/v1/, and contours/v1/
+ * are dead weight once v2 is deployed.
  *
- * Usage: node scripts/delete-chart-basemap-tiles.mjs [--dry-run]
+ * Usage:
+ *   node scripts/delete-stale-tile-prefixes.mjs --dry-run
+ *   node scripts/delete-stale-tile-prefixes.mjs
+ *
+ * Requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ACCESS_TOKEN)
+ * in .env at the project root.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -13,8 +19,9 @@ import { createClient } from "@supabase/supabase-js";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const envPath = join(root, ".env");
 const BUCKET = "chart-tiles";
-const PROJECT_REF = "mealpzwbjamkjdrsszqe";
 const DRY_RUN = process.argv.includes("--dry-run");
+/** Prefixes the client no longer reads (live: contours/v2). */
+const STALE_PREFIXES = ["chart", "contours/v1"];
 
 function loadEnv() {
   const env = { ...process.env };
@@ -25,17 +32,6 @@ function loadEnv() {
     env[m[1]] = m[2].replace(/^["']|["']$/g, "");
   }
   return env;
-}
-
-async function fetchServiceRoleKey(accessToken) {
-  const res = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/api-keys`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!res.ok) throw new Error(`api-keys fetch failed: ${res.status} ${await res.text()}`);
-  const keys = await res.json();
-  const sr = keys.find((k) => k.name === "service_role");
-  if (!sr?.api_key?.startsWith("eyJ")) throw new Error("No JWT service_role key");
-  return sr.api_key;
 }
 
 async function listAll(supabase, prefix) {
@@ -66,32 +62,31 @@ async function listAll(supabase, prefix) {
 
 async function main() {
   const env = loadEnv();
-  const url = env.SUPABASE_URL;
-  const accessToken = env.SUPABASE_ACCESS_TOKEN;
-  if (!url || !accessToken) {
-    console.error("Missing SUPABASE_URL or SUPABASE_ACCESS_TOKEN in .env");
+  const url = env.SUPABASE_URL || env.VITE_SUPABASE_URL;
+  const serviceRole = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceRole) {
+    console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env");
     process.exit(1);
   }
 
-  const serviceRole = await fetchServiceRoleKey(accessToken);
   const supabase = createClient(url, serviceRole, { auth: { persistSession: false } });
 
-  const prefixes = ["chart"];
   const toDelete = [];
-  for (const prefix of prefixes) {
+  for (const prefix of STALE_PREFIXES) {
     const files = await listAll(supabase, prefix);
+    console.log(`  ${prefix}/ → ${files.length} objects`);
     toDelete.push(...files);
   }
 
-  console.log(`Found ${toDelete.length} objects under chart/ in ${BUCKET}`);
+  console.log(`Total stale objects: ${toDelete.length} (keeping contours/v2/)`);
   if (!toDelete.length) {
     console.log("Nothing to delete.");
     return;
   }
 
   if (DRY_RUN) {
-    console.log("Dry run — first 10 paths:");
-    toDelete.slice(0, 10).forEach((p) => console.log(" ", p));
+    console.log("Dry run — first 15 paths:");
+    toDelete.slice(0, 15).forEach((p) => console.log(" ", p));
     return;
   }
 
@@ -101,12 +96,12 @@ async function main() {
     const { error } = await supabase.storage.from(BUCKET).remove(batch);
     if (error) throw new Error(`remove batch: ${error.message}`);
     deleted += batch.length;
-    if (deleted % 500 === 0 || deleted === toDelete.length) {
+    if (deleted % 1000 === 0 || deleted === toDelete.length) {
       console.log(`  deleted ${deleted}/${toDelete.length}`);
     }
   }
 
-  console.log(`Done — removed ${deleted} chart basemap objects. contours/v1/ unchanged.`);
+  console.log(`Done — removed ${deleted} stale tile objects.`);
 }
 
 main().catch((err) => {

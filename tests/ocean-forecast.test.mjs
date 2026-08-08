@@ -48,19 +48,23 @@ console.log("\nlive Open-Meteo forecast divergence (0h vs 24h):");
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}`
     + "&hourly=wind_speed_10m,wind_direction_10m,surface_pressure&wind_speed_unit=kn&timezone=UTC&forecast_days=5";
-  const r = await fetch(url);
-  if (!r.ok) {
-    console.log("  ⚠ skip live Open-Meteo (offline or rate limited)");
-  } else {
-    const d = await r.json();
-    const times = d?.hourly?.time ?? [];
-    const i0 = nearestHourlyIndex(times, Date.now());
-    const i24 = nearestHourlyIndex(times, Date.now() + 24 * 3600000);
-    const w0 = num(d?.hourly?.wind_speed_10m?.[i0]);
-    const w24 = num(d?.hourly?.wind_speed_10m?.[i24]);
-    check("forecast returns wind at +0h", w0 != null);
-    check("forecast returns wind at +24h", w24 != null);
-    console.log(`    wind now=${w0}kt, +24h=${w24}kt`);
+  try {
+    const r = await fetch(url);
+    if (!r.ok) {
+      console.log("  ⚠ skip live Open-Meteo (offline or rate limited)");
+    } else {
+      const d = await r.json();
+      const times = d?.hourly?.time ?? [];
+      const i0 = nearestHourlyIndex(times, Date.now());
+      const i24 = nearestHourlyIndex(times, Date.now() + 24 * 3600000);
+      const w0 = num(d?.hourly?.wind_speed_10m?.[i0]);
+      const w24 = num(d?.hourly?.wind_speed_10m?.[i24]);
+      check("forecast returns wind at +0h", w0 != null);
+      check("forecast returns wind at +24h", w24 != null);
+      console.log(`    wind now=${w0}kt, +24h=${w24}kt`);
+    }
+  } catch {
+    console.log("  ⚠ skip live Open-Meteo (offline)");
   }
 }
 
@@ -69,6 +73,7 @@ console.log("\nlive ocean edge predictinputs (hours=0 vs hours=24):");
   const params = (hours) =>
     `${BASE}?mode=predictinputs&latMin=34.5&latMax=35.5&lngMin=-76.5&lngMax=-75.5&maxPoints=8`
     + (hours > 0 ? `&hours=${hours}` : "");
+  try {
   const [r0, r24] = await Promise.all([fetch(params(0)), fetch(params(24))]);
   if (!r0.ok || !r24.ok) {
     console.log(`  ⚠ skip live edge (status ${r0.status}/${r24.status}) — deploy ocean function first`);
@@ -97,6 +102,9 @@ console.log("\nlive ocean edge predictinputs (hours=0 vs hours=24):");
     const t24 = tides24[0];
     console.log(`    sample tide now=${t0?.value?.toFixed(2)} (${t0?.state}), +24h=${t24?.value?.toFixed(2)} (${t24?.state})`);
     check("hours=24 tide observedAtMs is future valid time", t24?.observedAtMs > Date.now());
+  }
+  } catch {
+    console.log("  ⚠ skip live edge (offline)");
   }
 }
 
