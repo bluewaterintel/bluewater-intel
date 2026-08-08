@@ -1298,6 +1298,76 @@ body.modal-open #brief-toggle{
 }
 .catch-chip.active{background:rgba(41,121,181,.28);border-color:rgba(125,211,252,.45);color:#f0f6ff}
 .catch-filter-section{width:100%;margin-bottom:4px}
+/* ── Manual condition entry on the catch form ───────────────────────────── */
+.catch-cond-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:9px}
+.catch-cond-field{min-width:0}
+.catch-cond-input{margin-top:0 !important;padding:9px 10px !important;font-size:13px !important;width:100%}
+.catch-cond-input::placeholder{color:#6b8199}
+.catch-cond-input.is-auto{color:#9db4cc;font-style:italic}
+
+/* ── Species profile (My Catches → analytics) ───────────────────────────── */
+.catch-sp-picker{margin-top:16px}
+.catch-sp-chiprow{display:flex;flex-wrap:wrap;gap:7px}
+.catch-sp-chip{
+  display:inline-flex;align-items:center;gap:6px;background:rgba(15,36,68,.6);
+  border:1px solid rgba(107,191,234,.22);color:#cdd9e8;padding:6px 11px;border-radius:999px;
+  font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1.2;
+}
+.catch-sp-chip:hover{border-color:rgba(107,191,234,.5);color:#f0f6ff}
+.catch-sp-chip.active{color:#f0f6ff;border-color:rgba(107,191,234,.65);background:rgba(107,191,234,.14)}
+.catch-sp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.catch-sp-n{font-size:11px;color:#8fa6bd;font-weight:700}
+.catch-sp-chip.active .catch-sp-n{color:#cfe5ff}
+
+.catch-prof-facts{margin-top:14px;font-size:13px;color:#cdd9e8;line-height:1.6}
+.catch-prof-facts b{color:#f0f6ff}
+.catch-prof-dot{padding:0 8px;color:#5b7085}
+.catch-prof-vizgrid{
+  margin-top:14px;display:grid;gap:12px;
+  grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+}
+.catch-prof-viz{
+  background:rgba(15,36,68,.5);border:1px solid rgba(107,191,234,.15);
+  border-radius:10px;padding:10px 12px;
+}
+.catch-prof-viz-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  font-size:11.5px;font-weight:700;color:#6bbfea;letter-spacing:.07em;
+  text-transform:uppercase;margin-bottom:8px;
+}
+.catch-prof-viz-range{font-size:11.5px;color:#9db4cc;letter-spacing:0;text-transform:none;font-weight:600}
+.catch-prof-viz-axis{display:flex;justify-content:space-between;font-size:11px;color:#8fa6bd;margin-top:3px}
+
+.catch-prof-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.catch-prof-bar-label{
+  flex:0 0 84px;font-size:12px;color:#cdd9e8;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
+}
+/* Lure names are product names and run long — give them room before the bar. */
+.catch-prof-bar-label.wide{flex-basis:118px}
+.catch-prof-viz-axis span:only-child{margin-left:auto}
+.catch-prof-bar-track{flex:1;height:9px;background:rgba(255,255,255,.06);border-radius:5px;overflow:hidden}
+.catch-prof-bar-fill{height:100%;border-radius:5px;min-width:6px}
+.catch-prof-bar-count{flex:0 0 18px;text-align:right;font-size:11.5px;color:#9db4cc;font-weight:700}
+
+.catch-prof-row{
+  background:rgba(15,36,68,.45);border:1px solid rgba(107,191,234,.13);
+  border-radius:10px;padding:10px 12px;margin-bottom:8px;
+}
+.catch-prof-row-date{font-size:12.5px;font-weight:700;color:#f0f6ff;margin-bottom:7px}
+.catch-prof-row-time{font-size:11.5px;font-weight:600;color:#9db4cc;margin-left:8px}
+.catch-prof-cells{display:flex;flex-wrap:wrap;gap:7px}
+.catch-prof-cell{
+  background:rgba(107,191,234,.06);border:1px solid rgba(107,191,234,.13);
+  border-radius:7px;padding:4px 9px;min-width:0;
+}
+.catch-prof-cell-label{
+  font-size:10px;font-weight:700;color:#6bbfea;letter-spacing:.07em;text-transform:uppercase;
+}
+.catch-prof-cell-value{font-size:12.5px;color:#f0f6ff;font-weight:600;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.catch-prof-swatch{width:10px;height:10px;border-radius:3px;flex-shrink:0;border:1px solid rgba(255,255,255,.25)}
+.catch-prof-row-notes{font-size:12.5px;color:#cfe5ff;line-height:1.45;margin-top:7px}
+
 .catch-filter-label{font-size:10px;font-weight:700;color:#6bbfea;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
 .catch-filter-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .catch-filter-date{
@@ -3569,12 +3639,37 @@ body.nav-open .leaflet-control-attribution{
         <div id="catch-photo-preview" style="margin-top:8px"></div>
       </div>
 
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px">Conditions (optional)</label>
+        <div class="catch-cond-grid">
+          <div class="catch-cond-field">
+            <div class="catch-filter-label">Water temp °F</div>
+            <input id="catch-cond-sst" type="number" inputmode="decimal" step="0.1" min="28" max="95"
+                   class="pref-select catch-cond-input" placeholder="—">
+          </div>
+          <div class="catch-cond-field">
+            <div class="catch-filter-label">Wind kt</div>
+            <input id="catch-cond-windkt" type="number" inputmode="numeric" step="1" min="0" max="80"
+                   class="pref-select catch-cond-input" placeholder="—">
+          </div>
+          <div class="catch-cond-field">
+            <div class="catch-filter-label">Wind from</div>
+            <select id="catch-cond-winddir" class="pref-select catch-cond-input"></select>
+          </div>
+          <div class="catch-cond-field">
+            <div class="catch-filter-label">Cloud cover</div>
+            <select id="catch-cond-cloud" class="pref-select catch-cond-input"></select>
+          </div>
+        </div>
+        <div class="catch-field-hint" id="catch-cond-hint">Anything you leave blank is filled from the live ocean model where it can be.</div>
+      </div>
+
       <div id="catch-conditions-preview" style="
         background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);
-        border-radius:8px;padding:9px 12px;font-size:11px;color:#a7f3d0;
+        border-radius:8px;padding:9px 12px;font-size:11.5px;color:#a7f3d0;
         line-height:1.5;display:none;
       ">
-        <div style="font-weight:700;color:#34d399;letter-spacing:.06em;text-transform:uppercase;font-size:9px;margin-bottom:4px">✨ Auto-filled conditions</div>
+        <div style="font-weight:700;color:#34d399;letter-spacing:.06em;text-transform:uppercase;font-size:10px;margin-bottom:4px">✨ Auto-filled conditions</div>
         <div id="catch-conditions-text"></div>
       </div>
 
@@ -3688,7 +3783,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260808b"></script>
+<script src="bw-core.js?v=20260808d"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
@@ -4453,7 +4548,7 @@ body.nav-open .leaflet-control-attribution{
     "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
     <div style="flex:1;min-width:0">
       <div class="catches-title" style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🎣 My Catches</div>
-      <div class="catches-sub overlay-page-sub">Personal Log · Auto-filled Conditions</div>
+      <div class="catches-sub overlay-page-sub">Personal Log · Your Conditions & Patterns</div>
     </div>
     <button class="catches-log-btn" onclick="openLogCatch()" style="
       background:#2979b5;border:none;color:#fff;
@@ -4928,6 +5023,13 @@ input[type="date"].rp-post-input::-webkit-calendar-picker-indicator{
   #catches-overlay .catch-pat-body{font-size:13px !important}
   #catches-overlay .catch-pat-note{font-size:11.5px !important}
   #catches-overlay .catch-pat-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr)) !important}
+  /* One rollup per row on a phone — two columns squeezes the dot strips and
+     the bar labels below the point of being readable. */
+  #catches-overlay .catch-prof-vizgrid{grid-template-columns:1fr !important}
+  #catches-overlay .catch-prof-bar-label{flex-basis:96px !important}
+  #catches-overlay .catch-prof-cell-value{font-size:13px !important}
+  #catches-overlay .catch-prof-row-date{font-size:13px !important}
+  #catches-overlay .catch-prof-facts{font-size:13px !important}
   #regs-overlay [style*="font-size:10px"],
   #legal-overlay [style*="font-size:10px"],
   #kn-overlay [style*="font-size:10px"],
@@ -4946,7 +5048,7 @@ input[type="date"].rp-post-input::-webkit-calendar-picker-indicator{
 }
 </style>
 
-<script src="bw-reports.js?v=20260808a"></script>
+<script src="bw-reports.js?v=20260808d"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TERMINAL TACKLE — Knots, Crimps, Connections

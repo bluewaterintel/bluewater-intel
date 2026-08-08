@@ -10917,6 +10917,7 @@ function catchPopulateFormFromEntry(entry){
   catchInitLureColorChips("catch-lure-colors", _catchFormLureColor, "catchPickFormLureColor");
   const notesEl = document.getElementById("catch-notes");
   if(notesEl) notesEl.value = entry.notes || "";
+  catchFillConditionInputs(entry.conditions || {}, {});
   const photoIn = document.getElementById("catch-photo");
   if(photoIn) photoIn.value = "";
   _catchPendingPhoto = entry.photo || null;
@@ -10981,6 +10982,7 @@ function openLogCatch(){
   if(tackle) tackle.value = "";
   _catchFormLureColor = "";
   catchInitLureColorChips("catch-lure-colors", "", "catchPickFormLureColor");
+  catchFillConditionInputs({}, {});
   const photoIn = document.getElementById("catch-photo");
   if(photoIn) photoIn.value = "";
   const photoPrev = document.getElementById("catch-photo-preview");
@@ -11224,14 +11226,37 @@ function catchUpdateLocationDisplay(){
   catchShowConditionsPreview(lat, lng);
 }
 
+// True once the angler has changed any condition field away from what we
+// pre-filled, so a later location change never overwrites their typing.
+function catchConditionInputsTouched(){
+  const g = (id) => { const el = document.getElementById(id); return el ? String(el.value).trim() : ""; };
+  const a = _catchAutoCond || {};
+  const norm = (v) => v == null ? "" : String(v);
+  return g("catch-cond-sst") !== norm(a.sst)
+      || g("catch-cond-windkt") !== norm(a.windKt)
+      || g("catch-cond-winddir") !== norm(catchWindDirName(a.windDir))
+      || g("catch-cond-cloud") !== norm(a.cloud);
+}
+
+function catchFormTimestamp(){
+  const dt = document.getElementById("catch-datetime");
+  return dt && dt.value ? new Date(dt.value).toISOString() : new Date().toISOString();
+}
+
 function catchShowConditionsPreview(lat, lng){
+  const ts = catchFormTimestamp();
+  const sameDay = catchIsSameDay(ts);
   const cond = catchAutoFillConditions(lat, lng);
+  if(!catchConditionInputsTouched()){
+    catchFillConditionInputs(sameDay ? cond : {}, { fromModel: sameDay, backdated: !sameDay });
+  }
+  // Only the fields that stay automatic are previewed. Water temp and wind now
+  // live in the inputs above, and showing a second copy here invites the two to
+  // disagree once the angler corrects one.
   const parts = [];
-  if(cond.sst != null)         parts.push(`SST <b>${cond.sst}°F</b>`);
-  if(cond.moon)                parts.push(`Moon <b>${cond.moon}</b>`);
-  if(cond.tide)                parts.push(`Tide <b>${cond.tide}</b>`);
-  if(cond.pressureTrend)       parts.push(`Pressure <b>${cond.pressureTrend}</b>`);
-  if(cond.windDir != null)     parts.push(`Wind <b>${cond.windDir}°</b>`);
+  if(cond.moon)                          parts.push(`Moon <b>${cond.moon}</b>`);
+  if(sameDay && cond.tide)               parts.push(`Tide <b>${cond.tide}</b>`);
+  if(sameDay && cond.pressureTrend)      parts.push(`Pressure <b>${cond.pressureTrend}</b>`);
   const previewEl = document.getElementById("catch-conditions-preview");
   const textEl = document.getElementById("catch-conditions-text");
   if(parts.length && previewEl && textEl){
@@ -11298,10 +11323,9 @@ function saveCatchFromForm(){
       return;
     }
     const wasShared = !!existing.shared;
-    const locChanged = existing.lat !== lat || existing.lng !== lng;
-    const conditions = locChanged && lat != null && lng != null
-      ? catchAutoFillConditions(lat, lng, timestamp)
-      : (existing.conditions || {});
+    // The form owns water temp, wind and cloud now, so an edit always reads
+    // them back rather than only refreshing when the pin moved.
+    const conditions = catchBuildConditions(lat, lng, timestamp);
     const patch = {
       species,
       lat,
@@ -11350,6 +11374,7 @@ function saveCatchFromForm(){
       port: portName || undefined,
       tackleType,
       lureColor: _catchFormLureColor || null,
+      conditions: catchBuildConditions(lat, lng, timestamp),
     });
   }
   if(typeof drawCatchPins === "function") drawCatchPins();
@@ -11771,22 +11796,145 @@ function refreshSettingsModal(){
 // ════════════════════════════════════════════════════════════════════════════
 const USER_CATCHES = [];
 
+// hex/hex2 drive the swatches in the species profile rollups. Two-tone entries
+// carry hex2 so the swatch reads as the actual skirt rather than a flat blob.
 const CATCH_LURE_COLORS = [
-  { id: "green", label: "Green" },
-  { id: "blue", label: "Blue" },
-  { id: "blue-white", label: "Blue/White" },
-  { id: "pink", label: "Pink" },
-  { id: "purple", label: "Purple" },
-  { id: "red", label: "Red" },
-  { id: "orange", label: "Orange" },
-  { id: "yellow", label: "Yellow" },
-  { id: "white", label: "White" },
-  { id: "black", label: "Black" },
-  { id: "rainbow", label: "Rainbow" },
-  { id: "chartreuse", label: "Chartreuse" },
-  { id: "silver", label: "Silver" },
-  { id: "gold", label: "Gold" },
+  { id: "green", label: "Green", hex: "#22c55e" },
+  { id: "blue", label: "Blue", hex: "#3b82f6" },
+  { id: "blue-white", label: "Blue/White", hex: "#3b82f6", hex2: "#f8fafc" },
+  { id: "pink", label: "Pink", hex: "#ec4899" },
+  { id: "purple", label: "Purple", hex: "#a855f7" },
+  { id: "red", label: "Red", hex: "#ef4444" },
+  { id: "orange", label: "Orange", hex: "#f97316" },
+  { id: "yellow", label: "Yellow", hex: "#eab308" },
+  { id: "white", label: "White", hex: "#f8fafc" },
+  { id: "black", label: "Black", hex: "#111827" },
+  { id: "rainbow", label: "Rainbow", hex: "#22c55e", hex2: "#ec4899", rainbow: true },
+  { id: "chartreuse", label: "Chartreuse", hex: "#a3e635" },
+  { id: "silver", label: "Silver", hex: "#cbd5e1" },
+  { id: "gold", label: "Gold", hex: "#d4af37" },
 ];
+
+// ── MANUAL CONDITION ENTRY ───────────────────────────────────────────────────
+// The angler was on the water; the model was not. Water temp, wind, and cloud
+// cover are typed in, with the live model used only as a starting guess for a
+// catch being logged the same day. A backdated catch gets blank fields rather
+// than today's readings dressed up as history, which is what the old auto-only
+// path silently did.
+const CATCH_WIND_DIRS = [
+  { id: "N", deg: 0 }, { id: "NE", deg: 45 }, { id: "E", deg: 90 }, { id: "SE", deg: 135 },
+  { id: "S", deg: 180 }, { id: "SW", deg: 225 }, { id: "W", deg: 270 }, { id: "NW", deg: 315 },
+];
+const CATCH_CLOUD_COVER = [
+  { id: "clear", label: "Clear", icon: "☀️" },
+  { id: "partly", label: "Partly cloudy", icon: "🌤" },
+  { id: "mostly", label: "Mostly cloudy", icon: "⛅" },
+  { id: "overcast", label: "Overcast", icon: "☁️" },
+  { id: "fog", label: "Fog", icon: "🌫" },
+  { id: "rain", label: "Rain", icon: "🌧" },
+];
+function catchCloudLabel(id){
+  const c = CATCH_CLOUD_COVER.find(x => x.id === id);
+  return c ? c.label : (id || null);
+}
+function catchWindDirName(deg){
+  if(deg == null || !isFinite(deg)) return null;
+  return CATCH_WIND_DIRS[Math.round(deg / 45) % 8].id;
+}
+
+// What the model offered when the form opened, so save time can tell a value
+// the angler typed from one they simply left alone.
+let _catchAutoCond = {};
+
+function catchInitConditionSelects(){
+  const wd = document.getElementById("catch-cond-winddir");
+  if(wd && wd.options.length <= 1){
+    wd.innerHTML = `<option value="">—</option>` +
+      CATCH_WIND_DIRS.map(d => `<option value="${d.id}">${d.id}</option>`).join("");
+  }
+  const cl = document.getElementById("catch-cond-cloud");
+  if(cl && cl.options.length <= 1){
+    cl.innerHTML = `<option value="">—</option>` +
+      CATCH_CLOUD_COVER.map(c => `<option value="${c.id}">${c.icon} ${c.label}</option>`).join("");
+  }
+}
+
+function catchIsSameDay(timestamp){
+  if(!timestamp) return true;
+  const d = new Date(timestamp), n = new Date();
+  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+}
+
+// cond: values to show (an existing catch's conditions, or a fresh auto-fill).
+function catchFillConditionInputs(cond, opts){
+  catchInitConditionSelects();
+  const c = cond || {};
+  const isAuto = !!(opts && opts.fromModel);
+  if(isAuto){
+    _catchAutoCond = { sst: c.sst, windKt: c.windKt, windDir: c.windDir, cloud: c.cloud };
+  } else {
+    // Editing: keep whatever was previously model-sourced marked as such, so
+    // re-saving an untouched catch doesn't relabel the model's guess as the
+    // angler's observation.
+    const prev = c.src || {};
+    _catchAutoCond = {};
+    ["sst", "windKt", "windDir", "cloud"].forEach(k => { if(prev[k] === "auto") _catchAutoCond[k] = c[k]; });
+  }
+  const set = (id, v) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.value = (v == null || v === "") ? "" : String(v);
+    el.classList.toggle("is-auto", isAuto && v != null);
+  };
+  set("catch-cond-sst", c.sst);
+  set("catch-cond-windkt", c.windKt);
+  set("catch-cond-winddir", catchWindDirName(c.windDir));
+  set("catch-cond-cloud", c.cloud);
+  const hint = document.getElementById("catch-cond-hint");
+  if(hint){
+    hint.textContent = (opts && opts.backdated)
+      ? "This catch isn't from today, so nothing was pre-filled — the live model only knows about right now."
+      : "Pre-filled from the live ocean model where it could be. Correct anything that looks wrong.";
+  }
+}
+
+// The four form-owned fields become the record. Everything else on the passed
+// conditions object (moon, tide, pressure) is carried through untouched.
+function catchReadConditionInputs(base){
+  const cond = Object.assign({}, base || {});
+  delete cond.sst; delete cond.windKt; delete cond.windDir; delete cond.cloud;
+  const src = {};
+  const numOf = (id) => {
+    const el = document.getElementById(id);
+    if(!el || String(el.value).trim() === "") return null;
+    const v = parseFloat(el.value);
+    return isFinite(v) ? v : null;
+  };
+  const mark = (key, val) => { src[key] = (_catchAutoCond[key] != null && _catchAutoCond[key] === val) ? "auto" : "user"; };
+
+  const sst = numOf("catch-cond-sst");
+  if(sst != null){ cond.sst = Math.round(sst * 10) / 10; mark("sst", cond.sst); }
+  const kt = numOf("catch-cond-windkt");
+  if(kt != null){ cond.windKt = Math.round(kt); mark("windKt", cond.windKt); }
+  const dirEl = document.getElementById("catch-cond-winddir");
+  if(dirEl && dirEl.value){
+    const d = CATCH_WIND_DIRS.find(x => x.id === dirEl.value);
+    if(d){ cond.windDir = d.deg; mark("windDir", cond.windDir); }
+  }
+  const clEl = document.getElementById("catch-cond-cloud");
+  if(clEl && clEl.value){ cond.cloud = clEl.value; mark("cloud", cond.cloud); }
+
+  if(Object.keys(src).length) cond.src = src;
+  return cond;
+}
+
+function catchLureColorSwatch(id){
+  const c = CATCH_LURE_COLORS.find(x => x.id === id);
+  if(!c) return "#6b7280";
+  if(c.rainbow) return "linear-gradient(90deg,#ef4444,#eab308,#22c55e,#3b82f6,#a855f7)";
+  if(c.hex2) return `linear-gradient(90deg,${c.hex} 50%,${c.hex2} 50%)`;
+  return c.hex;
+}
 
 // My Catches filter state (session-scoped).
 const CATCH_FILTER = {
@@ -11980,6 +12128,42 @@ function nearestPortTo(lat, lng){
 // nearest real sample → regional real median → null; tide/wind/pressure come from
 // the nearest real ocean-field sample; moon phase is an exact astronomical value.
 // Any value without real data is omitted (the catch record shows "—" for it).
+// Moon phase for an arbitrary instant. moonPhase() reads the forecast clock,
+// which is right for the Bite Map and wrong for a fish caught last Tuesday.
+// This is pure astronomy, so a backdated catch can still be stamped exactly.
+function catchMoonNameAt(timestamp){
+  const t = timestamp ? new Date(timestamp).getTime() : Date.now();
+  if(!isFinite(t)) return null;
+  const refNewMoon = new Date("2000-01-06T18:14:00Z").getTime();
+  const synodic = 29.530588853 * 24 * 3600 * 1000;
+  let p = ((t - refNewMoon) % synodic) / synodic;
+  if(p < 0) p += 1;
+  if(p < 0.06 || p > 0.94) return "New";
+  if(p < 0.19) return "Waxing Crescent";
+  if(p < 0.31) return "First Quarter";
+  if(p < 0.44) return "Waxing Gibbous";
+  if(p < 0.56) return "Full";
+  if(p < 0.69) return "Waning Gibbous";
+  if(p < 0.81) return "Last Quarter";
+  return "Waning Crescent";
+}
+
+// Assemble what gets stored. The typed fields win; moon is computed for the
+// catch's own date; tide and pressure are only carried when the catch is from
+// today, since the live field cannot speak to any other day.
+function catchBuildConditions(lat, lng, timestamp){
+  const sameDay = catchIsSameDay(timestamp);
+  const auto = (sameDay && lat != null && lng != null) ? catchAutoFillConditions(lat, lng) : {};
+  const base = {};
+  if(sameDay){
+    if(auto.tide) base.tide = auto.tide;
+    if(auto.pressureTrend) base.pressureTrend = auto.pressureTrend;
+  }
+  const moon = catchMoonNameAt(timestamp);
+  if(moon) base.moon = moon;
+  return catchReadConditionInputs(base);
+}
+
 function catchAutoFillConditions(lat, lng /*, timestamp */){
   const conditions = {};
   try {
@@ -12235,6 +12419,123 @@ function catchAnalytics(speciesFilter){
     } : null,
     topPort,
   };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SPECIES PROFILE — everything logged for one species, as data rather than as
+// a claim.
+//
+// catchAnalytics() answers "what pattern holds across your catches" and stays
+// silent below five, which is the right call for a statistical claim. But most
+// anglers have one or two of any given species, so a per-species view built on
+// that alone would be an empty box for every choice. This returns the raw
+// per-catch attributes plus simple distributions, all of which are honest at
+// n=1, and leaves the pattern chips to the existing function.
+// ════════════════════════════════════════════════════════════════════════════
+function catchSpeciesProfile(speciesId){
+  const all = USER_CATCHES.filter(c => c.species === speciesId);
+  const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
+  const name = sp ? sp.name : speciesId;
+  const color = sp && sp.color ? sp.color : "#22c55e";
+  if(!all.length) return { speciesId, name, color, n: 0, rows: [], dist: {}, numeric: {} };
+
+  const rows = all.map(c => {
+    const d = new Date(c.timestamp);
+    const cond = c.conditions || {};
+    return {
+      id: c.id,
+      ms: d.getTime(),
+      dateStr: d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+      timeStr: d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+      hour: d.getHours() + d.getMinutes() / 60,
+      weight: c.weight == null ? null : c.weight,
+      length: c.length == null ? null : c.length,
+      tackleType: c.tackleType || null,
+      lureColor: c.lureColor || null,
+      lure: c.lure || null,
+      lureCat: c.lureCat || null,
+      port: c.port ? String(c.port).split(",")[0] : null,
+      notes: c.notes || "",
+      photo: c.photo || null,
+      sst: cond.sst == null ? null : cond.sst,
+      moon: cond.moon || null,
+      tide: cond.tide || null,
+      pressureTrend: cond.pressureTrend || null,
+      windDir: cond.windDir == null ? null : cond.windDir,
+      windKt: cond.windKt == null ? null : cond.windKt,
+      cloud: cond.cloud || null,
+      condSrc: cond.src || null,
+    };
+  }).sort((a, b) => b.ms - a.ms);
+
+  // Categorical counts, ordered by frequency. Empty arrays where nothing was
+  // ever recorded, so the view can skip that rollup instead of drawing a blank.
+  const distOf = (fn) => {
+    const m = new Map();
+    for(const r of rows){
+      const v = fn(r);
+      if(v == null || v === "") continue;
+      m.set(v, (m.get(v) || 0) + 1);
+    }
+    return [...m.entries()]
+      .map(([key, count]) => ({ key, count, pct: Math.round(count / rows.length * 100) }))
+      .sort((a, b) => b.count - a.count);
+  };
+  const dirName = (d) => ["N","NE","E","SE","S","SW","W","NW"][Math.round(d / 45) % 8];
+  const hourBucket = (h) => h < 5 ? "Night (12–5am)" : h < 9 ? "Early AM (5–9am)"
+    : h < 12 ? "Late AM (9am–12pm)" : h < 16 ? "Afternoon (12–4pm)"
+    : h < 20 ? "Evening (4–8pm)" : "Night (8pm–12am)";
+
+  const numOf = (fn) => {
+    const values = rows.map(fn).filter(v => v != null && isFinite(v));
+    if(!values.length) return null;
+    const min = Math.min(...values), max = Math.max(...values);
+    return { values, min, max, mean: values.reduce((a, b) => a + b, 0) / values.length };
+  };
+
+  return {
+    speciesId, name, color,
+    n: rows.length,
+    rows,
+    first: rows[rows.length - 1],
+    last: rows[0],
+    heaviest: rows.reduce((b, r) => (r.weight != null && (!b || r.weight > b.weight)) ? r : b, null),
+    longest: rows.reduce((b, r) => (r.length != null && (!b || r.length > b.length)) ? r : b, null),
+    dist: {
+      lureColor: distOf(r => r.lureColor),
+      lure: distOf(r => r.lure),
+      lureCat: distOf(r => r.lureCat),
+      tackleType: distOf(r => r.tackleType),
+      moon: distOf(r => r.moon),
+      tide: distOf(r => r.tide),
+      pressureTrend: distOf(r => r.pressureTrend),
+      wind: distOf(r => r.windDir == null ? null : dirName(r.windDir)),
+      cloud: distOf(r => r.cloud),
+      timeOfDay: distOf(r => hourBucket(r.hour)),
+      port: distOf(r => r.port),
+    },
+    numeric: {
+      sst: numOf(r => r.sst),
+      hour: numOf(r => r.hour),
+      weight: numOf(r => r.weight),
+      windKt: numOf(r => r.windKt),
+    },
+  };
+}
+
+// Species the user has actually logged, most-caught first. The Filters dropdown
+// lists the whole app catalog, which is the wrong set for a "pick one of yours"
+// control — nearly every option would be empty.
+function catchLoggedSpecies(){
+  const m = new Map();
+  for(const c of USER_CATCHES){
+    if(!c.species) continue;
+    m.set(c.species, (m.get(c.species) || 0) + 1);
+  }
+  return [...m.entries()].map(([id, count]) => {
+    const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === id) : null;
+    return { id, count, name: sp ? sp.name : id, color: sp && sp.color ? sp.color : "#22c55e" };
+  }).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 // Share a logged catch to the community forum as a REAL first-party report.

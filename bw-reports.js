@@ -92,6 +92,9 @@ function renderMyCatches(){
     </div>
     <div id="catch-analytics-output"></div>`;
 
+  // The container above was just rewritten, so repaint the panel if it was open.
+  if(CATCH_PROFILE.open) paintCatchAnalytics(false);
+
   // Keep Filters directly under analytics (move the row after stats content).
   if(filterRow && statsEl.nextElementSibling !== filterRow){
     statsEl.insertAdjacentElement("afterend", filterRow);
@@ -126,17 +129,35 @@ function renderMyCatches(){
   listEl.innerHTML = filtered.map(c => renderCatchCard(c)).join("");
 }
 
-// Triggered by the "Run Catch Analytics" button. Computes and renders the
-// pattern analysis into its container, using the current species filter.
+// Which species the analytics panel is showing, and whether it is open at all.
+// renderMyCatches() rebuilds the stats container on every filter change, which
+// used to blank the analytics output — so the panel has to remember itself.
+const CATCH_PROFILE = { open: false, species: "all" };
+
+// Triggered by the "Run Catch Analytics" button.
 function runCatchAnalytics(){
-  const out = document.getElementById("catch-analytics-output");
-  const btn = document.getElementById("run-analytics-btn");
-  if(!out) return;
   if(typeof catchReadFilterControls === "function") catchReadFilterControls();
-  const sp = CATCH_FILTER.species === "all" ? "all" : CATCH_FILTER.species;
-  out.innerHTML = renderCatchInsights(sp);
-  out.scrollIntoView({behavior:"smooth", block:"nearest"});
+  if(CATCH_FILTER.species && CATCH_FILTER.species !== "all") CATCH_PROFILE.species = CATCH_FILTER.species;
+  CATCH_PROFILE.open = true;
+  paintCatchAnalytics(true);
+}
+
+// Species chip click.
+function selectCatchSpecies(id){
+  CATCH_PROFILE.species = id || "all";
+  CATCH_PROFILE.open = true;
+  paintCatchAnalytics(false);
+}
+
+function paintCatchAnalytics(scrollIntoView){
+  const out = document.getElementById("catch-analytics-output");
+  if(!out) return;
+  const sp = CATCH_PROFILE.species || "all";
+  const body = (sp === "all") ? renderCatchInsights("all") : renderSpeciesProfile(sp);
+  out.innerHTML = renderSpeciesChips(sp) + body;
+  const btn = document.getElementById("run-analytics-btn");
   if(btn) btn.textContent = "📈 Refresh Analytics";
+  if(scrollIntoView) out.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 // Renders the "Your Patterns" analytics panel for the My Catches page.
@@ -182,6 +203,161 @@ function renderCatchInsights(speciesFilter){
               : `<div class="catch-pat-body" style="font-size:13px;color:#9ca3af;padding:4px 0">No strong patterns yet — your catches are spread evenly across conditions. Keep logging.</div>`}
       ${summaryBits.length ? `<div class="catch-pat-summary" style="font-size:13px;color:#aab8c8;margin-top:10px;line-height:1.5">${summaryBits.join(" &nbsp;·&nbsp; ")}</div>` : ""}
       <div class="catch-pat-note" style="font-size:11.5px;color:#8b9cb0;margin-top:8px;font-style:italic;line-height:1.45">Patterns reflect your logged data only — more catches sharpen them. Conditions are from the same model driving the Bite Map.</div>
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SPECIES PROFILE VIEW
+// Nothing here needs a charting library. The data is a handful of points per
+// species, and the useful idiom at that size is a dot strip showing every
+// catch rather than a histogram binning three fish into three bars of one.
+// ════════════════════════════════════════════════════════════════════════════
+
+// One dot per catch along a real axis. Overlapping dots stay translucent so
+// clustering reads as density without pretending to be a distribution.
+function profDotStrip(num, opts){
+  if(!num || !num.values.length) return "";
+  const fmt = opts.fmt || (v => String(Math.round(v)));
+  const lo = opts.min != null ? opts.min : num.min - (num.max - num.min || 2) * 0.15;
+  const hi = opts.max != null ? opts.max : num.max + (num.max - num.min || 2) * 0.15;
+  const span = (hi - lo) || 1;
+  const W = 100, H = 30, cy = 15;
+  const dots = num.values.map(v => {
+    const x = ((v - lo) / span) * W;
+    return `<circle cx="${x.toFixed(2)}" cy="${cy}" r="3.4" fill="${opts.color || "#6bbfea"}" fill-opacity="0.55" stroke="${opts.color || "#6bbfea"}" stroke-opacity="0.9" stroke-width="0.8" vector-effect="non-scaling-stroke"/>`;
+  }).join("");
+  const meanX = ((num.mean - lo) / span) * W;
+  // A midpoint tick, because an axis running 12am to 12am is unreadable
+  // without one — you cannot tell which end is which.
+  const hasMid = opts.mid != null;
+  const midX = hasMid ? ((opts.mid - lo) / span) * W : 0;
+  return `
+    <div class="catch-prof-viz">
+      <div class="catch-prof-viz-head"><span>${opts.label}</span><span class="catch-prof-viz-range">${fmt(num.min)}${num.values.length > 1 ? " – " + fmt(num.max) : ""}</span></div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:30px;display:block">
+        <line x1="0" y1="${cy}" x2="${W}" y2="${cy}" stroke="rgba(107,191,234,.22)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+        ${hasMid ? `<line x1="${midX.toFixed(2)}" y1="7" x2="${midX.toFixed(2)}" y2="${H - 7}" stroke="rgba(107,191,234,.28)" stroke-width="1" vector-effect="non-scaling-stroke"/>` : ""}
+        ${num.values.length > 2 ? `<line x1="${meanX.toFixed(2)}" y1="4" x2="${meanX.toFixed(2)}" y2="${H - 4}" stroke="#fbbf24" stroke-opacity=".6" stroke-dasharray="3 3" stroke-width="1" vector-effect="non-scaling-stroke"/>` : ""}
+        ${dots}
+      </svg>
+      <div class="catch-prof-viz-axis"><span>${fmt(lo)}</span>${hasMid ? `<span>${fmt(opts.mid)}</span>` : ""}<span>${fmt(hi)}</span></div>
+    </div>`;
+}
+
+// Horizontal count bars. Used for every categorical attribute; swatch is only
+// passed for lure color so the bar reads as the actual color.
+function profBars(rows, opts){
+  if(!rows || !rows.length) return "";
+  const max = rows[0].count;
+  const bars = rows.slice(0, opts.limit || 6).map(r => {
+    const w = Math.max(6, (r.count / max) * 100);
+    const fill = opts.swatch ? catchLureColorSwatch(r.key) : (opts.color || "#6bbfea");
+    const label = opts.labelFn ? opts.labelFn(r.key) : r.key;
+    return `
+      <div class="catch-prof-bar-row">
+        <div class="catch-prof-bar-label${opts.wide ? " wide" : ""}" title="${escapeHtml(String(label))}">${escapeHtml(String(label))}</div>
+        <div class="catch-prof-bar-track"><div class="catch-prof-bar-fill" style="width:${w}%;background:${fill}"></div></div>
+        <div class="catch-prof-bar-count">${r.count}</div>
+      </div>`;
+  }).join("");
+  return `<div class="catch-prof-viz"><div class="catch-prof-viz-head"><span>${opts.label}</span></div>${bars}</div>`;
+}
+
+// The species picker — only species actually in the log, with counts.
+function renderSpeciesChips(activeId){
+  const logged = catchLoggedSpecies();
+  if(!logged.length) return "";
+  const total = USER_CATCHES.length;
+  const chip = (id, label, count, color, active) => `
+    <button type="button" class="catch-sp-chip${active ? " active" : ""}"
+      onclick="selectCatchSpecies(${id === "all" ? "'all'" : "'" + id + "'"})"
+      ${active && color ? `style="border-color:${color}99;background:${color}1f"` : ""}>
+      ${color && id !== "all" ? `<span class="catch-sp-dot" style="background:${color}"></span>` : ""}${escapeHtml(label)}
+      <span class="catch-sp-n">${count}</span>
+    </button>`;
+  return `
+    <div class="catch-sp-picker">
+      <div class="catch-pat-label" style="margin-bottom:6px">Break down by species</div>
+      <div class="catch-sp-chiprow">
+        ${chip("all", "All species", total, null, activeId === "all" || !activeId)}
+        ${logged.map(s => chip(s.id, s.name, s.count, s.color, activeId === s.id)).join("")}
+      </div>
+    </div>`;
+}
+
+// Full profile for one species: what was caught, then how it clusters, then
+// the earned pattern chips if there are enough fish to claim one.
+function renderSpeciesProfile(speciesId){
+  const p = catchSpeciesProfile(speciesId);
+  if(!p.n) return `<div class="catch-pat-body" style="padding:12px 0">No ${escapeHtml(p.name)} logged yet.</div>`;
+
+  const tackleLabel = (t) => t === "bait" ? "Bait" : t === "artificial" ? "Artificial" : t;
+  const colorLabel = (id) => (CATCH_LURE_COLORS.find(c => c.id === id) || { label: id }).label;
+
+  // ── Band 1: headline facts ────────────────────────────────────────────────
+  const facts = [];
+  facts.push(`<span><b>${p.n}</b> logged</span>`);
+  if(p.heaviest && p.heaviest.weight != null) facts.push(`Best <b>${p.heaviest.weight} lb</b>`);
+  if(p.longest && p.longest.length != null) facts.push(`Longest <b>${p.longest.length}"</b>`);
+  if(p.first && p.last) facts.push(p.n > 1 ? `${p.first.dateStr} → ${p.last.dateStr}` : p.last.dateStr);
+  if(p.dist.port.length) facts.push(`Mostly <b>${escapeHtml(p.dist.port[0].key)}</b>`);
+
+  // ── Band 2: rollups ───────────────────────────────────────────────────────
+  const viz = [
+    profDotStrip(p.numeric.sst, { label: "Water temp", fmt: v => `${v.toFixed(1)}°`, color: "#fbbf24" }),
+    profDotStrip(p.numeric.hour, { label: "Time of day", min: 0, max: 24, mid: 12, color: "#7dd3fc",
+      fmt: v => { const h = Math.floor(v) % 24; const ap = h < 12 ? "am" : "pm"; const hh = h % 12 === 0 ? 12 : h % 12; return `${hh}${ap}`; } }),
+    profBars(p.dist.lureColor, { label: "Lure color", swatch: true, labelFn: colorLabel }),
+    profBars(p.dist.lure, { label: "Lure", wide: true }),
+    profBars(p.dist.tackleType, { label: "Bait vs artificial", labelFn: tackleLabel, color: "#9ec5e8" }),
+    profBars(p.dist.moon, { label: "Moon phase", color: "#a78bfa" }),
+    profBars(p.dist.tide, { label: "Tide", color: "#34d399" }),
+    profBars(p.dist.pressureTrend, { label: "Pressure trend", color: "#f472b6" }),
+    profBars(p.dist.wind, { label: "Wind direction", color: "#60a5fa" }),
+    profDotStrip(p.numeric.windKt, { label: "Wind speed", min: 0, fmt: v => `${Math.round(v)} kt`, color: "#60a5fa" }),
+    profBars(p.dist.cloud, { label: "Cloud cover", color: "#cbd5e1", labelFn: catchCloudLabel }),
+    profBars(p.dist.port, { label: "Spot", color: "#22c55e" }),
+  ].filter(Boolean).join("");
+
+  // ── Band 3: every catch, every attribute ──────────────────────────────────
+  const cell = (label, value) => value == null || value === ""
+    ? ""
+    : `<div class="catch-prof-cell"><div class="catch-prof-cell-label">${label}</div><div class="catch-prof-cell-value">${value}</div></div>`;
+  const rowsHtml = p.rows.map(r => {
+    const size = [r.weight != null ? `${r.weight} lb` : null, r.length != null ? `${r.length}"` : null]
+      .filter(Boolean).join(" · ") || null;
+    return `
+      <div class="catch-prof-row">
+        <div class="catch-prof-row-date">${r.dateStr}<span class="catch-prof-row-time">${r.timeStr}</span></div>
+        <div class="catch-prof-cells">
+          ${cell("Size", size)}
+          ${cell("Tackle", r.tackleType ? tackleLabel(r.tackleType) : null)}
+          ${cell("Lure", r.lure ? escapeHtml(r.lure) : null)}
+          ${cell("Color", r.lureColor ? `<span class="catch-prof-swatch" style="background:${catchLureColorSwatch(r.lureColor)}"></span>${escapeHtml(colorLabel(r.lureColor))}` : null)}
+          ${cell("SST", r.sst != null ? `${r.sst}°F` : null)}
+          ${cell("Moon", r.moon ? escapeHtml(r.moon) : null)}
+          ${cell("Tide", r.tide ? escapeHtml(r.tide) : null)}
+          ${cell("Pressure", r.pressureTrend ? escapeHtml(r.pressureTrend) : null)}
+          ${cell("Wind", [catchWindDirName(r.windDir), r.windKt != null ? `${r.windKt} kt` : null].filter(Boolean).join(" ") || null)}
+          ${cell("Sky", r.cloud ? escapeHtml(catchCloudLabel(r.cloud)) : null)}
+          ${cell("Spot", r.port ? escapeHtml(r.port) : null)}
+        </div>
+        ${r.notes ? `<div class="catch-prof-row-notes">${escapeHtml(r.notes)}</div>` : ""}
+      </div>`;
+  }).join("");
+
+  // Pattern chips ride on the existing analytics, which stays silent until it
+  // has enough fish to make a claim. Its absence is a footnote here, not the
+  // whole panel, because the data above is already worth reading.
+  const patterns = renderCatchInsights(speciesId);
+
+  return `
+    <div class="catch-prof">
+      <div class="catch-prof-facts">${facts.join('<span class="catch-prof-dot">·</span>')}</div>
+      ${viz ? `<div class="catch-prof-vizgrid">${viz}</div>` : ""}
+      <div class="catch-pat-head" style="margin:16px 0 8px">Every ${escapeHtml(p.name)} logged</div>
+      ${rowsHtml}
+      ${patterns}
     </div>`;
 }
 
