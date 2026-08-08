@@ -10918,7 +10918,7 @@ function catchPopulateFormFromEntry(entry){
   catchPopulateLureSelect(entry.species || null, entry.lure || null);
   const notesEl = document.getElementById("catch-notes");
   if(notesEl) notesEl.value = entry.notes || "";
-  catchFillConditionInputs(entry.conditions || {}, {});
+  catchFillConditionInputs(entry.conditions || {}, { backdated: !catchIsSameDay(entry.timestamp) });
   const photoIn = document.getElementById("catch-photo");
   if(photoIn) photoIn.value = "";
   _catchPendingPhoto = entry.photo || null;
@@ -11240,6 +11240,38 @@ function catchConditionInputsTouched(){
       || g("catch-cond-cloud") !== norm(a.cloud);
 }
 
+// Drop the italic once the angler edits a pre-filled value.
+let _catchCondListenersBound = false;
+function catchBindConditionInputListeners(){
+  if(_catchCondListenersBound) return;
+  _catchCondListenersBound = true;
+  const clearAuto = (e) => { if(e.target) e.target.classList.remove("is-auto"); };
+  ["catch-cond-sst", "catch-cond-windkt", "catch-cond-winddir", "catch-cond-cloud"].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener("input", clearAuto);
+    el.addEventListener("change", clearAuto);
+  });
+}
+
+function catchDatetimeChanged(){
+  if(_catchPendingLat != null && _catchPendingLng != null){
+    catchShowConditionsPreview(_catchPendingLat, _catchPendingLng);
+    return;
+  }
+  const ts = catchFormTimestamp();
+  if(!catchConditionInputsTouched() && !catchIsSameDay(ts)){
+    catchFillConditionInputs({}, { backdated: true });
+  } else {
+    const hint = document.getElementById("catch-cond-hint");
+    if(hint){
+      hint.textContent = catchIsSameDay(ts)
+        ? "Pre-filled from the live ocean model where it could be. Correct anything that looks wrong."
+        : "This catch isn't from today, so nothing was pre-filled — the live model only knows about right now.";
+    }
+  }
+}
+
 function catchFormTimestamp(){
   const dt = document.getElementById("catch-datetime");
   return dt && dt.value ? new Date(dt.value).toISOString() : new Date().toISOString();
@@ -11382,7 +11414,7 @@ function saveCatchFromForm(){
     });
   }
   if(typeof drawCatchPins === "function") drawCatchPins();
-  if(shared && typeof renderReports === "function") renderReports();
+  if(shared && typeof loadReports === "function") loadReports();
   const fromCatches = _catchLogFromCatches;
   const isNewCatch = !editingId;
   if(fromCatches && isNewCatch){
@@ -11893,16 +11925,21 @@ function catchFillConditionInputs(cond, opts){
     _catchAutoCond = {};
     ["sst", "windKt", "windDir", "cloud"].forEach(k => { if(prev[k] === "auto") _catchAutoCond[k] = c[k]; });
   }
-  const set = (id, v) => {
+  const set = (id, fieldKey, v, fmt) => {
     const el = document.getElementById(id);
     if(!el) return;
-    el.value = (v == null || v === "") ? "" : String(v);
-    el.classList.toggle("is-auto", isAuto && v != null);
+    const display = fmt ? (v != null ? fmt(v) : "") : (v == null || v === "" ? "" : String(v));
+    el.value = display;
+    const autoVal = _catchAutoCond[fieldKey];
+    const fromModel = isAuto && v != null;
+    const stillAuto = autoVal != null && (fmt ? display === fmt(autoVal) : String(autoVal) === display);
+    el.classList.toggle("is-auto", fromModel || stillAuto);
   };
-  set("catch-cond-sst", c.sst);
-  set("catch-cond-windkt", c.windKt);
-  set("catch-cond-winddir", catchWindDirName(c.windDir));
-  set("catch-cond-cloud", c.cloud);
+  set("catch-cond-sst", "sst", c.sst);
+  set("catch-cond-windkt", "windKt", c.windKt);
+  set("catch-cond-winddir", "windDir", c.windDir, catchWindDirName);
+  set("catch-cond-cloud", "cloud", c.cloud);
+  catchBindConditionInputListeners();
   const hint = document.getElementById("catch-cond-hint");
   if(hint){
     hint.textContent = (opts && opts.backdated)
@@ -12292,7 +12329,10 @@ function catchAutoFillConditions(lat, lng /*, timestamp */){
       const tideF = nearestFieldSample(lat, lng, "tide");
       if(tideF && tideF.state) conditions.tide = tideF.state;
       const windF = nearestFieldSample(lat, lng, "wind");
-      if(windF && windF.dir != null) conditions.windDir = Math.round(windF.dir);
+      if(windF){
+        if(windF.dir != null) conditions.windDir = Math.round(windF.dir);
+        if(windF.value != null) conditions.windKt = Math.round(windF.value);
+      }
       const presF = nearestFieldSample(lat, lng, "pressure");
       if(presF && presF.value != null) conditions.pressureTrend = presF.value > 1 ? "rising" : presF.value < -1 ? "falling" : "steady";
     }

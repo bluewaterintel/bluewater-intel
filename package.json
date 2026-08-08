@@ -13,7 +13,6 @@
     "config": "node scripts/generate-bw-config.mjs",
     "config:native": "node scripts/generate-bw-config.mjs --native",
     "setup:backend": "node scripts/setup-backend.mjs",
-    "patch:m3m4": "node scripts/apply-m3-m4-patches.mjs",
     "test:freshness": "node tests/freshness.test.mjs",
     "test:wind": "node tests/wind.test.mjs",
     "test:ocean": "node tests/ocean-forecast.test.mjs",
