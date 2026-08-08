@@ -6769,18 +6769,19 @@ const WindParticleLayer = L.Layer.extend({
         continue;
       }
       // Step length grows with speed (px/frame), capped so gales stay readable.
-      // The 0.4 px/frame trim comes off AFTER the speed term, so it takes a much
+      // The 0.3 px/frame trim comes off AFTER the speed term, so it takes a much
       // bigger bite out of light air than out of a gale. That is what pulls the
       // green band (10-15 kt) away from the yellow band (16-23 kt): a purely
       // proportional step puts them within a few hundredths of a pixel per frame
-      // of each other, which reads as one uniform speed.
+      // of each other, which reads as one uniform speed. 0.4 separated them
+      // further still but dragged green and yellow below a readable drift.
       const rawStep = Math.min(1.8, wind.speedKts * 0.045) * zoomScale;
       // Zoomed out far enough, the whole field steps less than the trim itself
       // and a flat subtraction would clamp every band flat at the floor —
       // freezing green solid and undoing the separation above. Never take more
       // than three quarters of the step, so the ordering by speed survives at
       // any scale.
-      const stepPx = Math.max(0.05, rawStep * 0.25, rawStep - 0.4);
+      const stepPx = Math.max(0.05, rawStep * 0.25, rawStep - 0.3);
       const mag = Math.hypot(wind.u, wind.v) || 1;
       const dx = (wind.u / mag) * stepPx;     // east = +x
       const dy = (-wind.v / mag) * stepPx;    // north = -y on screen
