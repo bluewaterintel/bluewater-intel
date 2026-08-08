@@ -1147,7 +1147,10 @@ body.modal-open #brief-toggle{
 /* Map bottom time-step pills — altimetry / satellite / wind / radar */
 .map-time-pill{
   display:none;position:absolute;
-  bottom:80px;left:50%;transform:translateX(-50%);z-index:500;
+  /* Fallback only — restackBottomControls() owns the real bottom for every bar
+     in the stack. Kept equal to its desktop base so a bar that renders a frame
+     before the restack doesn't visibly jump. */
+  bottom:18px;left:50%;transform:translateX(-50%);z-index:500;
   background:var(--bw-map-chrome-bg);
   border-radius:14px;
   padding:12px 18px 10px;
@@ -3672,7 +3675,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260807b"></script>
+<script src="bw-core.js?v=20260807c"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

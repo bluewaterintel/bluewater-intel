@@ -6573,10 +6573,12 @@ const WindParticleLayer = L.Layer.extend({
   initialize: function(options){
     this._opts = Object.assign({
       particleCount: 900,   // scaled by viewport in _seed
-      maxAgeFrames: 48,     // lifespan before respawn
-      speedScale: 0.010,    // map-units (px) per m/s per frame factor
+      // Lifespan before respawn. Raised alongside the slower step below so a
+      // particle still covers about the same ground before it recycles —
+      // holding it at 48 would have churned the field faster than it flows.
+      maxAgeFrames: 60,
       lineWidth: 1.15,
-      trailFade: 0.80,      // 0-1; higher = longer trails
+      trailFade: 0.87,      // 0-1; higher = longer trails
       shadeCellPx: 14,
     }, options || {});
     this._particles = [];
@@ -6767,8 +6769,18 @@ const WindParticleLayer = L.Layer.extend({
         continue;
       }
       // Step length grows with speed (px/frame), capped so gales stay readable.
-      // Trim 0.2 px/frame so streaks read a touch slower without going stagnant.
-      const stepPx = Math.max(0.05, Math.min(1.8, wind.speedKts * 0.045) * zoomScale - 0.2);
+      // The 0.4 px/frame trim comes off AFTER the speed term, so it takes a much
+      // bigger bite out of light air than out of a gale. That is what pulls the
+      // green band (10-15 kt) away from the yellow band (16-23 kt): a purely
+      // proportional step puts them within a few hundredths of a pixel per frame
+      // of each other, which reads as one uniform speed.
+      const rawStep = Math.min(1.8, wind.speedKts * 0.045) * zoomScale;
+      // Zoomed out far enough, the whole field steps less than the trim itself
+      // and a flat subtraction would clamp every band flat at the floor —
+      // freezing green solid and undoing the separation above. Never take more
+      // than three quarters of the step, so the ordering by speed survives at
+      // any scale.
+      const stepPx = Math.max(0.05, rawStep * 0.25, rawStep - 0.4);
       const mag = Math.hypot(wind.u, wind.v) || 1;
       const dx = (wind.u / mag) * stepPx;     // east = +x
       const dy = (-wind.v / mag) * stepPx;    // north = -y on screen
@@ -9815,6 +9827,14 @@ function updateCurrentsLegendMeta(){
 // so it never overlaps the bars or the Leaflet attribution line.
 const BOTTOM_STACK_ORDER = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider"];
 const BOTTOM_STACK_GAP  = 8;    // px gap between stacked bars
+// Bottom inset of the lowest bar in the stack. Phones need the extra room for
+// the Leaflet attribution line, which runs the full width down there. On
+// desktop the attribution tucks into the bottom-right corner while these bars
+// are centred and a third of the map wide, so they can sit as low as the other
+// bottom-centre chrome (the ruler readout and drop-pin hints, all at 18px) and
+// hand the difference back to the chart.
+const BOTTOM_STACK_BASE_PHONE = 34;
+const BOTTOM_STACK_BASE       = 18;
 // Phase 2 mobile: when collapsed, the bottom control bars fold behind a single
 // "Controls ▴" chip so an active overlay owns the screen. Only meaningful on
 // phones and reset automatically whenever the stack is empty.
@@ -9835,10 +9855,8 @@ function toggleMobileControls(){
 }
 
 function restackBottomControls(){
-  // On phones the Leaflet attribution/credit line sits along the very bottom,
-  // so start the stack higher to clear it; on desktop a smaller inset is fine.
   const phone = (typeof isPhoneView === "function") ? isPhoneView() : (window.innerWidth <= 680);
-  const base = phone ? 34 : 60;
+  const base = phone ? BOTTOM_STACK_BASE_PHONE : BOTTOM_STACK_BASE;
   const toggle = document.getElementById("mobile-controls-toggle");
 
   // Bars currently shown = inline display set and not "none".
@@ -12293,19 +12311,50 @@ function toggleOceanLegendDetail(){
   oceanLegendExpanded = !oceanLegendExpanded;
   updateOceanLegend();
 }
+// ── TOP-CENTRE LEGEND STACK ──────────────────────────────────────────────────
+// The bite-score banner and the ocean-overlay legend both hang from the top
+// centre of the map at the same width, so the legend can only be placed once
+// the banner's real height is known. Both panels defer to these two helpers
+// rather than each guessing at the other's size.
+const TOP_LEGEND_INSET       = 14;  // desktop top inset with no banner above
+const TOP_LEGEND_INSET_PHONE = 6;
+const TOP_LEGEND_GAP         = 10;  // clearance between the banner and legend
+
+// Where the ocean legend's top edge belongs right now, measured against the
+// banner as it is actually rendered.
+function topLegendTopPx(){
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
+  const banner = document.getElementById("bite-banner");
+  if(banner && banner.style.display !== "none"){
+    const h = banner.offsetHeight || biteBannerHeightPx();
+    if(h > 0) return banner.offsetTop + h + TOP_LEGEND_GAP;
+  }
+  return phone ? TOP_LEGEND_INSET_PHONE : TOP_LEGEND_INSET;
+}
+
+// Drop the ocean legend below the banner (or back to the top inset). Safe to
+// call at any time — it only reads what is on screen, so it can be run after
+// either panel changes without caring which one moved.
+function restackTopLegends(){
+  const legend = document.getElementById("ocean-legend");
+  if(!legend || legend.style.display === "none") return;
+  legend.style.top = Math.round(topLegendTopPx()) + "px";
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
+  if(!phone) legend.style.maxHeight = oceanLegendMaxHeightPx() + "px";
+}
+
 function oceanLegendMaxHeightPx(){
   const mapH = (MAP && MAP.getSize) ? MAP.getSize().y : (window.innerHeight || 600);
   const phone = (typeof isPhoneView === "function") ? isPhoneView() : (window.innerWidth <= 680);
-  const topInset = layerVis.predict ? 70 : (phone ? 10 : 14);
-  let bottomReserve = phone ? 28 : 12;
+  const topInset = topLegendTopPx();
+  let bottomReserve = (phone ? BOTTOM_STACK_BASE_PHONE : BOTTOM_STACK_BASE) + 12;
   const stackIds = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider"];
   for(const id of stackIds){
     const el = document.getElementById(id);
     if(el && el.style.display && el.style.display !== "none"){
-      bottomReserve += (el.offsetHeight || 56) + 8;
+      bottomReserve += (el.offsetHeight || 56) + BOTTOM_STACK_GAP;
     }
   }
-  if(phone) bottomReserve += 20;
   return Math.max(100, mapH - topInset - bottomReserve);
 }
 function updateOceanLegend(){
@@ -12487,9 +12536,8 @@ function updateOceanLegend(){
   }
   content.innerHTML = parts.join("");
   el.style.display = "block";
-  // If the bite-score banner is also showing at the top, push this panel down so
-  // they don't overlap; otherwise sit at the normal top inset.
-  el.style.top = (layerVis.predict ? (typeof biteBannerHeightPx === "function" ? biteBannerHeightPx() + 10 : 70) : (phone ? 6 : 14)) + "px";
+  // Vertical placement is left to restackTopLegends() at the end of this
+  // function, once updateBiteBanner has settled the banner above it.
   // Keep the top scale bubble centered — ~1/3 map width on desktop (inset from edges), 3/4 on phone.
   el.style.left = "50%";
   el.style.right = "auto";
@@ -12511,7 +12559,13 @@ function updateOceanLegend(){
     el.style.maxHeight = oceanLegendMaxHeightPx() + "px";
     el.style.overflowY = "auto";
   }
+  // The banner has to be shown and filled before it can be measured, so the
+  // legend is positioned after it rather than against an assumed height. This
+  // is what used to break when the bite map was switched off and back on: the
+  // legend ran first, saw a hidden banner, fell back to a 56px guess and ended
+  // up underneath the taller real banner.
   updateBiteBanner();
+  restackTopLegends();
 }
 
 // Show/hide the slim bite-score gradient banner across the top of the map. It
@@ -12523,6 +12577,7 @@ function toggleBiteBannerForecast(){
   b.classList.toggle("bite-fc-open");
   const btn = document.getElementById("bite-fc-toggle");
   if(btn) btn.setAttribute("aria-expanded", b.classList.contains("bite-fc-open") ? "true" : "false");
+  restackTopLegends();
   if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
 }
 
@@ -12579,6 +12634,7 @@ function updateBiteBanner(){
   }
   updateWindBiteSyncHints();
   syncExplainerPosition();
+  restackTopLegends();
   if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
 }
 
@@ -14655,6 +14711,7 @@ window.addEventListener("resize", () => {
   syncHeaderHeightVar();
   refreshWpLegendDisplay();
   restackBottomControls();
+  if(typeof restackTopLegends === "function") restackTopLegends();
   if(typeof syncExplainerPosition === "function") syncExplainerPosition();
   if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
   if(typeof isPhoneView === "function" && !isPhoneView()){
