@@ -4312,25 +4312,25 @@ function barrierCoastLng(lat){
   // Values must sit on or slightly WEST of MAIN_COAST oceanfront. Sitting east
   // invents a wall in open water and stops LORAN lines short of the beach.
   if(lat >= 36.0 && lat <= 36.55){
-    return -75.82;  // Currituck Banks / Corolla (MAIN ~-75.72…-75.85)
+    return -75.92;  // Currituck Banks / Corolla (MAIN ~-75.95)
   }
   if(lat >= 35.70 && lat < 36.0){
-    return -75.58;  // Nags Head / Bodie Island (MAIN ~-75.50…-75.72)
+    return -75.68;  // Nags Head / Bodie Island
   }
   if(lat >= 35.40 && lat < 35.70){
-    return -75.48;  // Rodanthe / Waves / Salvo
+    return -75.58;  // Rodanthe / Waves / Salvo
   }
   if(lat >= 35.20 && lat < 35.40){
-    return -75.54;  // Buxton / Cape Hatteras tip
+    return -75.64;  // Buxton / Cape Hatteras tip
   }
   if(lat >= 35.05 && lat < 35.20){
-    return -75.60;  // Hatteras village / Frisco ocean side
+    return -75.70;  // Hatteras village / Frisco ocean side
   }
   if(lat >= 34.95 && lat < 35.05){
-    return -75.95;  // Ocracoke Island Atlantic
+    return -76.05;  // Ocracoke Island Atlantic
   }
   if(lat >= 34.85 && lat < 34.95){
-    return -76.18;  // Portsmouth / north Core Banks
+    return -76.28;  // Portsmouth / north Core Banks
   }
   if(lat >= 34.70 && lat < 34.85){
     // Was -76.38 — sat EAST of Core Banks oceanfront (MAIN ~-76.35…-76.48)
@@ -4444,8 +4444,10 @@ const MAIN_COAST = [
   // ── VA Beach coastline (oceanfront) ──
   [36.80, -75.95], [36.70, -75.92],
   // ── NC Outer Banks Atlantic oceanfront (keep Pamlico / Core west = land) ──
-  [36.55, -75.85], [36.10, -75.72], [35.85, -75.50], [35.55, -75.47],
-  [35.35, -75.48], [35.22, -75.53], [35.10, -75.58], [35.00, -75.90],
+  // Nudged ~8 nm west (Aug 2026): simplified vertices sat east of the visible
+  // beach and truncated 9960-Y 40100–40400 short of Hatteras / Ocracoke.
+  [36.55, -75.95], [36.10, -75.82], [35.85, -75.60], [35.55, -75.57],
+  [35.35, -75.58], [35.22, -75.63], [35.10, -75.68], [35.00, -76.00],
   [34.90, -76.10], [34.80, -76.35], [34.65, -76.55],
   // ── NC south coast (Cape Lookout → Oak Island oceanfront) ──
   // Nudged ~8 nm west (Jul 2026): simplified vertices sat east of the visible
@@ -10412,6 +10414,55 @@ function loranTD(lat, lng, chain){
   return geom * scale + offset;
 }
 
+// March an open-water endpoint to the keepPt boundary (shore / sound cut).
+// 9960-Y hyperbolas often stop in open water east of the thin OBX strip before
+// the contour reaches land — extend along the line, then west toward the barrier.
+function loranExtendPolyEndpoints(poly, keepPt){
+  if(poly.length < 2) return poly;
+  const maxNm = 12;
+  const maxDeg = maxNm / 60;
+  const extendTip = (tipIdx) => {
+    const tip = poly[tipIdx];
+    if(!keepPt(tip)) return;
+    const adj = poly[tipIdx + (tipIdx === 0 ? 1 : -1)];
+    let dLat = tip[0] - adj[0], dLng = tip[1] - adj[1];
+    let segLen = Math.hypot(dLat, dLng);
+    if(segLen < 1e-9) return;
+    dLat /= segLen; dLng /= segLen;
+    const march = (dirLat, dirLng) => {
+      const dlen = Math.hypot(dirLat, dirLng);
+      if(dlen < 1e-9) return null;
+      const nLat = dirLat / dlen, nLng = dirLng / dlen;
+      let a = tip, b = tip, hit = false;
+      for(let s = segLen * 0.4; s <= maxDeg; s += segLen * 0.4){
+        const p = [tip[0] + nLat * s, tip[1] + nLng * s];
+        if(keepPt(p)) a = p;
+        else { b = p; hit = true; break; }
+      }
+      if(!hit) return null;
+      for(let i = 0; i < 10; i++){
+        const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        if(keepPt(m)) a = m; else b = m;
+      }
+      return (Math.abs(a[0] - tip[0]) > 1e-5 || Math.abs(a[1] - tip[1]) > 1e-5) ? a : null;
+    };
+    let shore = march(dLat, dLng);
+    // OBX/Hatteras: thin barrier + hyperbola stops short in open water — march
+    // west (9960-Y tilt has a north component here, so bias NW slightly).
+    if(!shore && tip[0] >= 34.55 && tip[0] <= 36.05 && tip[1] > -76.0){
+      shore = march(-0.12, -1);
+      if(!shore) shore = march(0, -1);
+    }
+    if(shore){
+      if(tipIdx === 0) poly.unshift(shore);
+      else poly.push(shore);
+    }
+  };
+  extendTip(0);
+  extendTip(poly.length - 1);
+  return poly;
+}
+
 // Marching-squares contour tracer for a specific chain
 function traceLoranLine(tdValue, bounds, step, chain){
   const lines = [];
@@ -10579,6 +10630,9 @@ function traceLoranLine(tdValue, bounds, step, chain){
       }
     }
     flush();
+  }
+  for(let i = 0; i < clipped.length; i++){
+    clipped[i] = loranExtendPolyEndpoints(clipped[i], keepPt);
   }
   return clipped;
 }
