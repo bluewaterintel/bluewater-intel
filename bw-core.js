@@ -10915,6 +10915,7 @@ function catchPopulateFormFromEntry(entry){
   if(tackle) tackle.value = entry.tackleType || "";
   _catchFormLureColor = entry.lureColor || "";
   catchInitLureColorChips("catch-lure-colors", _catchFormLureColor, "catchPickFormLureColor");
+  catchPopulateLureSelect(entry.species || null, entry.lure || null);
   const notesEl = document.getElementById("catch-notes");
   if(notesEl) notesEl.value = entry.notes || "";
   catchFillConditionInputs(entry.conditions || {}, {});
@@ -10982,6 +10983,7 @@ function openLogCatch(){
   if(tackle) tackle.value = "";
   _catchFormLureColor = "";
   catchInitLureColorChips("catch-lure-colors", "", "catchPickFormLureColor");
+  catchPopulateLureSelect(document.getElementById("catch-species")?.value || null, null);
   catchFillConditionInputs({}, {});
   const photoIn = document.getElementById("catch-photo");
   if(photoIn) photoIn.value = "";
@@ -11342,6 +11344,7 @@ function saveCatchFromForm(){
       port: resolvedPort,
       tackleType,
       lureColor: _catchFormLureColor || null,
+      ...catchReadLure(),
       conditions,
     };
     catchUpdate(editingId, patch);
@@ -11374,6 +11377,7 @@ function saveCatchFromForm(){
       port: portName || undefined,
       tackleType,
       lureColor: _catchFormLureColor || null,
+      ...catchReadLure(),
       conditions: catchBuildConditions(lat, lng, timestamp),
     });
   }
@@ -11788,9 +11792,18 @@ function refreshSettingsModal(){
 //     port:      nearest known port (for stats / reports)
 //     length:    inches (optional)
 //     weight:    pounds (optional)
-//     notes:     free text (technique, lure, depth, etc.)
+//     notes:     free text (depth, drift, anything else worth remembering)
 //     photo:     base64 data URI (optional, downscaled)
-//     conditions:{sst, moonPhase, tide, pressure, windDir} — auto-filled
+//     tackleType:"bait" | "artificial"
+//     lureColor: id from CATCH_LURE_COLORS
+//     lure:      display name; lureId/lureCat set when it came from TB_TACKLE
+//                (absent for a lure typed by hand)
+//     conditions:{sst, windKt, windDir, cloud, moon, tide, pressureTrend,
+//                 src:{field:"user"|"auto"}}
+//                sst/wind/cloud are entered on the form and pre-filled from the
+//                live model only for a same-day catch; moon is computed from
+//                this catch's timestamp; tide and pressure are omitted unless
+//                the catch is from today.
 //     shared:    boolean — if true, this catch ALSO appears in SOCIAL reports
 //   }
 // ════════════════════════════════════════════════════════════════════════════
@@ -11926,6 +11939,92 @@ function catchReadConditionInputs(base){
 
   if(Object.keys(src).length) cond.src = src;
   return cond;
+}
+
+// ── LURE PICKER ──────────────────────────────────────────────────────────────
+// Sourced from the tackle box catalog rather than a second list, so a lure
+// logged here is the same record the Tackle Box recommends. Lures tagged for
+// the species being logged come first — only a handful are relevant to any one
+// fish — but the whole catalog stays reachable, and anything not in it can be
+// typed, because no catalog covers what is actually tied on.
+const CATCH_LURE_OTHER = "__other__";
+
+function catchLureCatalog(){
+  return (typeof TB_TACKLE !== "undefined" && Array.isArray(TB_TACKLE)) ? TB_TACKLE : [];
+}
+function catchLureById(id){
+  return catchLureCatalog().find(t => t.id === id) || null;
+}
+
+function catchPopulateLureSelect(speciesId, currentName){
+  const sel = document.getElementById("catch-lure");
+  if(!sel) return;
+  const all = catchLureCatalog();
+  const opt = (t) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`;
+  let html = `<option value="">— Not specified —</option>`;
+  if(all.length){
+    const forSp = speciesId ? all.filter(t => (t.species || []).includes(speciesId)) : [];
+    const forSpIds = new Set(forSp.map(t => t.id));
+    if(forSp.length){
+      const spName = (typeof SPECIES !== "undefined" && SPECIES.find(s => s.id === speciesId) || {}).name || "this species";
+      html += `<optgroup label="For ${escapeHtml(spName)}">${forSp.map(opt).join("")}</optgroup>`;
+    }
+    const rest = all.filter(t => !forSpIds.has(t.id));
+    const byCat = new Map();
+    for(const t of rest){
+      if(!byCat.has(t.cat)) byCat.set(t.cat, []);
+      byCat.get(t.cat).push(t);
+    }
+    for(const cat of [...byCat.keys()].sort()){
+      html += `<optgroup label="${escapeHtml(cat)}">${byCat.get(cat).map(opt).join("")}</optgroup>`;
+    }
+  }
+  html += `<option value="${CATCH_LURE_OTHER}">Something else…</option>`;
+  sel.innerHTML = html;
+
+  // Restore the current value. A name that isn't in the catalog is free text,
+  // which happens for older catches and for anything hand-tied.
+  const otherEl = document.getElementById("catch-lure-other");
+  if(!currentName){
+    sel.value = "";
+    if(otherEl){ otherEl.value = ""; otherEl.style.display = "none"; }
+    return;
+  }
+  const match = all.find(t => t.name === currentName);
+  if(match){
+    sel.value = match.id;
+    if(otherEl){ otherEl.value = ""; otherEl.style.display = "none"; }
+  } else {
+    sel.value = CATCH_LURE_OTHER;
+    if(otherEl){ otherEl.value = currentName; otherEl.style.display = "block"; }
+  }
+}
+
+function catchLureSelected(val){
+  const otherEl = document.getElementById("catch-lure-other");
+  if(!otherEl) return;
+  const isOther = val === CATCH_LURE_OTHER;
+  otherEl.style.display = isOther ? "block" : "none";
+  if(isOther) otherEl.focus();
+  else otherEl.value = "";
+}
+
+// Species drives which lures surface first, so the list follows the picker.
+function catchSpeciesChanged(){
+  const sp = document.getElementById("catch-species");
+  catchPopulateLureSelect(sp ? sp.value : null, catchReadLure().lure);
+}
+
+function catchReadLure(){
+  const sel = document.getElementById("catch-lure");
+  const otherEl = document.getElementById("catch-lure-other");
+  if(!sel || !sel.value) return { lure: null, lureId: null, lureCat: null };
+  if(sel.value === CATCH_LURE_OTHER){
+    const txt = otherEl ? otherEl.value.trim() : "";
+    return { lure: txt || null, lureId: null, lureCat: null };
+  }
+  const t = catchLureById(sel.value);
+  return t ? { lure: t.name, lureId: t.id, lureCat: t.cat || null } : { lure: null, lureId: null, lureCat: null };
 }
 
 function catchLureColorSwatch(id){
@@ -12219,6 +12318,9 @@ function catchAdd(data){
     weightUnknown: !!data.weightUnknown,
     tackleType: data.tackleType || null,
     lureColor: data.lureColor || null,
+    lure: data.lure || null,
+    lureId: data.lureId || null,
+    lureCat: data.lureCat || null,
     notes: data.notes || "",
     photo: data.photo || null,
     conditions: data.conditions || (data.lat != null && data.lng != null

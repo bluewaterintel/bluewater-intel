@@ -309,6 +309,9 @@ function renderSpeciesProfile(speciesId){
       fmt: v => { const h = Math.floor(v) % 24; const ap = h < 12 ? "am" : "pm"; const hh = h % 12 === 0 ? 12 : h % 12; return `${hh}${ap}`; } }),
     profBars(p.dist.lureColor, { label: "Lure color", swatch: true, labelFn: colorLabel }),
     profBars(p.dist.lure, { label: "Lure", wide: true }),
+    // Category separates sooner than name does: you'll have several catches on
+    // trolling lures long before you have several on any one trolling lure.
+    profBars(p.dist.lureCat, { label: "Lure type", color: "#c4b5fd" }),
     profBars(p.dist.tackleType, { label: "Bait vs artificial", labelFn: tackleLabel, color: "#9ec5e8" }),
     profBars(p.dist.moon, { label: "Moon phase", color: "#a78bfa" }),
     profBars(p.dist.tide, { label: "Tide", color: "#34d399" }),

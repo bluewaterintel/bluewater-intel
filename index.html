@@ -3563,7 +3563,7 @@ body.nav-open .leaflet-control-attribution{
 
       <div>
         <label style="font-size:11px;font-weight:700;color:#7dd3fc;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px">Species</label>
-        <select id="catch-species" class="pref-select" style="margin-top:0"></select>
+        <select id="catch-species" class="pref-select" style="margin-top:0" onchange="catchSpeciesChanged()"></select>
       </div>
 
       <div style="display:flex;gap:10px">
@@ -3624,6 +3624,10 @@ body.nav-open .leaflet-control-attribution{
             <option value="artificial">Artificial lure</option>
           </select>
         </div>
+        <div class="catch-filter-label" style="margin-top:2px">Lure / bait</div>
+        <select id="catch-lure" class="pref-select catch-cond-input" style="margin-bottom:8px" onchange="catchLureSelected(this.value)"></select>
+        <input id="catch-lure-other" type="text" class="pref-select catch-cond-input" style="display:none;margin-bottom:8px"
+               placeholder="What were you using?" maxlength="60">
         <div class="catch-filter-label" style="margin-top:2px">Lure color</div>
         <div id="catch-lure-colors" class="catch-chip-row"></div>
       </div>
@@ -3783,7 +3787,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260808d"></script>
+<script src="bw-core.js?v=20260808e"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
@@ -5048,7 +5052,7 @@ input[type="date"].rp-post-input::-webkit-calendar-picker-indicator{
 }
 </style>
 
-<script src="bw-reports.js?v=20260808d"></script>
+<script src="bw-reports.js?v=20260808e"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TERMINAL TACKLE — Knots, Crimps, Connections
