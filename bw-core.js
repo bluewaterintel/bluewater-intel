@@ -4801,46 +4801,52 @@ function isFishableWater(lat, lng){
 // Sailfish 4nm off Miami in 600 ft and sailfish 40nm off NC in 600 ft
 // are both "offshore" — same habitat.
 // ════════════════════════════════════════════════════════════════════════════
+// Bay polygons — protected shallow water inside sounds/bays. Flattened to a
+// packed array of lat/lng bounds and hoisted out of classifyWaterType, which a
+// heat-map bake calls a few hundred thousand times: rebuilding the literal per
+// call, and destructuring each row, was allocating millions of short-lived
+// arrays and dominated the cost of a repaint.
+const BAY_BOXES = new Float64Array([
+  36.95, 39.55, -77.30, -75.95,
+  38.85, 39.35, -75.45, -75.05,
+  35.20, 36.10, -76.30, -75.50,
+  35.85, 36.20, -76.70, -75.85,
+  34.65, 34.78, -76.70, -76.55,  // Bogue Sound
+  34.55, 34.85, -76.55, -76.30,  // Core/Back Sound
+  40.95, 41.20, -73.70, -71.95,
+  41.75, 42.05, -70.65, -70.10,
+  41.45, 41.75, -71.45, -71.20,
+  41.45, 41.70, -71.05, -70.70,
+  25.30, 25.80, -80.30, -80.10,
+  24.85, 25.30, -81.20, -80.40,
+  27.00, 29.10, -80.85, -80.55,
+  30.30, 30.55, -81.55, -81.35,
+  24.55, 24.95, -81.85, -81.00,
+  26.40, 26.75, -82.20, -81.85,
+  27.55, 28.05, -82.75, -82.45,
+  28.50, 29.20, -82.85, -82.60,
+  29.65, 29.85, -85.10, -84.70,
+  30.15, 30.45, -86.60, -86.30,
+  30.30, 30.55, -87.30, -86.95,
+  30.20, 30.65, -88.20, -87.50,
+  30.10, 30.45, -88.95, -88.40,
+  30.05, 30.25, -89.60, -89.05,
+  29.95, 30.35, -90.50, -89.60,
+  29.10, 29.55, -90.50, -89.50,
+  29.30, 29.75, -91.30, -90.50,
+  29.50, 29.90, -92.30, -91.30,
+  29.20, 29.55, -94.95, -94.60,
+  28.55, 28.90, -96.20, -95.70,
+  28.10, 28.55, -96.70, -96.20,
+  28.00, 28.30, -97.10, -96.65,
+  27.55, 27.95, -97.40, -97.05,
+  26.95, 27.50, -97.50, -97.15,
+]);
+
 function classifyWaterType(lat, lng){
-  // Bay polygons — protected shallow water inside sounds/bays
-  const bays = [
-    [36.95, 39.55, -77.30, -75.95],
-    [38.85, 39.35, -75.45, -75.05],
-    [35.20, 36.10, -76.30, -75.50],
-    [35.85, 36.20, -76.70, -75.85],
-    [34.65, 34.78, -76.70, -76.55],  // Bogue Sound
-    [34.55, 34.85, -76.55, -76.30],  // Core/Back Sound
-    [40.95, 41.20, -73.70, -71.95],
-    [41.75, 42.05, -70.65, -70.10],
-    [41.45, 41.75, -71.45, -71.20],
-    [41.45, 41.70, -71.05, -70.70],
-    [25.30, 25.80, -80.30, -80.10],
-    [24.85, 25.30, -81.20, -80.40],
-    [27.00, 29.10, -80.85, -80.55],
-    [30.30, 30.55, -81.55, -81.35],
-    [24.55, 24.95, -81.85, -81.00],
-    [26.40, 26.75, -82.20, -81.85],
-    [27.55, 28.05, -82.75, -82.45],
-    [28.50, 29.20, -82.85, -82.60],
-    [29.65, 29.85, -85.10, -84.70],
-    [30.15, 30.45, -86.60, -86.30],
-    [30.30, 30.55, -87.30, -86.95],
-    [30.20, 30.65, -88.20, -87.50],
-    [30.10, 30.45, -88.95, -88.40],
-    [30.05, 30.25, -89.60, -89.05],
-    [29.95, 30.35, -90.50, -89.60],
-    [29.10, 29.55, -90.50, -89.50],
-    [29.30, 29.75, -91.30, -90.50],
-    [29.50, 29.90, -92.30, -91.30],
-    [29.20, 29.55, -94.95, -94.60],
-    [28.55, 28.90, -96.20, -95.70],
-    [28.10, 28.55, -96.70, -96.20],
-    [28.00, 28.30, -97.10, -96.65],
-    [27.55, 27.95, -97.40, -97.05],
-    [26.95, 27.50, -97.50, -97.15],
-  ];
-  for(const [latMin, latMax, lngMin, lngMax] of bays){
-    if(lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax){
+  for(let i = 0; i < BAY_BOXES.length; i += 4){
+    if(lat >= BAY_BOXES[i] && lat <= BAY_BOXES[i + 1] &&
+       lng >= BAY_BOXES[i + 2] && lng <= BAY_BOXES[i + 3]){
       return "bay";
     }
   }
@@ -6058,18 +6064,32 @@ const BasemapSampler = {
 };
 
 // Basemap tiles loaded or switched → refresh the heat-map land/water mask.
+// The basemap itself changed (layer switch, contours toggled), so the land mask
+// really is different and the heat has to be rebuilt.
 function scheduleHeatMaskRepaint(){
   BasemapSampler.invalidate();
-  // Debounced inside the layer. Repainting per tile used to mean dozens of full
-  // field renders during a single pan.
   if(_heatLayer && typeof _heatLayer._onBasemapChanged === "function"){
+    _heatLayer._onBasemapChanged();
+  }
+}
+
+// A tile finishing is NOT a reason to rebuild. Tiles stream in on every pan, and
+// a rebuild costs a full-area field render — wiring this straight to
+// scheduleHeatMaskRepaint meant one of those after essentially every pan, which
+// is slower than the per-viewport repaint the bake was meant to replace. The
+// baked area is already masked; the only case new tiles can improve is a bake
+// that never got a readable basemap and fell back to polygons.
+function noteBasemapTileLoaded(){
+  BasemapSampler.invalidate();
+  if(_heatLayer && _heatLayer._bakeProvisional &&
+     typeof _heatLayer._onBasemapChanged === "function"){
     _heatLayer._onBasemapChanged();
   }
 }
 
 function bindBasemapTileRefresh(layer){
   if(!layer || !layer.on) return;
-  layer.on("tileload", scheduleHeatMaskRepaint);
+  layer.on("tileload", noteBasemapTileLoaded);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -6164,8 +6184,11 @@ const HeatCanvasLayer = L.Layer.extend({
   // half a screen needs no repaint at all.
   _bakePad: 0.5,
   // Ceiling on either bake dimension. On a large window the padding is trimmed
-  // instead of letting the bitmap grow without bound.
-  _bakeMaxDim: 2600,
+  // instead of letting the bitmap grow without bound. Set well clear of a
+  // desktop viewport: at 2600 a 1920-wide window kept only 340px of padding and
+  // rebuilt after a fifth of a screen of panning. Phones never approach this —
+  // their padding is capped by _bakePad long before the dimension matters.
+  _bakeMaxDim: 3400,
   // Zoom levels the view may drift from the bake before the upscale is worth
   // repainting for. The field is interpolated off a 0.1-0.25 degree grid, so
   // stretching it 2x is not visibly softer than rendering it fresh.
@@ -6363,7 +6386,35 @@ const HeatCanvasLayer = L.Layer.extend({
     for(let y = 0; y < h; y += PIX_STRIDE){
       const _lat = _latAtY[y];
       for(let x = 0; x < w; x += PIX_STRIDE){
-        const ll = { lat: _lat, lng: _lngAtX[x] };
+        const plat = _lat, plng = _lngAtX[x];
+
+        // ── Score first, so the masks below are only paid for where heat can
+        // actually appear ──
+        // Every mask can only push a pixel further toward transparent, so a
+        // block under the score floor is already finished no matter what they
+        // say. Most of the bake is under it — the scored grid only spans the
+        // port's range, while the bitmap covers the whole padded viewport — so
+        // testing the score first skips the bathymetry, habitat and basemap
+        // lookups for the large majority of blocks. The image buffer starts out
+        // fully transparent, so "transparent" here means writing nothing.
+        const latLo = floorTo(plat, ORIGIN.lat);
+        const latHi = latLo + GRID_STEP;
+        const lngLo = floorTo(plng, ORIGIN.lng);
+        const lngHi = lngLo + GRID_STEP;
+        const fLat = (plat - latLo) / GRID_STEP;  // 0..1 weight toward latHi
+        const fLng = (plng - lngLo) / GRID_STEP;  // 0..1 weight toward lngHi
+
+        const s00 = lookupScore(latLo, lngLo);  // SW corner
+        const s01 = lookupScore(latLo, lngHi);  // SE
+        const s10 = lookupScore(latHi, lngLo);  // NW
+        const s11 = lookupScore(latHi, lngHi);  // NE
+
+        // Bilinear:  v = s00*(1-fLat)*(1-fLng) + s01*(1-fLat)*fLng
+        //              + s10*fLat*(1-fLng)     + s11*fLat*fLng
+        const sLo = s00 + (s01 - s00) * fLng;  // interp along lng at low lat
+        const sHi = s10 + (s11 - s10) * fLng;  // interp along lng at high lat
+        const score = sLo + (sHi - sLo) * fLat;  // interp along lat
+        if(score < PREDICT_HEAT_SCORE_MIN) continue;
 
         // ── REAL bathymetry land mask (authoritative when loaded) ──
         // CUDEM/ETOPO store land as depth 0 and water as depth > 0. When the bathy
@@ -6378,15 +6429,12 @@ const HeatCanvasLayer = L.Layer.extend({
         let bathyWater = false;
         let _rd = null;
         if(typeof depthAtFromGrid === "function" && typeof PREDICT_BATHY_GRID !== "undefined" && PREDICT_BATHY_GRID){
-          _rd = depthAtFromGrid(PREDICT_BATHY_GRID, ll.lat, ll.lng);
+          _rd = depthAtFromGrid(PREDICT_BATHY_GRID, plat, plng);
         }
         if((_rd == null || !isFinite(_rd)) && typeof realDepthAt === "function"){
-          _rd = realDepthAt(ll.lat, ll.lng);
+          _rd = realDepthAt(plat, plng);
         }
-        if(_rd != null && isFinite(_rd) && _rd <= 0){
-          this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
-          continue;
-        }
+        if(_rd != null && isFinite(_rd) && _rd <= 0) continue;
         if(_rd != null && isFinite(_rd) && _rd > 0) bathyWater = true;
 
         // ── Water/land mask — basemap pixel first, polygon fallback ──
@@ -6399,66 +6447,26 @@ const HeatCanvasLayer = L.Layer.extend({
           // returns null and the polygon check below takes over.
           isWater = BasemapSampler.isWater(x - padX, y - padY);
         }
-        if(isWater === false){
-          // Definitive land from the basemap → transparent
-          this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
-          continue;
-        }
+        if(isWater === false) continue;              // definitive land
         if(isWater === null && haveLandCheck){
           // Sampler couldn't decide → fall back to polygon
-          if(!isFishableWater(ll.lat, ll.lng)){
-            this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
-            continue;
-          }
+          if(!isFishableWater(plat, plng)) continue;
         }
         if(haveSpeciesMask){
-          const wt = classifyWaterType(ll.lat, ll.lng);
-          if(!speciesHabitat.includes(wt)){
-            this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
-            continue;
-          }
+          if(!speciesHabitat.includes(classifyWaterType(plat, plng))) continue;
         }
         // Geographic range check — pixels outside the species lat band are
         // transparent. Uses the central helper so per-region (Atlantic/Gulf)
         // species like bluefin tuna are filtered correctly.
         if(haveLatRange){
-          if(!speciesAllowedAtLat(sid, ll.lat, ll.lng)){
-            this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
-            continue;
-          }
+          if(!speciesAllowedAtLat(sid, plat, plng)) continue;
         }
-
-        // ── Bilinear interpolation of the 4 surrounding grid cells ──
-        // The pixel sits inside a [latLo, latHi] × [lngLo, lngHi] grid cell.
-        // Corners are computed RELATIVE to the grid origin (see snap/floorTo
-        // above) so they line up with the actual data points at origin+n·step.
-        const latLo = floorTo(ll.lat, ORIGIN.lat);
-        const latHi = latLo + GRID_STEP;
-        const lngLo = floorTo(ll.lng, ORIGIN.lng);
-        const lngHi = lngLo + GRID_STEP;
-        const fLat = (ll.lat - latLo) / GRID_STEP;  // 0..1 weight toward latHi
-        const fLng = (ll.lng - lngLo) / GRID_STEP;  // 0..1 weight toward lngHi
-
-        const s00 = lookupScore(latLo, lngLo);  // SW corner
-        const s01 = lookupScore(latLo, lngHi);  // SE
-        const s10 = lookupScore(latHi, lngLo);  // NW
-        const s11 = lookupScore(latHi, lngHi);  // NE
-
-        // Bilinear:  v = s00*(1-fLat)*(1-fLng) + s01*(1-fLat)*fLng
-        //              + s10*fLat*(1-fLng)     + s11*fLat*fLng
-        const sLo = s00 + (s01 - s00) * fLng;  // interp along lng at low lat
-        const sHi = s10 + (s11 - s10) * fLng;  // interp along lng at high lat
-        const score = sLo + (sHi - sLo) * fLat;  // interp along lat
 
         // Feathered score floor: instead of a hard on/off at the cutoff (which
         // produces a stair-stepped outer boundary), fade the alpha across a
         // small band just above the floor so the heat edge dissolves smoothly
-        // into the water. Below the band → fully transparent.
+        // into the water.
         const FEATHER = 0.06;  // score units over which the edge fades in
-        if(score < PREDICT_HEAT_SCORE_MIN){
-          this._fillBlock(pixels, x, y, w, h, PIX_STRIDE, 0,0,0,0);
-          continue;
-        }
         const edgeFade = Math.min(1, (score - PREDICT_HEAT_SCORE_MIN) / FEATHER);
 
         // ── Look up the gradient color for this score ──
