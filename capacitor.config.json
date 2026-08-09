@@ -16,12 +16,13 @@
     "contentInset": "automatic",
     "scrollEnabled": false,
     "backgroundColor": "#0a1628",
-    "scheme": "Bluewater Intel"
+    "scheme": "App"
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 1200,
-      "launchAutoHide": true,
+      "launchShowDuration": 0,
+      "launchAutoHide": false,
+      "launchFadeOutDuration": 0,
       "backgroundColor": "#0a1628",
       "showSpinner": false,
       "androidSplashResourceName": "splash",

@@ -7312,6 +7312,7 @@ function drawCurrents(){
 let SST_FORECAST_GRID = null;
 let sstForecastLayer = null;
 let _sstFcFetchSeq = 0;
+let SST_STATUS = "idle"; // idle | loading | ready | unavailable
 
 // Adaptive SST display range (°F). GIBS MUR tiles bake a global ~0–32°C
 // palette, so summer Mid-Atlantic water (all ~78–86°F) looks uniformly red.
@@ -7750,6 +7751,7 @@ const SstForecastLayer = L.Layer.extend({
     if(_sstBoxTooBig(bx)){
       // Zoomed out past what a MUR pull can cover — show tiles rather than an
       // empty ocean, and say so in the legend.
+      SST_STATUS = "ready";
       _sstShowGibsFallback();
       SST_FORECAST_GRID = null;
       this._smallFor = null;
@@ -7758,6 +7760,9 @@ const SstForecastLayer = L.Layer.extend({
       if(typeof updateOceanLegend === "function") updateOceanLegend();
       return;
     }
+    SST_STATUS = "loading";
+    _sstHideGibsFallback();
+    if(typeof updateOceanLegend === "function") updateOceanLegend();
     // MUR pulls fail intermittently rather than by size. Measured live against
     // the same box: 0.05° / 4.2k cells timed out once and returned in 13s the
     // next try, while 0.08° / 1.6k cells timed out. Every failure was a ~20s
@@ -7766,9 +7771,8 @@ const SstForecastLayer = L.Layer.extend({
     // fall back to tiles only once the retries are spent.
     const stepDeg = _sstStepForBox(bx, z);
     const giveUp = () => {
-      // Keep SST on screen via GIBS instead of blanking the ocean, which read
-      // as "SST isn't loading".
-      _sstShowGibsFallback();
+      SST_STATUS = "unavailable";
+      _sstHideGibsFallback();
       this._smallFor = null;
       this._draw();
       updateSatDateDisplay();
@@ -7786,6 +7790,7 @@ const SstForecastLayer = L.Layer.extend({
           return;
         }
         SST_FORECAST_GRID._requestStep = stepDeg;
+        SST_STATUS = "ready";
         // Canvas carries the local stretch — drop GIBS so its baked global
         // 0–32°C palette can't wash out summer Mid-Atlantic breaks.
         _sstHideGibsFallback();
@@ -7843,16 +7848,23 @@ function syncSstOverlayMode(){
     if(!sstForecastLayer) sstForecastLayer = new SstForecastLayer();
     if(!MAP.hasLayer(sstForecastLayer)) sstForecastLayer.addTo(MAP);
     else sstForecastLayer.refresh();
-    if(SST_FORECAST_GRID) _sstHideGibsFallback();
-    else _sstShowGibsFallback();
+    if(SST_FORECAST_GRID){
+      SST_STATUS = "ready";
+      _sstHideGibsFallback();
+    } else if(SST_STATUS !== "unavailable" && _sstScaleMode !== "global"){
+      SST_STATUS = "loading";
+      _sstHideGibsFallback();
+    }
   } else {
     if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
     SST_FORECAST_GRID = null;
+    SST_STATUS = "idle";
     _sstScaleMode = "local";
     if(sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
   }
   updateSatDateDisplay();
   updateSatDateControlVisibility();
+  if(layerVis.sst && typeof updateOceanLegend === "function") updateOceanLegend();
 }
 
 function refreshOceanForecastLayers(){
@@ -12978,10 +12990,13 @@ function updateOceanLegend(){
     const sstTitle = oceanOverlayForecastHour() > 0
       ? `SST FORECAST (+${oceanOverlayForecastHour()}h)`
       : "SST (°F)";
+    const sstLoading = SST_STATUS === "loading";
+    const sstUnavailable = SST_STATUS === "unavailable";
     // Legend ticks follow the adaptive local stretch (not the old global 50–86).
     // When the view is too wide for a MUR pull we are showing GIBS tiles on their
     // own baked palette, so say "global" rather than claim a local stretch.
-    const sstGlobal = (typeof _sstScaleMode !== "undefined" && _sstScaleMode === "global");
+    const sstGlobal = !sstLoading && !sstUnavailable
+      && (typeof _sstScaleMode !== "undefined" && _sstScaleMode === "global");
     const lo = sstGlobal ? 50 : ((typeof _sstColorLo === "number") ? _sstColorLo : 74);
     const hi = sstGlobal ? 86 : ((typeof _sstColorHi === "number") ? _sstColorHi : 88);
     const sstScaleTag = sstGlobal ? "global · zoom in for local scale" : "local";
@@ -12990,13 +13005,26 @@ function updateOceanLegend(){
     for(let i = 0; i < nTicks; i++){
       sstTicks.push(Math.round(lo + (hi - lo) * i / (nTicks - 1)));
     }
-    parts.push(`
-      <div style="${gap()}">
-        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle} <span style="font-weight:500;letter-spacing:0;color:#9ec5e8;text-transform:none">${sstScaleTag}</span></div>
+    const sstTitleRow = sstLoading
+      ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
+          <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#fbbf24;letter-spacing:.08em">${sstTitle}</div>
+          <span class="alti-spinner" aria-hidden="true"></span>
+        </div>`
+      : (sstUnavailable
+        ? `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">
+            <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#fbbf24;letter-spacing:.08em">${sstTitle}</div>
+            <div style="font-size:${legendMetaPx};font-weight:700;color:#f8a5a5;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap">Unavailable</div>
+          </div>`
+        : `<div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle} <span style="font-weight:500;letter-spacing:0;color:#9ec5e8;text-transform:none">${sstScaleTag}</span></div>`);
+    const sstBar = (sstLoading || sstUnavailable) ? "" : `
         <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#082460 0%,#0e5aaa 12%,#28aac8 24%,#5ac878 36%,#dcd232 50%,#ebb028 62%,#eb7823 74%,#be281f 88%,#8c1432 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:1px">
           ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}°</span>`).join("")}
-        </div>
+        </div>`;
+    parts.push(`
+      <div style="${gap()}">
+        ${sstTitleRow}
+        ${sstBar}
       </div>`);
   }
   if(layerVis.chlor){

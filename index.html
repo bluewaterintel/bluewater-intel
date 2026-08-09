@@ -16,7 +16,7 @@
 <script src="bw-iap.js"></script>
 <script src="bw-data-source.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="bw-auth.js?v=20260728a"></script>
+<script src="bw-auth.js?v=20260809f"></script>
 <script src="bw-freshness.js"></script>
 <script src="bw-ocean.js?v=20260719j"></script>
 <script src="bw-wind.js?v=20260712c"></script>
@@ -2444,7 +2444,7 @@ body.nav-open .leaflet-control-attribution{
 <!-- Auth gate — shown until Supabase session exists -->
 <div id="bw-auth-gate" style="
   position:fixed;inset:0;z-index:99999;background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
-  display:flex;align-items:center;justify-content:center;padding:24px;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden">
+  display:none;align-items:center;justify-content:center;padding:24px;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden">
   <!-- Translucent marlin + bluefin watermarks from the brand mark, behind the sign-in card. -->
   <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-marlin-br">
   <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-marlin-tl">
@@ -3787,7 +3787,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260809d"></script>
+<script src="bw-core.js?v=20260809f"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

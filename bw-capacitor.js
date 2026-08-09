@@ -26,6 +26,14 @@
     window.location.href = url;
   }
 
+  // Hide the native splash only after auth/session is resolved (see bw-authgate.js).
+  window.BW_hideNativeSplash = async function () {
+    try {
+      const SplashScreen = plugins.SplashScreen;
+      if (SplashScreen) await SplashScreen.hide({ fadeOutDuration: 0 });
+    } catch (e) { /* non-fatal */ }
+  };
+
   async function initNativeShell() {
     // Status bar — match app header
     try {
@@ -34,12 +42,6 @@
         await StatusBar.setStyle({ style: "DARK" });
         await StatusBar.setBackgroundColor({ color: "#0a1628" });
       }
-    } catch (e) { /* non-fatal */ }
-
-    // Hide splash once DOM is ready
-    try {
-      const SplashScreen = plugins.SplashScreen;
-      if (SplashScreen) await SplashScreen.hide();
     } catch (e) { /* non-fatal */ }
 
     // Deep links: email confirm, password recovery, Stripe return URLs

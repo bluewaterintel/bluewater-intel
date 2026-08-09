@@ -25,6 +25,7 @@
     "deploy": "node scripts/generate-bw-config.mjs && netlify deploy --prod --dir=.",
     "cap:sync": "npm run build:ios && npx cap sync ios",
     "cap:open:ios": "npx cap open ios",
+    "ios:icon": "node scripts/copy-ios-app-icon.mjs",
     "ios:sync": "npm run cap:sync && npm run cap:open:ios"
   },
   "dependencies": {
@@ -33,6 +34,7 @@
     "@capacitor/core": "^7.0.0",
     "@capacitor/ios": "^7.0.0",
     "@capacitor/keyboard": "^7.0.0",
+    "@capacitor/preferences": "^7.0.4",
     "@capacitor/splash-screen": "^7.0.0",
     "@capacitor/status-bar": "^7.0.0",
     "@revenuecat/purchases-capacitor": "^10.0.0",
@@ -45,6 +47,8 @@
     "supabase": "^2.108.0"
   },
   "capacitor": {
-    "platforms": ["ios"]
+    "platforms": [
+      "ios"
+    ]
   }
 }

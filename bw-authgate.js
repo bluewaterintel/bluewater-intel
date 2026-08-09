@@ -35,6 +35,12 @@
   function hideGate(){ if(gate) gate.style.display="none"; }
   function showGate(){ if(gate) gate.style.display="flex"; }
 
+  function hideBootChrome(){
+    if(typeof window.BW_hideNativeSplash === "function"){
+      window.BW_hideNativeSplash().catch(() => {});
+    }
+  }
+
   async function onSignedIn(user){
     if(typeof USER_PREFS !== "undefined"){
       USER_PREFS.account = {
@@ -86,12 +92,23 @@
   function wireAuth(){
     if(!window.BW_AUTH){ setTimeout(wireAuth, 100); return; }
     window.BW_AUTH.onAuthChange(async (user) => {
-      if(user) await onSignedIn(user);
-      else showGate();
+      if(user){
+        hideBootChrome();
+        await onSignedIn(user);
+      }
+      // Don't flash the sign-in gate while the saved session is still loading.
+      else if(window.BW_AUTH.isAuthInitDone && window.BW_AUTH.isAuthInitDone()){
+        hideBootChrome();
+        showGate();
+      }
     });
-    // Note: we intentionally do NOT hideGate() here on existing session. The
-    // onAuthChange handler above runs onSignedIn(), which checks entitlement and
-    // either drops the gate (valid plan) or shows the plan picker (no plan yet).
+    window.BW_AUTH.whenReady().then((session) => {
+      hideBootChrome();
+      if(!session) showGate();
+    }).catch(() => {
+      hideBootChrome();
+      showGate();
+    });
   }
   wireAuth();
 

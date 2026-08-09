@@ -11,11 +11,50 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     return;
   }
 
+  // iOS WebView localStorage is often cleared on force-quit; Preferences uses
+  // UserDefaults and survives app restarts. One-time read migrates legacy keys.
+  function nativePreferencesStorage() {
+    const P = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences;
+    if (!P) return null;
+    return {
+      getItem: async (key) => {
+        try {
+          const { value } = await P.get({ key });
+          if (value != null) return value;
+        } catch (e) { console.warn("BW_AUTH: Preferences.get failed", e); }
+        try {
+          const legacy = localStorage.getItem(key);
+          if (legacy != null) {
+            await P.set({ key, value: legacy });
+            return legacy;
+          }
+        } catch (e) { /* ignore */ }
+        return null;
+      },
+      setItem: async (key, value) => {
+        await P.set({ key, value });
+      },
+      removeItem: async (key) => {
+        await P.remove({ key });
+        try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
+      },
+    };
+  }
+
+  const authOpts = {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: !window.BW_NATIVE,
+  };
+  const nativeStore = window.BW_NATIVE && nativePreferencesStorage();
+  if (nativeStore) authOpts.storage = nativeStore;
+
   const client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-    auth: { persistSession: true, autoRefreshToken: true },
+    auth: authOpts,
   });
 
   let _user = null;
+  let _authInitDone = false;
   const listeners = new Set();
 
   function emit(user) {
@@ -328,6 +367,8 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   }
 
   client.auth.onAuthStateChange(async (event, session) => {
+    // Skip the pre-storage INITIAL_SESSION null — whenReady() owns first emit.
+    if (event === "INITIAL_SESSION" && !_authInitDone) return;
     emit(session ? session.user : null);
     if (event === "PASSWORD_RECOVERY") {
       if (typeof window.openPasswordRecoveryModal === "function") {
@@ -346,9 +387,19 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     }
   });
 
-  client.auth.getSession().then(({ data: { session } }) => {
+  const whenReady = client.auth.getSession().then(({ data: { session } }) => {
     emit(session ? session.user : null);
+    _authInitDone = true;
+    return session;
+  }).catch((e) => {
+    _authInitDone = true;
+    console.error("BW_AUTH: getSession failed", e);
+    return null;
   });
+
+  function isAuthInitDone() {
+    return _authInitDone;
+  }
 
   window.BW_AUTH = {
     _sb: client,
@@ -379,5 +430,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     callBrief,
     onAuthChange,
     getUser,
+    whenReady,
+    isAuthInitDone,
   };
 })();
