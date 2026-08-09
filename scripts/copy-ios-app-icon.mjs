@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 /**
- * Copy icons/app-icon-1024.png → Xcode AppIcon + Splash assets.
+ * Copy icons/app-icon-1024.png → Xcode AppIcon asset.
  * Usage: npm run ios:icon
+ *
+ * Splash assets are NOT generated here. iOS draws the launch image with
+ * scaleAspectFill, so a tall phone crops a 2732 square to roughly the middle
+ * 46% of its width — a full-bleed icon comes out zoomed and clipped. The
+ * Splash.imageset PNGs are pre-built with the marlin sized to stay inside that
+ * safe band; see icons/README-app-icon.md before regenerating them.
  */
 import { copyFileSync, existsSync, statSync } from "node:fs";
-import { execSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,12 +19,6 @@ const iconDest = join(
   root,
   "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
 );
-const splashDir = join(root, "ios/App/App/Assets.xcassets/Splash.imageset");
-const splashNames = [
-  "splash-2732x2732.png",
-  "splash-2732x2732-1.png",
-  "splash-2732x2732-2.png",
-];
 
 if (!existsSync(src)) {
   console.error(`
@@ -40,10 +39,4 @@ if (size < 5000) {
 
 copyFileSync(src, iconDest);
 console.log("App icon installed → ios/App/App/Assets.xcassets/AppIcon.appiconset/");
-
-for (const name of splashNames) {
-  const dest = join(splashDir, name);
-  execSync(`sips -z 2732 2732 "${src}" --out "${dest}"`, { stdio: "inherit" });
-}
-console.log("Launch splash installed → ios/App/App/Assets.xcassets/Splash.imageset/");
 console.log("Next: npm run cap:sync  then Clean + Run in Xcode.");
