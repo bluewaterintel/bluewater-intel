@@ -2,7 +2,8 @@
 /**
  * Bluewater Intel — Milestone 1 seed loader
  * ----------------------------------------------------------------------------
- * Loads waypoint_types, waypoints (12,593) and ramps (644) into Supabase Postgres.
+ * Loads waypoint_types, waypoints and ramps into Supabase Postgres from the
+ * NDJSON in this directory (regenerate with `npm run build:waypoints`).
  *
  * RUN THIS SERVER-SIDE ONLY. It uses the SERVICE ROLE key, which bypasses RLS.
  * The service role key must NEVER ship to the client or be committed to git.
@@ -38,8 +39,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const DB_URL = process.env.SUPABASE_DB_URL;
-const EXPECT_WP = 12579;
-const EXPECT_RP = 644;
 
 if (!DB_URL && (!URL || !KEY)) {
   console.error('Missing SUPABASE_DB_URL or SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.');
@@ -125,8 +124,10 @@ async function seedViaPg() {
       (select count(*)::int from public.waypoints) as wp,
       (select count(*)::int from public.ramps) as rp
   `);
-  console.log(`\nDone. waypoints=${counts.wp} (expect ${EXPECT_WP}), ramps=${counts.rp} (expect ${EXPECT_RP}).`);
-  if (counts.wp !== EXPECT_WP || counts.rp !== EXPECT_RP) {
+  // Expect what we actually sent — a hardcoded count silently goes stale every
+  // time the dataset is rebuilt, and this check exists to catch partial inserts.
+  console.log(`\nDone. waypoints=${counts.wp} (expect ${wps.length}), ramps=${counts.rp} (expect ${rps.length}).`);
+  if (counts.wp !== wps.length || counts.rp !== rps.length) {
     await client.end();
     console.error('COUNT MISMATCH — investigate before wiring the client.');
     process.exit(1);
@@ -200,8 +201,8 @@ async function main() {
   // ── verify ───────────────────────────────────────────────────────────────────
   const { count: wpCount } = await db.from('waypoints').select('*', { head: true, count: 'exact' });
   const { count: rpCount } = await db.from('ramps').select('*', { head: true, count: 'exact' });
-  console.log(`\nDone. waypoints=${wpCount} (expect ${EXPECT_WP}), ramps=${rpCount} (expect ${EXPECT_RP}).`);
-  if (wpCount !== EXPECT_WP || rpCount !== EXPECT_RP) {
+  console.log(`\nDone. waypoints=${wpCount} (expect ${wps.length}), ramps=${rpCount} (expect ${rps.length}).`);
+  if (wpCount !== wps.length || rpCount !== rps.length) {
     console.error('COUNT MISMATCH — investigate before wiring the client.');
     process.exit(1);
   }

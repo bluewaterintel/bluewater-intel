@@ -13,12 +13,13 @@
  */
 
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_CSV = join(root, 'data/Master_Waypoint_Combined_1.csv');
 
+// Legacy Master_Waypoint_Combined_1.csv: singular `Type` column.
 const TYPE_MAP = {
   Wreck: 'wk',
   Reef: 'rf',
@@ -31,6 +32,24 @@ const TYPE_MAP = {
   Tower: 'tw',
   Platform: 'pf',
   Rig: 'rg',
+};
+
+// Current sheet export: plural `category` column, which maps 1:1 onto the type
+// codes. Its sibling `type` column is free text — "Subway cars", "Reef Balls",
+// and a handful of rows where a ship name landed in the type field — so the
+// category is the only trustworthy grouping and `type` is deliberately unused.
+const CATEGORY_MAP = {
+  Wrecks: 'wk',
+  Reefs: 'rf',
+  Structure: 'st',
+  Ledges: 'ld',
+  Rocks: 'rk',
+  Holes: 'hl',
+  Humps: 'hp',
+  Canyons: 'cy',
+  Towers: 'tw',
+  Platforms: 'pf',
+  Rigs: 'rg',
 };
 
 const TYPES = {
@@ -103,22 +122,50 @@ function parseCsv(text) {
     return fields;
   }
 
+  // Header case differs between the two exports, so match on lowercase.
   const header = readRow();
-  const idx = Object.fromEntries(header.map((h, n) => [h.trim(), n]));
-  for (const need of ['Name', 'Latitude', 'Longitude', 'Type']) {
+  const idx = Object.fromEntries(header.map((h, n) => [h.trim().toLowerCase(), n]));
+  for (const need of ['name', 'latitude', 'longitude']) {
     if (idx[need] == null) throw new Error(`CSV missing column: ${need}`);
   }
+  if (idx.category == null && idx.type == null) {
+    throw new Error('CSV needs a `category` (current export) or `Type` (legacy) column');
+  }
+  // The current export carries signed decimal coordinates; the legacy one has
+  // unsigned values with hemisphere letters. Pick the reader from the header.
+  const byCategory = idx.category != null;
 
   while (i < len) {
     const fields = readRow();
     if (!fields.length || (fields.length === 1 && !fields[0])) continue;
-    const name = fields[idx.Name]?.trim();
-    const typeLabel = fields[idx.Type]?.trim();
-    if (!name || !typeLabel) continue;
-    const code = TYPE_MAP[typeLabel];
-    if (!code) throw new Error(`Unknown type "${typeLabel}" on row: ${name}`);
-    const lat = parseCoord(fields[idx.Latitude], true);
-    const lng = parseCoord(fields[idx.Longitude], false);
+    const name = fields[idx.name]?.trim();
+    if (!name) continue;
+
+    let code, lat, lng;
+    if (byCategory) {
+      const cat = fields[idx.category]?.trim();
+      if (!cat) continue;
+      code = CATEGORY_MAP[cat];
+      if (!code) throw new Error(`Unknown category "${cat}" on row: ${name}`);
+      lat = Number(fields[idx.latitude]);
+      lng = Number(fields[idx.longitude]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        throw new Error(`bad coords on row: ${name}`);
+      }
+    } else {
+      const typeLabel = fields[idx.type]?.trim();
+      if (!typeLabel) continue;
+      code = TYPE_MAP[typeLabel];
+      if (!code) throw new Error(`Unknown type "${typeLabel}" on row: ${name}`);
+      lat = parseCoord(fields[idx.latitude], true);
+      lng = parseCoord(fields[idx.longitude], false);
+    }
+
+    // This feeds a production table captains navigate against, so a transposed
+    // or unsigned coordinate must fail the build rather than ship.
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      throw new Error(`coord out of range on row "${name}": ${lat},${lng}`);
+    }
     rows.push({ name, lat, lng, t: code });
   }
   return rows;
@@ -138,10 +185,13 @@ function main() {
   }
 
   if (copyFrom) {
+    // Keep the source filename so a new export lands beside the legacy CSV
+    // rather than overwriting it — the two are different formats.
     mkdirSync(join(root, 'data'), { recursive: true });
-    copyFileSync(copyFrom, DEFAULT_CSV);
-    csvPath = DEFAULT_CSV;
-    console.log(`Copied source CSV → data/Master_Waypoint_Combined_1.csv`);
+    const dest = join(root, 'data', basename(copyFrom));
+    copyFileSync(copyFrom, dest);
+    csvPath = dest;
+    console.log(`Copied source CSV → data/${basename(copyFrom)}`);
   }
 
   const text = readFileSync(csvPath, 'utf8');
