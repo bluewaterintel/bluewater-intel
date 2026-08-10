@@ -9929,6 +9929,17 @@ const BOTTOM_STACK_GAP  = 8;    // px gap between stacked bars
 // hand the difference back to the chart.
 const BOTTOM_STACK_BASE_PHONE = 34;
 const BOTTOM_STACK_BASE       = 18;
+
+// The attribution line is not a fixed height: it wraps to two or three lines on
+// a phone depending on which overlays are on (currents adds its own credit) and
+// on the device width, so a hardcoded phone base leaves the Controls chip sitting
+// on top of it. Measure it instead and clear whatever it actually occupies.
+function bottomStackBasePx(phone){
+  if(!phone) return BOTTOM_STACK_BASE;
+  const attr = document.querySelector(".leaflet-control-attribution");
+  const h = (attr && attr.offsetHeight) ? attr.offsetHeight : 0;
+  return Math.max(BOTTOM_STACK_BASE_PHONE, h + 12);
+}
 // Phase 2 mobile: when collapsed, the bottom control bars fold behind a single
 // "Controls ▴" chip so an active overlay owns the screen. Only meaningful on
 // phones and reset automatically whenever the stack is empty.
@@ -9950,7 +9961,7 @@ function toggleMobileControls(){
 
 function restackBottomControls(){
   const phone = (typeof isPhoneView === "function") ? isPhoneView() : (window.innerWidth <= 680);
-  const base = phone ? BOTTOM_STACK_BASE_PHONE : BOTTOM_STACK_BASE;
+  const base = bottomStackBasePx(phone);
   const toggle = document.getElementById("mobile-controls-toggle");
 
   // Bars currently shown = inline display set and not "none".
@@ -12945,7 +12956,7 @@ function oceanLegendMaxHeightPx(){
   const mapH = (MAP && MAP.getSize) ? MAP.getSize().y : (window.innerHeight || 600);
   const phone = (typeof isPhoneView === "function") ? isPhoneView() : (window.innerWidth <= 680);
   const topInset = topLegendTopPx();
-  let bottomReserve = (phone ? BOTTOM_STACK_BASE_PHONE : BOTTOM_STACK_BASE) + 12;
+  let bottomReserve = bottomStackBasePx(phone) + 12;
   const stackIds = ["sat-date-control", "alti-date-control", "radar-loop-control", "wind-forecast-slider"];
   for(const id of stackIds){
     const el = document.getElementById(id);
