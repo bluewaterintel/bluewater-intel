@@ -359,6 +359,13 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
 
   function onAuthChange(fn) {
     listeners.add(fn);
+    // Replay the settled state to late subscribers. bw-auth.js loads near the top
+    // of the document and bw-authgate.js ~2400 lines later, so getSession() can
+    // resolve and emit before the gate has subscribed — that listener would then
+    // never learn the user is signed in, and entitlement would never refresh.
+    if (_authInitDone) {
+      try { fn(_user); } catch (e) { console.error(e); }
+    }
     return () => listeners.delete(fn);
   }
 
@@ -387,15 +394,20 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     }
   });
 
-  const whenReady = client.auth.getSession().then(({ data: { session } }) => {
-    emit(session ? session.user : null);
+  const _ready = client.auth.getSession().then(({ data: { session } }) => {
     _authInitDone = true;
+    emit(session ? session.user : null);
     return session;
   }).catch((e) => {
     _authInitDone = true;
     console.error("BW_AUTH: getSession failed", e);
+    emit(null);
     return null;
   });
+
+  function whenReady() {
+    return _ready;
+  }
 
   function isAuthInitDone() {
     return _authInitDone;
