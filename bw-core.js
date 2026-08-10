@@ -7316,18 +7316,92 @@ let SST_STATUS = "idle"; // idle | loading | ready | unavailable
 
 // Adaptive SST display range (°F). GIBS MUR tiles bake a global ~0–32°C
 // palette, so summer Mid-Atlantic water (all ~78–86°F) looks uniformly red.
-// Canvas SST stretches the *visible* viewport (P10–P90) across the full rainbow
-// so 1–2°F breaks read like Rutgers coolers. Updated whenever the SST grid paints.
+// Canvas SST stretches P10–P90 across the full rainbow so 1–2°F breaks read
+// like Rutgers coolers.
 //
-// Important: range is taken from the on-screen map bounds, not the padded fetch
-// box. The fetch pad pulls in Gulf Stream / cool-shelf extremes just off-screen,
-// and using those made every Mid-Atlantic view land on the 74–88°F fallback and
-// crush the 79–84°F fishing band into one orange smear.
+// The stretch is anchored to a REGION, not to the viewport. Deriving it from
+// the on-screen bounds meant every pan re-derived a slightly different range
+// and repainted the whole field, so the same water changed colour as you moved
+// and two screens were never comparable. Anchoring also lets the rasterised
+// field be cached, which is what makes panning a blit instead of a rebuild.
+// Still not the padded fetch box: that pulls in Gulf Stream / cool-shelf
+// extremes and lands everything on the 74–88°F fallback, crushing the 79–84°F
+// fishing band into one orange smear.
 let _sstColorLo = 74;
 let _sstColorHi = 88;
 
+// Radius of water that defines the stretch, and how far the view has to leave
+// the anchor before it is re-derived. Sized so a normal day's panning around
+// the run never moves the scale, but a long steam to different water does.
+const SST_RANGE_RADIUS_NM   = 100;
+const SST_RANGE_REANCHOR_NM = 50;
+let _sstRangeAnchor = null;   // {lat,lng} the live palette was derived for
+let _sstRangeKey    = null;   // anchor identity the palette was last built from
+
+function _sstNmBetween(a, b){
+  const dLat = (a.lat - b.lat) * 60;
+  const dLng = (a.lng - b.lng) * 60 * Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+  return Math.hypot(dLat, dLng);
+}
+
+function _sstAnchorBounds(anchor){
+  const dLat = SST_RANGE_RADIUS_NM / 60;
+  const cos = Math.max(0.2, Math.cos(anchor.lat * Math.PI / 180));
+  const dLng = SST_RANGE_RADIUS_NM / (60 * cos);
+  return L.latLngBounds(
+    [anchor.lat - dLat, anchor.lng - dLng],
+    [anchor.lat + dLat, anchor.lng + dLng],
+  );
+}
+
+// Home port seeds the anchor so the very first paint is tuned to the water the
+// captain actually runs, rather than to wherever the map happens to open.
+function _sstResolveRangeAnchor(){
+  let centre = null;
+  try { const c = MAP.getCenter(); centre = { lat: c.lat, lng: c.lng }; } catch(e){ return _sstRangeAnchor; }
+  if(!_sstRangeAnchor){
+    const p = (activePort && typeof PORTS !== "undefined") ? PORTS[activePort] : null;
+    _sstRangeAnchor = (p && _sstNmBetween({ lat: p.lat, lng: p.lng }, centre) <= SST_RANGE_RADIUS_NM)
+      ? { lat: p.lat, lng: p.lng }
+      : centre;
+  } else if(_sstNmBetween(_sstRangeAnchor, centre) > SST_RANGE_REANCHOR_NM){
+    _sstRangeAnchor = centre;
+  }
+  return _sstRangeAnchor;
+}
+
+// Returns true when the accepted palette actually moved (caller repaints).
+// `force` is for a freshly fetched field, which must always be re-evaluated.
+function _sstUpdateDisplayRange(g, force){
+  if(!g) return false;
+  const anchor = _sstResolveRangeAnchor();
+  if(!anchor) return false;
+  const key = anchor.lat.toFixed(3) + "," + anchor.lng.toFixed(3);
+  if(!force && key === _sstRangeKey) return false;   // same water — skip the sort
+  _sstRangeKey = key;
+  const range = computeSstDisplayRangeFromGrid(_sstFcPrepared(g), _sstAnchorBounds(anchor));
+  // Too little water under the anchor to trust a stretch — normally a long run
+  // whose refetch hasn't landed yet. Hold the current scale instead of flashing
+  // the 74–88 fallback across the field, and retry on the next settle.
+  if(range.n < 30){ _sstRangeKey = null; return false; }
+  // Percentile noise between two fetches of the same water moves the ends by a
+  // tenth or two. Repainting for that is exactly the flicker being removed, so
+  // hold the current scale unless it has drifted by a legend tick.
+  if(Math.abs(range.lo - _sstColorLo) < 0.5 && Math.abs(range.hi - _sstColorHi) < 0.5) return false;
+  _sstColorLo = range.lo;
+  _sstColorHi = range.hi;
+  return true;
+}
+
+function resetSstRangeAnchor(){
+  _sstRangeAnchor = null;
+  _sstRangeKey = null;
+}
+
+// Returns {lo, hi, n} — n is the sample count, so callers can tell a real
+// 74–88 stretch from the fallback returned when there isn't enough water.
 function computeSstDisplayRangeFromGrid(g, viewBounds){
-  if(!g || !g.val) return {lo: 74, hi: 88};
+  if(!g || !g.val) return {lo: 74, hi: 88, n: 0};
   const vals = [];
   const step = g.step || 0.05;
   const nLng = g.nLng || 0;
@@ -7355,7 +7429,7 @@ function computeSstDisplayRangeFromGrid(g, viewBounds){
       if(typeof v === "number" && isFinite(v) && v > 28 && v < 100) vals.push(v);
     }
   }
-  if(vals.length < 30) return {lo: 74, hi: 88};
+  if(vals.length < 30) return {lo: 74, hi: 88, n: vals.length};
   vals.sort((a, b) => a - b);
   const at = q => vals[Math.min(vals.length - 1, Math.max(0, Math.round(q * (vals.length - 1))))];
   // P10–P90 (was P5–P95): drop the Stream-core / cold-eddy tails so the color
@@ -7376,7 +7450,7 @@ function computeSstDisplayRangeFromGrid(g, viewBounds){
   lo = Math.floor(lo * 2) / 2;
   hi = Math.ceil(hi * 2) / 2;
   if(hi <= lo) hi = lo + MIN_SPAN;
-  return {lo, hi};
+  return {lo, hi, n: vals.length};
 }
 
 function _sstForecastRGBA(tempF){
@@ -7548,22 +7622,26 @@ function _sstLandMaskAtGrid(g){
   return mask;
 }
 
-function _sstFcBuildSmallCanvas(g, viewBounds){
+// Gap fill and the land mask depend only on the fetched field, so they are done
+// once per grid and shared by the range computation and the raster build.
+function _sstFcPrepared(g){
+  if(g._prepared) return g._prepared;
+  const filled = _sstFcFillGaps(g.val, g.nLat, g.nLng);
+  const landAtGrid = _sstLandMaskAtGrid(g);
+  for(let k = 0; k < filled.length; k++) if(landAtGrid[k]) filled[k] = NaN;
+  g._prepared = {
+    val: filled, step: g.step, nLat: g.nLat, nLng: g.nLng,
+    minLat: g.minLat, minLng: g.minLng,
+  };
+  return g._prepared;
+}
+
+function _sstFcBuildSmallCanvas(g){
   // Bilinear-interpolate TEMPERATURE into a denser grid, then colorize.
   // Land/sound cells are cleared first so the wash never paints over terrain.
   const scale = (g.step <= 0.025) ? 3 : 4;
   const w = g.nLng * scale, h = g.nLat * scale;
-  const filled = _sstFcFillGaps(g.val, g.nLat, g.nLng);
-  const landAtGrid = _sstLandMaskAtGrid(g);
-  for(let k = 0; k < filled.length; k++) if(landAtGrid[k]) filled[k] = NaN;
-  // Range from *visible* ocean cells only — land temps and off-screen Stream /
-  // shelf extremes must not skew the local stretch.
-  const range = computeSstDisplayRangeFromGrid({
-    val: filled, step: g.step, nLat: g.nLat, nLng: g.nLng,
-    minLat: g.minLat, minLng: g.minLng,
-  }, viewBounds);
-  _sstColorLo = range.lo;
-  _sstColorHi = range.hi;
+  const filled = _sstFcPrepared(g).val;
   const c = document.createElement("canvas");
   c.width = w; c.height = h;
   const cx = c.getContext("2d");
@@ -7721,9 +7799,10 @@ const SstForecastLayer = L.Layer.extend({
     const tl = this._map.containerPointToLayerPoint([0, 0]);
     L.DomUtil.setPosition(this._canvas, tl);
     this._canvas.width = size.x; this._canvas.height = size.y;
-    // View settled — rebuild the palette from the new visible bounds so the
-    // local stretch follows the water on screen (not the padded fetch box).
-    this._smallFor = null;
+    // View settled. The stretch is anchored to a region, so panning inside it
+    // is a no-op here and _draw() reuses the cached raster; only a long run
+    // that re-anchors rebuilds the field.
+    _sstUpdateDisplayRange(SST_FORECAST_GRID, false);
     this._draw();
     if(typeof updateOceanLegend === "function") updateOceanLegend();
     // Only hit the network when the view leaves cached coverage (or zoom tier changes).
@@ -7795,8 +7874,10 @@ const SstForecastLayer = L.Layer.extend({
         // 0–32°C palette can't wash out summer Mid-Atlantic breaks.
         _sstHideGibsFallback();
         updateSatDateDisplay();
-        this._smallFor = null; // rebuild palette for the new local range
-        this._draw(); // sets _sstColorLo/Hi — legend must refresh *after* that
+        // New field — always re-evaluate the stretch, then let the raster cache
+        // notice the grid changed. Legend must refresh *after* the range moves.
+        _sstUpdateDisplayRange(SST_FORECAST_GRID, true);
+        this._draw();
         if(typeof updateOceanLegend === "function") updateOceanLegend();
       }).catch(() => {
         if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
@@ -7812,11 +7893,13 @@ const SstForecastLayer = L.Layer.extend({
     ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
     const g = SST_FORECAST_GRID;
     if(!g) return;
-    if(this._smallFor !== g){
-      let viewBounds = null;
-      try { viewBounds = this._map.getBounds(); } catch(e){}
-      this._small = _sstFcBuildSmallCanvas(g, viewBounds);
+    // Rebuild only when the field or the accepted stretch changes — panning and
+    // zooming reuse this canvas, so a move costs a reposition plus a blit.
+    if(this._smallFor !== g || this._smallLo !== _sstColorLo || this._smallHi !== _sstColorHi){
+      this._small = _sstFcBuildSmallCanvas(g);
       this._smallFor = g;
+      this._smallLo = _sstColorLo;
+      this._smallHi = _sstColorHi;
     }
     const north = g.bounds.n + g.step * 0.5, south = g.bounds.s - g.step * 0.5;
     const west = g.bounds.w - g.step * 0.5, east = g.bounds.e + g.step * 0.5;
@@ -17632,6 +17715,9 @@ function closePortDd(){
 function selectPort(name, opts){
   opts = opts || {};
   activePort=name;
+  // New home water — let the SST stretch re-seed from the new port instead of
+  // holding a scale tuned to the water they just left.
+  if(typeof resetSstRangeAnchor === "function") resetSstRangeAnchor();
   if(typeof _hdrTide !== "undefined") _hdrTide = { key: "", text: "", atMs: 0 };
   // NOTE: selecting a port from the dropdown is a SESSION-ONLY action — it does
   // NOT change the user's saved default. The default home port is set in
