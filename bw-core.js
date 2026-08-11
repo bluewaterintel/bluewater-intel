@@ -7537,8 +7537,9 @@ function _sstFcFillGaps(val, nLat, nLng){
 }
 
 // ── LAND MASK FOR THE SST WASH ───────────────────────────────────────────────
-// Open-ocean only. MUR returns values over land and inside the barrier sounds,
-// and those tint farmland green/yellow in the overlay.
+// MUR returns values over land and inside the barrier sounds, and those tint
+// farmland green/yellow in the overlay, so the wash is cut back to open water
+// plus the bays listed in SST_WATER_POLYGONS below.
 //
 // The boundary is painted as a shape rather than tested per pixel. isOnLand
 // walks 223 vertices across 7 polygons, and the supersampled bitmap covers ~74k
@@ -7552,6 +7553,51 @@ function _sstFcFillGaps(val, nLat, nLng){
 // is the union of exactly the per-polygon tests isOnLand ORs together.
 const SST_BARRIER_LAT_S = 33.80;
 const SST_BARRIER_LAT_N = 36.60;
+
+// MAIN_COAST runs straight across the mouth of the Chesapeake, from the Cape
+// Charles tip to Virginia Beach, so every point behind that line tests as land
+// and the wash erased the whole bay. seaDepth() already works around this with
+// its own bay rectangles; the SST mask had no equivalent.
+//
+// MUR resolves the main stem end to end — sampling the grid up the centreline
+// returns temperatures continuously from the mouth to the head at 39.3°N — so
+// the bay is punched back out as a hole in the land shape. The outline was
+// traced off SRTM30+ bathymetry rather than by hand: for each row of latitude,
+// the run of water containing the previous row's centre, inset a cell from each
+// shore, seeded mid-stem so it can't escape into the Atlantic at the mouth and
+// capped per row so a river mouth can't drag it up the Potomac. 97.8% of the
+// enclosed area is water; the remainder is Smith, Tangier and Kent islands,
+// which are narrower than a MUR cell anyway. The precision matters because MUR
+// reports temperatures over the Eastern Shore and the western mainland, so a
+// loose box here would tint farmland.
+const CHESAPEAKE_BAY_WATER = [
+  // West shore, mouth → head. The first and last rows run east past the
+  // MAIN_COAST cut so the hole joins the open Atlantic without a masked seam.
+  [36.95, -76.25], [37.03, -76.29], [37.10, -76.33], [37.18, -76.38],
+  [37.25, -76.42], [37.33, -76.27], [37.40, -76.25], [37.48, -76.27],
+  [37.55, -76.29], [37.63, -76.28], [37.70, -76.29], [37.78, -76.30],
+  [37.85, -76.23], [37.93, -76.29], [38.00, -76.46], [38.08, -76.31],
+  [38.15, -76.32], [38.23, -76.37], [38.30, -76.36], [38.38, -76.37],
+  [38.45, -76.45], [38.53, -76.50], [38.60, -76.50], [38.68, -76.51],
+  [38.75, -76.54], [38.83, -76.49], [38.90, -76.48], [38.98, -76.44],
+  [39.05, -76.41], [39.13, -76.42], [39.20, -76.41], [39.28, -76.37],
+  [39.31, -76.32],
+  // East shore, head → mouth.
+  [39.31, -76.30], [39.28, -76.28], [39.20, -76.26], [39.13, -76.25],
+  [39.05, -76.24], [38.98, -76.35], [38.90, -76.38], [38.83, -76.32],
+  [38.75, -76.35], [38.68, -76.26], [38.60, -76.28], [38.53, -76.24],
+  [38.45, -76.33], [38.38, -76.27], [38.30, -76.14], [38.23, -75.82],
+  [38.15, -75.93], [38.08, -75.84], [38.00, -75.87], [37.93, -75.84],
+  [37.85, -75.68], [37.78, -75.80], [37.70, -75.85], [37.63, -75.90],
+  [37.55, -75.95], [37.48, -75.98], [37.40, -75.99], [37.33, -76.03],
+  [37.25, -76.04], [37.18, -76.01], [37.10, -75.90], [37.03, -75.90],
+  [36.95, -75.90],
+];
+
+// Water the land shape would otherwise swallow. Cut out of the mask after the
+// land is painted. Delaware Bay and the Albemarle are enclosed the same way and
+// can be added here once their outlines are traced the same way.
+const SST_WATER_POLYGONS = [CHESAPEAKE_BAY_WATER];
 
 function _sstPaintLandShapes(cx, toX, toY, westLng){
   if(typeof LAND_POLYGONS !== "undefined"){
@@ -7596,22 +7642,44 @@ function _sstPaintLandShapes(cx, toX, toY, westLng){
   cx.fill();
 }
 
-// Same shapes rasterized at grid resolution, as a 1-per-cell flag. Land has to
+// The mask as an alpha bitmap: opaque everywhere the wash must be erased,
+// transparent over the bay water punched back out of it. Both callers need the
+// same shape — one to flag grid cells, one to cut the finished field — so the
+// holes are applied here instead of in _sstPaintLandShapes, which the field
+// pass already draws under destination-out and so could not undo.
+function _sstLandMaskCanvas(w, h, toX, toY, westLng){
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const cx = c.getContext("2d", { willReadFrequently: true });
+  if(!cx) return null;
+  cx.fillStyle = "#fff";
+  _sstPaintLandShapes(cx, toX, toY, westLng);
+  cx.globalCompositeOperation = "destination-out";
+  for(const poly of SST_WATER_POLYGONS){
+    cx.beginPath();
+    for(let i = 0; i < poly.length; i++){
+      const x = toX(poly[i][1]), y = toY(poly[i][0]);
+      if(i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    }
+    cx.closePath();
+    cx.fill();
+  }
+  return c;
+}
+
+// Same shape rasterized at grid resolution, as a 1-per-cell flag. Land has to
 // be dropped BEFORE the display range is computed or MUR's land temperatures
 // drag the P10–P90 window off the water.
 function _sstLandMaskAtGrid(g){
   const mask = new Uint8Array(g.nLat * g.nLng);
-  const c = document.createElement("canvas");
-  c.width = g.nLng; c.height = g.nLat;
-  const cx = c.getContext("2d", { willReadFrequently: true });
-  if(!cx) return mask;
-  cx.fillStyle = "#fff";
-  _sstPaintLandShapes(
-    cx,
+  const c = _sstLandMaskCanvas(
+    g.nLng, g.nLat,
     lng => (lng - g.minLng) / g.step,
     lat => (g.nLat - 1) - (lat - g.minLat) / g.step,
     g.minLng - 1,
   );
+  if(!c) return mask;
+  const cx = c.getContext("2d", { willReadFrequently: true });
   const d = cx.getImageData(0, 0, g.nLng, g.nLat).data;
   for(let i = 0; i < g.nLat; i++){
     const y = (g.nLat - 1) - i;
@@ -7675,16 +7743,18 @@ function _sstFcBuildSmallCanvas(g){
   // Cut the coastline out of the finished field in one pass. Bilinear bleed
   // from ocean cells onto the beach is removed here rather than being avoided
   // per pixel.
-  cx.save();
-  cx.globalCompositeOperation = "destination-out";
-  cx.fillStyle = "#000";
-  _sstPaintLandShapes(
-    cx,
+  const maskC = _sstLandMaskCanvas(
+    w, h,
     lng => (lng - g.minLng) / g.step * scale,
     lat => (h - 1) - (lat - g.minLat) / g.step * scale,
     g.minLng - 1,
   );
-  cx.restore();
+  if(maskC){
+    cx.save();
+    cx.globalCompositeOperation = "destination-out";
+    cx.drawImage(maskC, 0, 0);
+    cx.restore();
+  }
   return c;
 }
 
@@ -17865,11 +17935,20 @@ function syncHeaderHeightVar(){
   document.documentElement.style.setProperty("--bw-hdr-h", px + "px");
   return px;
 }
-// Viewport-fixed panel top: app header + gap. The bite banner is a map overlay
-// (not layout chrome), so fixed panels must not offset by banner height.
+// Viewport-fixed panel top: the header's bottom edge plus a gap. The bite
+// banner is a map overlay (not layout chrome), so fixed panels must not offset
+// by banner height.
+//
+// The header's BOTTOM, not its height. body carries the iOS safe-area inset as
+// padding, so the header starts a status bar's worth down the screen; a panel
+// pinned to the viewport and offset by height alone opens that far inside it,
+// over the conditions strip. The two are the same number wherever the inset is
+// zero, which is why this only ever showed up on the phone.
 function viewportPanelTopPx(gap){
-  const hdr = syncHeaderHeightVar();
-  return hdr + (gap != null ? gap : 8);
+  syncHeaderHeightVar();
+  const hdr = document.getElementById("hdr");
+  const bottom = hdr ? Math.ceil(hdr.getBoundingClientRect().bottom) : 64;
+  return bottom + (gap != null ? gap : 8);
 }
 
 function resetExplainerScrollTop(){
@@ -18251,7 +18330,11 @@ function navBack(closeFn){
 
 function phoneTopSheetInlineStyle(){
   const top = viewportPanelTopPx(4);
-  const maxH = Math.max(200, window.innerHeight - top - 12);
+  // body carries the home-indicator inset as padding, but the sheet is pinned
+  // to the viewport and has to subtract it itself or the last port in the list
+  // sits under the bar.
+  const inset = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
+  const maxH = Math.max(200, window.innerHeight - top - inset - 12);
   return `
     position:fixed !important;
     top:${top}px !important;
@@ -18457,6 +18540,10 @@ window.bwOnSignedIn = async function (user) {
 function syncNavMenuPosition(){
   const m = document.getElementById("nav-menu");
   if(!m) return;
+  // The menu hangs off --bw-hdr-h, and the header grows a row once the port
+  // conditions arrive, so re-measure before showing it rather than trusting
+  // whatever the last resize left behind.
+  syncHeaderHeightVar();
   // Let CSS safe-area rules drive placement; clear stale inline geometry.
   m.style.top = "";
   m.style.left = "";

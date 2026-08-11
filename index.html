@@ -403,14 +403,18 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   #nav-btn{width:46px;height:46px;gap:4px;border-radius:13px}
   .nav-bar{width:20px;height:2.5px}
   .nav-label{display:none}
+  /* Hangs off the bottom of the header. #nav-menu and the two header dropdowns
+     are all descendants of #hdr, whose backdrop-filter makes it their containing
+     block, so `top` is measured from the header's own box — the safe-area inset
+     is already in body's padding and must not be added again here. All three
+     share this offset so they open at the same height. */
   #nav-menu{
-    /* Top-anchored sheet from safe area — same as other full-screen panels on iOS */
     left:8px !important;
     right:8px !important;
     width:auto !important;
     max-width:none !important;
-    top:env(safe-area-inset-top, 0px) !important;
-    max-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 8px) !important;
+    top:calc(var(--bw-hdr-h, 100px) + 4px) !important;
+    max-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--bw-hdr-h, 100px) - 12px) !important;
     overflow-x:hidden !important;
     overflow-y:auto !important;
     overscroll-behavior:contain;
@@ -472,10 +476,12 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
   }
   #ptabs{height:42px}
   .tbtn{padding:0 10px;font-size:11px}
-  /* Species + Port dropdowns — full-width panel anchored below header */
+  /* Species + Port dropdowns — full-width panel anchored below the header, at
+     the same offset as the nav menu (see #nav-menu above for why there is no
+     safe-area term). */
   #sp-dd, #port-dd{
     position:fixed !important;
-    top:calc(env(safe-area-inset-top, 0px) + var(--bw-hdr-h, 100px) + 4px) !important;
+    top:calc(var(--bw-hdr-h, 100px) + 4px) !important;
     bottom:auto !important;
     left:0 !important;
     right:0 !important;
@@ -3155,27 +3161,32 @@ body.nav-open .leaflet-control-attribution{
     </div>
   </div>
 
-</div>
-
-<!-- WEATHER RADAR — pill + manual scrub + play loop for storm motion -->
-<div id="radar-loop-control" class="map-time-pill map-time-pill--green">
-  <div class="map-time-pill-head">
-    <div class="map-time-pill-title">Weather Radar</div>
-    <div class="map-time-pill-head-right">
-      <div id="radar-loop-time" class="map-time-pill-display">Live</div>
-      <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show radar time controls">▾</button>
+  <!-- WEATHER RADAR — pill + manual scrub + play loop for storm motion.
+       Inside #map with the rest of the stack: restackBottomControls() positions
+       every bar with `bottom`, and #map is the containing block the others
+       resolve against. Left outside, this one measured from the viewport
+       instead, which on iOS sits a home-indicator inset lower — far enough to
+       slide under the Controls chip. -->
+  <div id="radar-loop-control" class="map-time-pill map-time-pill--green">
+    <div class="map-time-pill-head">
+      <div class="map-time-pill-title">Weather Radar</div>
+      <div class="map-time-pill-head-right">
+        <div id="radar-loop-time" class="map-time-pill-display">Live</div>
+        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show radar time controls">▾</button>
+      </div>
+    </div>
+    <div class="map-time-pill-row">
+      <button id="radar-frame-older" type="button" class="map-time-pill-step" onclick="stepRadarFrame(-1)" title="Earlier frame">◀</button>
+      <input id="radar-frame-input" type="range" class="map-time-pill-slider" min="0" max="12" step="1" value="12" oninput="onRadarSliderInput(this.value)">
+      <button id="radar-frame-newer" type="button" class="map-time-pill-step" onclick="stepRadarFrame(1)" title="Later frame">▶</button>
+    </div>
+    <div class="map-time-pill-footer">
+      <span>4 h ago</span>
+      <button id="radar-loop-btn" type="button" class="map-time-pill-play" onclick="toggleRadarLoop()">▶ Play storm loop</button>
+      <span>Now →</span>
     </div>
   </div>
-  <div class="map-time-pill-row">
-    <button id="radar-frame-older" type="button" class="map-time-pill-step" onclick="stepRadarFrame(-1)" title="Earlier frame">◀</button>
-    <input id="radar-frame-input" type="range" class="map-time-pill-slider" min="0" max="12" step="1" value="12" oninput="onRadarSliderInput(this.value)">
-    <button id="radar-frame-newer" type="button" class="map-time-pill-step" onclick="stepRadarFrame(1)" title="Later frame">▶</button>
-  </div>
-  <div class="map-time-pill-footer">
-    <span>4 h ago</span>
-    <button id="radar-loop-btn" type="button" class="map-time-pill-play" onclick="toggleRadarLoop()">▶ Play storm loop</button>
-    <span>Now →</span>
-  </div>
+
 </div>
 
 <!-- Distance scale bar — nautical miles; opaque chrome so map markers don't show through. -->
@@ -3818,7 +3829,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260809h"></script>
+<script src="bw-core.js?v=20260810b"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
