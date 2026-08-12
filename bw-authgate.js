@@ -32,8 +32,67 @@
     if(welcome) welcome.style.display="block";
     showGate();
   }
-  function hideGate(){ if(gate) gate.style.display="none"; }
+  function hideGate(){ if(gate) gate.style.display="none"; authKeyboardScroll(false); }
   function showGate(){ if(gate) gate.style.display="flex"; }
+
+  // iOS Capacitor sets scrollEnabled:false for the map, which blocks scrolling when
+  // the keyboard covers auth fields. Re-enable scroll on auth screens and nudge
+  // focused inputs into view.
+  let _authKbScrollOn = false;
+  async function authKeyboardScroll(on){
+    const K = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard;
+    if(!K || typeof K.setScroll !== "function") return;
+    if(_authKbScrollOn === on) return;
+    _authKbScrollOn = on;
+    try { await K.setScroll({ isDisabled: !on }); } catch(e){ /* non-fatal */ }
+  }
+  function syncAuthKbPad(root){
+    const vv = window.visualViewport;
+    if(!vv || !root) return;
+    const kb = Math.max(0, window.innerHeight - vv.height - (vv.offsetTop || 0));
+    root.style.setProperty("--auth-kb-pad", kb > 50 ? (kb + 24) + "px" : "0px");
+  }
+  function scrollAuthFieldIntoView(el){
+    if(!el) return;
+    const root = el.closest(".auth-fullscreen");
+    syncAuthKbPad(root);
+    setTimeout(() => {
+      try { el.scrollIntoView({ block: "center", behavior: "smooth" }); }
+      catch(e){ el.scrollIntoView(true); }
+    }, 300);
+  }
+  function wireAuthFormScroll(root){
+    if(!root || root._bwKbWired) return;
+    root._bwKbWired = true;
+    const onResize = () => syncAuthKbPad(root);
+    if(window.visualViewport){
+      window.visualViewport.addEventListener("resize", onResize);
+      window.visualViewport.addEventListener("scroll", onResize);
+    }
+    root.querySelectorAll("input, textarea, select").forEach((el) => {
+      el.addEventListener("focus", () => {
+        authKeyboardScroll(true);
+        scrollAuthFieldIntoView(el);
+      });
+      el.addEventListener("blur", () => {
+        setTimeout(() => {
+          const active = document.activeElement;
+          if(!root.contains(active) || !(active && active.matches && active.matches("input,textarea,select"))){
+            root.style.setProperty("--auth-kb-pad", "0px");
+            const gateOpen = gate && gate.style.display !== "none";
+            const ca = document.getElementById("create-account-page");
+            const pw = document.getElementById("password-recovery-page");
+            const caOpen = ca && ca.style.display !== "none";
+            const pwOpen = pw && pw.style.display !== "none";
+            if(!gateOpen && !caOpen && !pwOpen) authKeyboardScroll(false);
+          }
+        }, 120);
+      });
+    });
+  }
+  wireAuthFormScroll(gate);
+  wireAuthFormScroll(document.getElementById("create-account-page"));
+  wireAuthFormScroll(document.getElementById("password-recovery-page"));
 
   function hideBootChrome(){
     if(typeof window.BW_hideNativeSplash === "function"){

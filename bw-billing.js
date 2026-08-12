@@ -98,7 +98,7 @@
     const em = document.getElementById("bw-auth-email");
     const caEm = document.getElementById("ca-email");
     if(em && caEm && em.value) caEm.value = em.value.trim();
-    if(p) p.style.display = "block";
+    if(p) p.style.display = "flex";
   };
   window.closeCreateAccount = function(){
     const p = document.getElementById("create-account-page"); if(p) p.style.display = "none";
@@ -127,7 +127,7 @@
     if(newEl) newEl.value = "";
     if(confirmEl) confirmEl.value = "";
     if(gate) gate.style.display = "none";
-    if(p) p.style.display = "block";
+    if(p) p.style.display = "flex";
   };
   window.closePasswordRecoveryModal = function(){
     const p = document.getElementById("password-recovery-page");
