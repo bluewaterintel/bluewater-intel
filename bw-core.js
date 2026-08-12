@@ -9140,7 +9140,7 @@ function drawPrediction(){
   // Bump the generation token so any in-flight async compute is abandoned and
   // won't paint stale results after we've torn down (prevents flicker/races).
   _predictGen++;
-  if(!layerVis.predict){ hidePredictLoading(); invalidatePredictCache(); if(_heatLayer){ MAP.removeLayer(_heatLayer); _heatLayer=null; } _predictGrid = null; if(_predictTooltip) MAP.closeTooltip(_predictTooltip); updateForecastSliderVisibility(); return; }
+  if(!layerVis.predict){ hidePredictLoading(); invalidatePredictCache(); if(_heatLayer){ MAP.removeLayer(_heatLayer); _heatLayer=null; } _predictGrid = null; if(_predictTooltip) MAP.closeTooltip(_predictTooltip); updateForecastSliderVisibility(); if(typeof updateBiteBanner === "function") updateBiteBanner(); return; }
   // No species selected → silently render nothing (empty-state overlay handles UX)
   if(!activeSpId || activeSpId === "all"){ hidePredictLoading(); invalidatePredictCache(); if(_heatLayer){ MAP.removeLayer(_heatLayer); _heatLayer=null; } _predictGrid = null; if(_predictTooltip) MAP.closeTooltip(_predictTooltip); updateForecastSliderVisibility(); return; }
 
@@ -9618,6 +9618,7 @@ function setForecastHour(hours){
   if(typeof hours !== "number") return;
   const target = normalizeForecastHour(hours);
   if(FORECAST_HOUR_OFFSET === target) return;
+  if(typeof hideDepthReadout === "function") hideDepthReadout();
   FORECAST_HOUR_OFFSET = target;
   if(typeof BW_OCEAN !== "undefined" && typeof BW_OCEAN.clearPredictInputsCache === "function"){
     BW_OCEAN.clearPredictInputsCache();
@@ -9878,7 +9879,7 @@ function toggleLayer(key){
   const chk=document.getElementById("chk-"+key);
   if(chk)chk.checked=layerVis[key];
   if(key==="spots")drawCanyons();  // unified structure layer (canyons+wrecks+reefs+lumps)
-  else if(key==="predict"){ _predictUserOff = !layerVis.predict; drawPrediction(); updateOceanLegend();
+  else if(key==="predict"){ _predictUserOff = !layerVis.predict; drawPrediction(); updateOceanLegend(); updateBiteBanner();
     if(!layerVis.predict && FORECAST_HOUR_OFFSET > 0 && !layerVis.sst && !layerVis.currents) setForecastHour(0);
     else updateForecastSliderVisibility();
   }
@@ -13503,7 +13504,7 @@ function updateOceanLegend(){
   const parts = [];
   const gap = () => parts.length ? 'margin-top:6px' : '';
   const phone = (typeof isPhoneView === "function") && isPhoneView();
-  const legendTitlePx = phone ? "10px" : "14px";
+  const legendTitlePx = phone ? "9px" : "11px";
   const legendMetaPx = phone ? "10px" : "11px";
   _oceanLegendDetailByKey = {};
   // Verbose bullet explanations are collapsed by default so the panel doesn't
@@ -13658,7 +13659,7 @@ function updateOceanLegend(){
   }
   if(layerVis.radar){
     parts.push(section("radar", "radar",
-      `<div style="font-size:14px;font-weight:700;color:#a855f7;letter-spacing:.08em;margin-bottom:3px">RADAR (dBZ)</div>`,
+      `<div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#a855f7;letter-spacing:.08em;margin-bottom:3px">RADAR (dBZ)</div>`,
       `<div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#04e9e7 0%,#019ff4 15%,#0300f4 28%,#02fd02 42%,#01c501 52%,#fdf802 64%,#e5bc00 72%,#fd9500 80%,#fd0000 90%,#d40000 95%,#bc0000 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
        <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
          <span>light</span><span>moderate</span><span>heavy</span><span>intense</span>
@@ -13725,8 +13726,10 @@ function biteBannerHeightPx(){
 function updateBiteBanner(){
   const b = document.getElementById("bite-banner");
   if(!b) return;
-  b.style.display = layerVis.predict ? "block" : "none";
   const phone = (typeof isPhoneView === "function") && isPhoneView();
+  const show = !!layerVis.predict;
+  b.classList.toggle("bite-banner-hidden", !show);
+  b.style.display = show ? (phone ? "grid" : "block") : "none";
   // Match other top map legends — 1/3 width on desktop, 3/4 on phone.
   b.style.left = "50%";
   b.style.right = "auto";
@@ -13748,7 +13751,7 @@ function updateBiteBanner(){
     if(layerVis.predict){
       const pills = FORECAST_OPTIONS.map(opt => {
         const active = opt.hours === FORECAST_HOUR_OFFSET;
-        return `<button type="button" class="fc-mark${active ? " active" : ""}" onclick="setForecastHour(${opt.hours})">${opt.short}</button>`;
+        return `<button type="button" class="fc-mark${active ? " active" : ""}" onclick="onBiteForecastPillClick(event,${opt.hours})">${opt.short}</button>`;
       }).join("");
       const windHint = windBiteTimeMismatchHtml();
       fc.innerHTML = `
@@ -13762,6 +13765,10 @@ function updateBiteBanner(){
       `;
     } else {
       fc.innerHTML = "";
+    }
+    if(fc && typeof shieldMapOverlayFromLeaflet === "function" && !fc.dataset.bwShielded){
+      shieldMapOverlayFromLeaflet(fc);
+      fc.dataset.bwShielded = "1";
     }
   }
   updateWindBiteSyncHints();
@@ -14138,12 +14145,26 @@ function shieldMapOverlayFromLeaflet(el){
   L.DomEvent.disableClickPropagation(el);
   L.DomEvent.disableScrollPropagation(el);
   const stop = e => { e.stopPropagation(); };
+  el.addEventListener("click", stop);
+  el.addEventListener("touchend", stop, {passive: true});
   el.addEventListener("pointerdown", stop);
+  el.addEventListener("pointerup", stop);
   el.addEventListener("pointermove", stop);
   el.addEventListener("touchstart", stop, {passive: true});
   el.addEventListener("touchmove", stop, {passive: true});
   el.addEventListener("mousedown", stop);
+  el.addEventListener("mouseup", stop);
   el.addEventListener("mousemove", stop);
+}
+
+function onBiteForecastPillClick(ev, hours){
+  if(ev){
+    ev.preventDefault();
+    ev.stopPropagation();
+    if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+  }
+  if(typeof hideDepthReadout === "function") hideDepthReadout();
+  setForecastHour(hours);
 }
 
 function onMapClick(e){
