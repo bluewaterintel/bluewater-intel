@@ -13149,6 +13149,82 @@ function catchPhotoFromFile(file){
 let oceanLegendExpanded = false;
 let _oceanLegendDetailHtml = "";
 
+// ── Per-legend collapse ──────────────────────────────────────────────────────
+// With four or five overlays on, the top-centre stack eats most of the chart.
+// Each legend carries a chevron that folds it down to its title bar, so a
+// captain can keep the scale that's still changing (SST) open and shrink the
+// ones already committed to memory. Keyed by layer so the choice survives
+// toggling the layer off and back on, and persisted across sessions.
+const LEGEND_COLLAPSE_KEY = "bwi.legendCollapsed.v1";
+let LEGEND_COLLAPSED = {};
+try {
+  const saved = JSON.parse(localStorage.getItem(LEGEND_COLLAPSE_KEY) || "{}");
+  if(saved && typeof saved === "object") LEGEND_COLLAPSED = saved;
+} catch(e){}
+function saveLegendCollapsed(){
+  try { localStorage.setItem(LEGEND_COLLAPSE_KEY, JSON.stringify(LEGEND_COLLAPSED)); } catch(e){}
+}
+
+// Chevron button markup shared by the ocean-legend sections and the bite
+// banner. Absolutely positioned into the panel's top-right corner so it never
+// has to fit inside the title rows, which differ per layer (some carry a
+// status/date, some don't).
+function legendCollapseBtn(onclick, label, collapsed){
+  return `<button type="button" class="oc-sec-collapse" onclick="${onclick}"
+    aria-expanded="${collapsed ? "false" : "true"}"
+    title="${collapsed ? "Expand" : "Collapse"} ${label} legend"
+    aria-label="${collapsed ? "Expand" : "Collapse"} ${label} legend"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"></polyline></svg></button>`;
+}
+
+// Fold/unfold one overlay legend in place. The panel isn't rebuilt — swapping a
+// class avoids a flash and keeps the detail sheet state — but everything that
+// measures the top stack has to re-run afterwards.
+function toggleLegendSection(key, label){
+  const collapsed = !LEGEND_COLLAPSED[key];
+  LEGEND_COLLAPSED[key] = collapsed;
+  saveLegendCollapsed();
+  const sec = document.querySelector('.oc-legend-sec[data-sec="' + key + '"]');
+  if(sec){
+    sec.classList.toggle("collapsed", collapsed);
+    const btn = sec.querySelector(".oc-sec-collapse");
+    if(btn){
+      const verb = collapsed ? "Expand" : "Collapse";
+      btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      btn.setAttribute("title", verb + " " + (label || key) + " legend");
+      btn.setAttribute("aria-label", verb + " " + (label || key) + " legend");
+    }
+  }
+  restackTopLegends();
+  if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
+}
+
+function toggleBiteLegendCollapsed(){
+  const collapsed = !LEGEND_COLLAPSED.bite;
+  LEGEND_COLLAPSED.bite = collapsed;
+  saveLegendCollapsed();
+  applyBiteLegendCollapsed();
+  restackTopLegends();
+  if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
+  if(typeof syncExplainerPosition === "function") syncExplainerPosition();
+}
+
+function applyBiteLegendCollapsed(){
+  const b = document.getElementById("bite-banner");
+  if(!b) return;
+  const collapsed = !!LEGEND_COLLAPSED.bite;
+  b.classList.toggle("legend-collapsed", collapsed);
+  // A collapsed banner can't show the forecast pills, so drop that state too —
+  // otherwise re-expanding pops open a drawer the captain never asked for.
+  if(collapsed) b.classList.remove("bite-fc-open");
+  const btn = b.querySelector(".oc-sec-collapse");
+  if(btn){
+    const verb = collapsed ? "Expand" : "Collapse";
+    btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    btn.setAttribute("title", verb + " bite score legend");
+    btn.setAttribute("aria-label", verb + " bite score legend");
+  }
+}
+
 function toggleMapTimePill(btn){
   const pill = btn && btn.closest ? btn.closest(".map-time-pill") : null;
   if(!pill) return;
@@ -13289,6 +13365,21 @@ function updateOceanLegend(){
     }
     return `<div class="legend-detail" style="display:${oceanLegendExpanded?'block':'none'}">${html}</div>`;
   };
+  // One overlay legend: its title row stays put when folded so the panel still
+  // says what's on the map, and everything below it hides. The title row is
+  // emitted as the section's first child because the phone stylesheet targets
+  // `#ocean-legend-content > div > div:first-child` to shrink legend headings.
+  const sectionKeys = [];
+  const section = (key, label, titleRow, body) => {
+    const collapsed = !!LEGEND_COLLAPSED[key];
+    sectionKeys.push(key);
+    return `
+      <div class="oc-legend-sec${collapsed ? " collapsed" : ""}" data-sec="${key}" style="${gap()}">
+        ${titleRow}
+        <div class="oc-sec-body">${body}</div>
+        ${legendCollapseBtn(`toggleLegendSection('${key}','${label}')`, label, collapsed)}
+      </div>`;
+  };
   // NOTE: the bite-score legend is rendered as a slim banner across the top of
   // the map (see updateBiteBanner), not in this side panel — it was taking up
   // too much room here. This panel now only covers the gradient overlays.
@@ -13327,31 +13418,23 @@ function updateOceanLegend(){
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:1px">
           ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}°</span>`).join("")}
         </div>`;
-    parts.push(`
-      <div style="${gap()}">
-        ${sstTitleRow}
-        ${sstBar}
-      </div>`);
+    parts.push(section("sst", "SST", sstTitleRow, sstBar));
   }
   if(layerVis.chlor){
-    parts.push(`
-      <div style="${gap()}">
-        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#34d399;letter-spacing:.08em;margin-bottom:3px">CHLOROPHYLL</div>
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1a1a4d 0%,#2563a8 25%,#34d399 55%,#fbbf24 80%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
-          <span>Low</span><span>Productive</span><span>High</span>
-        </div>
-      </div>`);
+    parts.push(section("chlor", "chlorophyll",
+      `<div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#34d399;letter-spacing:.08em;margin-bottom:3px">CHLOROPHYLL</div>`,
+      `<div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1a1a4d 0%,#2563a8 25%,#34d399 55%,#fbbf24 80%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+       <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
+         <span>Low</span><span>Productive</span><span>High</span>
+       </div>`));
   }
   if(layerVis.wind){
-    parts.push(`
-      <div style="${gap()}">
-        <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:3px">WIND (kt)</div>
-        <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:${(window.BW_WIND && window.BW_WIND.legendGradient) ? window.BW_WIND.legendGradient(40) : 'linear-gradient(90deg,#2870d2,#82e178,#ebe650,#e46e19,#be1a26,#f05ab4)'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:2px">
-          ${[0,5,10,15,20,25,30,35,"40+"].map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}</span>`).join("")}
-        </div>
-      </div>`);
+    parts.push(section("wind", "wind",
+      `<div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#7dd3fc;letter-spacing:.08em;margin-bottom:3px">WIND (kt)</div>`,
+      `<div class="oc-legend-bar" style="height:11px;border-radius:3px;background:${(window.BW_WIND && window.BW_WIND.legendGradient) ? window.BW_WIND.legendGradient(40) : 'linear-gradient(90deg,#2870d2,#82e178,#ebe650,#e46e19,#be1a26,#f05ab4)'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+       <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:2px">
+         ${[0,5,10,15,20,25,30,35,"40+"].map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}</span>`).join("")}
+       </div>`));
   }
   if(layerVis.currents){
     const curTime = currentsLegendTimeLabel();
@@ -13365,9 +13448,7 @@ function updateOceanLegend(){
           <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#2dd4bf;letter-spacing:.08em;min-width:0">CURRENT DRIFT (kt)</div>
           <div class="oc-currents-meta" style="font-size:${legendMetaPx};font-weight:700;color:${curTimeColor};letter-spacing:.06em;white-space:nowrap;flex-shrink:0">${compactOceanLegendStatus(curTime)}</div>
         </div>`;
-    parts.push(`
-      <div style="${gap()}">
-        ${curTitleRow}
+    parts.push(section("currents", "current drift", curTitleRow, `
         <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#93c5e0 0%,#38bdf8 18%,#2dd4bf 40%,#5eead4 62%,#fbbf24 88%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="position:relative;height:11px;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600">
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
@@ -13379,8 +13460,7 @@ function updateOceanLegend(){
           <span style="justify-self:center;color:#67e8f9;font-size:13px;line-height:1">●</span><span><b style="color:#a5f3fc">Cyan</b> — strong current (2–3 kt). Edges concentrate bait &amp; fish.</span>
           <span style="justify-self:center;color:#fbbf24;font-size:13px;line-height:1">●</span><span><b style="color:#fde68a">Amber</b> — Gulf Stream core (3+ kt). Fish the western edge, not the core.</span>
         </div>
-        <div style="font-size:13px;color:#7aa8c8;margin-top:7px;line-height:1.45"><b style="color:#2dd4bf">Tip:</b> streaks show where the water is going (set). The edges between fast and slow water hold the most fish — same as a rip line.</div>`)}
-      </div>`);
+        <div style="font-size:13px;color:#7aa8c8;margin-top:7px;line-height:1.45"><b style="color:#2dd4bf">Tip:</b> streaks show where the water is going (set). The edges between fast and slow water hold the most fish — same as a rip line.</div>`)}`));
   }
   if(layerVis.altimetry){
     const loading = ALTIMETRY_STATUS === "loading" || (!ALTIMETRY_GRID && ALTIMETRY_STATUS !== "unavailable");
@@ -13409,9 +13489,7 @@ function updateOceanLegend(){
     const altiRangeNote = altiPort
       ? `within <b style="color:#e8f4ff">${altiRangeNm} nm</b> of <b style="color:#e8f4ff">${altiPort}</b>`
       : `within <b style="color:#e8f4ff">${altiRangeNm} nm</b> of your home port <span style="color:#fbbf24">(select a port)</span>`;
-    parts.push(`
-      <div style="${gap()}">
-        ${altiTitleRow}
+    parts.push(section("altimetry", "front convergence", altiTitleRow, `
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1e88ff 0%,#22d3ee 26%,#1b2233 50%,#ffa63a 74%,#ff2a1a 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>−0.2 m</span><span>Flat</span><span>+0.2 m</span>
@@ -13426,22 +13504,20 @@ function updateOceanLegend(){
           <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">〜</span><span><b style="color:#eef0f6">White contours — equal SSH.</b> Tightly-packed lines = a steep gradient = a temperature/current break.</span>
           <span style="justify-self:center;color:#e8e8ef;font-size:13px;line-height:1">→</span><span><b style="color:#eef0f6">Arrows — geostrophic flow</b> (from the SSH slope, not a direct measurement). Shows eddy rotation; longer = stronger.</span>
         </div>
-        <div style="font-size:13px;color:#7aa8c8;margin-top:7px;line-height:1.45">Use the <b style="color:#2dd4bf">Ocean Currents layer</b> for actual drift direction; these arrows show eddy circulation pattern only.</div>`)}
-      </div>`);
+        <div style="font-size:13px;color:#7aa8c8;margin-top:7px;line-height:1.45">Use the <b style="color:#2dd4bf">Ocean Currents layer</b> for actual drift direction; these arrows show eddy circulation pattern only.</div>`)}`));
   }
   if(layerVis.radar){
-    parts.push(`
-      <div style="${gap()}">
-        <div style="font-size:14px;font-weight:700;color:#a855f7;letter-spacing:.08em;margin-bottom:3px">RADAR (dBZ)</div>
-        <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#04e9e7 0%,#019ff4 15%,#0300f4 28%,#02fd02 42%,#01c501 52%,#fdf802 64%,#e5bc00 72%,#fd9500 80%,#fd0000 90%,#d40000 95%,#bc0000 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
-          <span>light</span><span>moderate</span><span>heavy</span><span>intense</span>
-        </div>
-      </div>`);
+    parts.push(section("radar", "radar",
+      `<div style="font-size:14px;font-weight:700;color:#a855f7;letter-spacing:.08em;margin-bottom:3px">RADAR (dBZ)</div>`,
+      `<div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#04e9e7 0%,#019ff4 15%,#0300f4 28%,#02fd02 42%,#01c501 52%,#fdf802 64%,#e5bc00 72%,#fd9500 80%,#fd0000 90%,#d40000 95%,#bc0000 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+       <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
+         <span>light</span><span>moderate</span><span>heavy</span><span>intense</span>
+       </div>`));
   }
   // Single toggle controlling every collapsed detail block, so the panel stays
-  // compact (scale + status only) until the user asks for the full key.
-  if(_hasDetail){
+  // compact (scale + status only) until the user asks for the full key. With
+  // every legend folded there is nothing left for it to reveal.
+  if(_hasDetail && sectionKeys.some(k => !LEGEND_COLLAPSED[k])){
     const toggleLabel = phone
       ? "How to read ▾"
       : (oceanLegendExpanded ? "Hide details ▴" : "How to read ▾");
@@ -13525,6 +13601,7 @@ function updateBiteBanner(){
   b.style.maxWidth = bannerWidth;
   b.style.minWidth = "0";
   if(!layerVis.predict) b.classList.remove("bite-fc-open");
+  applyBiteLegendCollapsed();
   const fcToggleLbl = document.getElementById("bite-fc-toggle-label");
   if(fcToggleLbl){
     fcToggleLbl.textContent = FORECAST_HOUR_OFFSET === 0

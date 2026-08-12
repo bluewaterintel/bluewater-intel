@@ -507,13 +507,15 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     margin:0 !important;
   }
   /* ── Ocean/weather legend — ~3/4 width, centered under header ── */
+  /* No `top` here: restackTopLegends() sets it inline so the legend drops below
+     the bite-score banner. An !important top pinned both panels to the same
+     coordinate and they overlapped instead of stacking. */
   #ocean-legend{
     padding:4px 6px !important;
     min-width:0 !important;
     width:75% !important;
     left:50% !important;
     right:auto !important;
-    top:6px !important;
     transform:translateX(-50%) !important;
     max-width:75% !important;
     overflow:visible !important;
@@ -1436,6 +1438,42 @@ body.modal-open #brief-toggle{
   overscroll-behavior:contain;
 }
 #ocean-legend .ocean-legend-toggle{pointer-events:auto}
+
+/* ── Per-legend collapse chevron ──────────────────────────────────────────
+   Each overlay legend (and the bite-score banner) folds down to its title bar
+   so a crowded top stack can be thinned without turning layers off. The button
+   is absolutely positioned rather than placed inside the title rows because
+   those differ per layer — some already carry a status or observation date. */
+.oc-legend-sec{position:relative}
+.oc-legend-sec > :first-child{padding-right:22px}
+#bite-banner .bite-banner-hdr{padding-right:22px}
+.oc-sec-collapse{
+  position:absolute;top:2px;right:2px;
+  width:20px;height:20px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  border:0;border-radius:5px;
+  background:rgba(255,255,255,.07);
+  color:#9ec5e8;
+  cursor:pointer;pointer-events:auto;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s ease,color .15s ease;
+}
+#bite-banner .oc-sec-collapse{top:5px;right:6px}
+.oc-sec-collapse:hover{background:rgba(255,255,255,.16);color:#e8f4ff}
+.oc-sec-collapse:focus-visible{outline:2px solid #6bbfea;outline-offset:1px}
+.oc-sec-collapse svg{width:11px;height:11px;transition:transform .18s ease}
+/* Generous invisible hit area — the visible chip stays small on a busy chart. */
+.oc-sec-collapse::after{content:"";position:absolute;inset:-9px}
+.oc-legend-sec.collapsed > .oc-sec-body{display:none}
+.oc-legend-sec.collapsed .oc-sec-collapse svg,
+#bite-banner.legend-collapsed .oc-sec-collapse svg{transform:rotate(180deg)}
+.oc-legend-sec.collapsed > :first-child{margin-bottom:0 !important}
+#bite-banner.legend-collapsed .bite-banner-gradient,
+#bite-banner.legend-collapsed .bite-banner-labels,
+#bite-banner.legend-collapsed .bite-fc-toggle,
+#bite-banner.legend-collapsed #bite-banner-forecast{display:none !important}
+#bite-banner.legend-collapsed .bite-banner-hdr{margin-bottom:0 !important}
+
 /* Ocean legend detail sheet — mobile panel below header */
 #ocean-legend-sheet{
   display:none;position:fixed;inset:0;z-index:100002;
@@ -1508,12 +1546,12 @@ body.modal-open #brief-toggle{
   #layers-toggle svg,#ruler-toggle svg,#wpdrop-toggle svg,#basemap-toggle svg,#settings-toggle svg,#catch-log-toggle svg{
     width:20px !important;height:20px !important;
   }
-  /* Ocean legend — ~3/4 width, centered at top */
+  /* Ocean legend — ~3/4 width, centered at top. `top` is left to
+     restackTopLegends() so it stacks under the bite-score banner. */
   #ocean-legend{
     pointer-events:auto !important;
     left:50% !important;
     right:auto !important;
-    top:6px !important;
     transform:translateX(-50%) !important;
     width:75% !important;
     max-width:75% !important;
@@ -3070,6 +3108,7 @@ body.nav-open .leaflet-control-attribution{
       <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#fb923c">BITE SCORE</span>
       <span class="bite-banner-subtitle" style="font-size:10px;color:#9ec5e8">predicted fishing quality</span>
     </div>
+    <button type="button" class="oc-sec-collapse" onclick="toggleBiteLegendCollapsed()" aria-expanded="true" title="Collapse bite score legend" aria-label="Collapse bite score legend"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"></polyline></svg></button>
     <div class="bite-banner-gradient" style="height:12px;border-radius:6px;background:linear-gradient(90deg,#65a30d 0%,#84cc16 22%,#eab308 45%,#f59e0b 68%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);pointer-events:none"></div>
     <div class="bite-banner-labels" style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#dde8f5;margin-top:3px;pointer-events:none">
       <span>POOR</span><span>FAIR</span><span>GOOD</span><span>EXCELLENT</span>
@@ -3879,7 +3918,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260812d"></script>
+<script src="bw-core.js?v=20260812e"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
