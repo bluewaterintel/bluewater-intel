@@ -5103,12 +5103,11 @@ const SPECIES_LAT_RANGE = {
   cobia:         [25.0, 40.5],   // FL through Chesapeake/DelMarVa up to NJ (summer)
   spanishmack:   [27.0, 41.0],   // FL through NJ
   // Blackfin: a warm-water / subtropical tuna. Common FL, Gulf, and the SE
-  // Atlantic; the OBX/Hatteras is the northern stronghold. Northern bound 35.7°N
-  // reaches just past Oregon Inlet (~35.8°N) so the OBX bite isn't clipped, while
-  // still keeping the predominant weight toward Hatteras (35.2°N). Combined with
-  // breakPref:"edge" (so even within range it scores the Stream, not the inner
-  // shelf), this keeps blackfin realistic.
-  blackfin:      [24.0, 35.7],
+  // Atlantic; the OBX/Hatteras is the northern stronghold. Northern bound 35.9°N
+  // covers Oregon Inlet (~35.8°N) and the outer OBX Stream edge without opening
+  // the Mid-Atlantic shelf. Combined with breakPref:"edge" (so even within range
+  // it scores the Stream, not the inner shelf), this keeps blackfin realistic.
+  blackfin:      [24.0, 35.9],
   // ── MID-ATLANTIC + NEW ENGLAND ───────────────────────────────────────
   // Blueline tilefish: TWO populations, and the flat [33.0, 40.5] band this
   // replaces silently excluded one of them. That band hard-excluded everything
