@@ -3806,6 +3806,34 @@ body.nav-open .leaflet-control-attribution{
       </label>
       <div class="pref-hint">Turns on now and every time you open the app. Zoom in for 5-fathom shelf steps and 20-fathom slope steps.</div>
 
+      <label class="layer-row" title="Show home-port markers across the chart when the app opens.">
+        <input type="checkbox" id="pref-ports" onchange="prefSet('defaultPorts', this.checked)">
+        <span class="lyr-label">
+          <span class="layer-swatch" style="background:#f0c840;border:1px solid rgba(255,255,255,.35);border-radius:50%;width:10px;height:10px"></span>
+          <span>Ports</span>
+        </span>
+        <span class="lyr-toggle"></span>
+      </label>
+
+      <label class="layer-row" title="Show the 15 closest major fishing areas (canyons, wrecks, reefs, lumps) near your home port when the app opens.">
+        <input type="checkbox" id="pref-spots" onchange="prefSet('defaultSpots', this.checked)">
+        <span class="lyr-label">
+          <span class="layer-swatch" style="background:linear-gradient(135deg,#dc2626,#f97316);border-radius:2px;width:10px;height:10px"></span>
+          <span>Major Fishing Areas</span>
+        </span>
+        <span class="lyr-toggle"></span>
+      </label>
+
+      <label class="layer-row" title="Keep LORAN-C TD lines visible when the app opens. Pro subscription required.">
+        <input type="checkbox" id="pref-loran" onchange="prefSet('persistLoran', this.checked)">
+        <span class="lyr-label">
+          <span class="layer-swatch" style="background:transparent;border:2px dashed #f97316;border-radius:2px;width:10px;height:10px"></span>
+          <span>LORAN-C Lines <span style="font-size:8px;color:#9ec5e8;opacity:.7">(Pro)</span></span>
+        </span>
+        <span class="lyr-toggle"></span>
+      </label>
+      <div class="pref-hint">Ports and fishing areas apply on open and when you change them here. LORAN requires Pro.</div>
+
       <hr class="layers-divider">
       <div class="layers-section">AI CAPTAIN'S BRIEF</div>
       <button type="button" id="settings-recent-briefs-btn" data-paid="1" onclick="openRecentBriefs()" style="
@@ -3829,7 +3857,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260810b"></script>
+<script src="bw-core.js?v=20260812a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

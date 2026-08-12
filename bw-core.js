@@ -998,10 +998,14 @@ async function initMap(){
   // don't immediately overwrite a restored view with the default).
   startMapViewPersistence();
 
-  drawCanyons();
-  drawPortMarkers();
   drawCatchPins();
   drawClosures();
+  // Ports, Major Fishing Areas, and LORAN follow Settings → Default Map Layers.
+  if(typeof applyDefaultMapLayers === "function") applyDefaultMapLayers();
+  else {
+    drawCanyons();
+    drawPortMarkers();
+  }
   // User waypoints/catches hydrate from account on sign-in (bwOnSignedIn).
   drawUserWaypoints();
   buildSpDropdown();
@@ -9729,6 +9733,15 @@ function toggleLayer(key){
     if(typeof openPricing === "function") openPricing();
     return;
   }
+  // Bite Map needs a target species — same gate as the AI Captain's Brief button.
+  if(key === "predict" && !layerVis.predict){
+    if(!activeSpId || activeSpId === "all"){
+      const c = document.getElementById("chk-" + key);
+      if(c) c.checked = false;
+      if(typeof toggleDd === "function") toggleDd();
+      return;
+    }
+  }
   layerVis[key]=!layerVis[key];
   const chk=document.getElementById("chk-"+key);
   if(chk)chk.checked=layerVis[key];
@@ -11692,8 +11705,10 @@ const USER_PREFS = {
   defaultSpecies:    null,    // species id, e.g. "yellowfin"
   defaultBaseMap:    "satellite",
   defaultContours:   false,   // draw Depth Contours on open
+  defaultPorts:      true,    // port markers on open
+  defaultSpots:      true,    // Major Fishing Areas on open
   autozoomPort:      true,
-  persistLoran:      false,
+  persistLoran:      false,   // LORAN-C lines on open (Pro)
   // Account state — null when logged out. When signed in, becomes
   //   {name: "Display Name", email: "user@example.com", id: "..."}.
   // The auth backend isn't wired up yet (waiting on deploy); for now this
@@ -11723,6 +11738,9 @@ function prefSet(key, val){
     // do nothing until the next launch reads as broken.
     if(typeof applyDefaultContours === "function") applyDefaultContours();
   }
+  if(key === "defaultPorts" || key === "defaultSpots" || key === "persistLoran"){
+    if(typeof applyDefaultMapLayers === "function") applyDefaultMapLayers();
+  }
 }
 
 // Sync the Depth Contours overlay to USER_PREFS.defaultContours. Used both at
@@ -11747,6 +11765,33 @@ function applyDefaultContours(){
   updateBathyAttribution();
   if(typeof scheduleHeatMaskRepaint === "function") scheduleHeatMaskRepaint();
 }
+
+// Sync Ports, Major Fishing Areas, and LORAN-C to USER_PREFS defaults. Used at
+// startup and when the Settings toggles change (same pattern as depth contours).
+function applyDefaultMapLayers(opts){
+  const actNow = !opts || opts.actNow !== false;
+  const wantPorts = USER_PREFS.defaultPorts !== false;
+  const wantSpots = USER_PREFS.defaultSpots !== false;
+  let wantLoran = !!USER_PREFS.persistLoran;
+  if(wantLoran && (typeof BW_PREMIUM === "undefined" || !BW_PREMIUM)) wantLoran = false;
+
+  if(typeof layerVis !== "undefined"){
+    layerVis.ports = wantPorts;
+    layerVis.spots = wantSpots;
+    layerVis.loran = wantLoran;
+  }
+  const cp = document.getElementById("chk-ports"); if(cp) cp.checked = wantPorts;
+  const cs = document.getElementById("chk-spots"); if(cs) cs.checked = wantSpots;
+  const cl = document.getElementById("chk-loran"); if(cl) cl.checked = wantLoran;
+  const pl = document.getElementById("pref-loran"); if(pl) pl.checked = wantLoran;
+  const pp = document.getElementById("pref-ports"); if(pp) pp.checked = wantPorts;
+  const ps = document.getElementById("pref-spots"); if(ps) ps.checked = wantSpots;
+
+  if(!actNow || typeof MAP === "undefined" || !MAP) return;
+  if(typeof drawCanyons === "function") drawCanyons();
+  if(typeof drawPortMarkers === "function") drawPortMarkers();
+  if(typeof drawLoranLines === "function") drawLoranLines();
+}
 // Persist preferences. localStorage is the durable store on this device; when
 // the account backend is wired, prefs also sync to the user's profile so they
 // follow the user across devices. We never persist the `account` object here.
@@ -11757,6 +11802,8 @@ function prefSave(){
     defaultSpecies: USER_PREFS.defaultSpecies,
     defaultBaseMap: USER_PREFS.defaultBaseMap,
     defaultContours: USER_PREFS.defaultContours,
+    defaultPorts:    USER_PREFS.defaultPorts,
+    defaultSpots:    USER_PREFS.defaultSpots,
     autozoomPort:   USER_PREFS.autozoomPort,
     persistLoran:   USER_PREFS.persistLoran,
   };
@@ -11803,6 +11850,8 @@ function prefLoad(){
         }
       }
       if("defaultContours" in saved) USER_PREFS.defaultContours = !!saved.defaultContours;
+      if("defaultPorts" in saved)    USER_PREFS.defaultPorts    = !!saved.defaultPorts;
+      if("defaultSpots" in saved)    USER_PREFS.defaultSpots    = !!saved.defaultSpots;
       if("autozoomPort" in saved)   USER_PREFS.autozoomPort   = !!saved.autozoomPort;
       if("persistLoran" in saved)   USER_PREFS.persistLoran   = !!saved.persistLoran;
     }
@@ -11978,9 +12027,13 @@ function prefResetAll(){
   USER_PREFS.defaultSpecies = null;
   USER_PREFS.defaultBaseMap = "satellite";
   USER_PREFS.defaultContours = false;
+  USER_PREFS.defaultPorts = true;
+  USER_PREFS.defaultSpots = true;
   USER_PREFS.autozoomPort = true;
   USER_PREFS.persistLoran = false;
   prefSave();
+  if(typeof applyDefaultMapLayers === "function") applyDefaultMapLayers();
+  if(typeof applyDefaultContours === "function") applyDefaultContours();
   refreshSettingsModal();
 }
 
@@ -12035,6 +12088,20 @@ function refreshSettingsModal(){
     contoursChk.disabled = !available;
     const row = contoursChk.closest(".layer-row");
     if(row) row.style.opacity = available ? "" : ".5";
+  }
+
+  const portsChk = document.getElementById("pref-ports");
+  if(portsChk) portsChk.checked = USER_PREFS.defaultPorts !== false;
+
+  const spotsChk = document.getElementById("pref-spots");
+  if(spotsChk) spotsChk.checked = USER_PREFS.defaultSpots !== false;
+
+  const loranChk = document.getElementById("pref-loran");
+  if(loranChk){
+    loranChk.checked = !!USER_PREFS.persistLoran;
+    const loranRow = loranChk.closest(".layer-row");
+    const pro = typeof BW_PREMIUM !== "undefined" && BW_PREMIUM;
+    if(loranRow) loranRow.style.opacity = pro ? "" : ".65";
   }
 
   if(typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
@@ -14489,6 +14556,7 @@ function applyEntitlementGating(){
   if(typeof USER_PREFS !== "undefined" && USER_PREFS.persistLoran){
     USER_PREFS.persistLoran = false;
     try { if(typeof prefSave === "function") prefSave(); } catch(e){}
+    if(typeof applyDefaultMapLayers === "function") applyDefaultMapLayers();
   }
   let changed = false;
   for(const k of BW_PREMIUM_LAYERS){
@@ -18475,6 +18543,8 @@ window.bwOnSignedIn = async function (user) {
             }
           }
           if("defaultContours" in acct) USER_PREFS.defaultContours = !!acct.defaultContours;
+          if("defaultPorts"    in acct) USER_PREFS.defaultPorts    = acct.defaultPorts !== false;
+          if("defaultSpots"    in acct) USER_PREFS.defaultSpots    = acct.defaultSpots !== false;
           if("autozoomPort"   in acct) USER_PREFS.autozoomPort   = !!acct.autozoomPort;
           if("persistLoran"   in acct) USER_PREFS.persistLoran   = !!acct.persistLoran;
         }
@@ -18500,6 +18570,7 @@ window.bwOnSignedIn = async function (user) {
     }
     // Refresh the Settings modal controls so the synced values are reflected.
     if(typeof refreshSettingsModal === "function") refreshSettingsModal();
+    if(typeof applyDefaultMapLayers === "function") applyDefaultMapLayers();
 
     // Recenter the map to the login/home port ONLY on the genuine sign-in, not
     // on every onAuthChange re-fire. Supabase fires onAuthChange again on token

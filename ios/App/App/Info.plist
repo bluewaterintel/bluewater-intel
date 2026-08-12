@@ -45,5 +45,24 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.bluewaterintel.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.bluewaterintel.app</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Bluewater Intel uses your location to center the fishing map on your position.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo of your catch for length and weight estimation.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select a catch photo for measurement.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
