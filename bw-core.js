@@ -6156,33 +6156,44 @@ const HeatCanvasLayer = L.Layer.extend({
     // rebuilt when the view leaves it, the zoom drifts too far to upscale
     // cleanly, or the data itself changes.
     map.on('moveend zoomend viewreset resize', this._scheduleReset, this);
-    map.on('zoomstart', this._onZoomStart, this);
+    // Scale the painted bitmap through the zoom animation the way a tile layer
+    // does, instead of hiding the canvas and repainting at zoomend. Hiding was
+    // what made the field blink out and reappear on every pinch/scroll.
+    if(map.options.zoomAnimation && L.Browser.any3d){
+      L.DomUtil.addClass(this._canvas, 'leaflet-zoom-animated');
+      map.on('zoomanim', this._animateZoom, this);
+    } else {
+      L.DomUtil.addClass(this._canvas, 'leaflet-zoom-hide');
+    }
     this._reset();
   },
   onRemove: function(map){
     if(this._rafId){ cancelAnimationFrame(this._rafId); this._rafId = null; }
     if(this._bakeTimer){ clearTimeout(this._bakeTimer); this._bakeTimer = null; }
+    if(this._bakeDelayTimer){ clearTimeout(this._bakeDelayTimer); this._bakeDelayTimer = null; }
     this._invalidateBake();
     if(this._canvas && this._canvas.parentNode){
       this._canvas.parentNode.removeChild(this._canvas);
     }
     map.off('moveend zoomend viewreset resize', this._scheduleReset, this);
-    map.off('zoomstart', this._onZoomStart, this);
+    map.off('zoomanim', this._animateZoom, this);
   },
-  // Hide the (now stale) heat canvas the instant a zoom gesture begins, so the
-  // basemap can animate alone. zoomend → _scheduleReset repaints + reveals it.
-  _onZoomStart: function(){
-    if(this._canvas) this._canvas.style.visibility = 'hidden';
+  // Same transform Leaflet applies to an image overlay: the canvas holds a
+  // geographically-anchored picture, so a scale about the zoom centre keeps it
+  // registered to the basemap for the whole animation.
+  _animateZoom: function(e){
+    if(!this._canvas || !this._map || !this._canvasNW || !this._canvasSE) return;
+    const bounds = L.latLngBounds(this._canvasNW, this._canvasSE);
+    const scale = this._map.getZoomScale(e.zoom);
+    const offset = this._map._latLngBoundsToNewLayerBounds(bounds, e.zoom, e.center).min;
+    L.DomUtil.setTransform(this._canvas, offset, scale);
   },
   // Coalesce redraw requests into one per animation frame.
   _scheduleReset: function(){
     if(this._rafId) return;
     this._rafId = requestAnimationFrame(() => {
       this._rafId = null;
-      try { this._reset(); }
-      finally {
-        if(this._canvas) this._canvas.style.visibility = 'visible';
-      }
+      this._reset();
     });
   },
   // How far outside the viewport the bake reaches, in viewport widths per side.
@@ -6200,14 +6211,22 @@ const HeatCanvasLayer = L.Layer.extend({
   // stretching it 2x is not visibly softer than rendering it fresh.
   _bakeZoomDrift: 1,
 
+  // How long to let a gesture settle before paying for a full field render. The
+  // previous bitmap stays on screen for this window, so the layer never blanks.
+  _bakeDelayMs: 90,
+
   _invalidateBake: function(){
     this._bakeCanvas = null;
     this._bakeNW = null;
     this._bakeProvisional = false;
+    this._bakeStale = false;
   },
 
   _bakeUsable: function(){
     if(!this._bakeCanvas || !this._bakeNW || !this._map) return false;
+    // The mask inputs changed under us (basemap swap, new bathy). Repaint, but
+    // keep showing this bitmap until the replacement is ready.
+    if(this._bakeStale) return false;
     const map = this._map;
     if(Math.abs(map.getZoom() - this._bakeZoom) > this._bakeZoomDrift) return false;
     // A bake taken before the basemap tiles were readable had to mask off
@@ -6246,20 +6265,49 @@ const HeatCanvasLayer = L.Layer.extend({
     this._bakeTimer = setTimeout(() => {
       this._bakeTimer = null;
       if(!this._map) return;
-      this._invalidateBake();
+      // Mark rather than drop: _bakeUsable() will now ask for a repaint while
+      // the existing bitmap keeps covering the map.
+      this._bakeStale = true;
       this._scheduleReset();
     }, 700);
   },
 
-  _reset: function(){
+  // Repaint the field off the gesture, so a pan or zoom never waits on a full
+  // per-pixel render. The stale bitmap is already on screen by the time this
+  // runs; the new one simply replaces it.
+  _scheduleBake: function(immediate){
+    if(this._bakeDelayTimer){ clearTimeout(this._bakeDelayTimer); this._bakeDelayTimer = null; }
+    const run = () => {
+      this._bakeDelayTimer = null;
+      if(!this._map) return;
+      this._bake();
+      this._blit();
+    };
+    if(immediate){ run(); return; }
+    this._bakeDelayTimer = setTimeout(run, this._bakeDelayMs);
+  },
+
+  _reset: function(opts){
     if(!this._map) return;
     const size = this._map.getSize();
     const topLeft = this._map.containerPointToLayerPoint([0, 0]);
     L.DomUtil.setPosition(this._canvas, topLeft);
-    this._canvas.width = size.x;
-    this._canvas.height = size.y;
-    if(!this._bakeUsable()) this._bake();
+    // Resizing a canvas clears it. Only pay that (and the blank frame it costs)
+    // when the viewport really changed shape.
+    if(this._canvas.width !== size.x || this._canvas.height !== size.y){
+      this._canvas.width = size.x;
+      this._canvas.height = size.y;
+    }
+    // Geographic corners of the canvas, for the zoom-animation transform.
+    this._canvasNW = this._map.containerPointToLatLng([0, 0]);
+    this._canvasSE = this._map.containerPointToLatLng([size.x, size.y]);
+    // Put the picture we already have back under the map first. A bitmap that
+    // only partly covers the new view still reads as a continuous layer, where
+    // clearing to transparent reads as the layer vanishing.
     this._blit();
+    // Deferring only helps when there is something to look at meanwhile; with no
+    // bitmap yet (first paint) waiting would just delay the layer appearing.
+    if(!this._bakeUsable()) this._scheduleBake((opts && opts.immediate) || !this._bakeCanvas);
   },
   // Rasterize the field into the offscreen bitmap. Everything below works in
   // bake coordinates, which are the viewport's own pixel grid shifted by the
@@ -6562,7 +6610,9 @@ const HeatCanvasLayer = L.Layer.extend({
   setPoints: function(points){
     this._points = points || [];
     this._invalidateBake();
-    this._reset();
+    // New scores are the one case the user is waiting on a repaint, so this
+    // path renders straight away instead of deferring like a pan does.
+    this._reset({ immediate: true });
   },
 });
 
