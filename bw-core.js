@@ -953,6 +953,7 @@ async function initMap(){
   shieldMapOverlayFromLeaflet(document.getElementById("wp-legend-toggle"));
   shieldMapOverlayFromLeaflet(document.getElementById("mobile-controls-toggle"));
   shieldMapOverlayFromLeaflet(document.getElementById("predict-loading"));
+  shieldMapOverlayFromLeaflet(document.getElementById("ocean-opacity-control"));
 
   // ── Initial port + map view ──
   // Three cases:
@@ -10324,6 +10325,8 @@ function restackBottomControls(){
   }
   syncMapTimePillExpandButtons();
   updateMobileLayerMode();
+  document.body.classList.toggle("bw-controls-collapsed", collapsed);
+  updateOpacityControl();
 }
 
 function syncMapTimePillExpandButtons(){
@@ -10396,10 +10399,18 @@ function updateOpacityControl(valueOnly){
   const key = activeOceanLayerKey();
   const phone = (typeof isPhoneView === "function") && isPhoneView();
   if(!valueOnly){
-    box.style.display = (key && !phone) ? "flex" : "none";
+    const show = phone
+      ? !!(layerVis.sst && !_bwControlsCollapsed)
+      : !!key;
+    box.style.display = show ? "flex" : "none";
+    if(show && typeof shieldMapOverlayFromLeaflet === "function" && !box.dataset.bwShielded){
+      shieldMapOverlayFromLeaflet(box);
+      box.dataset.bwShielded = "1";
+    }
   }
-  if(!key) return;
-  const pct = Math.round(oceanOpacity[key] * 100);
+  const opacityKey = phone ? (layerVis.sst ? "sst" : key) : key;
+  if(!opacityKey) return;
+  const pct = Math.round(oceanOpacity[opacityKey] * 100);
   const input = document.getElementById("ocean-opacity-input");
   const readout = document.getElementById("ocean-opacity-readout");
   const label = document.getElementById("ocean-opacity-label");
@@ -10407,7 +10418,7 @@ function updateOpacityControl(valueOnly){
   if(readout) readout.textContent = pct + "%";
   if(label){
     const labels = { sst: "SST", chlor: "Chlor", relief: "Relief" };
-    label.textContent = labels[key] || key;
+    label.textContent = labels[opacityKey] || opacityKey;
   }
   if(typeof restackRightSliders === "function") restackRightSliders();
 }
@@ -13279,9 +13290,7 @@ function ensureLegendExpanded(key){
 }
 
 // Chevron button markup shared by the ocean-legend sections and the bite
-// banner. Absolutely positioned into the panel's top-right corner so it never
-// has to fit inside the title rows, which differ per layer (some carry a
-// status/date, some don't).
+// banner. Grid layout in CSS keeps the chip inline with the title row.
 function legendCollapseBtn(onclick, label, collapsed){
   return `<button type="button" class="oc-sec-collapse" onclick="${onclick}"
     aria-expanded="${collapsed ? "false" : "true"}"
@@ -13729,7 +13738,7 @@ function updateBiteBanner(){
   const phone = (typeof isPhoneView === "function") && isPhoneView();
   const show = !!layerVis.predict;
   b.classList.toggle("bite-banner-hidden", !show);
-  b.style.display = show ? (phone ? "grid" : "block") : "none";
+  b.style.display = show ? "grid" : "none";
   // Match other top map legends — 1/3 width on desktop, 3/4 on phone.
   b.style.left = "50%";
   b.style.right = "auto";
@@ -13740,6 +13749,18 @@ function updateBiteBanner(){
   b.style.minWidth = "0";
   if(!layerVis.predict) b.classList.remove("bite-fc-open");
   applyBiteLegendCollapsed();
+  const fcTimeEl = document.getElementById("bite-banner-fc-time");
+  if(fcTimeEl){
+    if(layerVis.predict && phone){
+      fcTimeEl.textContent = (typeof forecastTimeDisplay === "function")
+        ? forecastTimeDisplay()
+        : biteForecastTimeLabel();
+      fcTimeEl.style.display = "";
+    } else {
+      fcTimeEl.textContent = "";
+      fcTimeEl.style.display = "none";
+    }
+  }
   const fcToggleLbl = document.getElementById("bite-fc-toggle-label");
   if(fcToggleLbl){
     fcToggleLbl.textContent = FORECAST_HOUR_OFFSET === 0
@@ -14131,7 +14152,7 @@ function updateLegend(){
 const MAP_CHROME_CLICK_SELECTOR =
   "#bite-banner, #ocean-legend, #ocean-legend-sheet, #predict-loading, " +
   "#mobile-controls-toggle, #waypoint-legend, #wp-legend-toggle, " +
-  "#bluetopo-relief-control, .map-time-pill, #radar-loop-control, #depth-readout, #wind-readout, " +
+  "#bluetopo-relief-control, #ocean-opacity-control, .map-time-pill, #radar-loop-control, #depth-readout, #wind-readout, " +
   ".leaflet-control, .leaflet-popup, .leaflet-tooltip, " +
   "#predict-explainer, #predict-explainer-backdrop";
 

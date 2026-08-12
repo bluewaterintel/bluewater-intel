@@ -865,9 +865,13 @@ body.modal-open #brief-toggle{
 .ocean-opacity-cap{font-size:11px;color:#9ec5e8;line-height:1;opacity:.8}
 
 @media (max-width:680px){
-  /* Vertical map-side sliders are desktop-only — too much chrome on phones. */
-  #ocean-opacity-control,
+  /* BlueTopo relief slider stays desktop-only. SST opacity is JS-driven on phones. */
   #bluetopo-relief-control{display:none !important}
+  #ocean-opacity-control{
+    left:10px;
+    right:auto;
+    transform:translateY(-50%);
+  }
 }
 
 /* Leaflet popups need to render above the right-side icon column (z-index 600)
@@ -1200,12 +1204,15 @@ body.modal-open #brief-toggle{
 .map-time-pill-head-right{display:flex;align-items:center;gap:6px;min-width:0;flex-shrink:1}
 .map-time-pill-expand{
   display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;width:28px;height:28px;padding:0;
-  border-radius:7px;border:1px solid rgba(255,255,255,.18);
-  background:rgba(255,255,255,.06);color:#bfe3f5;
-  font-size:14px;font-weight:800;line-height:1;cursor:pointer;font-family:inherit;
+  flex-shrink:0;width:22px;height:22px;padding:0;
+  border-radius:5px;border:1px solid rgba(107,191,234,.28);
+  background:var(--bw-map-chrome-bg);color:#cfe5ff;
+  font-size:10px;font-weight:800;line-height:1;cursor:pointer;font-family:inherit;
   -webkit-tap-highlight-color:transparent;
+  transition:background .15s ease,color .15s ease;
 }
+.map-time-pill-expand:hover{background:rgba(255,255,255,.10);color:#e8f4ff}
+.map-time-pill-expand:focus-visible{outline:2px solid #6bbfea;outline-offset:1px}
 /* Mobile: slider row hidden until ▾ expands the pill. Desktop: hidden only when
    `.map-time-pill--collapsed` is set (default is fully expanded). */
 @media (max-width:680px){
@@ -1462,32 +1469,44 @@ body.modal-open #brief-toggle{
 #ocean-legend .oc-sec-collapse{pointer-events:auto}
 
 /* ── Per-legend collapse chevron ──────────────────────────────────────────
-   Each overlay legend (and the bite-score banner) folds down to its title bar
-   so a crowded top stack can be thinned without turning layers off. The button
-   is absolutely positioned rather than placed inside the title rows because
-   those differ per layer — some already carry a status or observation date. */
-.oc-legend-sec{position:relative}
-.oc-legend-sec > :first-child{padding-right:22px}
-#bite-banner .bite-banner-hdr{padding-right:22px}
+   Each overlay legend (and the bite-score banner) folds down to its title bar.
+   Grid layout keeps the chip inline with the title on every viewport — avoids
+   the old absolute/floating chevron clipping on desktop. */
+.oc-legend-sec{
+  display:grid;
+  grid-template-columns:1fr auto;
+  column-gap:4px;
+  align-items:start;
+  position:relative;
+}
+.oc-legend-sec > :first-child{
+  grid-column:1;grid-row:1;
+  padding-right:0 !important;
+  align-self:center;
+  min-width:0;
+}
+.oc-legend-sec > .oc-sec-body{grid-column:1 / -1;grid-row:2}
+.oc-legend-sec > .oc-sec-collapse{
+  grid-column:2;grid-row:1;
+  position:static;
+  align-self:center;
+  justify-self:end;
+}
 .oc-sec-collapse{
-  position:absolute;top:2px;right:2px;
-  width:20px;height:20px;padding:0;
+  width:22px;height:22px;padding:0;
   display:flex;align-items:center;justify-content:center;
-  border:0;border-radius:5px;
-  background:rgba(255,255,255,.07);
-  color:#9ec5e8;
+  border:1px solid rgba(107,191,234,.28);
+  border-radius:5px;
+  background:var(--bw-map-chrome-bg);
+  color:#cfe5ff;
   cursor:pointer;pointer-events:auto;
   -webkit-tap-highlight-color:transparent;
   transition:background .15s ease,color .15s ease;
+  flex-shrink:0;
 }
-#bite-banner .oc-sec-collapse{top:5px;right:6px}
-.oc-sec-collapse:hover{background:rgba(255,255,255,.16);color:#e8f4ff}
+.oc-sec-collapse:hover{background:rgba(255,255,255,.10);color:#e8f4ff}
 .oc-sec-collapse:focus-visible{outline:2px solid #6bbfea;outline-offset:1px}
-.oc-sec-collapse svg{width:11px;height:11px;transition:transform .18s ease}
-/* Generous invisible hit area — the visible chip stays small on a busy chart.
-   Bite banner: don't extend downward or forecast pills inherit the tap. */
-.oc-sec-collapse::after{content:"";position:absolute;inset:-9px}
-#bite-banner > .oc-sec-collapse::after{inset:-6px -6px 0 -6px}
+.oc-sec-collapse svg{width:10px;height:10px;transition:transform .18s ease}
 #bite-banner-forecast{position:relative;z-index:2;pointer-events:auto}
 #bite-banner-forecast .fc-mark{
   position:relative;z-index:3;pointer-events:auto;
@@ -1503,6 +1522,39 @@ body.modal-open #brief-toggle{
 #bite-banner.legend-collapsed #bite-banner-forecast{display:none !important}
 #bite-banner.legend-collapsed .bite-banner-hdr{margin-bottom:0 !important}
 #bite-banner.bite-banner-hidden{display:none !important}
+#bite-banner-fc-time{
+  display:none;
+  grid-column:2;grid-row:1;
+  align-self:center;
+  font-size:9px;
+  font-weight:600;
+  color:#9ec5e8;
+  white-space:nowrap;
+  pointer-events:none;
+  line-height:1.2;
+}
+@media (max-width:680px){
+  #bite-banner-fc-time{display:block}
+}
+/* Bite banner uses the same grid + chip chevron as ocean legend sections. */
+#bite-banner{
+  grid-template-columns:1fr auto auto;
+  column-gap:5px;
+}
+#bite-banner .bite-banner-hdr{
+  grid-column:1;grid-row:1;
+  padding-right:0 !important;
+  align-self:center;
+  min-width:0;
+}
+#bite-banner > .oc-sec-collapse{
+  grid-column:3;grid-row:1;
+  z-index:1;
+}
+#bite-banner .bite-banner-gradient{grid-column:1 / -1;grid-row:2}
+#bite-banner .bite-banner-labels{grid-column:1 / -1;grid-row:3}
+#bite-banner .bite-fc-toggle{grid-column:1 / -1;grid-row:4}
+#bite-banner #bite-banner-forecast{grid-column:1 / -1;grid-row:5}
 
 /* Ocean legend detail sheet — mobile panel below header */
 #ocean-legend-sheet{
@@ -1550,6 +1602,7 @@ body.modal-open #brief-toggle{
   -webkit-tap-highlight-color:transparent;
 }
 .bw-collapsed-hide{display:none !important}
+body.bw-controls-collapsed #ocean-opacity-control{display:none !important}
 @media (max-width:680px){
   /* While a gradient/overlay is active, hide the scale bar and fade the port &
      canyon labels so the data layer reads cleanly. The home-port label stays. */
@@ -1621,7 +1674,8 @@ body.modal-open #brief-toggle{
      display:grid !important here — it beats inline display:none and leaves
      the pill stuck on screen after the layer is unchecked (iOS/mobile). */
   #bite-banner{
-    grid-template-columns:1fr auto;
+    grid-template-columns:1fr auto auto;
+    column-gap:5px;
     top:4px !important;
     left:50% !important;
     right:auto !important;
@@ -1635,8 +1689,9 @@ body.modal-open #brief-toggle{
   #bite-banner .bite-banner-hdr{
     grid-column:1;grid-row:1;
     margin-bottom:2px !important;
-    padding-right:4px !important;
+    padding-right:0 !important;
     align-self:center;
+    min-width:0;
   }
   #bite-banner .bite-banner-gradient{grid-column:1 / -1;grid-row:2}
   #bite-banner .bite-banner-labels{grid-column:1 / -1;grid-row:3}
@@ -1644,39 +1699,6 @@ body.modal-open #brief-toggle{
   /* Phones: forecast pills always visible — collapse the whole banner instead */
   #bite-banner .bite-fc-toggle{display:none !important}
   #bite-banner #bite-banner-forecast .bite-fc-pills{display:flex !important}
-  /* Legend collapse chevrons — inline with title row, solid chrome on iOS */
-  .oc-legend-sec{
-    display:grid;
-    grid-template-columns:1fr auto;
-    column-gap:4px;
-    align-items:start;
-  }
-  .oc-legend-sec > :first-child{
-    grid-column:1;grid-row:1;
-    padding-right:0 !important;
-    align-self:center;
-    margin-bottom:2px !important;
-  }
-  .oc-legend-sec > .oc-sec-body{grid-column:1 / -1;grid-row:2}
-  .oc-legend-sec > .oc-sec-collapse,
-  #bite-banner > .oc-sec-collapse{
-    grid-column:2;grid-row:1;
-    position:static;
-    align-self:center;
-    justify-self:end;
-    width:22px;height:22px;
-    background:var(--bw-map-chrome-bg);
-    border:1px solid rgba(107,191,234,.28);
-    border-radius:5px;
-    color:#cfe5ff;
-    flex-shrink:0;
-    z-index:1;
-  }
-  #bite-banner > .oc-sec-collapse::after{display:none}
-  #bite-banner #bite-banner-forecast{z-index:2}
-  .oc-legend-sec > .oc-sec-collapse svg,
-  #bite-banner > .oc-sec-collapse svg{width:10px;height:10px}
-  #bite-banner .bite-banner-hdr .bite-banner-subtitle{display:none !important}
   #bite-banner .bite-banner-hdr > span:first-child{font-size:9px !important}
   #bite-banner .bite-banner-gradient{height:7px !important;border-radius:4px !important}
   #bite-banner .bite-banner-labels{
@@ -1691,9 +1713,9 @@ body.modal-open #brief-toggle{
   #bite-banner-forecast .bite-fc-wind-hint{display:none !important}
   #bite-banner-forecast .fc-mark{
     font-size:9px !important;
-    padding:8px 4px !important;
+    padding:3px 2px !important;
     min-width:0 !important;
-    min-height:36px;
+    min-height:0;
   }
   #bite-banner-forecast .bite-fc-pills{margin-top:0 !important}
   /* Smaller port/canyon map labels */
@@ -2313,13 +2335,31 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 /* Full-screen menu pages (Fishing Reports, My Catches, etc.) — iOS safe areas */
 .menu-page-overlay{
   box-sizing:border-box;
-  padding-top:env(safe-area-inset-top, 0px);
+  padding-top:0;
   padding-bottom:env(safe-area-inset-bottom, 0px);
 }
-.menu-page-hdr{flex-shrink:0}
+.menu-page-hdr{
+  flex-shrink:0;
+  position:sticky;
+  top:0;
+  z-index:100;
+  background:#0a1a2e !important;
+  padding-top:calc(12px + env(safe-area-inset-top, 0px)) !important;
+}
+/* Block scroll bleed — content must not peek above the banner on iOS. */
+.menu-page-hdr::before{
+  content:"";
+  position:absolute;
+  bottom:100%;
+  left:0;
+  right:0;
+  height:100vh;
+  background:#0a1a2e;
+  pointer-events:none;
+}
 @media (max-width:680px){
   .menu-page-hdr{
-    padding:10px 12px !important;
+    padding:calc(10px + env(safe-area-inset-top, 0px)) 12px 10px !important;
     gap:10px !important;
     align-items:center !important;
   }
@@ -3158,6 +3198,7 @@ body.nav-open .leaflet-control-attribution{
       <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#fb923c">BITE SCORE</span>
       <span class="bite-banner-subtitle" style="font-size:10px;color:#9ec5e8">predicted fishing quality</span>
     </div>
+    <span id="bite-banner-fc-time" class="bite-banner-fc-time" aria-live="polite"></span>
     <button type="button" class="oc-sec-collapse" onclick="toggleBiteLegendCollapsed()" aria-expanded="true" title="Collapse bite score legend" aria-label="Collapse bite score legend"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"></polyline></svg></button>
     <div class="bite-banner-gradient" style="height:12px;border-radius:6px;background:linear-gradient(90deg,#65a30d 0%,#84cc16 22%,#eab308 45%,#f59e0b 68%,#dc2626 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);pointer-events:none"></div>
     <div class="bite-banner-labels" style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#dde8f5;margin-top:3px;pointer-events:none">
@@ -3968,7 +4009,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260812n"></script>
+<script src="bw-core.js?v=20260812p"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
