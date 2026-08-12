@@ -1850,11 +1850,11 @@ export const handler = async (req: Request): Promise<Response> => {
       }
       const mur = await fetchSstRows(latMin, latMax, lngMin, lngMax, {
         targetDeg: reqStep ?? undefined,
-        lookback: 2,
+        lookback: 4,
         // MUR is daily and this host routinely needs 14–30 s; a 20 s abort was
         // discarding good pulls and the overlay then had nothing to draw.
         timeoutMs: 45000,
-        retries: 1,
+        retries: 2,
       });
       const rows = (mur.rows as number[][]).filter((r) => r && r[2] != null);
       if (!rows.length) return json({ error: "MUR SST unavailable" }, cors, 502);

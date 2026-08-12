@@ -8040,7 +8040,10 @@ const SstForecastLayer = L.Layer.extend({
       return;
     }
     SST_STATUS = "loading";
-    _sstHideGibsFallback();
+    // Keep GIBS tiles up as a stand-in until the local MUR canvas is ready.
+    // Hiding them here is what made SST look broken during a slow pull or after
+    // an ERDDAP failure — the user saw blank water with no fallback.
+    if(!SST_FORECAST_GRID) _sstShowGibsFallback();
     if(typeof updateOceanLegend === "function") updateOceanLegend();
     // MUR pulls fail intermittently rather than by size. Measured live against
     // the same box: 0.05° / 4.2k cells timed out once and returned in 13s the
@@ -8050,8 +8053,12 @@ const SstForecastLayer = L.Layer.extend({
     // fall back to tiles only once the retries are spent.
     const stepDeg = _sstStepForBox(bx, z);
     const giveUp = () => {
-      SST_STATUS = "unavailable";
-      _sstHideGibsFallback();
+      // MUR failed after retries — fall back to GIBS tiles rather than a blank
+      // ocean. The legend switches to the global scale tag so it is honest
+      // about what is on screen until a local pull succeeds.
+      SST_STATUS = "ready";
+      SST_FORECAST_GRID = null;
+      _sstShowGibsFallback();
       this._smallFor = null;
       this._draw();
       updateSatDateDisplay();
@@ -8134,9 +8141,9 @@ function syncSstOverlayMode(){
     if(SST_FORECAST_GRID){
       SST_STATUS = "ready";
       _sstHideGibsFallback();
-    } else if(SST_STATUS !== "unavailable" && _sstScaleMode !== "global"){
+    } else {
       SST_STATUS = "loading";
-      _sstHideGibsFallback();
+      _sstShowGibsFallback();
     }
   } else {
     if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
@@ -9863,6 +9870,10 @@ function toggleLayer(key){
     }
   }
   layerVis[key]=!layerVis[key];
+  if(layerVis[key]){
+    const lk = LEGEND_LAYER_KEYS[key];
+    if(lk) ensureLegendExpanded(lk);
+  }
   const chk=document.getElementById("chk-"+key);
   if(chk)chk.checked=layerVis[key];
   if(key==="spots")drawCanyons();  // unified structure layer (canyons+wrecks+reefs+lumps)
@@ -13200,7 +13211,11 @@ let _oceanLegendDetailHtml = "";
 // captain can keep the scale that's still changing (SST) open and shrink the
 // ones already committed to memory. Keyed by layer so the choice survives
 // toggling the layer off and back on, and persisted across sessions.
-const LEGEND_COLLAPSE_KEY = "bwi.legendCollapsed.v1";
+const LEGEND_COLLAPSE_KEY = "bwi.legendCollapsed.v2";
+const LEGEND_LAYER_KEYS = {
+  sst: "sst", chlor: "chlor", wind: "wind", currents: "currents",
+  altimetry: "altimetry", radar: "radar", predict: "bite",
+};
 let LEGEND_COLLAPSED = {};
 try {
   const saved = JSON.parse(localStorage.getItem(LEGEND_COLLAPSE_KEY) || "{}");
@@ -13208,6 +13223,31 @@ try {
 } catch(e){}
 function saveLegendCollapsed(){
   try { localStorage.setItem(LEGEND_COLLAPSE_KEY, JSON.stringify(LEGEND_COLLAPSED)); } catch(e){}
+}
+
+// Turn a legend back on when its layer is enabled. Collapse is remembered only
+// while the layer stays on — toggling a layer off and back on always shows the
+// full scale bar again so a captain isn't staring at a title with no gradient.
+function ensureLegendExpanded(key){
+  if(!key || !LEGEND_COLLAPSED[key]) return;
+  LEGEND_COLLAPSED[key] = false;
+  saveLegendCollapsed();
+  if(key === "bite"){
+    applyBiteLegendCollapsed();
+  } else {
+    const sec = document.querySelector('.oc-legend-sec[data-sec="' + key + '"]');
+    if(sec){
+      sec.classList.remove("collapsed");
+      const btn = sec.querySelector(".oc-sec-collapse");
+      if(btn){
+        btn.setAttribute("aria-expanded", "true");
+        btn.setAttribute("title", "Collapse " + key + " legend");
+        btn.setAttribute("aria-label", "Collapse " + key + " legend");
+      }
+    }
+  }
+  restackTopLegends();
+  if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
 }
 
 // Chevron button markup shared by the ocean-legend sections and the bite
