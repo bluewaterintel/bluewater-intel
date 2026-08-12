@@ -949,6 +949,7 @@ async function initMap(){
   // without this, taps change forecast AND fire depth readout underneath.
   shieldMapOverlayFromLeaflet(document.getElementById("bite-banner"));
   shieldMapOverlayFromLeaflet(document.getElementById("ocean-legend"));
+  shieldMapOverlayFromLeaflet(document.getElementById("ocean-legend-content"));
   shieldMapOverlayFromLeaflet(document.getElementById("wp-legend-toggle"));
   shieldMapOverlayFromLeaflet(document.getElementById("mobile-controls-toggle"));
   shieldMapOverlayFromLeaflet(document.getElementById("predict-loading"));
@@ -10311,9 +10312,34 @@ function restackBottomControls(){
 
   const legend = document.getElementById("ocean-legend");
   if(legend && legend.style.display !== "none" && typeof oceanLegendMaxHeightPx === "function"){
-    legend.style.maxHeight = oceanLegendMaxHeightPx() + "px";
+    const content = document.getElementById("ocean-legend-content");
+    const maxH = oceanLegendMaxHeightPx() + "px";
+    if(content){
+      content.style.maxHeight = maxH;
+      content.style.overflowY = "auto";
+    } else {
+      legend.style.maxHeight = maxH;
+    }
   }
+  syncMapTimePillExpandButtons();
   updateMobileLayerMode();
+}
+
+function syncMapTimePillExpandButtons(){
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
+  document.querySelectorAll(".map-time-pill-expand").forEach(btn => {
+    const pill = btn.closest(".map-time-pill");
+    if(!pill) return;
+    if(phone){
+      const open = pill.classList.contains("map-time-pill--open");
+      btn.textContent = open ? "▴" : "▾";
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    } else {
+      const collapsed = pill.classList.contains("map-time-pill--collapsed");
+      btn.textContent = collapsed ? "▾" : "▴";
+      btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    }
+  });
 }
 
 // ── OCEAN OPACITY SLIDER ─────────────────────────────────────────────────────
@@ -13203,7 +13229,8 @@ function catchPhotoFromFile(file){
 // which layers are currently active.
 // ──────────────────────────────────────────────────────────────────────────
 let oceanLegendExpanded = false;
-let _oceanLegendDetailHtml = "";
+let _oceanLegendDetailByKey = {};
+let LEGEND_DETAIL_EXPANDED = {};
 
 // ── Per-legend collapse ──────────────────────────────────────────────────────
 // With four or five overlays on, the top-centre stack eats most of the chart.
@@ -13313,28 +13340,32 @@ function applyBiteLegendCollapsed(){
 function toggleMapTimePill(btn){
   const pill = btn && btn.closest ? btn.closest(".map-time-pill") : null;
   if(!pill) return;
-  const opening = !pill.classList.contains("map-time-pill--open");
-  // One expanded pill at a time on phones — keeps the bottom stack short.
-  if(opening && typeof isPhoneView === "function" && isPhoneView()){
-    document.querySelectorAll(".map-time-pill--open").forEach(p => {
-      if(p !== pill){
-        p.classList.remove("map-time-pill--open");
-        const b = p.querySelector(".map-time-pill-expand");
-        if(b) b.textContent = "▾";
-      }
-    });
+  const phone = typeof isPhoneView === "function" && isPhoneView();
+  if(phone){
+    const opening = !pill.classList.contains("map-time-pill--open");
+    // One expanded pill at a time on phones — keeps the bottom stack short.
+    if(opening){
+      document.querySelectorAll(".map-time-pill--open").forEach(p => {
+        if(p !== pill){
+          p.classList.remove("map-time-pill--open");
+        }
+      });
+    }
+    pill.classList.toggle("map-time-pill--open");
+  } else {
+    pill.classList.toggle("map-time-pill--collapsed");
   }
-  pill.classList.toggle("map-time-pill--open");
-  btn.textContent = pill.classList.contains("map-time-pill--open") ? "▴" : "▾";
+  syncMapTimePillExpandButtons();
   if(typeof restackBottomControls === "function") restackBottomControls();
 }
 
-function openOceanLegendSheet(){
+function openOceanLegendSheet(key){
   const sheet = document.getElementById("ocean-legend-sheet");
   const body = document.getElementById("ocean-legend-sheet-body");
   if(!sheet || !body) return;
-  body.innerHTML = _oceanLegendDetailHtml ||
-    '<div style="color:#9ec5e8;font-size:13px">No extra details for the active layers.</div>';
+  body.innerHTML = (key && _oceanLegendDetailByKey[key])
+    || Object.values(_oceanLegendDetailByKey).join("")
+    || '<div style="color:#9ec5e8;font-size:13px">No extra details for the active layers.</div>';
   sheet.classList.add("open");
   oceanLegendExpanded = true;
   setMapInteractionLocked(true);
@@ -13362,8 +13393,46 @@ function syncOceanLegendSheet(){
   const sheet = document.getElementById("ocean-legend-sheet");
   const body = document.getElementById("ocean-legend-sheet-body");
   if(!sheet || !body || !sheet.classList.contains("open")) return;
-  body.innerHTML = _oceanLegendDetailHtml ||
-    '<div style="color:#9ec5e8;font-size:13px">No extra details for the active layers.</div>';
+  body.innerHTML = Object.values(_oceanLegendDetailByKey).join("")
+    || '<div style="color:#9ec5e8;font-size:13px">No extra details for the active layers.</div>';
+}
+
+function legendDetailToggleBtn(key, label){
+  const phone = (typeof isPhoneView === "function") && isPhoneView();
+  const expanded = !!LEGEND_DETAIL_EXPANDED[key];
+  const text = phone ? "How to read ▾" : (expanded ? "Hide details ▴" : "How to read ▾");
+  const action = phone
+    ? `openOceanLegendSheet('${key}')`
+    : `toggleLegendDetail('${key}')`;
+  return `<button type="button" class="ocean-legend-toggle ocean-legend-detail-toggle" onclick="${action}" style="
+    width:100%;margin-top:8px;padding:8px 10px;border-radius:6px;cursor:pointer;pointer-events:auto;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+    color:#bfe3f5;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:5px"
+    aria-expanded="${expanded ? "true" : "false"}"
+    aria-label="${phone ? "How to read " + label : (expanded ? "Hide" : "Show") + " " + label + " details"}">${text}</button>`;
+}
+
+function toggleLegendDetail(key){
+  if(typeof isPhoneView === "function" && isPhoneView()){
+    openOceanLegendSheet(key);
+    return;
+  }
+  LEGEND_DETAIL_EXPANDED[key] = !LEGEND_DETAIL_EXPANDED[key];
+  const expanded = !!LEGEND_DETAIL_EXPANDED[key];
+  const sec = document.querySelector('.oc-legend-sec[data-sec="' + key + '"]');
+  if(sec){
+    const detailEl = sec.querySelector('.legend-detail[data-detail-key="' + key + '"]');
+    const btn = sec.querySelector(".ocean-legend-detail-toggle");
+    if(detailEl) detailEl.style.display = expanded ? "block" : "none";
+    if(btn){
+      btn.textContent = expanded ? "Hide details ▴" : "How to read ▾";
+      btn.setAttribute("aria-expanded", expanded ? "true" : "false");
+      btn.setAttribute("aria-label", (expanded ? "Hide" : "Show") + " " + key + " details");
+    }
+  }
+  restackTopLegends();
+  if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
 }
 
 function toggleOceanLegendDetail(){
@@ -13373,8 +13442,6 @@ function toggleOceanLegendDetail(){
     else openOceanLegendSheet();
     return;
   }
-  oceanLegendExpanded = !oceanLegendExpanded;
-  updateOceanLegend();
 }
 // ── TOP-CENTRE LEGEND STACK ──────────────────────────────────────────────────
 // The bite-score banner and the ocean-overlay legend both hang from the top
@@ -13438,26 +13505,24 @@ function updateOceanLegend(){
   const phone = (typeof isPhoneView === "function") && isPhoneView();
   const legendTitlePx = phone ? "10px" : "14px";
   const legendMetaPx = phone ? "10px" : "11px";
-  _oceanLegendDetailHtml = "";
+  _oceanLegendDetailByKey = {};
   // Verbose bullet explanations are collapsed by default so the panel doesn't
   // run down the middle of the map. On phones, detail opens in a bottom sheet.
-  let _hasDetail = false;
-  const detail = (html) => {
-    _hasDetail = true;
+  const detail = (key, label, html) => {
+    _oceanLegendDetailByKey[key] = html;
     if(phone){
-      _oceanLegendDetailHtml += html;
-      return "";
+      return legendDetailToggleBtn(key, label);
     }
-    return `<div class="legend-detail" style="display:${oceanLegendExpanded?'block':'none'}">${html}</div>`;
+    const expanded = !!LEGEND_DETAIL_EXPANDED[key];
+    return `${legendDetailToggleBtn(key, label)}
+      <div class="legend-detail" data-detail-key="${key}" style="display:${expanded ? "block" : "none"}">${html}</div>`;
   };
   // One overlay legend: its title row stays put when folded so the panel still
   // says what's on the map, and everything below it hides. The title row is
   // emitted as the section's first child because the phone stylesheet targets
   // `#ocean-legend-content > div > div:first-child` to shrink legend headings.
-  const sectionKeys = [];
   const section = (key, label, titleRow, body) => {
     const collapsed = !!LEGEND_COLLAPSED[key];
-    sectionKeys.push(key);
     return `
       <div class="oc-legend-sec${collapsed ? " collapsed" : ""}" data-sec="${key}" style="${gap()}">
         ${titleRow}
@@ -13538,7 +13603,7 @@ function updateOceanLegend(){
         <div style="position:relative;height:11px;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600">
           ${[0,0.5,1,2,3,4].map((v,i,arr)=>{const pct=v/4*100;const tx=i===0?'0':(i===arr.length-1?'-100%':'-50%');return `<span style="position:absolute;left:${pct}%;transform:translateX(${tx})">${v===4?'4+':v}</span>`;}).join('')}
         </div>
-        ${detail(`
+        ${detail("currents", "current drift", `
         <div style="margin-top:6px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
           <span style="justify-self:center;color:#94a3b8;font-size:13px;line-height:1">●</span><span><b style="color:#e2eaf2">Gray/faint</b> — barely moving (&lt;0.5 kt). Negligible drift.</span>
           <span style="justify-self:center;color:#2dd4bf;font-size:13px;line-height:1">●</span><span><b style="color:#99f6e4">Teal</b> — solid current (0.5–2 kt). Note the direction; adjust your drift.</span>
@@ -13579,7 +13644,7 @@ function updateOceanLegend(){
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
           <span>−0.2 m</span><span>Flat</span><span>+0.2 m</span>
         </div>
-        ${detail(`
+        ${detail("altimetry", "front convergence", `
         <div style="font-size:13px;color:#7aa8c8;margin-top:6px;line-height:1.45"><b style="color:#f472b6">Magenta lines mark the 1–3 strongest breaks</b> ${altiRangeNote}. Use the <b style="color:#fbcfe8">${MAP_CONVERGENCE_DATE_LABEL}</b> bar to step day-by-day. Amber arrow = how far a tracked break moved. The bite breakdown labels this signal <b style="color:#fbcfe8">Front convergence</b>.</div>
         <div style="margin-top:7px;display:grid;grid-template-columns:14px 1fr;gap:5px 8px;align-items:start;font-size:13px;color:#cfe5ff;line-height:1.45">
           <span style="justify-self:center;color:#f472b6;font-size:15px;line-height:1">▬</span><span><b style="color:#f9a8d4">Magenta — strongest break(s)</b>. Sharpest SSH edges ${altiRangeNote} (up to 3). Only breaks inside your ${altiRangeNm}-nm fishing range are highlighted.</span>
@@ -13599,22 +13664,6 @@ function updateOceanLegend(){
          <span>light</span><span>moderate</span><span>heavy</span><span>intense</span>
        </div>`));
   }
-  // Single toggle controlling every collapsed detail block, so the panel stays
-  // compact (scale + status only) until the user asks for the full key. With
-  // every legend folded there is nothing left for it to reveal.
-  if(_hasDetail && sectionKeys.some(k => !LEGEND_COLLAPSED[k])){
-    const toggleLabel = phone
-      ? "How to read ▾"
-      : (oceanLegendExpanded ? "Hide details ▴" : "How to read ▾");
-    parts.push(`
-      <button type="button" class="ocean-legend-toggle" onclick="toggleOceanLegendDetail()" style="
-        width:100%;margin-top:8px;padding:8px 10px;border-radius:6px;cursor:pointer;pointer-events:auto;
-        background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
-        color:#bfe3f5;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.06em;
-        text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:5px">
-        ${toggleLabel}
-      </button>`);
-  }
   content.innerHTML = parts.join("");
   el.style.display = "block";
   // Vertical placement is left to restackTopLegends() at the end of this
@@ -13629,16 +13678,17 @@ function updateOceanLegend(){
   el.style.minWidth = "0";
   if(phone){
     el.style.padding = "4px 6px";
-    el.style.maxHeight = "none";
-    el.style.overflowY = "visible";
+    content.style.maxHeight = "none";
+    content.style.overflowY = "visible";
     el.style.overflowX = "";
     syncOceanLegendSheet();
   } else {
     el.style.padding = "8px 16px";
     el.style.overflowX = "visible";
+    el.style.overflowY = "visible";
     // Cap height so the panel scrolls instead of covering bottom map controls.
-    el.style.maxHeight = oceanLegendMaxHeightPx() + "px";
-    el.style.overflowY = "auto";
+    content.style.maxHeight = oceanLegendMaxHeightPx() + "px";
+    content.style.overflowY = "auto";
   }
   // The banner has to be shown and filled before it can be measured, so the
   // legend is positioned after it rather than against an assumed height. This

@@ -1199,10 +1199,25 @@ body.modal-open #brief-toggle{
 .map-time-pill-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
 .map-time-pill-head-right{display:flex;align-items:center;gap:6px;min-width:0;flex-shrink:1}
 .map-time-pill-expand{
-  display:none;flex-shrink:0;width:28px;height:28px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;width:28px;height:28px;padding:0;
   border-radius:7px;border:1px solid rgba(255,255,255,.18);
   background:rgba(255,255,255,.06);color:#bfe3f5;
   font-size:14px;font-weight:800;line-height:1;cursor:pointer;font-family:inherit;
+  -webkit-tap-highlight-color:transparent;
+}
+/* Mobile: slider row hidden until ▾ expands the pill. Desktop: hidden only when
+   `.map-time-pill--collapsed` is set (default is fully expanded). */
+@media (max-width:680px){
+  .map-time-pill:not(.map-time-pill--open) .map-time-pill-row,
+  .map-time-pill:not(.map-time-pill--open) .map-time-pill-footer{display:none !important}
+  .map-time-pill:not(.map-time-pill--open) .map-time-pill-head{margin-bottom:0 !important}
+  .map-time-pill--open .map-time-pill-head{margin-bottom:6px !important}
+}
+@media (min-width:681px){
+  .map-time-pill.map-time-pill--collapsed .map-time-pill-row,
+  .map-time-pill.map-time-pill--collapsed .map-time-pill-footer{display:none}
+  .map-time-pill.map-time-pill--collapsed .map-time-pill-head{margin-bottom:0}
 }
 .map-time-pill-title{font-size:13px;letter-spacing:.1em;font-weight:800;text-transform:uppercase;flex-shrink:0}
 .map-time-pill-display{font-size:15px;font-weight:700;line-height:1.3;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1433,11 +1448,18 @@ body.modal-open #brief-toggle{
 #ocean-legend .legend-detail{font-size:13px;line-height:1.45}
 #ocean-legend{
   pointer-events:none;
-  overflow-y:auto;
-  -webkit-overflow-scrolling:touch;
-  overscroll-behavior:contain;
+  overflow:visible;
 }
-#ocean-legend .ocean-legend-toggle{pointer-events:auto}
+/* Scroll lives on the inner wrapper so wheel/touch gestures don't fall through
+   to Leaflet zoom when "How to read" detail is open. */
+#ocean-legend-content{
+  pointer-events:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+}
+#ocean-legend .ocean-legend-toggle,
+#ocean-legend .ocean-legend-detail-toggle,
+#ocean-legend .oc-sec-collapse{pointer-events:auto}
 
 /* ── Per-legend collapse chevron ──────────────────────────────────────────
    Each overlay legend (and the bite-score banner) folds down to its title bar
@@ -1578,10 +1600,6 @@ body.modal-open #brief-toggle{
   /* Compact time pills — tap ▾ to reveal slider */
   .map-time-pill{padding:7px 10px 5px !important;border-radius:10px !important}
   .map-time-pill-head{margin-bottom:0 !important}
-  .map-time-pill-expand{display:flex !important;align-items:center;justify-content:center}
-  .map-time-pill:not(.map-time-pill--open) .map-time-pill-row,
-  .map-time-pill:not(.map-time-pill--open) .map-time-pill-footer{display:none !important}
-  .map-time-pill--open .map-time-pill-head{margin-bottom:6px !important}
   .map-time-pill-title{font-size:10px !important;letter-spacing:.08em !important}
   .map-time-pill-display{font-size:11px !important}
   .map-time-pill-step{font-size:14px !important;padding:6px 10px !important;min-width:44px !important;min-height:40px !important}
@@ -3160,7 +3178,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="map-time-pill-title">Wind Forecast</div>
       <div class="map-time-pill-head-right">
         <div id="wind-forecast-display-pill" class="map-time-pill-display">Current</div>
-        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show wind time controls">▾</button>
+        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-expanded="true" aria-label="Collapse wind time controls">▴</button>
       </div>
     </div>
     <div class="map-time-pill-row">
@@ -3182,7 +3200,7 @@ body.nav-open .leaflet-control-attribution{
       <div id="sat-date-title" class="map-time-pill-title">SST</div>
       <div class="map-time-pill-head-right">
         <div id="sat-date-display" class="map-time-pill-display">Latest imagery</div>
-        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show date controls">▾</button>
+        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-expanded="true" aria-label="Collapse date controls">▴</button>
       </div>
     </div>
     <div class="map-time-pill-row">
@@ -3203,7 +3221,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="map-time-pill-title">Front Convergence</div>
       <div class="map-time-pill-head-right">
         <div id="alti-date-display" class="map-time-pill-display">Latest pass</div>
-        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show convergence date controls">▾</button>
+        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-expanded="true" aria-label="Collapse convergence date controls">▴</button>
       </div>
     </div>
     <div class="map-time-pill-row">
@@ -3229,7 +3247,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="map-time-pill-title">Weather Radar</div>
       <div class="map-time-pill-head-right">
         <div id="radar-loop-time" class="map-time-pill-display">Live</div>
-        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-label="Show radar time controls">▾</button>
+        <button type="button" class="map-time-pill-expand" onclick="toggleMapTimePill(this)" aria-expanded="true" aria-label="Collapse radar time controls">▴</button>
       </div>
     </div>
     <div class="map-time-pill-row">
@@ -3918,7 +3936,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260812h"></script>
+<script src="bw-core.js?v=20260812i"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
