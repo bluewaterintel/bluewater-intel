@@ -92,6 +92,13 @@ const CUDEM_TILE_DEG = 0.25;
 const CUDEM_NATIVE_STEP = 1 / (9 * 3600); // 1/9 arc-second in degrees
 const CUDEM_VERSIONS = ["2019v2", "2019v1", "2018v1"];
 const CUDEM_BOUNDS = { latMin: 23, latMax: 52, lngMin: -127, lngMax: -65 };
+// NCEI CUDEM NCSS can hang for 20s+ per tile when overloaded. Without a wall
+// clock the bite-map predictinputs call waits on hundreds of tiles and the whole
+// edge function times out — SST/wind never reach the client and depths fall back
+// to coarse ETOPO or the static shelf model.
+const CUDEM_TILE_TIMEOUT_MS = Number(Deno.env.get("CUDEM_TILE_TIMEOUT_MS") ?? "8000");
+const CUDEM_WALL_MS = Number(Deno.env.get("CUDEM_WALL_MS") ?? "12000");
+const CUDEM_MAX_TILES = Number(Deno.env.get("CUDEM_MAX_TILES") ?? "64");
 // NOAA CoastWatch BLENDED altimetry (multi-mission NRT, ~1-2 day latency).
 // Two sibling datasets on the same 0.25° grid: sla (m) from the SSH product,
 // u_current/v_current (m/s geostrophic) from the currents product. The older
@@ -1539,12 +1546,14 @@ async function fetchCudemTileRows(
   tile: { id: string; latSouth: number; lngWest: number },
   latMin: number, latMax: number, lngMin: number, lngMax: number,
   horizStride: number,
+  deadlineMs = 0,
 ): Promise<unknown[][]> {
   const a0 = Math.max(latMin, tile.latSouth);
   const a1 = Math.min(latMax, tile.latSouth + CUDEM_TILE_DEG);
   const o0 = Math.max(lngMin, tile.lngWest);
   const o1 = Math.min(lngMax, tile.lngWest + CUDEM_TILE_DEG);
   if (a0 >= a1 || o0 >= o1) return [];
+  if (deadlineMs > 0 && Date.now() >= deadlineMs) return [];
   const key = `${tile.id},${a0.toFixed(3)},${a1.toFixed(3)},${o0.toFixed(3)},${o1.toFixed(3)},${horizStride}`;
   const now = Date.now();
   const hit = cudemTileCache.get(key);
@@ -1554,9 +1563,10 @@ async function fetchCudemTileRows(
     const q = `var=z&north=${a1}&south=${a0}&west=${o0}&east=${o1}`
       + `&horizStride=${horizStride}&accept=netcdf`;
     for (const ver of CUDEM_VERSIONS) {
+      if (deadlineMs > 0 && Date.now() >= deadlineMs) return [];
       const url = `${CUDEM_NCSS}/ncei19_${tile.id}_${ver}.nc?${q}`;
       try {
-        const r = await fetch(url, { signal: AbortSignal.timeout(22000), headers: ERDDAP_HEADERS });
+        const r = await fetch(url, { signal: AbortSignal.timeout(CUDEM_TILE_TIMEOUT_MS), headers: ERDDAP_HEADERS });
         if (!r.ok) continue;
         const parsed = parseCudemNcss(await r.arrayBuffer());
         if (!parsed) continue;
@@ -1595,12 +1605,19 @@ async function fetchCudemRows(latMin: number, latMax: number, lngMin: number, ln
   }
   const horizStride = Math.max(1, Math.round(targetStep / CUDEM_NATIVE_STEP));
   const tiles = cudemTilesForBBox(a0, a1, o0, o1);
+  // Large port-range boxes can span 200+ tiles. When NCEI is slow that blocks
+  // the entire predictinputs response; ETOPO (sub-second) is good enough to score.
+  if (tiles.length > CUDEM_MAX_TILES) return null;
   // Coastal predict boxes fan out into dozens–hundreds of 0.25° CUDEM tiles. At
   // concurrency 4 they drained in slow serial batches (the top cold-load cost
   // for both the bite map and the currents coast mask). 10 keeps us well within
   // NCEI's tolerance while cutting wall time; tiles are cached 7 days after.
   const cudemConc = Number(Deno.env.get("CUDEM_CONCURRENCY") ?? "10");
-  const parts = await pool(tiles, cudemConc, (t) => fetchCudemTileRows(t, a0, a1, o0, o1, horizStride));
+  const deadlineMs = Date.now() + CUDEM_WALL_MS;
+  const parts = await pool(tiles, cudemConc, (t) => {
+    if (Date.now() >= deadlineMs) return Promise.resolve([]);
+    return fetchCudemTileRows(t, a0, a1, o0, o1, horizStride, deadlineMs);
+  });
   const byKey = new Map<string, unknown[]>();
   for (const part of parts) {
     for (const row of part) {
@@ -1643,10 +1660,11 @@ async function fetchEtopoRows(latMin: number, latMax: number, lngMin: number, ln
 }
 
 async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, lngMax: number): Promise<BathyOut> {
-  const [cudem, etopo] = await Promise.all([
-    fetchCudemRows(latMin, latMax, lngMin, lngMax),
-    fetchEtopoRows(latMin, latMax, lngMin, lngMax),
-  ]);
+  // Never block bathy on a hung CUDEM pull — ETOPO always runs in parallel and
+  // returns in ~1s even when NCEI NCSS is down.
+  const etopoP = fetchEtopoRows(latMin, latMax, lngMin, lngMax);
+  const cudemP = fetchCudemRows(latMin, latMax, lngMin, lngMax).catch(() => null);
+  const [cudem, etopo] = await Promise.all([cudemP, etopoP]);
   if (!cudem?.rows?.length) return etopo;
   const byKey = new Map<string, unknown[]>();
   for (const row of etopo.rows) {
