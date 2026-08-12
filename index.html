@@ -3827,7 +3827,9 @@ body.nav-open .leaflet-control-attribution{
       <label class="layer-row" title="Show home-port markers across the chart when the app opens.">
         <input type="checkbox" id="pref-ports" onchange="prefSet('defaultPorts', this.checked)">
         <span class="lyr-label">
-          <span class="layer-swatch" style="background:#f0c840;border:1px solid rgba(255,255,255,.35);border-radius:50%;width:10px;height:10px"></span>
+          <span style="width:20px;height:20px;background:linear-gradient(135deg,#f5c842,#e0a020);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.4)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3a2600" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.2"></circle><line x1="12" y1="7.2" x2="12" y2="21"></line><line x1="7" y1="11" x2="17" y2="11"></line><path d="M5 14a7 7 0 0 0 14 0"></path></svg>
+          </span>
           <span>Ports</span>
         </span>
         <span class="lyr-toggle"></span>
@@ -3836,7 +3838,9 @@ body.nav-open .leaflet-control-attribution{
       <label class="layer-row" title="Show the 15 closest major fishing areas (canyons, wrecks, reefs, lumps) near your home port when the app opens.">
         <input type="checkbox" id="pref-spots" onchange="prefSet('defaultSpots', this.checked)">
         <span class="lyr-label">
-          <span class="layer-swatch" style="background:linear-gradient(135deg,#dc2626,#f97316);border-radius:2px;width:10px;height:10px"></span>
+          <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f5a623" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="7" fill="rgba(245,166,35,.18)"></circle><circle cx="12" cy="12" r="2.5" fill="#f5a623" stroke="none"></circle><line x1="12" y1="1.5" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22.5"></line><line x1="1.5" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22.5" y2="12"></line></svg>
+          </span>
           <span>Major Fishing Areas</span>
         </span>
         <span class="lyr-toggle"></span>
@@ -3875,7 +3879,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260812c"></script>
+<script src="bw-core.js?v=20260812d"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

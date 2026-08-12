@@ -6143,6 +6143,12 @@ const HeatCanvasLayer = L.Layer.extend({
       // species/land mask boundaries (into Pamlico Sound, onto land). The
       // mask draws hard-edge transparent pixels; blur smears them. Smoothness
       // now comes from dense gradient color stops and gaussian falloff.
+      // The zoom transform below scales the canvas, and its geography is
+      // anchored at the top-left corner — so the scale has to grow from there.
+      // Set inline rather than relying on Leaflet's .leaflet-zoom-animated rule:
+      // with the browser default (centre) the field slid half a scaled viewport
+      // off screen during every zoom and snapped back at the end.
+      this._canvas.style.transformOrigin = '0 0';
       this._canvas.style.willChange = 'transform';
     }
     map.getPanes().overlayPane.appendChild(this._canvas);
@@ -6156,15 +6162,18 @@ const HeatCanvasLayer = L.Layer.extend({
     // rebuilt when the view leaves it, the zoom drifts too far to upscale
     // cleanly, or the data itself changes.
     map.on('moveend zoomend viewreset resize', this._scheduleReset, this);
-    // Scale the painted bitmap through the zoom animation the way a tile layer
-    // does, instead of hiding the canvas and repainting at zoomend. Hiding was
-    // what made the field blink out and reappear on every pinch/scroll.
-    if(map.options.zoomAnimation && L.Browser.any3d){
+    // Scale the painted bitmap through the zoom the way a tile layer does,
+    // instead of hiding the canvas and repainting at zoomend. Hiding was what
+    // made the field blink out and reappear on every pinch/scroll. Both events
+    // matter: scroll/box zoom animates via zoomanim, while a pinch drives plain
+    // zoom events — handling only the former left the field unscaled (and so
+    // apparently sliding) for the whole pinch.
+    this._zoomAnimated = !!(map.options.zoomAnimation && L.Browser.any3d);
+    if(this._zoomAnimated){
       L.DomUtil.addClass(this._canvas, 'leaflet-zoom-animated');
-      map.on('zoomanim', this._animateZoom, this);
-    } else {
-      L.DomUtil.addClass(this._canvas, 'leaflet-zoom-hide');
+      map.on('zoomanim', this._onAnimZoom, this);
     }
+    map.on('zoom', this._onZoom, this);
     this._reset();
   },
   onRemove: function(map){
@@ -6176,17 +6185,32 @@ const HeatCanvasLayer = L.Layer.extend({
       this._canvas.parentNode.removeChild(this._canvas);
     }
     map.off('moveend zoomend viewreset resize', this._scheduleReset, this);
-    map.off('zoomanim', this._animateZoom, this);
+    map.off('zoomanim', this._onAnimZoom, this);
+    map.off('zoom', this._onZoom, this);
   },
-  // Same transform Leaflet applies to an image overlay: the canvas holds a
-  // geographically-anchored picture, so a scale about the zoom centre keeps it
-  // registered to the basemap for the whole animation.
-  _animateZoom: function(e){
-    if(!this._canvas || !this._map || !this._canvasNW || !this._canvasSE) return;
-    const bounds = L.latLngBounds(this._canvasNW, this._canvasSE);
-    const scale = this._map.getZoomScale(e.zoom);
-    const offset = this._map._latLngBoundsToNewLayerBounds(bounds, e.zoom, e.center).min;
-    L.DomUtil.setTransform(this._canvas, offset, scale);
+  _onAnimZoom: function(e){
+    this._updateTransform(e.center, e.zoom);
+  },
+  _onZoom: function(){
+    if(!this._map) return;
+    this._updateTransform(this._map.getCenter(), this._map.getZoom());
+  },
+  // The same transform Leaflet's own canvas renderer applies. The bitmap belongs
+  // to the centre/zoom it was drawn for, so it is re-registered against the
+  // basemap by scaling about the canvas origin and translating its top-left to
+  // where that centre now projects. Deriving the scale from the canvas's own
+  // recorded zoom (not the map's current one) keeps it correct even when a reset
+  // is still pending.
+  _updateTransform: function(center, zoom){
+    if(!this._canvas || !this._map || !this._canvasCenter || this._canvasZoom == null) return;
+    const map = this._map;
+    const scale = map.getZoomScale(zoom, this._canvasZoom);
+    const viewHalf = map.getSize().multiplyBy(0.5);
+    const centerPoint = map.project(this._canvasCenter, zoom);
+    const topLeftOffset = viewHalf.multiplyBy(-scale).add(centerPoint)
+      .subtract(map._getNewPixelOrigin(center, zoom));
+    if(L.Browser.any3d) L.DomUtil.setTransform(this._canvas, topLeftOffset, scale);
+    else L.DomUtil.setPosition(this._canvas, topLeftOffset);
   },
   // Coalesce redraw requests into one per animation frame.
   _scheduleReset: function(){
@@ -6298,9 +6322,10 @@ const HeatCanvasLayer = L.Layer.extend({
       this._canvas.width = size.x;
       this._canvas.height = size.y;
     }
-    // Geographic corners of the canvas, for the zoom-animation transform.
-    this._canvasNW = this._map.containerPointToLatLng([0, 0]);
-    this._canvasSE = this._map.containerPointToLatLng([size.x, size.y]);
+    // The view this bitmap belongs to — _updateTransform re-registers it against
+    // the basemap from these while a zoom is in progress.
+    this._canvasCenter = this._map.getCenter();
+    this._canvasZoom = this._map.getZoom();
     // Put the picture we already have back under the map first. A bitmap that
     // only partly covers the new view still reads as a continuous layer, where
     // clearing to transparent reads as the layer vanishing.
