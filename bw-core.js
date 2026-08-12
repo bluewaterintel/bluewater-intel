@@ -2738,13 +2738,35 @@ function applyChlorData(data){
   // the handful of rows near the query point — identical results, far less work.
   const bucketDeg = Math.max(0.1, step * 2);
   const index = new Map();
+  let mnLa = Infinity, mnLn = Infinity;
   for(const r of data.rows){
+    if(r[0] < mnLa) mnLa = r[0];
+    if(r[1] < mnLn) mnLn = r[1];
     const key = Math.floor(r[0] / bucketDeg) + "," + Math.floor(r[1] / bucketDeg);
     let arr = index.get(key);
     if(!arr){ arr = []; index.set(key, arr); }
     arr.push(r);
   }
-  CHLOR_GRID = { step, rows: data.rows, freshestMs: freshest || null, index, bucketDeg };
+  // Exact-cell index on top of the buckets. The rows arrive on a regular
+  // stepDeg lattice, so snapping gives an O(1) lookup — chlorBreakGrid samples
+  // five points per scored cell and a nearest-neighbour scan for each of those
+  // was the bulk of the remaining bite-map cost. Callers fall back to
+  // chlorGridAt when a snapped cell is absent, so a ragged payload still works.
+  const cells = new Map();
+  for(const r of data.rows){
+    const i = Math.round((r[0] - mnLa) / step), j = Math.round((r[1] - mnLn) / step);
+    cells.set(i + "," + j, r);
+  }
+  CHLOR_GRID = { step, rows: data.rows, freshestMs: freshest || null, index, bucketDeg, cells, mnLa, mnLn };
+}
+
+// Chlorophyll value at the lattice cell containing a point, or null when this
+// snapshot has no cell there (gap, or a payload that isn't on a clean lattice).
+function chlorCellValue(g, lat, lng){
+  if(!g || !g.cells) return null;
+  const i = Math.round((lat - g.mnLa) / g.step), j = Math.round((lng - g.mnLn) / g.step);
+  const r = g.cells.get(i + "," + j);
+  return (r && r[2] != null) ? r[2] : null;
 }
 
 // Candidate chlor rows within radNm of a point, using the bucket index. Falls
@@ -2827,34 +2849,57 @@ function sstGridAt(lat, lng){
     : null;
 }
 
+// ── LOCAL FIELD GRADIENT ────────────────────────────────────────────────────
+// These detectors used to answer "what is the sharpest edge ANYWHERE within
+// 18 nm of here", by comparing every pair of grid points inside that disc. Two
+// problems: every cell within 18 nm of a front inherited the same peak reading,
+// so a ~36 nm wide band scored identically (which is why Front convergence read
+// 100% at every bite-map spot), and the all-pairs scan cost ~19k haversines per
+// cell — the single most expensive thing in a bite-map render.
+//
+// Now we measure the gradient AT the cell: a centered difference over a ±k-cell
+// baseline. Four array reads, no distance math, and the value actually falls off
+// as you move away from the front.
+// Half-baseline in grid cells. ±1 is deliberate: MUR is a smooth gap-free
+// analysis, so differencing adjacent cells is not noisy, and a wider stencil
+// averages a 5 nm Gulf Stream wall over 12 nm. Checked against a live MUR
+// transect off Oregon Inlet — ±1 peaked on the wall at 4.45°F/10nm, ±2 read it
+// as 2.94 and mislocated the peak onto the nearshore gradient instead.
+const GRID_GRAD_CELLS = 1;
+
+// `at(i, j)` returns the field value or null (off-grid / cloud-masked). Falls
+// back to a one-sided difference when a neighbour is missing, so a cloud gap or
+// the grid edge degrades the estimate instead of discarding it.
+function gridGradientPer10nm(at, iC, jC, k, stepDeg, lat){
+  const c = at(iC, jC);
+  const n = at(iC + k, jC), s = at(iC - k, jC);
+  const e = at(iC, jC + k), w = at(iC, jC - k);
+  const spanLatNm = 2 * k * stepDeg * 60;
+  const spanLngNm = spanLatNm * Math.max(0.2, Math.cos(lat * Math.PI / 180));
+  const axis = (hi, lo, span) => {
+    if(hi != null && lo != null) return (hi - lo) / span;
+    if(c == null) return null;
+    if(hi != null) return (hi - c) / (span / 2);
+    if(lo != null) return (c - lo) / (span / 2);
+    return null;
+  };
+  const gy = axis(n, s, spanLatNm);
+  const gx = axis(e, w, spanLngNm);
+  if(gy == null && gx == null) return null;
+  return Math.hypot(gx || 0, gy || 0) * 10;
+}
+
 // Thermal break (°F per 10nm) from the dense SST grid around a point.
 function thermalBreakGrid(lat, lng){
   const g = SST_GRID;
   if(!g) return null;
-  const radNm = 18;
-  const dLat = radNm / 60, dLng = radNm / (60 * Math.cos(lat * Math.PI/180));
-  const near = [];
   const iC = Math.round((lat - g.minLat) / g.step), jC = Math.round((lng - g.minLng) / g.step);
-  const di = Math.max(1, Math.round(dLat / g.step)), dj = Math.max(1, Math.round(dLng / g.step));
-  for(let i = iC - di; i <= iC + di; i++){
-    for(let j = jC - dj; j <= jC + dj; j++){
-      if(i < 0 || j < 0 || i >= g.nLat || j >= g.nLng) continue;
-      const v = g.val[i * g.nLng + j];
-      if(typeof v !== "number" || !isFinite(v)) continue;
-      near.push({ la: g.minLat + i * g.step, ln: g.minLng + j * g.step, v });
-    }
-  }
-  if(near.length < 2) return null;
-  let maxGrad = 0;
-  for(let a = 0; a < near.length; a++){
-    for(let b = a + 1; b < near.length; b++){
-      const dNm = nmBetween(near[a].la, near[a].ln, near[b].la, near[b].ln);
-      if(dNm < 1) continue;
-      const grad = Math.abs(near[a].v - near[b].v) / dNm;
-      if(grad > maxGrad) maxGrad = grad;
-    }
-  }
-  return maxGrad * 10;
+  const at = (i, j) => {
+    if(i < 0 || j < 0 || i >= g.nLat || j >= g.nLng) return null;
+    const v = g.val[i * g.nLng + j];
+    return (typeof v === "number" && isFinite(v)) ? v : null;
+  };
+  return gridGradientPer10nm(at, iC, jC, GRID_GRAD_CELLS, g.step, lat);
 }
 
 // Chlorophyll color-edge gradient (mg/m³ per 10nm) from the dense CHLOR_GRID
@@ -2864,17 +2909,31 @@ function thermalBreakGrid(lat, lng){
 function chlorBreakGrid(lat, lng){
   const g = CHLOR_GRID;
   if(!g || !g.rows || !g.rows.length) return null;
-  const radNm = 18;
-  const near = [];
-  for(const r of _chlorRowsNear(g, lat, lng, radNm)){
-    if(r[2] == null) continue;
-    if(nmBetween(lat, lng, r[0], r[1]) <= radNm) near.push({ la:r[0], ln:r[1], v:r[2] });
-  }
-  if(near.length < 2) return null;
-  if(typeof BW_BREAKS !== "undefined" && BW_BREAKS.maxGradientPer10nm){
-    return BW_BREAKS.maxGradientPer10nm(near, lat, lng, radNm);
-  }
-  return null;
+  // Chlorophyll arrives as a gap-filled row list rather than a dense array, so
+  // the stencil arms are read through the snapped cell index, falling back to a
+  // wider nearest-neighbour search where the composite has a cloud hole.
+  const dLat = g.step * GRID_GRAD_CELLS;
+  const dLng = dLat / Math.max(0.2, Math.cos(lat * Math.PI / 180));
+  const val = (la, ln) => {
+    const exact = chlorCellValue(g, la, ln);
+    if(exact != null) return exact;
+    const s = chlorGridAt(la, ln);          // gap or ragged lattice — search wider
+    return s ? s.value : null;
+  };
+  const c = val(lat, lng);
+  const n = val(lat + dLat, lng), s = val(lat - dLat, lng);
+  const e = val(lat, lng + dLng), w = val(lat, lng - dLng);
+  const spanNm = 2 * dLat * 60;   // both arms span the same distance by construction
+  const axis = (hi, lo) => {
+    if(hi != null && lo != null) return (hi - lo) / spanNm;
+    if(c == null) return null;
+    if(hi != null) return (hi - c) / (spanNm / 2);
+    if(lo != null) return (c - lo) / (spanNm / 2);
+    return null;
+  };
+  const gy = axis(n, s), gx = axis(e, w);
+  if(gy == null && gx == null) return null;
+  return Math.hypot(gx || 0, gy || 0) * 10;
 }
 
 // Real depth (meters) at a point from the map-wide CUDEM/ETOPO grid; null if unavailable.
@@ -3188,22 +3247,12 @@ function thermalBreakReal(lat, lng){
   const fromGrid = thermalBreakGrid(lat, lng);
   if(fromGrid != null) return fromGrid;
   const radiusNm = (OCEAN_FIELD.spacingNm ? OCEAN_FIELD.spacingNm * 2.2 : 35);
+  if(typeof BW_BREAKS === "undefined" || !BW_BREAKS.localGradientPer10nm) return 0;
   const near = [];
   for(const s of OCEAN_FIELD.samples){
-    const d = nmBetween(lat, lng, s.la, s.ln);
-    if(d <= radiusNm && s.p?.sst?.value != null) near.push({ la: s.la, ln: s.ln, v: s.p.sst.value });
+    if(s.p?.sst?.value != null) near.push({ la: s.la, ln: s.ln, v: s.p.sst.value });
   }
-  if(near.length < 2) return 0;
-  let maxGrad = 0;  // °F per nm
-  for(let i = 0; i < near.length; i++){
-    for(let j = i + 1; j < near.length; j++){
-      const dNm = nmBetween(near[i].la, near[i].ln, near[j].la, near[j].ln);
-      if(dNm < 1) continue;  // ignore near-duplicate samples
-      const grad = Math.abs(near[i].v - near[j].v) / dNm;
-      if(grad > maxGrad) maxGrad = grad;
-    }
-  }
-  return maxGrad * 10;  // convert to °F per 10nm
+  return BW_BREAKS.localGradientPer10nm(near, lat, lng, radiusNm);
 }
 
 function scoreCell(lat, lng, speciesId){
@@ -3523,7 +3572,10 @@ function scoreCell(lat, lng, speciesId){
     const sshGrad = (typeof sshBreakAt === "function") ? sshBreakAt(lat, lng) : null;
     if(sshGrad != null){
       _sshEdge01 = BW_BREAKS.sshEdgeStrength(sshGrad);
-      const sshBreakScore = _sshEdge01 >= 1.0 ? 1.0 : _sshEdge01 >= 0.7 ? 0.7 : _sshEdge01 >= 0.4 ? 0.4 : _sshEdge01 > 0 ? 0.3 : 0;
+      // sshEdgeStrength is a continuous 0..1 ramp now, so use it directly rather
+      // than snapping it back onto the old four-step ladder. Any detected edge
+      // is still worth at least 0.3, as it was before.
+      const sshBreakScore = _sshEdge01 > 0 ? Math.max(0.3, _sshEdge01) : 0;
       if(sshBreakScore > breakScore){ breakScore = sshBreakScore; frontSensor = "ssh"; }
       else if(sshBreakScore > 0 && frontSensor === "sst" && tBreak <= 0) frontSensor = "ssh";
     }
@@ -8180,41 +8232,35 @@ function applyAltimetryGrid(data){ ALTIMETRY_GRID = buildAltiGrid(data); }
 function sshBreakAt(lat, lng, grid){
   const g = grid || PREDICT_ALTI_GRID;
   if(!g || !g.nLat || !g.sla) return null;
-  const radNm = 18;
-  const dLat = radNm/60, dLng = radNm/(60*Math.cos(lat*Math.PI/180));
   const iC = Math.round((lat-g.minLat)/g.step), jC = Math.round((lng-g.minLng)/g.step);
-  const di = Math.max(1, Math.round(dLat/g.step)), dj = Math.max(1, Math.round(dLng/g.step));
   // Coriolis parameter f at this latitude (1/s) for the geostrophic conversion
   // ∂η/∂x = v·f/g. M_PER_10NM converts the per-metre gradient to m per 10 nm.
   const fCor = 2 * 7.2921e-5 * Math.sin(Math.abs(lat) * Math.PI / 180);
   const G = 9.81, M_PER_10NM = 18520, geoFactor = fCor > 0 ? (fCor / G) * M_PER_10NM : 0;
-  const near=[];
-  let maxGeoGrad = 0;   // SLA-equivalent gradient (m/10nm) inferred from the jet
-  for(let i=iC-di;i<=iC+di;i++){
-    for(let j=jC-dj;j<=jC+dj;j++){
-      if(i<0||j<0||i>=g.nLat||j>=g.nLng) continue;
-      const idx=i*g.nLng+j;
-      const v=g.sla[idx];
-      if(!Number.isFinite(v)) continue;
-      near.push({la:g.minLat+i*g.step, ln:g.minLng+j*g.step, v});
-      if(geoFactor > 0){
-        const spd = Math.hypot(g.ugos[idx]||0, g.vgos[idx]||0);   // m/s
-        if(spd > 0){ const geoGrad = spd * geoFactor; if(geoGrad > maxGeoGrad) maxGeoGrad = geoGrad; }
-      }
+  const idxOf = (i, j) => (i < 0 || j < 0 || i >= g.nLat || j >= g.nLng) ? -1 : i * g.nLng + j;
+  const at = (i, j) => {
+    const idx = idxOf(i, j);
+    if(idx < 0) return null;
+    const v = g.sla[idx];
+    return Number.isFinite(v) ? v : null;
+  };
+  // ±1 cell: the altimetry product is already ~0.25° (~15 nm), so the tightest
+  // stencil the grid supports is the right one. A wider one just smears the wall.
+  const slaGrad = gridGradientPer10nm(at, iC, jC, 1, g.step, lat);
+  // Geostrophic speed AT this node, not the peak across a neighbourhood — the
+  // jet is the un-smeared measure of the wall, and taking a local maximum was
+  // what smeared it back out across every cell near the Stream.
+  let geoGrad = 0;
+  if(geoFactor > 0){
+    const idx = idxOf(iC, jC);
+    if(idx >= 0){
+      const spd = Math.hypot(g.ugos[idx]||0, g.vgos[idx]||0);   // m/s
+      if(spd > 0) geoGrad = spd * geoFactor;
     }
   }
-  if(near.length < 2 && maxGeoGrad <= 0) return null;
-  let maxGrad=0;
-  for(let a=0;a<near.length;a++){
-    for(let b=a+1;b<near.length;b++){
-      const dNm=nmBetween(near[a].la,near[a].ln,near[b].la,near[b].ln);
-      if(dNm<1) continue;
-      const grad=Math.abs(near[a].v-near[b].v)/dNm;
-      if(grad>maxGrad) maxGrad=grad;
-    }
-  }
+  if(slaGrad == null && geoGrad <= 0) return null;
   // Both estimators are in m per 10 nm; feed sshEdgeStrength the stronger one.
-  return Math.max(maxGrad * 10, maxGeoGrad);
+  return Math.max(slaGrad || 0, geoGrad);
 }
 
 function getAltimetryField(lat, lng){
