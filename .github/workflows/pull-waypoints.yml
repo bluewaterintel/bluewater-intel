@@ -45,7 +45,8 @@ jobs:
             exit 1
           fi
 
-      - run: npm ci --omit=dev
+      - name: Install pull-waypoints dependencies
+        run: npm install @supabase/supabase-js@2.49.0 pg@8.22.0 --no-save --no-package-lock
 
       - name: Pull waypoints from Supabase
         env:

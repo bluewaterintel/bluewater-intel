@@ -37,7 +37,7 @@ fi
 if gh workflow list 2>/dev/null | grep -q "Snapshot waypoints"; then
   echo "Starting a test snapshot run…"
   gh workflow run pull-waypoints.yml
-  echo "Watch progress: gh run list --workflow=pull-waypoints.yml"
+  echo "Watch progress: gh run list -w pull-waypoints.yml"
 else
   echo "After you push, test manually:"
   echo "  GitHub → Actions → Snapshot waypoints → Run workflow"
