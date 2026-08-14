@@ -9,79 +9,31 @@
    These tests also lock in the FL peninsula fix for isGulfContext(), which had a
    flat lng < -82.0 test that misfiled Naples (-81.80) and Fort Myers (-81.95) as
    Atlantic ports. */
-import { readFileSync } from "node:fs";
-import vm from "node:vm";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { loadBw, makeChecker } from "./load-bw.mjs";
 
-const __dir = dirname(fileURLToPath(import.meta.url));
-const root = join(__dir, "..");
-
-// bw-core.js is a browser script; stub just enough of the DOM/Leaflet surface
-// that its top-level code runs to completion under node.
-const sandbox = {
-  console, Math, Date, JSON, isFinite, isNaN, parseFloat, parseInt,
-  Set, Map, Array, Object, String, Number, Promise, RegExp, Error,
-  setTimeout, clearTimeout, setInterval, clearInterval,
-  requestAnimationFrame: (fn) => setTimeout(fn, 0),
-};
-sandbox.globalThis = sandbox;
-sandbox.window = sandbox;
-sandbox.self = sandbox;
-sandbox.document = {
-  getElementById: () => null,
-  querySelector: () => null,
-  querySelectorAll: () => [],
-  createElement: () => ({ style: {}, appendChild(){}, setAttribute(){}, classList:{add(){},remove(){}} }),
-  addEventListener: () => {},
-  body: { appendChild(){}, classList:{add(){},remove(){}} },
-  documentElement: { style: {}, classList:{add(){},remove(){}} },
-};
-sandbox.navigator = { userAgent: "node", onLine: true };
-sandbox.localStorage = { getItem: () => null, setItem(){}, removeItem(){} };
-sandbox.location = { href: "http://localhost/", search: "", protocol: "http:" };
-sandbox.addEventListener = () => {};
-sandbox.fetch = () => Promise.reject(new Error("no network in tests"));
-sandbox.L = new Proxy(function(){}, {
-  get: () => sandbox.L, apply: () => sandbox.L, construct: () => sandbox.L,
-});
-
-// Top-level `const` stays in script scope under vm, so concatenate every file
-// into ONE script and hand the bindings out explicitly at the end.
-const FILES = [
-  "bw-data-ports.js", "bw-data-species.js", "bw-data-canyons.js",
-  "bw-data-bathy.js", "bw-data-closures.js", "bw-breaks.js", "bw-core.js",
-];
-const WANT = [
-  "PORTS", "SPECIES", "PREDICT_SPECIES_PREFS", "SPECIES_RUN_NM",
-  "speciesRunRangeNm", "portFishingRangeNm", "isGulfContext", "flPeninsulaDivide",
-];
-let bundle = "";
-for (const f of FILES) bundle += readFileSync(join(root, f), "utf8") + "\n;\n";
-bundle += `globalThis.__t = { ${WANT.join(", ")} };\n`;
-vm.runInContext(bundle, vm.createContext(sandbox), { filename: "bundle.js" });
-
-const T = sandbox.__t;
 const {
   PORTS, SPECIES, PREDICT_SPECIES_PREFS, SPECIES_RUN_NM,
   speciesRunRangeNm, portFishingRangeNm, isGulfContext,
-} = T;
+} = loadBw([
+  "PORTS", "SPECIES", "PREDICT_SPECIES_PREFS", "SPECIES_RUN_NM",
+  "speciesRunRangeNm", "portFishingRangeNm", "isGulfContext", "flPeninsulaDivide",
+]);
 
-let pass = 0, fail = 0;
-function check(name, cond) {
-  if (cond) { pass++; console.log("  ✓", name); }
-  else { fail++; console.log("  ✗ FAIL:", name); }
-}
+const { check, done } = makeChecker();
 const catOf = Object.fromEntries(SPECIES.map((s) => [s.id, s.cat]));
 const rangeAt = (portName, sp) => speciesRunRangeNm(sp, PORTS[portName]);
 
 console.log("\nthe reported bug — inshore species no longer reach the shelf edge:");
 {
-  // The original complaint: flounder from Naples painted spots ~100 nm out.
-  check("flounder from Naples is capped well inside 40 nm", rangeAt("Naples, FL", "flounder") <= 40);
-  check("flounder from Tampa Bay is capped well inside 40 nm", rangeAt("Tampa Bay, FL", "flounder") <= 40);
-  check("flounder depth band no longer reaches the outer shelf",
-    Math.max(...PREDICT_SPECIES_PREFS.flounder.depthBands.map((b) => b[1])) <= 40);
+  // The original complaint: flounder from Naples painted spots ~100 nm out. The
+  // cap is 40 nm (the Mid-Atlantic offshore fluke fishery needs it — see
+  // bottom-temp.test.mjs), which still cuts the old ~100 nm reach by 60%.
+  check("flounder from Naples no longer reaches the outer shelf",
+    rangeAt("Naples, FL", "flounder") <= 40);
+  check("flounder from Tampa Bay no longer reaches the outer shelf",
+    rangeAt("Tampa Bay, FL", "flounder") <= 40);
+  check("flounder depth band stays off true deep water",
+    Math.max(...PREDICT_SPECIES_PREFS.flounder.depthBands.map((b) => b[1])) <= 50);
   check("redfish from Naples stays inshore", rangeAt("Naples, FL", "redfish") <= 30);
   check("bonefish from Key West is a flats range, not a shelf range",
     rangeAt("Key West, FL", "bonefish") <= 20);
@@ -191,5 +143,4 @@ console.log("\nFL peninsula divide — Gulf ports classify as Gulf:");
   }
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

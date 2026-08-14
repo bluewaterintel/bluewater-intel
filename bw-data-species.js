@@ -116,12 +116,18 @@ const PREDICT_SPECIES_PREFS = {
   // band now covers published 70–90°F comfort; warmAdapted keeps warm-side credit
   // through the working edge.
   redfish:      {tempIdeal:[70,88], tempWorking:[58,92], chlorPref:"high",    depthBands:[[1,15]],     breakPref:"stable", warmAdapted:true },
-  // Flounder band capped at 40 m (~130 ft). The old 80 m (262 ft) reached the
+  // Flounder band capped at 45 m (~148 ft). The old 80 m (262 ft) reached the
   // whole west Florida shelf, so shelf cells 100 nm offshore scored as valid
-  // flounder ground. Mid-Atlantic winter fluke on offshore wrecks is the deepest
-  // real case at ~100–140 ft; Gulf southern flounder is far shallower.
-  flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[2,40]],     breakPref:"stable", demersal:true },
-  blackseabass: {tempIdeal:[58,72], tempWorking:[52,76], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable", demersal:true },
+  // flounder ground. Mid-Atlantic offshore fluke on wrecks is the deepest real
+  // case (Triangle Wrecks ~100 ft, deeper winter wrecks to ~140 ft); Gulf
+  // southern flounder is far shallower and is held in by the 40 nm run cap.
+  flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[2,45]],     breakPref:"stable", demersal:true },
+  // Sea bass cold edge widened 58→52 (working 52→45). The old band was calibrated
+  // against a bottom-temp estimate that reported the Mid-Atlantic shelf at ~73°F
+  // in August; with the cold pool modeled the same wrecks read ~50-55°F, which is
+  // exactly where the summer mid-shelf fishery happens. Without this the accurate
+  // bottom temp scored the NJ/NY August wreck bite at 16%.
+  blackseabass: {tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable", demersal:true },
   tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable", demersal:true },
   // Golden tilefish — two fisheries, not canyon-gated. Mid-Atlantic canyon mud
   // (MAFMC 250-450 ft ≈ 75-140 m) and a deeper shelf-edge / Gulf band (~575-1,380 ft

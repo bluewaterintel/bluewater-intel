@@ -3368,6 +3368,25 @@ function scoreCell(lat, lng, speciesId){
     else if(depth <= 600) bt = 50 - (depth - 350) / 250 * 3;   // 50→47
     else                  bt = 47;
     tempForScore = bt;
+  } else if(_isDemersal && sst != null && depth != null && depth > 0 &&
+            isColdPoolShelf(lat, lng, depth)){
+    // MID-ATLANTIC / NE SHELF: cold pool. A shallow (~50 ft) summer mixed layer
+    // over a sharp thermocline, then near-constant cold winter water below. This
+    // is what makes offshore fluke, sea bass and tog work here in summer — the
+    // bottom is 15-25°F cooler than the surface, not ~equal to it.
+    const coreF = coldPoolCoreF(lat);
+    let btFull;
+    if(depth <= 15)      btFull = sst;                                        // mixed layer
+    else if(depth <= 35) btFull = sst - (depth - 15) / 20 * (sst - coreF);    // sharp thermocline
+    else                 btFull = coreF;                                      // cold pool core
+    btFull = Math.max(btFull, 38);
+    // Stratification from the surface-to-core CONTRAST rather than an absolute
+    // SST ramp. A warm surface over cold winter water stratifies; a cold winter
+    // surface means a well-mixed column where the bottom tracks the surface. The
+    // absolute ramp under-stratified the Gulf of Maine, where deep water is cold
+    // year-round even under a 60°F surface.
+    const strat = Math.max(0, Math.min(1, (sst - coreF) / 12));
+    tempForScore = Math.max(38, sst - strat * Math.max(0, sst - btFull));
   } else if(_isDemersal && sst != null && depth != null && depth > 0){
     // THERMOCLINE bottom-temp estimate (°F), stratification-aware so ONE formula
     // works from the Gulf to the Gulf of Maine without region hardcoding.
@@ -4935,6 +4954,39 @@ function classifyWaterType(lat, lng){
   return "offshore";                         // 100+ ft (whole shelf + canyons)
 }
 
+// ── MID-ATLANTIC BIGHT / NE SHELF COLD POOL ─────────────────────────────────
+// From spring through fall a mass of cold winter water stays trapped on the
+// shelf beneath the seasonal thermocline, from Nantucket Shoals down to Cape
+// Hatteras. It is the single biggest reason a bottom fish's water differs from
+// the surface here: in August the surface off Virginia Beach reads ~79°F while
+// the bottom in 100 ft is ~55-62°F.
+//
+// The general thermocline curve in scoreCell() was anchored for the GULF (deep
+// mixed layer, no cold pool), so it reported the bottom at 100 ft as ~79°F —
+// wrong by 15-25°F here, which is what made offshore fluke on the Triangle
+// Wrecks score as too-warm. These two helpers gate a cold-pool profile to the
+// region it actually applies to and leave every other coast alone.
+//
+// (Heuristic tuned to published MAB bottom-temp ranges — replace with a real
+//  subsurface feed, e.g. HYCOM/GLORYS, when one is wired.)
+
+// Cold-pool core temperature (°F): coldest to the north, warmest at the
+// Hatteras end where the pool thins and erodes first.
+function coldPoolCoreF(lat){
+  const t = Math.max(0, Math.min(1, (lat - 35.5) / (44.5 - 35.5)));
+  return 60 - t * 14;   // ~60°F off Hatteras → ~46°F in the Gulf of Maine
+}
+
+// True only on the Atlantic shelf between Hatteras and the Gulf of Maine. Past
+// the shelf break (>200 m) it is slope/Gulf Stream water, not cold pool.
+function isColdPoolShelf(lat, lng, depthM){
+  if(lat < 35.0 || lat > 44.5) return false;
+  if(depthM == null || !(depthM > 0) || depthM > 200) return false;
+  if(typeof isGulfContext === "function" && isGulfContext(lat, lng)) return false;
+  if(typeof isPacificContext === "function" && isPacificContext(lat, lng)) return false;
+  return true;
+}
+
 // Species → valid habitat types
 // Each species lists the water types where it can realistically be encountered.
 const SPECIES_HABITAT = {
@@ -4974,7 +5026,13 @@ const SPECIES_HABITAT = {
   // Inshore/bay species — bays, sounds, shoreline
   striper:       ["bay", "inshore"],            // Stripers ARE bay fish (Chesapeake!)
   redfish:       ["bay", "inshore"],
-  flounder:      ["bay", "inshore", "nearshore"],
+  // "offshore" is here for the same reason vermilion needs it (see below):
+  // classifyWaterType() calls anything ≥100 ft "offshore", which blanked the
+  // Mid-Atlantic summer fluke grounds. The Triangle Wrecks off Virginia Beach
+  // sit right on that 100 ft line, so wreck cells flipped in and out of the map
+  // on a one-foot depth difference. The 45 m depth band keeps flounder off the
+  // true deep water, and the 40 nm run cap keeps it a day-boat fishery.
+  flounder:      ["bay", "inshore", "nearshore", "offshore"],
   speckledtrout: ["bay", "inshore"],
   croaker:       ["bay", "inshore"],
   sheepshead:    ["bay", "inshore"],
@@ -5570,7 +5628,9 @@ const SPECIES_RUN_NM = {
   // boat happily covers 25 nm of Pamlico Sound, Chesapeake, or Louisiana marsh.
   bonefish: 15, snook: 20, sheepshead: 20, permit: 20, pompano: 20,
   tarpon: 25, redfish: 25, speckledtrout: 25, croaker: 25,
-  flounder: 30,
+  // Fluke are a genuine offshore day-boat fishery in the Mid-Atlantic once the
+  // cold pool sets up — the Triangle Wrecks off Virginia Beach are 29-31 nm out.
+  flounder: 40,
   striper: 35, bluefish: 35,   // NE rips and shoals: Block Is., Montauk, Nantucket
 
   // ── Nearshore: beach through mid-shelf structure ──
