@@ -86,6 +86,15 @@ Add these **repository secrets** (GitHub → Settings → Secrets and variables 
 | `SUPABASE_URL` | Only if not using DB URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Required with `SUPABASE_URL`; never commit this |
 
+**Easy setup from your Mac** (reads `.env`, no copy-paste):
+
+```bash
+bash scripts/setup-waypoint-backup.sh
+```
+
+That script logs you into GitHub if needed, uploads `SUPABASE_DB_URL` from `.env`, and
+starts a test workflow run once the workflow file is on GitHub.
+
 If `main` is branch-protected, allow **github-actions[bot]** to push, or the weekly
 commit will fail when waypoints change.
 
