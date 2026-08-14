@@ -45,7 +45,7 @@ jobs:
             exit 1
           fi
 
-      - run: npm ci
+      - run: npm ci --omit=dev
 
       - name: Pull waypoints from Supabase
         env:
