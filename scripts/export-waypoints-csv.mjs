@@ -20,7 +20,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const MASTER = join(root, 'data/Master_Waypoint_Combined_1.csv');
+const MASTER = join(root, 'data/Master_Waypoint_Combined_8136.csv');
 
 function parseCsv(text) {
   const rows = [];

@@ -14889,7 +14889,7 @@ function drawPortMarkers(){
 // ════════════════════════════════════════════════════════════════════════════
 // FISHING WAYPOINTS — master dataset (~12.6k points) binned by distance from the
 // selected home port. Data is in bw-waypoints.js (built from
-// data/Master_Waypoint_Combined_1.csv) as window.BW_WAYPOINTS. We compute distance
+// data/Master_Waypoint_Combined_8136.csv) as window.BW_WAYPOINTS. We compute distance
 // at runtime (12k haversines is trivial)
 // rather than pre-binning per port, which keeps the data file minimal.
 //

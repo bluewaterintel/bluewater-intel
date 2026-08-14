@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * Build fishing-waypoint artifacts from Master_Waypoint_Combined_1.csv.
+ * Build fishing-waypoint artifacts from Master_Waypoint_Combined_8136.csv.
  *
  * Outputs:
- *   - data/Master_Waypoint_Combined_1.csv   (source copy, if --copy)
- *   - supabase-m1/seed/waypoints.ndjson      (DB seed)
- *   - bw-waypoints.js                         (offline embedded fallback)
+ *   - data/Master_Waypoint_Combined_8136.csv   (source copy, if --copy)
+ *   - supabase-m1/seed/waypoints.ndjson          (DB seed)
+ *   - bw-waypoints.js                             (offline embedded fallback)
  *
  * Usage:
- *   node scripts/build-waypoints.mjs [path/to/Master_Waypoint_Combined_1.csv]
+ *   node scripts/build-waypoints.mjs [path/to/Master_Waypoint_Combined_8136.csv]
  *   node scripts/build-waypoints.mjs --copy "/path/to/source.csv"
  */
 
@@ -17,9 +17,11 @@ import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DEFAULT_CSV = join(root, 'data/Master_Waypoint_Combined_1.csv');
+const DEFAULT_CSV = join(root, 'data/Master_Waypoint_Combined_8136.csv');
 
-// Legacy Master_Waypoint_Combined_1.csv: singular `Type` column.
+// Master_Waypoint_Combined_8136.csv: singular `Type` column. Primary labels map
+// directly; sub-type labels (e.g. "Subway cars", ship names on reef sites) fold
+// into the 11 canonical waypoint type codes the DB and client understand.
 const TYPE_MAP = {
   Wreck: 'wk',
   Reef: 'rf',
@@ -35,6 +37,34 @@ const TYPE_MAP = {
   Tower: 'tw',
   Platform: 'pf',
   Rig: 'rg',
+  // Artificial-reef sub-types (Virginia / Mid-Atlantic reef program detail)
+  'Subway cars': 'st',
+  Piling: 'st',
+  Pipe: 'st',
+  Tetrahedrons: 'st',
+  'Pier Sections': 'st',
+  'Bridge Sections': 'st',
+  Rubble: 'rf',
+  'Dbl. T Sections': 'st',
+  'Reef Balls': 'rf',
+  'Concrete Slabs': 'st',
+  'Military vehicles': 'st',
+  Igloos: 'st',
+  'Igloos and Tetrahedrons': 'st',
+  Piles: 'st',
+  'Concrete Block': 'st',
+  'Landing craft': 'wk',
+  Barge: 'wk',
+  Wreckage: 'wk',
+  // Ship names that landed in the Type column on reef-site rows
+  'J.B. Eskridge': 'wk',
+  'Lillian Luckenback': 'wk',
+  'USCGC Cuyahoga': 'wk',
+  'USNS Clark': 'wk',
+  'USNS Garrison': 'wk',
+  'USNS Haviland': 'wk',
+  'USNS Morgan': 'wk',
+  'USNS Webster': 'wk',
 };
 
 // Current sheet export: plural `category` column, which maps 1:1 onto the type
