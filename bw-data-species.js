@@ -116,7 +116,11 @@ const PREDICT_SPECIES_PREFS = {
   // band now covers published 70–90°F comfort; warmAdapted keeps warm-side credit
   // through the working edge.
   redfish:      {tempIdeal:[70,88], tempWorking:[58,92], chlorPref:"high",    depthBands:[[1,15]],     breakPref:"stable", warmAdapted:true },
-  flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable", demersal:true },
+  // Flounder band capped at 40 m (~130 ft). The old 80 m (262 ft) reached the
+  // whole west Florida shelf, so shelf cells 100 nm offshore scored as valid
+  // flounder ground. Mid-Atlantic winter fluke on offshore wrecks is the deepest
+  // real case at ~100–140 ft; Gulf southern flounder is far shallower.
+  flounder:     {tempIdeal:[60,72], tempWorking:[55,76], chlorPref:"high",    depthBands:[[2,40]],     breakPref:"stable", demersal:true },
   blackseabass: {tempIdeal:[58,72], tempWorking:[52,76], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable", demersal:true },
   tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable", demersal:true },
   // Golden tilefish — two fisheries, not canyon-gated. Mid-Atlantic canyon mud

@@ -4169,6 +4169,12 @@ function isGulfContext(lat, lng){
   // classified the entire US West Coast as "Gulf", which broke Pacific ranges,
   // shelf depth, and offshore reach for California ports.
   if(lng < -98.5) return false;
+  // Florida peninsula: use the same land-spine divide the bite map and waypoint
+  // filters already use. The old flat `lng < -82.0` test put Naples (-81.80) and
+  // Fort Myers (-81.95) on the Atlantic side, so two Gulf ports were picking up
+  // SE-Florida ranges and Atlantic species bands. Keys ports (lat < 25.3) are
+  // left alone — they fish both directions and keep their existing behavior.
+  if(lat >= 25.3 && lat <= 30.7) return lng < flPeninsulaDivide(lat);
   if(lng < -82.0 && lat < 30.7) return true;
   if(lng < -84.0) return true;
   return false;
@@ -5546,6 +5552,57 @@ function maxRangeForPort(portObj){
   return portFishingRangeNm(portObj);
 }
 
+// ── Species run range (nm) ──────────────────────────────────────────────────
+// portFishingRangeNm() answers "how far will a boat leave this port," which is
+// an OFFSHORE number. Applied to inshore/nearshore species it put flounder
+// hotspots 100 nm out on the west Florida shelf — water that is depth-plausible
+// (the shelf is still under 100 ft that far out) but that nobody would run to
+// for a flatfish. Depth cannot substitute for this: shallow water extends for
+// hundreds of miles across the Gulf shelf and the Keys banks, so a depth-derived
+// cap puts bonefish 160 nm from Key West. These are run distances for each
+// fishery instead.
+//
+// Every port sits on the shore, so a cap measured from the port doubles as the
+// shore-proximity gate these fish actually need.
+const SPECIES_RUN_NM = {
+  // ── Inshore: bays, sounds, beaches, passes ──
+  // Floors sit high enough to cover running INSIDE big protected water — a bay
+  // boat happily covers 25 nm of Pamlico Sound, Chesapeake, or Louisiana marsh.
+  bonefish: 15, snook: 20, sheepshead: 20, permit: 20, pompano: 20,
+  tarpon: 25, redfish: 25, speckledtrout: 25, croaker: 25,
+  flounder: 30,
+  striper: 35, bluefish: 35,   // NE rips and shoals: Block Is., Montauk, Nantucket
+
+  // ── Nearshore: beach through mid-shelf structure ──
+  spanishmack: 25, ceromack: 25,
+  falsealbacore: 30, bonito: 30, tripletail: 30,
+  cobia: 35,
+  tautog: 40, spadefish: 40, hogfish: 40,   // incl. winter offshore blackfish wrecks
+  muttonsnap: 45, lanesnap: 45, yellowtail: 45,
+  kingmack: 55,                              // SKA tournament boats run 40-70
+  triggerfish: 60,
+  blackseabass: 70,                          // Mid-Atlantic winter wrecks 40-70
+  grouper: 80, amberjack: 80,
+  snapper: 90, gaggrouper: 90, vermilion: 90, // wide west FL shelf runs
+  cod: 100, haddock: 100, pollock: 100,      // Gulf of Maine banks: Cashes ~90
+  cayellowtail: 100,                         // SoCal islands/banks: San Clemente 55
+};
+// Safety net for species added later without an explicit entry.
+const SPECIES_RUN_DEFAULT_NM = { inshore: 25, nearshore: 40 };
+
+// Effective bite-map range: the tighter of the fishery's realistic run and the
+// port's own reach, so a short-reach port (Oregon Inlet 85) still narrows it.
+// Offshore species are unchanged — they keep the full port range.
+function speciesRunRangeNm(speciesId, portObj){
+  const portMax = portFishingRangeNm(portObj);
+  if(!speciesId || speciesId === "all") return portMax;
+  const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
+  const cat = sp ? sp.cat : null;
+  if(!cat || cat === "offshore" || cat === "all") return portMax;
+  const cap = SPECIES_RUN_NM[speciesId] ?? SPECIES_RUN_DEFAULT_NM[cat];
+  return cap == null ? portMax : Math.min(cap, portMax);
+}
+
 // Charted waypoint display/export cap — independent of bite-map range so Gulf
 // ports can show Tampa Bay / Pulley Ridge spots without shrinking OBX reach.
 function waypointMaxRangeNm(){
@@ -5796,7 +5853,11 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   if(speciesId === "all"){ onDone && onDone(null, myGen); return myGen; }
 
   const port = (typeof activePort !== "undefined" && activePort) ? PORTS[activePort] : null;
-  const maxRange = maxRangeForPort(port);
+  // Scoring range is species-aware (inshore/nearshore fish get a realistic run
+  // cap). The DATA bbox below deliberately stays on the full port range so the
+  // bathymetry/ocean grid remains port-scoped and stable across species switches.
+  const portRange = maxRangeForPort(port);
+  const maxRange = speciesRunRangeNm(speciesId, port);
   // Full-coast extent clamp. The Atlantic/Gulf box (default) is unchanged, so
   // East Coast behavior is identical. Pacific ports get their own West-Coast
   // box; without this the Atlantic-only longitude clamp collapsed the San Diego
@@ -5816,13 +5877,20 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   let step, latMin, latMax, lngMin, lngMax, ROWS_PER_FRAME;
   let bboxLatMin = LAT_MIN, bboxLatMax = LAT_MAX, bboxLngMin = LNG_MIN, bboxLngMax = LNG_MAX;
   if(port){
-    const degLat = (maxRange / 60) + 0.15;
-    const degLng = (maxRange / (60 * Math.cos(port.lat * Math.PI / 180))) + 0.15;
+    const degLat = (portRange / 60) + 0.15;
+    const degLng = (portRange / (60 * Math.cos(port.lat * Math.PI / 180))) + 0.15;
     bboxLatMin = Math.max(LAT_MIN, port.lat - degLat);
     bboxLatMax = Math.min(LAT_MAX, port.lat + degLat);
     bboxLngMin = Math.max(LNG_MIN, port.lng - degLng);
     bboxLngMax = Math.min(LNG_MAX, port.lng + degLng);
-    latMin = bboxLatMin; latMax = bboxLatMax; lngMin = bboxLngMin; lngMax = bboxLngMax;
+    // Iterate only the species' own range — for an inshore fish that is a small
+    // fraction of the port bbox, so the grid finishes far sooner.
+    const sDegLat = (maxRange / 60) + 0.15;
+    const sDegLng = (maxRange / (60 * Math.cos(port.lat * Math.PI / 180))) + 0.15;
+    latMin = Math.max(bboxLatMin, port.lat - sDegLat);
+    latMax = Math.min(bboxLatMax, port.lat + sDegLat);
+    lngMin = Math.max(bboxLngMin, port.lng - sDegLng);
+    lngMax = Math.min(bboxLngMax, port.lng + sDegLng);
     step = 0.1;          // ≈6 nm — fine field, but only over the port's bbox
     ROWS_PER_FRAME = 6;  // ~6 rows × ≈50 lng over water keeps each frame <16ms
   } else {
@@ -5894,6 +5962,14 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
       let rows = 0;
       for(; lat <= latMax && rows < ROWS_PER_FRAME; lat += step, rows++){
         for(let lng = lngMin; lng <= lngMax; lng += step){
+          // Range gate first — it's pure arithmetic, while isPredictWater() hits
+          // the bathymetry grid. maxRange is species-aware, so an inshore fish is
+          // rejected out here rather than after a grid lookup.
+          let distNm = 0;
+          if(port){
+            distNm = nmBetween(port.lat, port.lng, lat, lng);
+            if(distNm > maxRange) continue;
+          }
           if(!isPredictWater(lat, lng)) continue;
           const waterType = classifyWaterType(lat, lng);
           if(!speciesAllowedInWater(speciesId, waterType)) continue;
@@ -5901,11 +5977,6 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
           // Keep the bite map on the port's coast — don't recommend Atlantic spots
           // for a Gulf port (or vice-versa) across the FL peninsula.
           if(port && !reachableFromPort(port, lat, lng)) continue;
-          let distNm = 0;
-          if(port){
-            distNm = nmBetween(port.lat, port.lng, lat, lng);
-            if(distNm > maxRange) continue;
-          }
           const result = scoreCell(lat, lng, speciesId);
           if(!result) continue;
           if(port && distNm > penaltyStart){
