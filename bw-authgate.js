@@ -137,9 +137,11 @@
     }
     _planOnboardCheckedFor = user.id;  // set BEFORE awaiting so concurrent re-fires can't double-open
     let showPlan = false;
-    try {
-      if(typeof window.needsPlanOnboarding === "function") showPlan = await window.needsPlanOnboarding();
-    } catch(e){}
+    if(typeof navigator === "undefined" || navigator.onLine !== false){
+      try {
+        if(typeof window.needsPlanOnboarding === "function") showPlan = await window.needsPlanOnboarding();
+      } catch(e){}
+    }
     if(showPlan && typeof window.openPostSignupPlans === "function"){
       window.openPostSignupPlans();
       return;

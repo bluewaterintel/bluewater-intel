@@ -223,7 +223,15 @@ if(typeof window !== "undefined"){
     BWI.logError("promise", (e.reason && e.reason.message) || e.reason, "");
   });
   window.addEventListener("online",  () => { BWI.online = true;  BWI._emitConn(); BWI.track("conn_online"); });
-  window.addEventListener("offline", () => { BWI.online = false; BWI._emitConn(); BWI.track("conn_offline"); });
+  window.addEventListener("offline", () => {
+    BWI.online = false; BWI._emitConn(); BWI.track("conn_offline");
+    // Connectivity loss must not trap an signed-in captain in the plan picker.
+    const pg = document.getElementById("plan-gate");
+    if(pg && pg.style.display && pg.style.display !== "none" &&
+       typeof window.closePostSignupPlans === "function"){
+      window.closePostSignupPlans();
+    }
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -15000,15 +15008,30 @@ function requireBriefGenerate(){
 }
 
 async function refreshEntitlement(){
+  const u = (window.BW_AUTH && window.BW_AUTH.getUser) ? window.BW_AUTH.getUser() : null;
+  const uid = u && u.id;
   let premium = false, paid = false, trialing = false, admin = false;
+  let loadedFromCache = false;
+  const applyCache = () => {
+    if(!uid) return false;
+    try {
+      const raw = localStorage.getItem("bwi_entitlement_v1_" + uid);
+      if(!raw) return false;
+      const c = JSON.parse(raw);
+      if(!c || c.uid !== uid) return false;
+      premium = !!c.premium; paid = !!c.paid; trialing = !!c.trialing; admin = !!c.admin;
+      loadedFromCache = true;
+      return true;
+    } catch(e){ return false; }
+  };
   try {
-    const u = (window.BW_AUTH && window.BW_AUTH.getUser) ? window.BW_AUTH.getUser() : null;
     const email = (u && u.email) ? u.email.toLowerCase() : "";
     if(email && BW_OWNER_EMAILS.includes(email)){
       premium = true; paid = true; admin = true;                     // owner fast-path
     } else if(u && window.BW_AUTH && window.BW_AUTH._sb){
-      const { data: p } = await window.BW_AUTH._sb
-        .from("profiles").select("is_owner, subscription_status, current_period_end").maybeSingle();
+      const { data: p, error } = await window.BW_AUTH._sb
+        .from("profiles").select("is_owner, subscription_status, current_period_end, plan_selected_at").maybeSingle();
+      if(error) throw error;
       if(p){
         const st = p.subscription_status;
         const cpe = p.current_period_end ? new Date(p.current_period_end).getTime() : 0;
@@ -15016,10 +15039,27 @@ async function refreshEntitlement(){
         else if(st === "active" || st === "lifetime"){ premium = true; paid = true; }
         else if(st === "trialing"){ premium = true; paid = false; trialing = true; }
         else if(cpe > Date.now() && st !== "canceled"){ premium = true; paid = true; } // grace period
+        // Returning subscriber / plan already chosen — remember locally so offline
+        // sessions don't re-open the post-signup plan picker.
+        if(p.plan_selected_at || p.is_owner || premium){
+          try { localStorage.setItem("bwi_plan_selected_" + uid, p.plan_selected_at || new Date().toISOString()); } catch(e){}
+        }
+      } else if(typeof navigator !== "undefined" && navigator.onLine === false){
+        applyCache();
       }
       if(!admin && email && BW_OWNER_EMAILS.includes(email)) admin = true;
     }
-  } catch(e){ premium = false; paid = false; trialing = false; admin = false; }
+    if(uid && !loadedFromCache){
+      try {
+        localStorage.setItem("bwi_entitlement_v1_" + uid, JSON.stringify({
+          uid, premium, paid, trialing, admin, at: Date.now(),
+        }));
+      } catch(e){}
+    }
+  } catch(e){
+    // Network loss mid-trip must not strip Pro access that was verified online.
+    if(!applyCache()){ premium = false; paid = false; trialing = false; admin = false; }
+  }
   BW_PREMIUM = premium; BW_PAID = paid; BW_TRIALING = trialing; BW_ADMIN = admin;
   await refreshBriefAllowance();
   applyAdminNavVisibility();

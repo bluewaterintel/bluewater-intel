@@ -59,21 +59,40 @@
 
   window.markPlanSelected = async function(){
     try {
+      const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+      if(u) localStorage.setItem("bwi_plan_selected_" + u.id, new Date().toISOString());
+    } catch(e){ /* non-fatal */ }
+    try {
       const s = sb();
       const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
       if(!s || !u) return;
       await s.from("profiles").update({ plan_selected_at: new Date().toISOString() }).eq("id", u.id);
     } catch(e){ console.warn("markPlanSelected", e); }
   };
+  function planSelectedLocally(uid){
+    if(!uid) return false;
+    try { return !!localStorage.getItem("bwi_plan_selected_" + uid); } catch(e){ return false; }
+  }
   window.needsPlanOnboarding = async function(){
     try {
+      const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+      if(!u) return false;
+      // Already picked Free / Pro once on this device — never re-prompt.
+      if(planSelectedLocally(u.id)) return false;
+      // Offline (common in Download My Trip / airplane mode): don't block the app
+      // waiting on a profile read that can't succeed. They chose a plan when online.
+      if(typeof navigator !== "undefined" && navigator.onLine === false) return false;
       const s = sb();
       if(!s) return false;
-      const { data:p } = await s.from("profiles")
+      const { data:p, error } = await s.from("profiles")
         .select("plan_selected_at, is_owner, subscription_status")
         .maybeSingle();
+      if(error) return false;
       if(!p) return true;
-      if(p.plan_selected_at) return false;
+      if(p.plan_selected_at){
+        try { localStorage.setItem("bwi_plan_selected_" + u.id, p.plan_selected_at); } catch(e){}
+        return false;
+      }
       if(p.is_owner) return false;
       if(p.subscription_status === "active" || p.subscription_status === "trialing") return false;
       return true;
@@ -82,6 +101,9 @@
 
   // One-time plan selection after the user's first confirmed sign-in.
   window.openPostSignupPlans = function(){
+    if(typeof navigator !== "undefined" && navigator.onLine === false) return;
+    const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+    if(u && planSelectedLocally(u.id)) return;
     const g = document.getElementById("plan-gate");
     const m = document.getElementById("plan-gate-msg");
     if(m) m.style.display = "none";
