@@ -1,0 +1,68 @@
+# Weekly snapshot of the live Supabase waypoints table into git.
+# Supabase is authoritative; this keeps waypoints.ndjson + bw-waypoints.js in sync.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL  — preferred (Session pooler connection string)
+#   — or both —
+#   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+#
+# If main is branch-protected, allow github-actions[bot] to push or use a PAT.
+
+name: Snapshot waypoints
+
+on:
+  schedule:
+    # Sundays 12:00 UTC
+    - cron: '0 12 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pull-waypoints:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Verify Supabase secrets
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -n "$SUPABASE_DB_URL" ]; then
+            echo "Using SUPABASE_DB_URL"
+          elif [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Using SUPABASE_URL + service role key"
+          else
+            echo "::error::Add SUPABASE_DB_URL or SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to repository secrets."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Pull waypoints from Supabase
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run pull:waypoints
+
+      - name: Commit snapshot if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase-m1/seed/waypoints.ndjson bw-waypoints.js
+          if git diff --staged --quiet; then
+            echo "No waypoint changes since last snapshot."
+          else
+            COUNT=$(wc -l < supabase-m1/seed/waypoints.ndjson | tr -d ' ')
+            git commit -m "chore(waypoints): weekly Supabase snapshot (${COUNT} rows) [skip ci]"
+            git push
+          fi

@@ -48,8 +48,8 @@ if (process.env.SUPABASE_DB_URL) {
   process.exit(1);
 }
 
-console.log('==> Step 2/3: seeding waypoints + ramps');
-execFileSync('node', ['supabase-m1/seed/load.mjs'], { cwd: root, stdio: 'inherit', env: process.env });
+console.log('==> Step 2/3: seeding waypoints + ramps (from git snapshot)');
+execFileSync('node', ['supabase-m1/seed/load.mjs', '--confirm'], { cwd: root, stdio: 'inherit', env: process.env });
 
 console.log('==> Step 3/3: regenerating bw-config.js');
 execFileSync('node', ['scripts/generate-bw-config.mjs'], { cwd: root, stdio: 'inherit', env: process.env });

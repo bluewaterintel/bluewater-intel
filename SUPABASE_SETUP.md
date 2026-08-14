@@ -49,11 +49,45 @@ npx supabase db push
 
 # Option B: SQL Editor — paste supabase/migrations/0001_waypoints_ramps.sql
 
-# Seed reference data (service role key required)
-npm run seed
+# Seed reference data — NEW PROJECT / DISASTER RECOVERY ONLY (truncates waypoints!)
+npm run seed -- --confirm
 ```
 
-Expected output: `waypoints=12585`, `ramps=643`.
+Expected output: waypoint count matching `supabase-m1/seed/waypoints.ndjson`, `ramps=643`.
+
+## Waypoints workflow (authoritative database)
+
+The live **`waypoints` table in Supabase** is the source of truth. Add, edit, or
+delete rows in the Supabase dashboard (Table Editor or SQL). Legacy CSV files in
+`data/` are removed — do not edit waypoints via git CSVs.
+
+After Supabase edits, snapshot to version control:
+
+```bash
+npm run pull:waypoints          # Supabase → waypoints.ndjson + bw-waypoints.js
+git add supabase-m1/seed/waypoints.ndjson bw-waypoints.js
+git commit -m "waypoints: describe your change"
+```
+
+**Do not run `npm run seed`** on a database with manual edits — it truncates and
+reloads from the NDJSON snapshot. Use `seed -- --confirm` only for a fresh project
+or restoring from git after data loss.
+
+### Weekly automated snapshot (GitHub Actions)
+
+Workflow: `.github/workflows/pull-waypoints.yml` — runs every **Sunday 12:00 UTC**
+and can be triggered manually from **Actions → Snapshot waypoints → Run workflow**.
+
+Add these **repository secrets** (GitHub → Settings → Secrets and variables → Actions):
+
+| Secret | Notes |
+|--------|--------|
+| `SUPABASE_DB_URL` | Preferred — Session pooler string from Dashboard → Connect |
+| `SUPABASE_URL` | Only if not using DB URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Required with `SUPABASE_URL`; never commit this |
+
+If `main` is branch-protected, allow **github-actions[bot]** to push, or the weekly
+commit will fail when waypoints change.
 
 ## 6. Regenerate client config
 

@@ -78,6 +78,19 @@ npm run cap:sync
 npm run cap:open:ios
 ```
 
+## Charted waypoints
+
+~12,000 fishing waypoints (wrecks, reefs, canyons, etc.) live in **Supabase
+PostGIS**. The live database is authoritative — edit in the Supabase dashboard,
+then snapshot to git:
+
+```bash
+npm run pull:waypoints
+```
+
+See `SUPABASE_SETUP.md` for the full workflow. Do not run `npm run seed` on a
+database with manual edits (it truncates and reloads from the NDJSON snapshot).
+
 ## A caution about agentic deploys
 
 Hold any automated tooling to two rules:

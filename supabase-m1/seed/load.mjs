@@ -1,25 +1,22 @@
 #!/usr/bin/env node
 /**
- * Bluewater Intel — Milestone 1 seed loader
+ * Bluewater Intel — reference-data seed loader (DISASTER RECOVERY ONLY)
  * ----------------------------------------------------------------------------
- * Loads waypoint_types, waypoints and ramps into Supabase Postgres from the
- * NDJSON in this directory (regenerate with `npm run build:waypoints`).
+ * The live Supabase `waypoints` table is authoritative. Edit there, then snapshot
+ * to git with `npm run pull:waypoints`. Do NOT run this against production after
+ * manual Supabase edits — it TRUNCATES waypoints and reloads from NDJSON.
+ *
+ * Use only for: brand-new project setup, or restoring from the git snapshot after
+ * a database loss. Requires `--confirm` (or SEED_CONFIRM=1).
  *
  * RUN THIS SERVER-SIDE ONLY. It uses the SERVICE ROLE key, which bypasses RLS.
  * The service role key must NEVER ship to the client or be committed to git.
  *
- * Usage (from your repo, with the Supabase project linked):
- *   SUPABASE_URL=https://YOURPROJECT.supabase.co \
- *   SUPABASE_SERVICE_ROLE_KEY=eyJ... \
- *   node seed/load.mjs
+ * Usage:
+ *   npm run seed -- --confirm
  *
  * Prefer SUPABASE_DB_URL in .env when using the new sb_secret_ API keys — the
  * REST client rejects them with "Unregistered API key"; direct Postgres works.
- *
- * Idempotent: it truncates the three tables first, then re-inserts. Safe to
- * re-run. (Truncate is appropriate here because this is public reference data
- * with no foreign keys from user tables yet — Milestone 2 will add those, and
- * at that point reference data should be updated, not truncated.)
  *
  * Requires: @supabase/supabase-js v2, pg (for direct Postgres seeding)
  */
@@ -142,7 +139,20 @@ async function seedViaPg() {
   await client.end();
 }
 
+function seedConfirmed() {
+  return process.argv.includes('--confirm') || process.env.SEED_CONFIRM === '1';
+}
+
 async function main() {
+  if (!seedConfirmed()) {
+    console.error(
+      'Refusing to seed: this TRUNCATES waypoints and reloads from NDJSON.\n' +
+      'The live Supabase database is authoritative — edit there, then `npm run pull:waypoints`.\n' +
+      'To restore from git (new project / disaster recovery only): npm run seed -- --confirm',
+    );
+    process.exit(1);
+  }
+
   if (DB_URL) {
     console.log('Seeding via direct Postgres (SUPABASE_DB_URL)…');
     return seedViaPg();

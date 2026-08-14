@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build:waypoints": "node scripts/build-waypoints.mjs",
+    "pull:waypoints": "node scripts/pull-waypoints.mjs",
     "build:ramps": "node scripts/build-ramps.mjs",
     "build:platforms": "node scripts/build-platforms-gom.mjs",
     "build:ios": "node scripts/build-ios-www.mjs",

@@ -22,11 +22,9 @@
 <script src="bw-wind.js?v=20260712c"></script>
 <script src="bw-breaks.js?v=20260812f"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<!-- Master fishing-waypoint dataset (~12.6k points), loaded as a companion file so the
-     main app stays lean. Defines window.BW_WAYPOINTS = {version, types, count, wp:[[name,lat,lng,typecode],…]}.
-     Rebuilt from data/Master_Waypoint_Combined_8136.csv via scripts/build-waypoints.mjs.
-     Loaded via <script src> (not fetch) so it works from a local file:// path with no CORS.
-     If this file is missing the app still runs; the Waypoints feature just stays empty. -->
+<!-- Offline fishing-waypoint fallback (~12k points). Live data comes from Supabase;
+     this blob is regenerated from supabase-m1/seed/waypoints.ndjson via npm run build:waypoints
+     after `npm run pull:waypoints`. Loaded via <script src> for file:// / at-sea offline use. -->
 <script src="bw-waypoints.js?v=20260813a"></script>
 <!-- Gulf of Mexico federal OCS platforms (BSEE active surface structures). Rebuild: npm run build:platforms -->
 <script src="bw-platforms-gom.js"></script>
@@ -415,18 +413,33 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     max-width:none !important;
     /* Hang flush off the header bottom — the +4px gap showed map on iOS. */
     top:100% !important;
-    max-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--bw-hdr-h, 100px) - 12px) !important;
+    /* Fill to the physical bottom of the screen; padding-bottom keeps content
+       above the home indicator. Do not subtract safe-area or a fudge px here —
+       that left a visible strip of map/background on iOS. */
+    height:calc(100dvh - env(safe-area-inset-top, 0px) - var(--bw-hdr-h, 100px)) !important;
+    max-height:calc(100dvh - env(safe-area-inset-top, 0px) - var(--bw-hdr-h, 100px)) !important;
     overflow-x:hidden !important;
     overflow-y:auto !important;
     overscroll-behavior:contain;
     touch-action:pan-y;
     padding-bottom:env(safe-area-inset-bottom, 0px);
+    box-sizing:border-box;
   }
   /* Cover subpixel gaps / the header's bottom border so no map bleeds through. */
   #nav-menu::before{
     content:"";
     position:absolute;
     bottom:100%;
+    left:0;right:0;
+    height:4px;
+    background:#0f2444;
+    pointer-events:none;
+  }
+  /* Same at the bottom edge — rounded corners + subpixel layout can flash map. */
+  #nav-menu::after{
+    content:"";
+    position:absolute;
+    top:100%;
     left:0;right:0;
     height:4px;
     background:#0f2444;
@@ -475,7 +488,7 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     left:0 !important;
     right:0 !important;
     width:100% !important;
-    border-radius:0 0 16px 16px !important;
+    border-radius:0 !important;
   }
   /* Map — fill remaining viewport */
   #map{flex:1;min-height:0}
