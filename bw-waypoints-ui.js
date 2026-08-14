@@ -458,7 +458,10 @@ async function wpFetchCharted(force){
     });
     if(error) throw error;
     if(seq !== _wpFetchSeq || wpChartedPort() !== port) return;
-    WP_state.charted = (data || []).map((r, i) => {
+    const filtered = (typeof filterWaypointsForPort === "function")
+      ? filterWaypointsForPort(p, data || [])
+      : (data || []);
+    WP_state.charted = filtered.map((r, i) => {
       const style = WP_TYPE_STYLE[r.type_code] || {};
       const label = style.label || "Waypoint";
       const nm = Number.isFinite(r.nm) ? r.nm : null;

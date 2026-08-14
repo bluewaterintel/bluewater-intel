@@ -1305,9 +1305,8 @@ async function dtFetchWaypoints(p){
     });
     if(error) return [];
     // The RPC only returns positions to entitled users; cap for snapshot size.
-    return (data || [])
-      .slice(0, 2500)
-      .map(r => ({ name: r.name, lat: _tround(r.lat,4), lng: _tround(r.lng,4), t: r.type_code, nm: _tround(r.nm,1) }));
+    const mapped = (data || []).map(r => ({ name: r.name, lat: _tround(r.lat,4), lng: _tround(r.lng,4), t: r.type_code, nm: _tround(r.nm,1) }));
+    return filterWaypointsForPort(p, mapped).slice(0, 2500);
   }catch(e){ return []; }
 }
 
@@ -4221,6 +4220,16 @@ function reachableFromPort(port, lat, lng){
   if(lat < 25.3 || lat > 30.9) return true;  // Keys / outside the peninsula band
   const cellSide = lng < flPeninsulaDivide(lat) ? "gulf" : "atlantic";
   return cellSide === side;
+}
+
+// Drop charted waypoints on the wrong FL coast (same rule as the bite map).
+function filterWaypointsForPort(port, rows){
+  if(!port || !Array.isArray(rows) || !rows.length) return rows || [];
+  if(!portCoastSide(port)) return rows;
+  return rows.filter(w =>
+    w && typeof w.lat === "number" && typeof w.lng === "number" &&
+    reachableFromPort(port, w.lat, w.lng)
+  );
 }
 
 // Gulf-side shoreline reference: returns the LATITUDE of the shore for a
@@ -15423,12 +15432,14 @@ async function drawWaypoints(){
     // The RPC returns the full set for entitled users, or nothing for free
     // accounts (positions are never shipped to non-entitled clients).
     rows = (data || []).map(r => ({ name: r.name, lat: r.lat, lng: r.lng, t: r.type_code, nm: r.nm }));
+    rows = filterWaypointsForPort(p, rows);
     fullCount = rows.length;
   } catch(e){
     // Offline fallback: use a saved trip snapshot's waypoints for this port.
     const cachedWp = (typeof tripWaypointsFor === "function") ? tripWaypointsFor(activePort) : null;
     if(cachedWp && cachedWp.length){
       rows = cachedWp.map(w => ({ name:w.name, lat:w.lat, lng:w.lng, t:w.t, nm:w.nm }));
+      rows = filterWaypointsForPort(p, rows);
       fullCount = rows.length; status = "cached";
     } else {
       rows = []; status = "unavailable";
@@ -15630,11 +15641,12 @@ async function mceChartedRows(portName, radiusNm){
   const sbc = window.BW_AUTH && window.BW_AUTH._sb;
   if(!p || !sbc) return { rows: [], entitled: false, total: 0 };
   try {
+    const cap = (typeof waypointMaxRangeNm === "function") ? waypointMaxRangeNm() : 160;
     const { data, error } = await sbc.rpc("pack_waypoints_within", {
-      p_port: portName, p_lat: p.lat, p_lng: p.lng, p_radius_nm: Math.min(radiusNm, 120), p_types: null,
+      p_port: portName, p_lat: p.lat, p_lng: p.lng, p_radius_nm: Math.min(radiusNm, cap), p_types: null,
     });
     if(error) throw error;
-    const rows = (data || []).map(r => ({ name: r.name, lat: r.lat, lng: r.lng, t: r.type_code, nm: r.nm }));
+    const rows = filterWaypointsForPort(p, (data || []).map(r => ({ name: r.name, lat: r.lat, lng: r.lng, t: r.type_code, nm: r.nm })));
     const entitled = (typeof BW_PREMIUM !== "undefined" && BW_PREMIUM);
     let total = rows.length;
     if(!entitled){ try { const { data: c } = await sbc.rpc("pack_port_count", { p_lat: p.lat, p_lng: p.lng }); if(typeof c === "number") total = c; } catch(e){} }
