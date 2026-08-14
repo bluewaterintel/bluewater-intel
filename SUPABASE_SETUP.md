@@ -53,7 +53,7 @@ npx supabase db push
 npm run seed
 ```
 
-Expected output: `waypoints=12592`, `ramps=643`.
+Expected output: `waypoints=12585`, `ramps=643`.
 
 ## 6. Regenerate client config
 
@@ -77,7 +77,7 @@ The Netlify build command runs `node scripts/generate-bw-config.mjs` to inject k
 After seeding, verify in SQL Editor:
 
 ```sql
-select count(*) from waypoints;  -- 12592
+select count(*) from waypoints;  -- 12585
 select count(*) from ramps;    -- 643
 select * from waypoints_within(35.7972, -75.5495, 40, null) limit 5;
 ```

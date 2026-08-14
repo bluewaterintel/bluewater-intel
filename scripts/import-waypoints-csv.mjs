@@ -23,7 +23,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const MASTER = join(root, 'data/Master_Waypoint_Combined_1.csv');
+const MASTER = join(root, 'data/Master_Waypoint_Combined_8136.csv');
 
 const TYPES = ['Wreck', 'Reef', 'Structure', 'Ledge', 'Rock', 'Hole', 'Hump',
   'Canyon', 'Tower', 'Platform', 'Rig'];
@@ -209,7 +209,7 @@ function main() {
   console.log(`\nresult   : ${final.length} waypoints`);
 
   if (!apply) {
-    console.log('\ndry run — re-run with --apply to write data/Master_Waypoint_Combined_1.csv');
+    console.log('\ndry run — re-run with --apply to write data/Master_Waypoint_Combined_8136.csv');
     return;
   }
 
@@ -226,7 +226,7 @@ function main() {
     ].join(','));
   }
   writeFileSync(MASTER, out.join('\n') + '\n');
-  console.log(`\nwrote ${MASTER} (backup at Master_Waypoint_Combined_1.csv.bak)`);
+  console.log(`\nwrote ${MASTER} (backup at Master_Waypoint_Combined_8136.csv.bak)`);
   console.log('next:\n  npm run build:waypoints\n  npm run seed');
 }
 
