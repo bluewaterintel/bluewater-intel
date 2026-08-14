@@ -1306,7 +1306,7 @@ async function dtFetchWaypoints(p){
     if(error) return [];
     // The RPC only returns positions to entitled users; cap for snapshot size.
     const mapped = (data || []).map(r => ({ name: r.name, lat: _tround(r.lat,4), lng: _tround(r.lng,4), t: r.type_code, nm: _tround(r.nm,1) }));
-    return filterWaypointsForPort(p, mapped).slice(0, 2500);
+    return filterWaypointsForPortAndRadius(p, mapped, radius).slice(0, 2500);
   }catch(e){ return []; }
 }
 
@@ -4257,6 +4257,21 @@ function filterWaypointsForPort(port, rows){
   );
 }
 
+// Coast filter + optional radius cap. Always apply client-side even when the RPC
+// already filtered — guards stale server caps and keeps the count in sync with
+// the Distance-from-port selector (100 vs 120 vs 160 nm must not read the same).
+function filterWaypointsForPortAndRadius(port, rows, radiusNm){
+  let out = filterWaypointsForPort(port, rows || []);
+  const cap = radiusNm != null ? radiusNm
+    : (typeof wpRadiusNm !== "undefined" ? wpRadiusNm : null);
+  if(cap == null || !port || !Number.isFinite(cap)) return out;
+  return out.filter(w => {
+    if(!w || typeof w.lat !== "number" || typeof w.lng !== "number") return false;
+    const nm = nmBetween(port.lat, port.lng, w.lat, w.lng);
+    return nm <= cap + 0.05;
+  });
+}
+
 // Gulf-side shoreline reference: returns the LATITUDE of the shore for a
 // given longitude. Water lies SOUTH of (lat < return value). 28 bands from
 // Brownsville TX east to Naples FL.
@@ -5865,6 +5880,7 @@ function nearestMajorFishingAreas(){
   const structures = [];
   for(const c of CANYONS){
     if(c.polygon || c.type === "closure") continue;
+    if(!reachableFromPort(refPort, c.lat, c.lng)) continue;
     const d = nmBetween(refPort.lat, refPort.lng, c.lat, c.lng);
     if(d <= HOME_PORT_RADIUS_NM) structures.push({ c, d });
   }
@@ -15563,14 +15579,14 @@ async function drawWaypoints(){
     // The RPC returns the full set for entitled users, or nothing for free
     // accounts (positions are never shipped to non-entitled clients).
     rows = (data || []).map(r => ({ name: r.name, lat: r.lat, lng: r.lng, t: r.type_code, nm: r.nm }));
-    rows = filterWaypointsForPort(p, rows);
+    rows = filterWaypointsForPortAndRadius(p, rows, wpRadiusNm);
     fullCount = rows.length;
   } catch(e){
     // Offline fallback: use a saved trip snapshot's waypoints for this port.
     const cachedWp = (typeof tripWaypointsFor === "function") ? tripWaypointsFor(activePort) : null;
     if(cachedWp && cachedWp.length){
       rows = cachedWp.map(w => ({ name:w.name, lat:w.lat, lng:w.lng, t:w.t, nm:w.nm }));
-      rows = filterWaypointsForPort(p, rows);
+      rows = filterWaypointsForPortAndRadius(p, rows, wpRadiusNm);
       fullCount = rows.length; status = "cached";
     } else {
       rows = []; status = "unavailable";
@@ -15777,7 +15793,7 @@ async function mceChartedRows(portName, radiusNm){
       p_port: portName, p_lat: p.lat, p_lng: p.lng, p_radius_nm: Math.min(radiusNm, cap), p_types: null,
     });
     if(error) throw error;
-    const rows = filterWaypointsForPort(p, (data || []).map(r => ({ name: r.name, lat: r.lat, lng: r.lng, t: r.type_code, nm: r.nm })));
+    const rows = filterWaypointsForPortAndRadius(p, (data || []).map(r => ({ name: r.name, lat: r.lat, lng: r.lng, t: r.type_code, nm: r.nm })), Math.min(radiusNm, cap));
     const entitled = (typeof BW_PREMIUM !== "undefined" && BW_PREMIUM);
     let total = rows.length;
     if(!entitled){ try { const { data: c } = await sbc.rpc("pack_port_count", { p_lat: p.lat, p_lng: p.lng }); if(typeof c === "number") total = c; } catch(e){} }
@@ -15932,6 +15948,8 @@ function setWpRadius(nm){
   if(sel && Number(sel.value) !== nm) sel.value = String(nm);
   drawWaypoints();
   drawRamps();
+  if(typeof wpFetchCharted === "function") wpFetchCharted(true);
+  if(typeof wpRender === "function" && document.getElementById("wp-content")) wpRender();
 }
 // Populate the distance-from-port dropdown (in the left waypoint legend) once.
 function buildWpRadiusButtons(){

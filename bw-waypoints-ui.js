@@ -452,15 +452,18 @@ async function wpFetchCharted(force){
   try {
     const sbc = window.BW_AUTH && window.BW_AUTH._sb;
     if(!sbc) throw new Error("auth not ready");
-    const radius = (typeof waypointMaxRangeNm === "function") ? waypointMaxRangeNm() : 160;
+    const radius = (typeof wpRadiusNm !== "undefined") ? wpRadiusNm
+      : ((typeof waypointMaxRangeNm === "function") ? waypointMaxRangeNm() : 160);
     const { data, error } = await sbc.rpc("pack_waypoints_within", {
       p_port: port, p_lat: p.lat, p_lng: p.lng, p_radius_nm: radius, p_types: null,
     });
     if(error) throw error;
     if(seq !== _wpFetchSeq || wpChartedPort() !== port) return;
-    const filtered = (typeof filterWaypointsForPort === "function")
-      ? filterWaypointsForPort(p, data || [])
-      : (data || []);
+    const filtered = (typeof filterWaypointsForPortAndRadius === "function")
+      ? filterWaypointsForPortAndRadius(p, data || [], radius)
+      : ((typeof filterWaypointsForPort === "function")
+        ? filterWaypointsForPort(p, data || [])
+        : (data || []));
     WP_state.charted = filtered.map((r, i) => {
       const style = WP_TYPE_STYLE[r.type_code] || {};
       const label = style.label || "Waypoint";
@@ -674,8 +677,12 @@ function mceInitControls(){
 function wpWithinPortNm(p, portName){
   const port = (typeof PORTS !== "undefined") ? PORTS[portName] : null;
   if(!port || !Number.isFinite(port.lat) || !Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return false;
-  const rangeNm = (typeof waypointMaxRangeNm === "function") ? waypointMaxRangeNm() : 160;
-  const dNm = Math.hypot(port.lat - p.lat, (port.lng - p.lng) * Math.cos(port.lat * Math.PI / 180)) * 60;
+  if(typeof reachableFromPort === "function" && !reachableFromPort(port, p.lat, p.lng)) return false;
+  const rangeNm = (typeof wpRadiusNm !== "undefined") ? wpRadiusNm
+    : ((typeof waypointMaxRangeNm === "function") ? waypointMaxRangeNm() : 160);
+  const dNm = (typeof nmBetween === "function")
+    ? nmBetween(port.lat, port.lng, p.lat, p.lng)
+    : Math.hypot(port.lat - p.lat, (port.lng - p.lng) * Math.cos(port.lat * Math.PI / 180)) * 60;
   return dNm <= rangeNm;
 }
 
