@@ -5537,6 +5537,12 @@ function maxRangeForPort(portObj){
   return portFishingRangeNm(portObj);
 }
 
+// Charted waypoint display/export cap — independent of bite-map range so Gulf
+// ports can show Tampa Bay / Pulley Ridge spots without shrinking OBX reach.
+function waypointMaxRangeNm(){
+  return 160;
+}
+
 // Altimetry magenta break highlights use the same port radius so we don't flag
 // a Gulf Stream wall 150 nm from Oregon Inlet when no OBX charter runs there.
 function altimetryBreakRadiusNm(portObj){
@@ -14747,7 +14753,7 @@ function drawPortMarkers(){
 // at runtime (12k haversines is trivial)
 // rather than pre-binning per port, which keeps the data file minimal.
 //
-//   • User picks a radius band (20/40/60/100/120/140 nm) → only waypoints within
+//   • User picks a radius band (20/40/60/100/120/140/160 nm) → only waypoints within
 //     that distance of the active port are drawn.
 //   • Type column drives a distinct map icon per type (wreck/reef/rock/…).
 //   • GPX export produces a file (port-origin) loadable in any chartplotter.
@@ -14758,7 +14764,7 @@ let _wpRedrawBound = false;              // ensure map move/zoom handlers attach
 let _wpMoveTimer = null;
 let wpRadiusNm = 40;                     // selected radius band (default 40nm)
 let wpTypeFilter = null;                 // null = all types, else Set of type codes
-const WP_RADII = [20, 40, 60, 100, 120, 140];
+const WP_RADII = [20, 40, 60, 100, 120, 140, 160];
 
 // Per-type visual style: glyph + color. Codes match waypoints.js ("wk" etc).
 const WP_TYPE_STYLE = {
@@ -15471,10 +15477,17 @@ function renderWaypointMarkers(force){
   wpLayerGroup.clearLayers();
   _wpRenderedBounds = bounds;
 
+  // Prefer what's on screen: the cache is nearest-port-first, so a wide radius
+  // around Naples can fill the 1200-marker cap with SE FL spots before Gulf
+  // reefs west of the port ever render. Filter to the padded viewport first.
+  let candidates = _wpInRangeCache;
+  if(bounds){
+    candidates = _wpInRangeCache.filter(w => bounds.contains([w.lat, w.lng]));
+  }
+
   let drawn = 0;
-  for(const w of _wpInRangeCache){
+  for(const w of candidates){
     if(drawn >= WP_MAX_DRAW) break;
-    if(bounds && !bounds.contains([w.lat, w.lng])) continue;
     const s = WP_TYPE_STYLE[w.t] || {label:"Spot"};
     const latStr = Math.abs(w.lat).toFixed(5) + (w.lat>=0 ? "° N" : "° S");
     const lngStr = Math.abs(w.lng).toFixed(5) + (w.lng>=0 ? "° E" : "° W");
@@ -15603,7 +15616,7 @@ async function drawRamps(){
 // waypoints in that circle to a GPX file for a chartplotter memory card. This is
 // independent of the live map radius buttons so it never disturbs the map view.
 // ════════════════════════════════════════════════════════════════════════════
-const MCE_MAX_NM = 100;        // hard cap per product spec
+const MCE_MAX_NM = 160;        // charted waypoint export cap (matches server)
 let mceRangeNm = 50;           // default slider value
 let mcePort = null;            // selected port for export — no default; user must choose
 
@@ -15716,7 +15729,7 @@ async function wpExportChartedGPX(){
     else showToast("Subscribe to Pro to export the charted waypoint database.", "info");
     return;
   }
-  const radius = Math.min(MCE_MAX_NM, (typeof maxRangeForPort === "function") ? maxRangeForPort(PORTS[port]) : MCE_MAX_NM);
+  const radius = Math.min(MCE_MAX_NM, (typeof waypointMaxRangeNm === "function") ? waypointMaxRangeNm() : MCE_MAX_NM);
   mcePort = port;
   const { rows, entitled } = await mceChartedRows(port, radius);
   if(!entitled){
@@ -15770,7 +15783,8 @@ function gpxEscape(s){
 }
 // Radius setter from the UI.
 function setWpRadius(nm){
-  wpRadiusNm = nm;
+  const cap = (typeof waypointMaxRangeNm === "function") ? waypointMaxRangeNm() : 160;
+  wpRadiusNm = Math.min(cap, Math.max(20, nm));
   const sel = document.getElementById("wp-radius-select");
   if(sel && Number(sel.value) !== nm) sel.value = String(nm);
   drawWaypoints();
@@ -18839,6 +18853,48 @@ async function signOut(){
   location.reload();
 }
 
+window.bwRefreshSessionState = async function(){
+  if(!window.BW_AUTH || !window.BW_AUTH.getUser || !window.BW_AUTH.getUser()) return;
+  try {
+    if(typeof refreshEntitlement === "function") await refreshEntitlement();
+  } catch(e){ console.error("entitlement refresh failed", e); }
+  if(typeof updateBriefFab === "function") updateBriefFab();
+  if(typeof renderAccountSection === "function") renderAccountSection();
+  if(typeof renderNavPlan === "function") renderNavPlan();
+  if(typeof drawWaypoints === "function" && layerVis && layerVis.waypoints) drawWaypoints();
+};
+
+window.bwRehydrateAccountIfNeeded = async function(){
+  if(!window.BW_AUTH || !window.BW_AUTH.getUser || !window.BW_AUTH.getUser()) return;
+  await window.bwRefreshSessionState();
+  const needsCatches = !(typeof USER_CATCHES !== "undefined" && USER_CATCHES.length);
+  const needsWaypoints = !(typeof WP_state !== "undefined" && Array.isArray(WP_state.userPoints) && WP_state.userPoints.length);
+  if(!needsCatches && !needsWaypoints) return;
+  try {
+    if(needsWaypoints){
+      const wps = await window.BW_AUTH.fetchWaypoints();
+      if(Array.isArray(wps) && wps.length){
+        WP_state.userPoints = wps;
+        if(typeof wpSaveUser === "function") wpSaveUser();
+        if(typeof drawUserWaypoints === "function") drawUserWaypoints();
+      }
+    }
+    if(needsCatches){
+      const catches = await window.BW_AUTH.fetchCatches();
+      if(Array.isArray(catches)){
+        USER_CATCHES.length = 0;
+        catches.forEach((c) => USER_CATCHES.push(c));
+        if(typeof catchSave === "function") catchSave();
+        if(typeof catchRenderLog === "function") catchRenderLog();
+        if(typeof drawCatchPins === "function") drawCatchPins();
+        if(typeof renderMyCatches === "function") renderMyCatches();
+      }
+    }
+  } catch(e){
+    console.error("account rehydrate failed", e);
+  }
+};
+
 window.bwOnSignedIn = async function (user) {
   if(!window.WP_state || !Array.isArray(window.WP_state.userPoints)){
     setTimeout(() => window.bwOnSignedIn(user), 0);
@@ -18913,24 +18969,40 @@ window.bwOnSignedIn = async function (user) {
     }
   } catch(e){ console.error("profile load failed", e); }
   try {
-    WP_state.userPoints = await window.BW_AUTH.fetchWaypoints();
-    if (typeof drawUserWaypoints === "function") drawUserWaypoints();
-
+    const wps = await window.BW_AUTH.fetchWaypoints();
+    if(Array.isArray(wps)){
+      WP_state.userPoints = wps;
+      if(typeof wpSaveUser === "function") wpSaveUser();
+      if(typeof drawUserWaypoints === "function") drawUserWaypoints();
+    }
+  } catch(e){
+    console.error("waypoints hydrate failed", e);
+    if(!WP_state.userPoints.length) WP_state.userPoints = wpLoadUser();
+    if(typeof drawUserWaypoints === "function") drawUserWaypoints();
+  }
+  try {
     const catches = await window.BW_AUTH.fetchCatches();
-    USER_CATCHES.length = 0; catches.forEach((c) => USER_CATCHES.push(c));
-    if (typeof catchRenderLog === "function") catchRenderLog();
-    drawCatchPins();
-
+    if(Array.isArray(catches)){
+      USER_CATCHES.length = 0;
+      catches.forEach((c) => USER_CATCHES.push(c));
+      if(typeof catchSave === "function") catchSave();
+      if(typeof catchRenderLog === "function") catchRenderLog();
+      if(typeof drawCatchPins === "function") drawCatchPins();
+    }
+  } catch(e){
+    console.error("catches hydrate failed", e);
+    if(!USER_CATCHES.length && typeof catchLoad === "function") catchLoad();
+    if(typeof catchRenderLog === "function") catchRenderLog();
+    if(typeof drawCatchPins === "function") drawCatchPins();
+  }
+  try {
     CM_state.log = await window.BW_AUTH.fetchLog("catch_meter");
     TB_state.favorites = await window.BW_AUTH.fetchLog("tide_favorites");
 
     // Load community fishing reports (de-identified) for the forum + reports factor.
     if (typeof loadReports === "function") loadReports();
   } catch (e) {
-    console.error("Account hydrate failed", e);
-    WP_state.userPoints = wpLoadUser();
-    catchLoad();
-    if (typeof drawUserWaypoints === "function") drawUserWaypoints();
+    console.error("logs/reports hydrate failed", e);
   }
 };
 
@@ -19008,8 +19080,9 @@ document.addEventListener("visibilitychange", () => {
   if(document.visibilityState !== "visible") return;
   if(typeof ensureFreshestSatDates === "function") ensureFreshestSatDates();
   if(typeof refreshActiveOceanLayers === "function") refreshActiveOceanLayers();
+  if(typeof bwRehydrateAccountIfNeeded === "function") bwRehydrateAccountIfNeeded();
 });
 window.addEventListener("pageshow", (e) => {
-  if(!e.persisted) return;
-  if(typeof restoreExplainerState === "function") restoreExplainerState();
+  if(e.persisted && typeof restoreExplainerState === "function") restoreExplainerState();
+  if(typeof bwRehydrateAccountIfNeeded === "function") bwRehydrateAccountIfNeeded();
 });

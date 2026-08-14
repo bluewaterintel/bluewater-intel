@@ -100,7 +100,7 @@
     }
   }
 
-  async function onSignedIn(user){
+  async function onSignedIn(user, event){
     if(typeof USER_PREFS !== "undefined"){
       USER_PREFS.account = {
         name: (user.user_metadata && user.user_metadata.full_name) || (user.email ? user.email.split("@")[0] : "Captain"),
@@ -108,8 +108,11 @@
       };
     }
     if(typeof renderAccountSection === "function") renderAccountSection();
-    if(typeof window.bwOnSignedIn === "function"){
+    const fullHydrate = !event || event === "INITIAL_SESSION" || event === "SIGNED_IN";
+    if(fullHydrate && typeof window.bwOnSignedIn === "function"){
       try { await window.bwOnSignedIn(user); } catch(e){ console.error(e); }
+    } else if(typeof window.bwRefreshSessionState === "function"){
+      try { await window.bwRefreshSessionState(); } catch(e){ console.error(e); }
     }
     // FREE TIER (Model B): every signed-in user reaches the app. Entitlement
     // (trial / active subscription / owner) unlocks the PRO features — the Bite
@@ -150,10 +153,10 @@
 
   function wireAuth(){
     if(!window.BW_AUTH){ setTimeout(wireAuth, 100); return; }
-    window.BW_AUTH.onAuthChange(async (user) => {
+    window.BW_AUTH.onAuthChange(async (user, event) => {
       if(user){
         hideBootChrome();
-        await onSignedIn(user);
+        await onSignedIn(user, event);
       }
       // Don't flash the sign-in gate while the saved session is still loading.
       else if(window.BW_AUTH.isAuthInitDone && window.BW_AUTH.isAuthInitDone()){

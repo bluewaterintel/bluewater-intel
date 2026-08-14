@@ -16,7 +16,7 @@
 <script src="bw-iap.js"></script>
 <script src="bw-data-source.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="bw-auth.js?v=20260809g"></script>
+<script src="bw-auth.js?v=20260813a"></script>
 <script src="bw-freshness.js"></script>
 <script src="bw-ocean.js?v=20260719j"></script>
 <script src="bw-wind.js?v=20260712c"></script>
@@ -27,7 +27,7 @@
      Rebuilt from data/Master_Waypoint_Combined_1.csv via scripts/build-waypoints.mjs.
      Loaded via <script src> (not fetch) so it works from a local file:// path with no CORS.
      If this file is missing the app still runs; the Waypoints feature just stays empty. -->
-<script src="bw-waypoints.js?v=20260810a"></script>
+<script src="bw-waypoints.js?v=20260813a"></script>
 <!-- Gulf of Mexico federal OCS platforms (BSEE active surface structures). Rebuild: npm run build:platforms -->
 <script src="bw-platforms-gom.js"></script>
 <script src="bw-data-buoys.js"></script>
@@ -413,13 +413,24 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     right:8px !important;
     width:auto !important;
     max-width:none !important;
-    top:calc(var(--bw-hdr-h, 100px) + 4px) !important;
+    /* Hang flush off the header bottom — the +4px gap showed map on iOS. */
+    top:100% !important;
     max-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--bw-hdr-h, 100px) - 12px) !important;
     overflow-x:hidden !important;
     overflow-y:auto !important;
     overscroll-behavior:contain;
     touch-action:pan-y;
     padding-bottom:env(safe-area-inset-bottom, 0px);
+  }
+  /* Cover subpixel gaps / the header's bottom border so no map bleeds through. */
+  #nav-menu::before{
+    content:"";
+    position:absolute;
+    bottom:100%;
+    left:0;right:0;
+    height:4px;
+    background:#0f2444;
+    pointer-events:none;
   }
 }
 
@@ -2651,7 +2662,7 @@ body.nav-open .leaflet-control-attribution{
       font-weight:600;font-size:15px;cursor:pointer;font-family:inherit">Create New Account</button>
   </div>
 </div>
-<script src="bw-authgate.js?v=20260812b"></script>
+<script src="bw-authgate.js?v=20260813a"></script>
 
 <!-- PRICING / UPGRADE MODAL ------------------------------------------------- -->
 <div id="pricing-modal" style="display:none;position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.62);
@@ -4009,7 +4020,7 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260812p"></script>
+<script src="bw-core.js?v=20260813a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
@@ -5965,7 +5976,7 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
 }
 </style>
 
-<script src="bw-waypoints-ui.js?v=20260724g"></script>
+<script src="bw-waypoints-ui.js?v=20260813a"></script>
 
 <style>
 /* ── 6-DAY FORECAST MODAL ─────────────────────────────────────────────────── */

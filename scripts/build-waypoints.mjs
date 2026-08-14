@@ -12,7 +12,7 @@
  *   node scripts/build-waypoints.mjs --copy "/path/to/source.csv"
  */
 
-import { readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,6 +23,9 @@ const DEFAULT_CSV = join(root, 'data/Master_Waypoint_Combined_1.csv');
 const TYPE_MAP = {
   Wreck: 'wk',
   Reef: 'rf',
+  Rf: 'rf',
+  RF: 'rf',
+  rf: 'rf',
   Structure: 'st',
   Ledge: 'ld',
   Rock: 'rk',
@@ -67,7 +70,13 @@ const TYPES = {
 };
 
 function parseCoord(s, isLat) {
-  const parts = s.trim().split(/\s+/);
+  const raw = String(s || '').trim();
+  const plain = Number(raw);
+  if (Number.isFinite(plain) && !/[NSEW]/i.test(raw)) {
+    if (isLat && plain >= -90 && plain <= 90) return plain;
+    if (!isLat && plain >= -180 && plain <= 180) return plain;
+  }
+  const parts = raw.split(/\s+/);
   const val = parseFloat(parts[0]);
   if (!Number.isFinite(val)) throw new Error(`bad coord: ${s}`);
   const hem = (parts[1] || '').toUpperCase();
@@ -171,6 +180,35 @@ function parseCsv(text) {
   return rows;
 }
 
+function dedupeKey(w) {
+  return `${w.name}|${w.lat.toFixed(5)}|${w.lng.toFixed(5)}`;
+}
+
+function mergeRows(primary, extra) {
+  const seen = new Set(primary.map(dedupeKey));
+  let added = 0;
+  for (const w of extra) {
+    const k = dedupeKey(w);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    primary.push(w);
+    added++;
+  }
+  return added;
+}
+
+function supplementaryCsvPaths(rootDir) {
+  const dir = join(rootDir, 'data', 'supplementary');
+  try {
+    return readdirSync(dir)
+      .filter((f) => f.toLowerCase().endsWith('.csv'))
+      .map((f) => join(dir, f))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
 function main() {
   const args = process.argv.slice(2);
   let csvPath = DEFAULT_CSV;
@@ -197,6 +235,13 @@ function main() {
   const text = readFileSync(csvPath, 'utf8');
   const rows = parseCsv(text);
   console.log(`Parsed ${rows.length} waypoints from ${csvPath}`);
+
+  for (const supPath of supplementaryCsvPaths(root)) {
+    const supText = readFileSync(supPath, 'utf8');
+    const supRows = parseCsv(supText);
+    const added = mergeRows(rows, supRows);
+    console.log(`Merged ${added} new waypoints from ${supPath} (${supRows.length} parsed)`);
+  }
 
   const ndjson = rows.map((w) => JSON.stringify(w)).join('\n') + '\n';
   writeFileSync(join(root, 'supabase-m1/seed/waypoints.ndjson'), ndjson);

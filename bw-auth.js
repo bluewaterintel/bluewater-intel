@@ -55,12 +55,14 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
 
   let _user = null;
   let _authInitDone = false;
+  let _lastAuthEvent = null;
   const listeners = new Set();
 
-  function emit(user) {
+  function emit(user, event) {
     _user = user;
+    if(event) _lastAuthEvent = event;
     listeners.forEach((fn) => {
-      try { fn(user); } catch (e) { console.error(e); }
+      try { fn(user, event || _lastAuthEvent); } catch (e) { console.error(e); }
     });
   }
 
@@ -97,7 +99,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   async function signIn(email, password) {
     const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    emit(data.user);
+    emit(data.user, "SIGNED_IN");
     return data.user;
   }
 
@@ -124,7 +126,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     if (error) throw error;
     // With "Confirm email" enabled, signUp returns user but no session until
     // the user clicks the link — do not emit an unconfirmed user as signed in.
-    if (data.session?.user) emit(data.session.user);
+    if (data.session?.user) emit(data.session.user, "SIGNED_IN");
     return data;
   }
 
@@ -154,7 +156,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   async function signOut() {
     const { error } = await client.auth.signOut();
     if (error) throw error;
-    emit(null);
+    emit(null, "SIGNED_OUT");
   }
 
   async function resetPassword(email) {
@@ -364,7 +366,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     // resolve and emit before the gate has subscribed — that listener would then
     // never learn the user is signed in, and entitlement would never refresh.
     if (_authInitDone) {
-      try { fn(_user); } catch (e) { console.error(e); }
+      try { fn(_user, _lastAuthEvent); } catch (e) { console.error(e); }
     }
     return () => listeners.delete(fn);
   }
@@ -376,7 +378,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   client.auth.onAuthStateChange(async (event, session) => {
     // Skip the pre-storage INITIAL_SESSION null — whenReady() owns first emit.
     if (event === "INITIAL_SESSION" && !_authInitDone) return;
-    emit(session ? session.user : null);
+    emit(session ? session.user : null, event);
     if (event === "PASSWORD_RECOVERY") {
       if (typeof window.openPasswordRecoveryModal === "function") {
         window.openPasswordRecoveryModal();
@@ -396,12 +398,12 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
 
   const _ready = client.auth.getSession().then(({ data: { session } }) => {
     _authInitDone = true;
-    emit(session ? session.user : null);
+    emit(session ? session.user : null, "INITIAL_SESSION");
     return session;
   }).catch((e) => {
     _authInitDone = true;
     console.error("BW_AUTH: getSession failed", e);
-    emit(null);
+    emit(null, "INITIAL_SESSION");
     return null;
   });
 
