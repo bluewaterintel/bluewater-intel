@@ -1826,6 +1826,9 @@ async function fetchForecast(lat, lng){
   return out;
 }
 
+// Exposed for Download My Trip offline prefetch (bw-core.js dtFetchForecasts).
+window.fetchForecast = fetchForecast;
+
 // Nearest NOAA CO-OPS station's high/low tide predictions across a time window,
 // as [{ type:"H"|"L", atMs }]. Reuses the same station-resolution path the
 // header tide uses (bwFetchPortConditions → sources.tide). Returns [] on any gap.

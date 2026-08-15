@@ -197,6 +197,10 @@ const BWI = {
   },
   loadForecast(lat, lng){
     try {
+      if(typeof tripForecastFor === "function"){
+        const trip = tripForecastFor(lat, lng);
+        if(trip && (trip.slots || trip.days)) return trip;
+      }
       const all = JSON.parse(localStorage.getItem(this.FORECAST_CACHE_KEY) || "{}");
       return all[this._fcKey(lat,lng)] || null;
     } catch(e){ return null; }
@@ -1235,8 +1239,8 @@ async function clearTileCache(){
 //
 // Captures everything a captain needs to run offshore even if cell/sat signal
 // drops: the bite map (heat grid + hotspots), the AI Captain's Brief (if one has
-// been generated), tide predictions, in-range waypoints, and the map tiles for
-// the fishing area. Stored in localStorage (JSON) + Cache Storage (tiles via the
+// been generated), tide predictions, in-range waypoints, 6-day wind/sea forecasts
+// for the port/major areas/nearby spots, and the map tiles for the fishing area. Stored in localStorage (JSON) + Cache Storage (tiles via the
 // service worker). When offline, the normal port/species flow transparently
 // falls back to this snapshot (see buildPredictInputs / drawWaypoints /
 // updateHeaderTide fallbacks below).
@@ -1253,8 +1257,17 @@ function tripSave(obj){
   catch(e){
     // Quota exceeded — retry without the (largest) predictInputs payload; the
     // cached heat grid alone still lets the bite map paint offline.
-    try{ const slim=Object.assign({},obj,{predictInputs:null}); localStorage.setItem(TRIP_CACHE_KEY, JSON.stringify(slim)); return true; }
-    catch(e2){ return false; }
+    try{
+      const slim = Object.assign({}, obj, { predictInputs: null });
+      localStorage.setItem(TRIP_CACHE_KEY, JSON.stringify(slim));
+      return true;
+    }catch(e2){
+      try{
+        const slimmer = Object.assign({}, obj, { predictInputs: null, forecasts: null });
+        localStorage.setItem(TRIP_CACHE_KEY, JSON.stringify(slimmer));
+        return true;
+      }catch(e3){ return false; }
+    }
   }
 }
 
@@ -1271,6 +1284,64 @@ function tripPredictInputsCovering(latMin, latMax, lngMin, lngMax){
 }
 function tripWaypointsFor(port){ const t=tripLoad(); return (t && t.port===port && Array.isArray(t.waypoints)) ? t.waypoints : null; }
 function tripTideHeaderFor(port){ const t=tripLoad(); return (t && t.port===port && t.tides && t.tides.headerText) ? t.tides.headerText : null; }
+
+// Rounded lat/lng key — matches BWI._fcKey / showForecast offline lookup.
+function dtForecastSpotKey(lat, lng){
+  return `${Number(lat).toFixed(2)},${Number(lng).toFixed(2)}`;
+}
+function tripForecastFor(lat, lng){
+  const t = tripLoad();
+  if(!t || !t.forecasts) return null;
+  return t.forecasts[dtForecastSpotKey(lat, lng)] || null;
+}
+
+// Spots captains tap for 6-day wind/sea forecasts: home port, major fishing areas,
+// nearest waypoints, and top bite hotspots.
+function dtCollectForecastSpots(port, waypoints, hotspots){
+  const seen = new Set();
+  const spots = [];
+  const add = (lat, lng, name) => {
+    if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const k = dtForecastSpotKey(lat, lng);
+    if(seen.has(k)) return;
+    seen.add(k);
+    spots.push({ lat, lng, name: name || "Spot" });
+  };
+  if(port) add(port.lat, port.lng, port.short || activePort || "Home port");
+  if(typeof nearestMajorFishingAreas === "function"){
+    for(const c of nearestMajorFishingAreas()) add(c.lat, c.lng, c.name);
+  }
+  const wpSorted = (waypoints || []).slice().sort((a, b) => (a.nm || 999) - (b.nm || 999));
+  for(const w of wpSorted.slice(0, 20)) add(w.lat, w.lng, w.name);
+  const hsSorted = (hotspots || []).slice().sort((a, b) => (b.score || 0) - (a.score || 0));
+  for(const h of hsSorted.slice(0, 10)) add(h.lat, h.lng, h.name || "Hotspot");
+  return spots;
+}
+
+async function dtFetchForecasts(spots, onProgress){
+  const fetchFn = (typeof window.fetchForecast === "function") ? window.fetchForecast : null;
+  if(!fetchFn || !spots.length) return {};
+  const out = {};
+  let done = 0;
+  const total = spots.length;
+  const batchSize = 3;
+  for(let i = 0; i < spots.length; i += batchSize){
+    const batch = spots.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (s) => {
+      try {
+        const slots = await fetchFn(s.lat, s.lng);
+        if(slots && slots.length){
+          const k = dtForecastSpotKey(s.lat, s.lng);
+          out[k] = { name: s.name, lat: s.lat, lng: s.lng, slots, savedAt: Date.now() };
+          if(typeof BWI !== "undefined" && BWI.saveForecast) BWI.saveForecast(s.lat, s.lng, slots);
+        }
+      } catch(e){ /* skip — other spots still save */ }
+      done++;
+      if(onProgress) onProgress(done, total);
+    }));
+  }
+  return out;
+}
 
 // Format the header tide string from a fetchNextTideEvent() result (mirrors the
 // live formatting in updateHeaderTide so cached + live look identical).
@@ -1409,7 +1480,15 @@ async function dtDownload(){
     const brief = (typeof aiCOA === "string" && aiCOA.trim()) ? { text: aiCOA, atMs: Date.now() } : null;
     setStep("brief", brief ? "ok" : "skip", brief ? "Included" : "Generate a brief first to include it");
 
-    // 5) Map tiles for the fishing area
+    // 5) 6-day wind/sea forecasts for port, major areas, waypoints & hotspots
+    const fcSpots = dtCollectForecastSpots(p, waypoints, hotspots);
+    setStep("forecasts","run",`Fetching forecasts (${fcSpots.length} spots)…`);
+    const forecasts = await dtFetchForecasts(fcSpots, (d, t) =>
+      dtSetStep("forecasts","run", `Fetching forecasts… ${d}/${t}`));
+    const fcN = Object.keys(forecasts).length;
+    setStep("forecasts", fcN ? "ok" : "warn", fcN ? `${fcN} spot${fcN === 1 ? "" : "s"}` : "None fetched");
+
+    // 6) Map tiles for the fishing area
     const bbox = dtBboxFromGrid(heatGrid);
     setStep("tiles","run","Caching map tiles…");
     const tileRes = await dtPrefetchTiles(bbox, (d,t) => dtSetStep("tiles","run", `Caching map tiles… ${d}/${t}`));
@@ -1437,7 +1516,11 @@ async function dtDownload(){
       tides,
       waypoints,
       brief,
-      counts: { heat: heatGrid.length, hotspots: hotspots.length, waypoints: waypoints.length, hasBrief: !!brief, hasTides: !!tides },
+      forecasts,
+      counts: {
+        heat: heatGrid.length, hotspots: hotspots.length, waypoints: waypoints.length,
+        hasTides: !!tides, hasBrief: !!brief, forecasts: fcN,
+      },
     };
     const ok = tripSave(snapshot);
     if(typeof BWI !== "undefined") BWI.track("trip_download", { port: activePort, species: activeSpId, heat: heatGrid.length, wp: waypoints.length });
@@ -1539,6 +1622,7 @@ const DT_STEPS = [
   { id:"tides",  label:"Tide predictions" },
   { id:"wp",     label:"Waypoints in range" },
   { id:"brief",  label:"AI Captain's Brief" },
+  { id:"forecasts", label:"6-day forecasts (port, spots & waypoints)" },
   { id:"tiles",  label:"Map tiles for the area" },
 ];
 function dtStepIcon(state){
@@ -1579,6 +1663,7 @@ function dtWhatGetsSavedHtml(){
         <li>Bite map scores &amp; hotspots for your species</li>
         <li>Tide predictions for your port</li>
         <li>Waypoints in range</li>
+        <li>6-day wind &amp; sea forecasts for your port, major fishing areas, and nearby spots</li>
         <li>Captain's Brief (if you generated one)</li>
         <li>Chart tiles for your fishing area</li>
       </ul>
@@ -1628,6 +1713,7 @@ function dtRender(){
       t.counts.hotspots ? `${t.counts.hotspots} hotspots` : null,
       t.counts.waypoints ? `${t.counts.waypoints.toLocaleString()} waypoints` : null,
       t.counts.hasTides ? "tides" : null,
+      t.counts.forecasts ? `${t.counts.forecasts} forecasts` : null,
       t.counts.hasBrief ? "brief" : null,
     ].filter(Boolean).map(c => `<span class="dt-chip">${c}</span>`).join("");
     savedBlock = `
