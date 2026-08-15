@@ -4560,7 +4560,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-step-num">2</div>
       <div class="tut-step-body">
         <div class="tut-step-title">Pick your target species</div>
-        <div class="tut-step-desc">Tap <b>TARGET SPECIES</b> and choose what you're after. 50 species are in the picker — each has its own habitat preferences (depth, temperature range, structure type, thermal-break tolerance). If you pick a species that doesn't live near your port, the app will tell you so directly.</div>
+        <div class="tut-step-desc">Tap <b>TARGET SPECIES</b> and choose what you're after. 50 species are in the picker — each one is modeled with its own regional habitat profile. If you pick a species that doesn't live near your port, the app will tell you so directly.</div>
       </div>
     </div>
 
@@ -4622,7 +4622,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-feature-icon">🎣</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Catch logging with auto-filled conditions</div>
-        <div class="tut-feature-desc">Open <b>Menu → My Catches</b> and tap <b>Log a Catch</b> to record one. Choose species, size, time, and location (map center or GPS). The app reads SST, moon phase, tide stage, pressure trend, and wind direction from the same data sources driving the Bite Map — so your catch record is internally consistent with what the algorithm showed. Optionally attach a photo and opt in to share the catch as an anonymous fishing report (which then feeds back into predictions). Once you've logged a handful, a <b>Your Patterns</b> panel mines your catches for the conditions that produce fish — best moon phase, tide, pressure trend, wind, water-temp band, and time of day — and can break it down per species.</div>
+        <div class="tut-feature-desc">Open <b>Menu → My Catches</b> and tap <b>Log a Catch</b> to record one. Choose species, size, time, and location (map center or GPS). The app auto-fills ocean and weather conditions from the same sources shown on the map. Optionally attach a photo and opt in to share the catch as an anonymous fishing report (which can feed back into predictions). Once you've logged a handful, a <b>Your Patterns</b> panel summarizes the conditions that show up most often in your successful trips — and can break it down per species.</div>
       </div>
     </div>
 
@@ -4640,7 +4640,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-feature-icon">🛰</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Satellite ocean data overlays</div>
-        <div class="tut-feature-desc">Two NASA satellite layers, toggleable in the Layers panel under "OCEAN DATA": <b>Sea Surface Temp</b> (MUR 1km — cloud-free, hi-res, shows the Gulf Stream wall and temp breaks) and <b>Chlorophyll-A</b> (VIIRS 1km — water color/productivity, where bait stacks along the green-to-blue boundary). These are the same data products the bite score is computed from, so the map matches the forecast. Both work on any basemap. The color legend appears at top-left when active. ~1 day processing lag is normal for satellite ocean data.</div>
+        <div class="tut-feature-desc">Two NASA satellite layers, toggleable in the Layers panel under "OCEAN DATA": <b>Sea Surface Temp</b> (MUR 1km — cloud-free, hi-res, shows the Gulf Stream wall and temp breaks) and <b>Chlorophyll-A</b> (VIIRS 1km — water color/productivity, where bait stacks along the green-to-blue boundary). Both work on any basemap. The color legend appears at top-left when active, along with the date the imagery is from.</div>
       </div>
     </div>
 
@@ -4649,7 +4649,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-feature-icon">💨</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Animated wind layer</div>
-        <div class="tut-feature-desc">Toggle <b>Wind (animated)</b> under Ocean Data for a live particle wind field — streaks show direction and are colored by speed (calm green → strong red). Data comes from the <b>GFS/HRRR seamless blend</b>: HRRR at 3 km for nearshore waters within 48 h, then GFS offshore and beyond. For a point forecast with gusts and 6-day outlook, tap any waypoint and use the 6-Day Forecast tab.</div>
+        <div class="tut-feature-desc">Toggle <b>Wind (animated)</b> under Ocean Data for a live particle wind field — streaks show direction and are colored by speed (calm green → strong red). For a point forecast with gusts and a multi-day outlook, tap any waypoint and use the 6-Day Forecast tab.</div>
       </div>
     </div>
 
@@ -4657,8 +4657,8 @@ body.nav-open .leaflet-control-attribution{
     <div class="tut-feature">
       <div class="tut-feature-icon">📐</div>
       <div class="tut-feature-body">
-        <div class="tut-feature-title">Real-feature bathymetry under the hood</div>
-        <div class="tut-feature-desc">Depth-driven habitat scoring is anchored to NOAA CUDEM / BlueTopo (~3 m) on US waters (ETOPO elsewhere), blended with 201 real-world reference points — canyon heads, named banks, shelf-edge stations, and Gulf canyons. The algorithm merges these with the regional shelf model so depth is correct around real features instead of just averaged. To <em>see</em> the seafloor, switch the basemap to Ocean Bathymetric and tap the map for depth in feet and fathoms.</div>
+        <div class="tut-feature-title">Bathymetry on the map</div>
+        <div class="tut-feature-desc">US waters use NOAA BlueTopo bathymetry; other regions use global elevation data. Switch the basemap to <b>Ocean Bathymetric</b> or <b>Seafloor Relief</b> to visualize the bottom, toggle <b>Depth Contours</b> in Layers as an overlay, and tap the map for depth in feet and fathoms.</div>
       </div>
     </div>
 
@@ -4670,7 +4670,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-data-icon">🌡</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Sea Surface Temperature (SST)</div>
-        <div class="tut-data-desc">Every species has a temperature range where it actively feeds. Yellowfin like 70-78°F water; bluefin prefer cooler 58-68°F; sailfish want 74-82°F. SST is the single most heavily-weighted input for offshore species. Gaussian falloff: in-range = full credit, edges get partial credit, way out = zero.</div>
+        <div class="tut-data-desc">Each species has water temperatures where it is most likely to feed. The Bite Map compares local sea surface temperature to that species' profile for your region. In the breakdown this shows as <b>Water temperature</b>.</div>
       </div>
     </div>
 
@@ -4678,7 +4678,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-data-icon">📊</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Temperature break</div>
-        <div class="tut-data-desc">The boundary between cold and warm water — what fishermen call a "color line" or "the wall" — concentrates baitfish, which attracts predators. We measure the temperature gradient and treat sharp breaks as a strong signal for pelagics. In the bite breakdown this shows as <b>Temperature break</b>.</div>
+        <div class="tut-data-desc">The boundary between cold and warm water — what fishermen call a "color line" or "the wall" — can concentrate baitfish and attract predators. In the bite breakdown this shows as <b>Temperature break</b>.</div>
       </div>
     </div>
 
@@ -4686,7 +4686,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-data-icon">◎</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Front convergence</div>
-        <div class="tut-data-desc">Where a temperature break, color edge, ocean-current shear, and satellite sea-surface height (SSH) features stack together — the same <b>convergence</b> ROFFS and Hiltons chart for tuna. On the bite map this shows up as <b>Front convergence</b> in the breakdown; toggle <b>Front Convergence (SSH)</b> under Ocean Data to see the underlying eddies and breaks. Magenta lines mark the strongest SSH edges near your port.</div>
+        <div class="tut-data-desc">Where ocean features stack together — temperature edges, water color, current shear, and sea-surface height anomalies — bait and predators often concentrate. On the bite map this shows up as <b>Front convergence</b> in the breakdown; toggle <b>Front Convergence (SSH)</b> under Ocean Data to see the underlying eddies and breaks on the chart.</div>
       </div>
     </div>
 
@@ -4694,7 +4694,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-data-icon">⬇</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Water depth (bathymetry)</div>
-        <div class="tut-data-desc">Depth determines what's possible — yellowfin won't be in 30 ft of water no matter how warm it is. Each species has preferred depth bands. On US coasts we score against NOAA CUDEM (BlueTopo, ~3 m); elsewhere ETOPO fills in. Flexible species like bluefin have multiple bands (shallow shelf for NC fall blitz, deeper canyon water for summer giants, Gulf canyons for Apr-Jun spawners). Offshore pelagics are also held to <b>blue water</b>: the map keeps tuna and billfish out on the shelf edge and beyond instead of lighting up the inner shelf just because the surface is warm. And deep <b>bottom species</b> like golden tilefish are scored on an estimated <b>bottom</b> temperature for their depth — not the warm surface — so they correctly show up over deep structure (e.g. Norfolk Canyon) year-round.</div>
+        <div class="tut-data-desc">Depth determines what habitat is available — a species won't score well in water that is too shallow or too deep for it. The map uses NOAA bathymetry on US coasts and global elevation data elsewhere. Offshore pelagics are kept over appropriate blue water rather than inshore shelf, and bottom species are evaluated against conditions at depth, not just the surface. In the breakdown this shows as <b>Depth</b>.</div>
       </div>
     </div>
 
@@ -4702,7 +4702,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-data-icon">🌿</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Chlorophyll concentration</div>
-        <div class="tut-data-desc">Indicates how green the water is, which drives the food chain. Inshore species like clean coastal water with some chlorophyll; offshore pelagics want clear blue water (low chlorophyll). Color edges between green and blue water often hold the most fish.</div>
+        <div class="tut-data-desc">Water color and productivity help describe the food chain. Clean blue water offshore and greener inshore water each suit different species. Edges between green and blue water are often productive.</div>
       </div>
     </div>
 
@@ -4710,7 +4710,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-data-icon">📈</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Barometric pressure trend</div>
-        <div class="tut-data-desc">Falling pressure (storm approaching) often triggers active feeding. Stable high pressure can shut down the bite. We factor in the recent 24-hour pressure trend.</div>
+        <div class="tut-data-desc">Falling pressure (storm approaching) often triggers active feeding. Stable high pressure can shut down the bite. Recent pressure trends are included in the score.</div>
       </div>
     </div>
 
@@ -4718,7 +4718,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-data-icon">🌙</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Solunar windows, tide stage &amp; moon phase</div>
-        <div class="tut-data-desc">Major and minor solunar feeding windows are calculated from the moon's position. For inshore species especially, tide stage matters a lot — most inshore action happens on a moving tide. Moon phase itself is also weighted: new and full moons drive stronger tides and more aggressive nighttime feeding for many inshore species.</div>
+        <div class="tut-data-desc">Major and minor solunar feeding windows are calculated from the moon's position. For inshore species especially, tide stage matters — most inshore action happens on a moving tide. New and full moons also tend to drive stronger tides and more aggressive feeding for many species.</div>
       </div>
     </div>
 
@@ -4733,8 +4733,8 @@ body.nav-open .leaflet-control-attribution{
     <div class="tut-data">
       <div class="tut-data-icon">📅</div>
       <div class="tut-data-body">
-        <div class="tut-data-title">Seasonal patterns with regional shifts</div>
-        <div class="tut-data-desc">Every species has known seasonal patterns by region. Striped bass run south to NC in winter and back to MA in summer. Tuna show up in mid-Atlantic canyons starting in late spring. Tarpon migration runs Florida → Carolinas → Chesapeake on a known schedule. Latitude-shifted seasons account for the same species running 4-6 weeks later as you move north. Crucially, season and range now act as a <b>gate</b>: if a species is out of season or simply outside its real range for your area (for example, blackfin tuna far north of their Gulf-Stream grounds), the map suppresses it and the breakdown flags it with high confidence — rather than lighting up spots where the fish wouldn't actually be.</div>
+        <div class="tut-data-title">Season &amp; range</div>
+        <div class="tut-data-desc">Season and geographic range act as a gate: if a species is out of season or outside its normal range for your area, the map suppresses it and the breakdown flags it with high confidence — rather than lighting up spots where the fish wouldn't realistically be.</div>
       </div>
     </div>
 
@@ -4742,7 +4742,7 @@ body.nav-open .leaflet-control-attribution{
       <div class="tut-data-icon">📍</div>
       <div class="tut-data-body">
         <div class="tut-data-title">Recent catch reports</div>
-        <div class="tut-data-desc">Recent fishing reports for a species near a location bump up scores in that area. Reports decay with an ~8-hour half-life — a 2-hour-old report carries full weight, yesterday's much less. Reports that include a port (matched within ~24–90 nm of that port) move the Bite Map; posts without a usable port show in the forum but do not shift scores. Recency uses the date fished when provided.</div>
+        <div class="tut-data-desc">Recent fishing reports for a species near a location can bump scores in that area. Newer reports carry more weight than older ones. Reports tied to a port near the bite area can influence the Bite Map; posts without a usable location show in the forum but do not shift scores.</div>
       </div>
     </div>
 
