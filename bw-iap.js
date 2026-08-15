@@ -75,13 +75,28 @@
     await ensureConfigured();
     const plugin = getPurchasesPlugin();
     const productId = interval === "year" ? PRODUCT.annual : PRODUCT.monthly;
-    const offerings = await plugin.getOfferings();
-    const pkg = offerings?.current?.availablePackages?.find(
-      (p) => p.product && p.product.identifier === productId,
-    ) || offerings?.current?.availablePackages?.[0];
-    if (!pkg) throw new Error("Subscription not available in the App Store yet. Check App Store Connect + RevenueCat.");
-    const { customerInfo } = await plugin.purchasePackage({ aPackage: pkg });
-    // RevenueCat webhook updates Supabase; poll until entitlement appears.
+
+    // Prefer offerings when configured; fall back to direct StoreKit product purchase.
+    try {
+      const offerings = await plugin.getOfferings();
+      const pkg = offerings?.current?.availablePackages?.find(
+        (p) => p.product && p.product.identifier === productId,
+      ) || offerings?.current?.availablePackages?.[0];
+      if (pkg) {
+        const { customerInfo } = await plugin.purchasePackage({ aPackage: pkg });
+        await refreshEntitlementAfterPurchase();
+        return customerInfo;
+      }
+    } catch (e) {
+      console.warn("RevenueCat offerings unavailable, trying direct product purchase", e);
+    }
+
+    const { products } = await plugin.getProducts({ productIdentifiers: [productId] });
+    const product = products && products.find((p) => p.identifier === productId);
+    if (!product) {
+      throw new Error("Subscription not available in the App Store yet. Check App Store Connect + RevenueCat product catalog.");
+    }
+    const { customerInfo } = await plugin.purchaseStoreProduct({ product });
     await refreshEntitlementAfterPurchase();
     return customerInfo;
   }

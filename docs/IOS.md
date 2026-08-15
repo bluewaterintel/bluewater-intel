@@ -203,11 +203,19 @@ We use [RevenueCat](https://www.revenuecat.com) (free tier available) because it
    - Bundle ID: `com.bluewaterintel.app`
    - Connect App Store Connect (follow their wizard — you'll need an **App Store Connect API key**)
 
-### 6.2 Add products & entitlement
+### 6.2 Add products, entitlement & offering
 
-1. **Product catalog** → import/link your two subscription product IDs
+1. **Product catalog** → import/link your two App Store subscription product IDs:
+   - `com.bluewaterintel.app.pro.monthly`
+   - `com.bluewaterintel.app.pro.annual`
 2. **Entitlements** → create entitlement named **`pro`**
-3. Attach both subscriptions to the **`pro`** entitlement
+3. Attach **both** App Store subscriptions to the **`pro`** entitlement
+4. **Offerings** → open **default** (or create one) → set as **Current**
+5. Add two packages to that offering:
+   - **Monthly** → `com.bluewaterintel.app.pro.monthly`
+   - **Annual** → `com.bluewaterintel.app.pro.annual`
+
+If the **Current** offering is empty, the app falls back to direct StoreKit purchase — but entitlements/webhooks still require step 3 above.
 
 ### 6.3 API keys
 
