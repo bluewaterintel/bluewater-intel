@@ -42,6 +42,8 @@ function main() {
   }
 
   for (const name of readdirSync(root)) {
+    // www/bw-config.js is generated above with --native (RevenueCat key); don't overwrite.
+    if (name === "bw-config.js") continue;
     if (!COPY_GLOBS.some((re) => re.test(name))) continue;
     cpSync(join(root, name), join(www, name));
   }
