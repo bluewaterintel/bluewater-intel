@@ -287,11 +287,28 @@ Apple **does not** allow testing real IAP in the simulator. Use a **physical dev
 
 ## Part 8 — TestFlight (beta testing)
 
+### 8.1 Upload from Xcode (local)
+
 1. In Xcode: set **Version** (e.g. `1.0.0`) and **Build** (e.g. `1`) under **General**
 2. **Product → Archive** (select **Any iOS Device** first, not simulator)
 3. When Organizer opens → **Distribute App** → **App Store Connect** → **Upload**
 4. In App Store Connect → **TestFlight** tab → wait for processing (~15–30 min)
 5. **Internal Testing** → add yourself → install **TestFlight** app on iPhone → install build
+
+### 8.2 Xcode Cloud (CI builds)
+
+The repo includes `ios/App/ci_scripts/ci_post_clone.sh`, which runs `npm ci`, `npm run cap:sync`, and `pod install` before archive. **Pods/** is gitignored (correct), so Xcode Cloud must generate it — without this script you get:
+
+> Unable to open base configuration reference file `Pods-App.release.xcconfig`
+
+**Workflow settings:**
+
+1. Open **`App.xcworkspace`** (not `App.xcodeproj`) when creating the workflow
+2. **Environment variables** (Workflow → Edit → Environment) — add as secrets:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `REVENUECAT_IOS_API_KEY`
+3. Commit and push `ci_post_clone.sh`, then re-run the workflow on `main`
 
 ---
 
