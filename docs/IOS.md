@@ -304,13 +304,10 @@ The repo includes `ios/App/ci_scripts/ci_post_clone.sh`, which runs `npm ci`, `n
 **Workflow settings:**
 
 1. Open **`App.xcworkspace`** (not `App.xcodeproj`) when creating the workflow
-2. **Environment variables** (Workflow → Edit → Environment) — add as secrets:
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
-   - `REVENUECAT_IOS_API_KEY`
-3. Commit and push `ci_post_clone.sh`, then **start a new build** on `main`
+2. **Environment variables are optional** — public iOS client keys live in `ios-resources/native-client-config.json` and are used when Xcode Cloud has no secrets configured
+3. After pushing CI scripts, **start a new build** on latest `main` (do not **Re-run** an old failed build — that repeats the pre-fix commit)
 
-**Re-run vs new build:** **Re-run** / **Rebuild** repeats the **same commit** as the failed build. After pushing the CI scripts, use **Start Build** on latest `main` (commit should be `ee8bf02` or later). In Xcode: Report navigator → Cloud → Control-click the workflow → **Start Build**. Confirm the build log shows `Installing npm dependencies…` during the post-clone step.
+**Re-run vs new build:** **Re-run** / **Rebuild** repeats the **same commit** as the failed build. Use **Start Build** on latest `main`. In Xcode: Report navigator → Cloud → Control-click the workflow → **Start Build**. Confirm the build log shows `Installing npm dependencies…` during post-clone.
 
 ---
 

@@ -8,9 +8,24 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const envPath = join(root, '.env');
+const nativeDefaultsPath = join(root, 'ios-resources/native-client-config.json');
+
+function loadNativeDefaults() {
+  if (!existsSync(nativeDefaultsPath)) return {};
+  try {
+    const j = JSON.parse(readFileSync(nativeDefaultsPath, 'utf8'));
+    return {
+      SUPABASE_URL: j.supabaseUrl || '',
+      SUPABASE_ANON_KEY: j.supabaseAnonKey || '',
+      REVENUECAT_IOS_API_KEY: j.revenueCatIosApiKey || '',
+    };
+  } catch {
+    return {};
+  }
+}
 
 function loadEnv() {
-  const env = { ...process.env };
+  const env = { ...loadNativeDefaults(), ...process.env };
   if (existsSync(envPath)) {
     for (const line of readFileSync(envPath, 'utf8').split('\n')) {
       const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
