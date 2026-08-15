@@ -54,6 +54,14 @@
       App.getLaunchUrl?.().then((r) => {
         if (r && r.url) handleAuthDeepLink(r.url);
       }).catch(() => {});
+      // iOS/Android: persist map layer toggles across background/resume.
+      App.addListener("appStateChange", ({ isActive }) => {
+        if (isActive) {
+          if (typeof restoreSessionLayerState === "function") restoreSessionLayerState();
+        } else if (typeof saveSessionLayerState === "function") {
+          saveSessionLayerState();
+        }
+      });
     }
   }
 

@@ -338,6 +338,100 @@ let pinLL=null;
 let _briefRunPlanSpots=null;
 let portMarkers=[], canyonLayers=[], catchLayers=[], closureLayers=[];
 let layerVis={spots:true, ports:true, predict:false, loran:false, catches:false, sst:false, chlor:false, radar:false, closures:false, platforms:false, buoys:false, wind:false, currents:false, altimetry:false, waypoints:false, ramps:false, relief:false, contours:false};
+
+// ── Session layer snapshot (iOS background / resume) ─────────────────────────
+// Hard close clears sessionStorage → initMap applies Settings defaults.
+// Background, quick return, or WebView reload within the same app session → restore.
+const SESSION_LAYERS_KEY = "bwi.session.layers.v1";
+const SESSION_RUNNING_KEY = "bwi.session.running";
+
+function syncLayerCheckboxesFromVis(){
+  if(typeof layerVis === "undefined") return;
+  for(const k of Object.keys(layerVis)){
+    const chk = document.getElementById("chk-" + k);
+    if(chk) chk.checked = !!layerVis[k];
+  }
+}
+
+function saveSessionLayerState(){
+  if(typeof layerVis === "undefined") return;
+  try {
+    sessionStorage.setItem(SESSION_RUNNING_KEY, "1");
+    sessionStorage.setItem(SESSION_LAYERS_KEY, JSON.stringify({
+      layerVis: Object.assign({}, layerVis),
+      predictUserOff: !!_predictUserOff,
+    }));
+  } catch(e){}
+}
+
+function restoreSessionLayerState(){
+  if(typeof layerVis === "undefined" || typeof MAP === "undefined" || !MAP) return false;
+  try {
+    if(sessionStorage.getItem(SESSION_RUNNING_KEY) !== "1") return false;
+    const raw = sessionStorage.getItem(SESSION_LAYERS_KEY);
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    if(!data || !data.layerVis) return false;
+    Object.assign(layerVis, data.layerVis);
+    if(typeof data.predictUserOff === "boolean") _predictUserOff = data.predictUserOff;
+    syncLayerCheckboxesFromVis();
+    applyLayerVisibilityToMap();
+    return true;
+  } catch(e){ return false; }
+}
+
+function applyLayerVisibilityToMap(){
+  if(!MAP) return;
+  if(typeof drawCanyons === "function") drawCanyons();
+  if(typeof drawPortMarkers === "function") drawPortMarkers();
+  if(typeof drawLoranLines === "function") drawLoranLines();
+  if(typeof drawCatchPins === "function") drawCatchPins();
+  if(typeof drawClosures === "function") drawClosures();
+  if(typeof drawPrediction === "function") drawPrediction();
+  if(typeof drawWind === "function") drawWind();
+  if(typeof drawCurrents === "function") drawCurrents();
+  if(typeof drawAltimetry === "function") drawAltimetry();
+  if(typeof sstLayer !== "undefined" && sstLayer){
+    if(layerVis.sst){
+      if(typeof syncSstOverlayMode === "function") syncSstOverlayMode();
+      else { sstLayer.setOpacity(oceanOpacity.sst); sstLayer.addTo(MAP); }
+    } else {
+      if(MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
+      if(typeof sstForecastLayer !== "undefined" && sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
+    }
+  }
+  if(typeof chlorLayer !== "undefined" && chlorLayer){
+    if(layerVis.chlor){ chlorLayer.setOpacity(oceanOpacity.chlor); chlorLayer.addTo(MAP); }
+    else if(MAP.hasLayer(chlorLayer)) MAP.removeLayer(chlorLayer);
+  }
+  if(typeof radarLayer !== "undefined" && radarLayer){
+    if(layerVis.radar) radarLayer.addTo(MAP);
+    else {
+      if(MAP.hasLayer(radarLayer)) MAP.removeLayer(radarLayer);
+      if(typeof stopRadarLoop === "function") stopRadarLoop();
+    }
+  }
+  if(typeof depthContoursLayer !== "undefined" && depthContoursLayer){
+    if(layerVis.contours){
+      depthContoursLayer.setOpacity(DEPTH_CONTOURS_OPACITY);
+      depthContoursLayer.addTo(MAP);
+    } else if(MAP.hasLayer(depthContoursLayer)) MAP.removeLayer(depthContoursLayer);
+  }
+  if(typeof drawWaypoints === "function") drawWaypoints();
+  if(typeof drawUserWaypoints === "function") drawUserWaypoints();
+  if(typeof drawRamps === "function") drawRamps();
+  if(typeof drawPlatforms === "function") drawPlatforms();
+  if(typeof drawBuoys === "function") drawBuoys();
+  if(typeof updateOceanLegend === "function") updateOceanLegend();
+  if(typeof updateSatDateControlVisibility === "function") updateSatDateControlVisibility();
+  if(typeof updateOpacityControl === "function") updateOpacityControl();
+  if(typeof updateForecastSliderVisibility === "function") updateForecastSliderVisibility();
+  if(typeof updateRadarLoopControlVisibility === "function") updateRadarLoopControlVisibility();
+  if(typeof updateWaypointControlVisibility === "function") updateWaypointControlVisibility();
+  if(typeof updateBiteBanner === "function") updateBiteBanner();
+  if(typeof updateBathyAttribution === "function") updateBathyAttribution();
+  if(typeof scheduleHeatMaskRepaint === "function") scheduleHeatMaskRepaint();
+}
 let predictLayers=[], predictionData=null, predictionExplainer=null;
 // PERFORMANCE: instead of creating one interactive L.circleMarker per grid cell
 // (which was thousands of SVG nodes Leaflet had to reposition on every zoom —
@@ -1014,12 +1108,23 @@ async function initMap(){
 
   drawCatchPins();
   drawClosures();
-  // Ports, Major Fishing Areas, and LORAN follow Settings → Default Map Layers.
-  if(typeof applyDefaultMapLayers === "function") applyDefaultMapLayers();
-  else {
-    drawCanyons();
-    drawPortMarkers();
+  // Fresh launch: Settings defaults. Same-session resume restores the snapshot
+  // saved on background (see saveSessionLayerState / visibilitychange).
+  const restoredLayers = typeof restoreSessionLayerState === "function" && restoreSessionLayerState();
+  if(restoredLayers){
+    /* layers restored from session */
+  } else {
+    if(typeof applyDefaultMapLayers === "function") applyDefaultMapLayers();
+    else {
+      drawCanyons();
+      drawPortMarkers();
+    }
+    if(typeof applyDefaultContours === "function") applyDefaultContours();
   }
+  try {
+    sessionStorage.setItem(SESSION_RUNNING_KEY, "1");
+    if(typeof saveSessionLayerState === "function") saveSessionLayerState();
+  } catch(e){}
   // User waypoints/catches hydrate from account on sign-in (bwOnSignedIn).
   drawUserWaypoints();
   buildSpDropdown();
@@ -19242,7 +19347,8 @@ window.bwOnSignedIn = async function (user) {
     }
     // Refresh the Settings modal controls so the synced values are reflected.
     if(typeof refreshSettingsModal === "function") refreshSettingsModal();
-    if(typeof applyDefaultMapLayers === "function") applyDefaultMapLayers();
+    // Layer toggles are session state — don't reset LORAN/ports/spots on profile
+    // sync (iOS resume can re-run this path and was unchecking LORAN).
 
     // Recenter the map to the login/home port ONLY on the genuine sign-in, not
     // on every onAuthChange re-fire. Supabase fires onAuthChange again on token
@@ -19364,12 +19470,21 @@ document.addEventListener('click',e=>{
 
 window.addEventListener("load",initMap);
 document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "hidden"){
+    if(typeof saveSessionLayerState === "function") saveSessionLayerState();
+    return;
+  }
   if(document.visibilityState !== "visible") return;
+  if(typeof restoreSessionLayerState === "function") restoreSessionLayerState();
   if(typeof ensureFreshestSatDates === "function") ensureFreshestSatDates();
   if(typeof refreshActiveOceanLayers === "function") refreshActiveOceanLayers();
   if(typeof bwRehydrateAccountIfNeeded === "function") bwRehydrateAccountIfNeeded();
 });
+window.addEventListener("pagehide", () => {
+  if(typeof saveSessionLayerState === "function") saveSessionLayerState();
+});
 window.addEventListener("pageshow", (e) => {
   if(e.persisted && typeof restoreExplainerState === "function") restoreExplainerState();
+  if(typeof restoreSessionLayerState === "function") restoreSessionLayerState();
   if(typeof bwRehydrateAccountIfNeeded === "function") bwRehydrateAccountIfNeeded();
 });
