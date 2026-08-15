@@ -53,6 +53,7 @@
   window.openPricing = async function(){
     const m = document.getElementById("pricing-modal"); if(!m) return;
     const msg = document.getElementById("pricing-msg"); if(msg) msg.style.display="none";
+    if(typeof adaptPricingForNative === "function") adaptPricingForNative();
     m.style.display = "flex";
   };
   window.closePricing = function(){ const m=document.getElementById("pricing-modal"); if(m) m.style.display="none"; };
@@ -107,6 +108,7 @@
     const g = document.getElementById("plan-gate");
     const m = document.getElementById("plan-gate-msg");
     if(m) m.style.display = "none";
+    if(typeof adaptPricingForNative === "function") adaptPricingForNative();
     const auth = document.getElementById("bw-auth-gate");
     const signedIn = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
     if(auth) auth.style.display = signedIn ? "none" : "flex";
@@ -451,3 +453,20 @@
     }
   } catch(e){}
 })();
+
+// iOS/Android: swap Stripe checkout copy for App Store billing on native builds.
+window.adaptPricingForNative = function(){
+  if(!window.BW_NATIVE) return;
+  const note = document.getElementById("pricing-checkout-note");
+  if(note) note.textContent = "Billed through the App Store. Manage or cancel in iPhone Settings → Subscriptions.";
+  const planNote = document.getElementById("plan-gate-checkout-note");
+  if(planNote){
+    planNote.innerHTML = 'Billed through the App Store. By continuing you agree to the '
+      + '<a href="#" onclick="event.preventDefault();if(typeof openLegal===\'function\')openLegal();" style="color:#7dd3fc;text-decoration:none">Terms &amp; subscription policy</a>.';
+  }
+};
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", () => { if(typeof adaptPricingForNative === "function") adaptPricingForNative(); });
+} else if(typeof adaptPricingForNative === "function"){
+  adaptPricingForNative();
+}

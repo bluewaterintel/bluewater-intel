@@ -2692,21 +2692,21 @@ body.nav-open .leaflet-control-attribution{
     <div style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:12px;margin-bottom:14px">
       <div style="font-size:14px;font-weight:800;color:#86efac;margin-bottom:3px">Start your 7-day free trial</div>
       <div style="font-size:11px;color:#cfe5ff;line-height:1.45;margin-bottom:9px">Full app — the Bite Map, ocean &amp; wind layers, forecasts and more, plus <b>1 free AI Captain's Brief</b> for the trial. A card is required; you'll be billed $12.99/mo after 7 days unless you cancel first.</div>
-      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month',trial:true})" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start free trial</button>
+      <button class="bw-buy" type="button" onclick="bwSubscribe('month',{trial:true})" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start free trial</button>
     </div>
 
     <div style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:12px 0 6px">Subscription — full app + 2 AI briefs/day</div>
     <div style="font-size:11px;color:#9ec5e8;margin-bottom:8px">Everything in the app, including all charted waypoints for your home port.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month'})">Monthly — $12.99/mo</button>
-      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'year'})">Annual — $109.99/yr</button>
+      <button class="bw-buy" type="button" onclick="bwSubscribe('month')">Monthly — $12.99/mo</button>
+      <button class="bw-buy" type="button" onclick="bwSubscribe('year')">Annual — $109.99/yr</button>
     </div>
     <div style="font-size:10px;color:#7d9bb8;margin-top:10px;line-height:1.5;text-align:center">Pro includes everything: the Bite Map, ocean &amp; wind layers, all charted waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.</div>
 
     <div style="margin-top:16px;text-align:center">
       <a href="#" onclick="event.preventDefault();bwManageBilling()" style="color:#7dd3fc;font-size:12.5px;text-decoration:none">Manage billing / cancel</a>
     </div>
-    <div style="font-size:10px;color:#7d9bb8;margin-top:12px;line-height:1.5">Secure checkout by Stripe.</div>
+    <div id="pricing-checkout-note" style="font-size:10px;color:#7d9bb8;margin-top:12px;line-height:1.5">Secure checkout by Stripe.</div>
   </div>
 </div>
 <style>
@@ -2844,22 +2844,30 @@ body.nav-open .leaflet-control-attribution{
 </div>
 
 <!-- ACCOUNT MANAGEMENT PAGE ---------------------------------------------------- -->
-<div id="account-page" style="display:none;position:fixed;inset:0;z-index:100004;
-     background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
-     overflow-y:auto;padding:24px 18px 40px;font-family:'Segoe UI',system-ui,sans-serif">
-  <!-- Same translucent marlin + bluefin watermarks as the sign-in gate. -->
-  <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-marlin-br">
-  <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-marlin-tl">
-  <img src="/icons/bluefin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-bluefin-bl">
-  <div style="position:relative;z-index:1;max-width:440px;margin:0 auto">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;padding-top:4px">
-      <div>
-        <div style="font-size:11px;font-weight:700;color:#6bbfea;letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px">Your account</div>
-        <div style="font-size:24px;font-weight:800;color:#f0f6ff;line-height:1.15">Account</div>
-      </div>
-      <button type="button" onclick="closeAccountPage()" aria-label="Close" style="background:rgba(255,255,255,.08);border:1px solid rgba(107,191,234,.28);color:#cfe5ff;width:38px;height:38px;border-radius:50%;font-size:20px;cursor:pointer;line-height:1;flex-shrink:0">×</button>
+<div id="account-page" class="menu-page-overlay" style="display:none;position:fixed;inset:0;z-index:100004;
+     background:#0a1a2e;color:#e8f4ff;
+     overflow-y:auto;-webkit-overflow-scrolling:touch;
+     font-family:'Segoe UI',system-ui,sans-serif">
+  <div class="menu-page-hdr" style="
+    position:sticky;top:0;z-index:10;
+    background:linear-gradient(180deg,#0a1a2e,#0f2444);
+    border-bottom:1px solid rgba(107,191,234,.18);
+    padding:12px 16px;display:flex;align-items:center;gap:12px;
+    box-shadow:0 4px 16px rgba(0,0,0,.5);
+  ">
+    <button type="button" class="nav-back-btn" data-nav-close="closeAccountPage" aria-label="Back to menu" style="
+      width:38px;height:38px;flex-shrink:0;
+      background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
+      color:#cfe5ff;border-radius:10px;
+      display:flex;align-items:center;justify-content:center;cursor:pointer;
+    "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Account</div>
+      <div class="overlay-page-sub">Your profile &amp; subscription</div>
     </div>
+  </div>
 
+  <div style="position:relative;z-index:1;max-width:440px;margin:0 auto;padding:20px 18px calc(40px + env(safe-area-inset-bottom, 0px))">
     <!-- PROFILE -->
     <div style="background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);border-radius:18px;padding:20px;margin-bottom:14px;box-shadow:0 16px 48px rgba(0,0,0,.35);backdrop-filter:blur(2px)">
       <div style="display:flex;align-items:center;gap:16px">
@@ -2933,25 +2941,25 @@ body.nav-open .leaflet-control-attribution{
         and your subscription renews monthly until you cancel. You can cancel anytime before the
         trial ends to avoid being charged, from Manage Billing.
       </div>
-      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month',trial:true})"
+      <button class="bw-buy" type="button" onclick="bwSubscribe('month',{trial:true})"
         style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start 7-day free trial</button>
     </div>
 
     <!-- Subscription (no trial) -->
     <div style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:14px 0 6px">Subscribe now — full app + 2 AI briefs/day</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'month'})">Monthly — $12.99/mo</button>
-      <button class="bw-buy" type="button" onclick="bwCheckout('subscription',{interval:'year'})">Annual — $109.99/yr</button>
+      <button class="bw-buy" type="button" onclick="bwSubscribe('month')">Monthly — $12.99/mo</button>
+      <button class="bw-buy" type="button" onclick="bwSubscribe('year')">Annual — $109.99/yr</button>
     </div>
 
-    <div style="font-size:10px;color:#7d9bb8;margin-top:16px;line-height:1.5;text-align:center">
+    <div id="plan-gate-checkout-note" style="font-size:10px;color:#7d9bb8;margin-top:16px;line-height:1.5;text-align:center">
       Secure checkout by Stripe. By continuing you agree to the
       <a href="#" onclick="event.preventDefault();if(typeof openLegal==='function')openLegal();" style="color:#7dd3fc;text-decoration:none">Terms &amp; subscription policy</a>.
     </div>
   </div>
 </div>
 
-<script src="bw-billing.js?v=20260814b"></script>
+<script src="bw-billing.js?v=20260815b"></script>
 
 <!-- HEADER -->
 <div id="hdr">
