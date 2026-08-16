@@ -1,27 +1,16 @@
 // ============================================================================
 // Bluewater Intel — Delete account (Edge Function, Deno)
 // Deploy: supabase functions deploy delete-account --no-verify-jwt
-//
-// Permanently deletes the CALLER's auth user and all app data. Identity is read
-// ONLY from the Authorization Bearer token — never from the request body.
-//
-// Order: (1) cancel any active Stripe subscription, (2) delete user-owned rows
-// with the service role, (3) delete the auth user via admin API.
-//
-// SECRETS: STRIPE_SECRET_KEY, ALLOWED_ORIGINS,
-//   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (auto).
 // ============================================================================
 
 import Stripe from "npm:stripe@16";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { purgeUserAccount } from "../_shared/delete-user.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20" });
 
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-// Reflect the caller's Origin so CORS works from every hostname (apex, www.,
-// mobile webview). Strict matching returned the apex domain for www./webview
-// callers, which the browser rejects. Auth is enforced by the JWT bearer token,
-// not CORS, and no cookies are used, so echoing the origin is safe.
+
 function cors(origin: string | null) {
   const allow = origin || (ALLOWED[0] ?? "*");
   return {
@@ -32,40 +21,6 @@ function cors(origin: string | null) {
   };
 }
 
-const ACTIVE_SUB_STATUSES = new Set(["active", "trialing", "past_due", "unpaid"]);
-
-async function cancelStripeSubscriptions(customerId: string): Promise<void> {
-  const subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 100 });
-  const active = subs.data.filter((s) => ACTIVE_SUB_STATUSES.has(s.status));
-  for (const sub of active) {
-    await stripe.subscriptions.cancel(sub.id);
-  }
-}
-
-function isMissingStripeCustomer(err: unknown): boolean {
-  const msg = (err as Error)?.message ?? "";
-  return /no such customer/i.test(msg);
-}
-
-async function deleteUserData(admin: ReturnType<typeof createClient>, userId: string): Promise<void> {
-  // Intentionally omits trial_consumed — that registry must survive deletion so
-  // a user cannot delete + re-signup for another free trial. Canceling to Free
-  // or choosing Free at signup never touches trial_consumed either.
-  const tables = [
-  { table: "user_waypoints", column: "user_id" },
-  { table: "user_catches", column: "user_id" },
-  { table: "user_logs", column: "user_id" },
-  { table: "fishing_reports", column: "user_id" },
-  { table: "user_brief_usage", column: "user_id" },
-  { table: "profiles", column: "id" },
-  ] as const;
-
-  for (const { table, column } of tables) {
-    const { error } = await admin.from(table).delete().eq(column, userId);
-    if (error) throw new Error(`Failed to delete ${table}: ${error.message}`);
-  }
-}
-
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
   const CORS = cors(origin);
@@ -73,7 +28,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-  // Never trust a user id from the request body — identity comes from the JWT only.
   try {
     const body = await req.json();
     if (body && typeof body === "object" && ("userId" in body || "user_id" in body)) {
@@ -88,7 +42,6 @@ Deno.serve(async (req) => {
   const { data: { user }, error: uerr } = await supa.auth.getUser();
   if (uerr || !user) return json({ error: "Sign in required." }, 401);
 
-  const userId = user.id;
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -96,43 +49,12 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { data: prof } = await admin
-      .from("profiles")
-      .select("stripe_customer_id, subscription_status")
-      .eq("id", userId)
-      .maybeSingle();
-
-    const customerId = prof?.stripe_customer_id as string | undefined;
-    const subStatus = (prof?.subscription_status as string | undefined) ?? "none";
-    const hasBillableSub = subStatus === "active" || subStatus === "trialing";
-
-    if (customerId) {
-      try {
-        await cancelStripeSubscriptions(customerId);
-      } catch (e) {
-        const msg = (e as Error)?.message ?? "";
-        console.error("stripe cancel failed", msg);
-        // Only block deletion when the profile still shows an active/trial subscription.
-        if (hasBillableSub) {
-          return json({
-            error: "Could not cancel your subscription. Please cancel billing first from Manage Billing, then try again.",
-          }, 409);
-        }
-        if (isMissingStripeCustomer(e)) {
-          await admin.from("profiles").update({ stripe_customer_id: null }).eq("id", userId);
-        }
-        console.warn("stripe cleanup skipped for non-billable account", userId, msg);
-      }
-    }
-
-    await deleteUserData(admin, userId);
-
-    const { error: delErr } = await admin.auth.admin.deleteUser(userId);
-    if (delErr) throw new Error(delErr.message);
-
+    await purgeUserAccount(admin, user.id, { stripe, strictBilling: true });
     return json({ ok: true });
   } catch (e) {
     console.error("delete-account error", (e as Error)?.message);
-    return json({ error: (e as Error)?.message || "Could not delete account." }, 500);
+    const msg = (e as Error)?.message || "Could not delete account.";
+    const status = /cancel.*subscription/i.test(msg) ? 409 : 500;
+    return json({ error: msg }, status);
   }
 });

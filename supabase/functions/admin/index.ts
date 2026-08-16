@@ -12,6 +12,11 @@
 // ============================================================================
 
 import { createClient, type User } from "jsr:@supabase/supabase-js@2";
+import Stripe from "npm:stripe@16";
+import { purgeUserAccount } from "../_shared/delete-user.ts";
+
+const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
+const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: "2024-06-20" }) : null;
 
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 const ADMIN_EMAILS = new Set(
@@ -232,8 +237,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
+  let caller;
   try {
-    await requireAdmin(req.headers.get("Authorization") ?? "");
+    caller = await requireAdmin(req.headers.get("Authorization") ?? "");
   } catch (e) {
     if (e instanceof Response) {
       const body = await e.json();
@@ -311,6 +317,16 @@ Deno.serve(async (req) => {
       const { data: usage } = await admin.from("user_brief_usage").select("count")
         .eq("user_id", userId).eq("day", todayUtc()).maybeSingle();
       return json({ ok: true, user: user ? mergeUser(user, profile, usage?.count ?? 0) : null });
+    }
+
+    if (action === "delete") {
+      const userId = String(body.userId ?? "");
+      if (!userId) return json({ error: "userId required" }, 400);
+      if (userId === caller.id) {
+        return json({ error: "To delete your own account, use Account → Delete my account." }, 400);
+      }
+      await purgeUserAccount(admin, userId, { stripe, strictBilling: false });
+      return json({ ok: true, deleted: userId });
     }
 
     return json({ error: "Unknown action" }, 400);

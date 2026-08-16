@@ -15440,6 +15440,11 @@ function adminRenderDetail(){
       <div class="admin-actions">
         <button type="button" class="admin-btn ok" onclick="adminSaveUser()">Save changes</button>
       </div>
+      <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(248,113,113,.25)">
+        <div style="font-size:11px;font-weight:700;color:#fca5a5;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Danger zone</div>
+        <div style="font-size:11px;color:#cbd5e1;line-height:1.5;margin-bottom:10px">Permanently deletes this user's auth account, profile, waypoints, catches, and reports. Stripe subscriptions are canceled when possible. This cannot be undone.</div>
+        <button type="button" class="admin-btn danger" onclick="adminDeleteUser()">Delete account</button>
+      </div>
     </div>`;
 }
 
@@ -15576,6 +15581,35 @@ async function adminPreset(preset){
     adminShowMsg("Updated.", true);
     adminLoadStats();
   } catch(e){ adminShowMsg(e.message || "Update failed", false); }
+}
+
+async function adminDeleteUser(){
+  const u = adminSelectedUser();
+  if(!u) return;
+  const self = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+  if(self && self.id === u.id){
+    adminShowMsg("To delete your own account, open Account → Delete my account.", false);
+    return;
+  }
+  const label = u.email || u.id;
+  const ownerWarn = u.is_owner ? "\n\nThis is an OWNER account." : "";
+  if(!confirm(`Permanently delete ${label}? All of their data will be removed.${ownerWarn}\n\nThis cannot be undone.`)) return;
+  const typed = window.prompt('Type DELETE to confirm account deletion.');
+  if(!typed || typed.trim().toUpperCase() !== "DELETE"){
+    adminShowMsg("Deletion cancelled.", false);
+    return;
+  }
+  try {
+    await adminApi({ action: "delete", userId: u.id });
+    _adminState.users = _adminState.users.filter(x => x.id !== u.id);
+    _adminState.selectedId = _adminState.users[0] ? _adminState.users[0].id : null;
+    adminRenderList();
+    adminRenderDetail();
+    adminShowMsg(`Deleted ${label}.`, true);
+    adminLoadStats();
+  } catch(e){
+    adminShowMsg(e.message || "Could not delete account.", false);
+  }
 }
 
 function openAdmin(){
