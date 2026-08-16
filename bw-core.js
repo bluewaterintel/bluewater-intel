@@ -14586,6 +14586,7 @@ function onMapClick(e){
 
 // ── Depth readout (tap map → feet + fathoms) ─────────────────────────────────
 let _depthReadoutEl = null;
+let _depthReadoutPin = null;
 let _depthReadoutTimer = null;
 let _depthReadoutBound = false;
 
@@ -14600,9 +14601,31 @@ function bindDepthReadout(){
   });
 }
 
+function depthClearReadoutPin(){
+  if(_depthReadoutPin && MAP){
+    try { MAP.removeLayer(_depthReadoutPin); } catch(e){}
+  }
+  _depthReadoutPin = null;
+}
+
+function depthPlaceReadoutPin(lat, lng){
+  depthClearReadoutPin();
+  if(!MAP) return;
+  _depthReadoutPin = L.marker([lat, lng], {
+    icon: L.divIcon({
+      className: "depth-readout-pin",
+      html: `<div style="width:16px;height:16px;background:#67e8f9;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,.55)"></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    }),
+    zIndexOffset: 940,
+  }).addTo(MAP);
+}
+
 function hideDepthReadout(){
   if(_depthReadoutTimer){ clearTimeout(_depthReadoutTimer); _depthReadoutTimer = null; }
   if(_depthReadoutEl) _depthReadoutEl.style.display = "none";
+  depthClearReadoutPin();
 }
 
 function formatDepthReadout(meters){
@@ -14653,6 +14676,7 @@ async function showDepthReadoutAt(lat, lng, containerPoint){
   _depthReadoutEl.style.left = pt.x + "px";
   _depthReadoutEl.style.top = pt.y + "px";
   _depthReadoutEl.style.display = "block";
+  depthPlaceReadoutPin(lat, lng);
   if(_depthReadoutTimer) clearTimeout(_depthReadoutTimer);
   _depthReadoutTimer = setTimeout(hideDepthReadout, 4500);
 }
