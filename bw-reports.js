@@ -533,14 +533,33 @@ function closeRegulations(){
 // ── LEGAL & PRIVACY ──────────────────────────────────────────────────────────
 // Terms of Use + Privacy Policy. Boilerplate intended to limit liability and set
 // expectations; NOT legal advice — see the attorney-review notice in the content.
+let _legalAuthReturn = null;
 function openLegal(){
-  document.getElementById("legal-overlay").style.display = "block";
+  _legalAuthReturn = null;
+  const ov = document.getElementById("legal-overlay");
+  if(!ov) return;
+  ov.style.zIndex = "5000";
+  ov.style.display = "block";
   document.body.style.overflow = "hidden";
   showLegalTab("terms");
 }
+function openLegalFromAuth(tab){
+  const ov = document.getElementById("legal-overlay");
+  if(!ov) return;
+  _legalAuthReturn = "create-account";
+  ov.style.zIndex = "100010";
+  ov.style.display = "block";
+  document.body.style.overflow = "hidden";
+  showLegalTab(tab === "privacy" ? "privacy" : "terms");
+}
 function closeLegal(){
-  document.getElementById("legal-overlay").style.display = "none";
+  const ov = document.getElementById("legal-overlay");
+  if(ov){
+    ov.style.display = "none";
+    ov.style.zIndex = "5000";
+  }
   document.body.style.overflow = "";
+  _legalAuthReturn = null;
 }
 function showLegalTab(which){
   const termsBtn = document.getElementById("legal-tab-terms");
