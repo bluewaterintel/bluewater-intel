@@ -133,13 +133,47 @@
   window.showVerifyEmailScreen = function(email){
     const p = document.getElementById("verify-email-page");
     const addr = document.getElementById("verify-email-addr");
+    const msg = document.getElementById("verify-email-msg");
     if(addr) addr.textContent = email || "";
+    if(msg){ msg.style.display = "none"; msg.textContent = ""; }
+    if(p) p._pendingEmail = email || "";
     if(p) p.style.display = "block";
   };
   window.verifyEmailContinue = function(){
     const p = document.getElementById("verify-email-page"); if(p) p.style.display = "none";
     // Take them to the sign-in screen; they'll sign in after confirming.
     if(typeof showGate === "function") showGate();
+  };
+  window.resendVerificationEmail = async function(){
+    const page = document.getElementById("verify-email-page");
+    const msg = document.getElementById("verify-email-msg");
+    const btn = document.getElementById("verify-email-resend");
+    const email = (page && page._pendingEmail) || (document.getElementById("verify-email-addr")?.textContent || "").trim();
+    const show = (text, ok) => {
+      if(!msg) return;
+      msg.style.display = "block";
+      msg.textContent = text;
+      msg.style.color = ok ? "#86efac" : "#fca5a5";
+    };
+    if(!email){ show("Missing email address. Go back and create your account again.", false); return; }
+    if(!window.BW_AUTH || !window.BW_AUTH.resendSignupConfirmation){
+      show("Sign-in service not ready. Refresh and try again.", false);
+      return;
+    }
+    if(btn){ btn.disabled = true; btn.textContent = "Sending…"; }
+    try {
+      await window.BW_AUTH.resendSignupConfirmation(email);
+      show("Verification email sent — check your inbox and spam folder.", true);
+    } catch(e){
+      const m = e?.message || String(e);
+      if(/rate limit|too many|after \d+ seconds/i.test(m)){
+        show("Please wait a minute before requesting another email.", false);
+      } else {
+        show(m || "Could not resend. Try again in a minute.", false);
+      }
+    } finally {
+      if(btn){ btn.disabled = false; btn.textContent = "Resend verification email"; }
+    }
   };
   window.openPasswordRecoveryModal = function(){
     const p = document.getElementById("password-recovery-page");

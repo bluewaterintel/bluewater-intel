@@ -44,4 +44,11 @@ The app opens the “Choose a new password” screen when the user returns on th
 
 Built-in Supabase mail often does not reach real inboxes. Configure **Authentication → SMTP Settings** with SendGrid, Resend, SES, or similar before relying on reset or confirmation email in production.
 
+If you rotate your Resend API key, update **both** Supabase Auth SMTP and edge-function secrets:
+
+```bash
+npm run sync:auth-smtp          # refreshes Supabase Auth SMTP from RESEND_API_KEY
+npm run deploy:health           # refreshes edge-function RESEND_API_KEY secret
+```
+
 See `supabase-fixes/PASSWORD_RESET_EMAIL.md` for step-by-step Dashboard checks.

@@ -2820,8 +2820,10 @@ body.nav-open .leaflet-control-attribution{
     <div style="font-size:24px;font-weight:800;color:#f0f6ff;margin-bottom:12px">Welcome to Bluewater Intel!</div>
     <div style="font-size:15px;color:#cfe5ff;line-height:1.6;margin-bottom:8px">Please check your email for a verification link to complete registration.</div>
     <div id="verify-email-addr" style="font-size:14px;color:#86efac;font-weight:700;margin-bottom:22px;word-break:break-all"></div>
+    <div id="verify-email-msg" style="display:none;font-size:13px;margin-bottom:14px;line-height:1.5"></div>
     <div style="font-size:13px;color:#9ab3cc;line-height:1.6;margin-bottom:28px">Once you confirm your email, sign in to choose your plan (Free or Pro) and start fishing. Don't see it? Check your spam folder — it can take a minute to arrive.</div>
     <button type="button" onclick="verifyEmailContinue()" style="width:100%;max-width:280px;padding:13px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:16px;cursor:pointer;font-family:inherit;margin-bottom:14px">Continue to Sign In</button>
+    <button id="verify-email-resend" type="button" onclick="resendVerificationEmail()" style="width:100%;max-width:280px;padding:11px;border:1px solid rgba(107,191,234,.35);border-radius:10px;background:transparent;color:#9ec5e8;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit">Resend verification email</button>
   </div>
 </div>
 

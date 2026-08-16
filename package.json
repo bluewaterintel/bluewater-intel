@@ -28,6 +28,7 @@
     "maintenance:branches": "node scripts/prune-remote-branches.mjs",
     "deploy:functions": "node scripts/deploy-m3-m4-functions.mjs",
     "deploy:health": "node scripts/deploy-health.mjs",
+    "sync:auth-smtp": "node scripts/sync-auth-smtp.mjs",
     "deploy": "node scripts/generate-bw-config.mjs && netlify deploy --prod --dir=.",
     "cap:sync": "npm run build:ios && npx cap sync ios",
     "cap:open:ios": "npx cap open ios",

@@ -124,10 +124,27 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
       },
     });
     if (error) throw error;
+    // Supabase anti-enumeration: re-signup with an existing email can return a
+    // user shell with no identities — treat that as "already registered".
+    const identities = data.user?.identities;
+    if (data.user && Array.isArray(identities) && identities.length === 0) {
+      const err = new Error("An account with this email already exists. Sign in, or use “Resend verification email” if you have not confirmed yet.");
+      err.code = "USER_ALREADY_EXISTS";
+      throw err;
+    }
     // With "Confirm email" enabled, signUp returns user but no session until
     // the user clicks the link — do not emit an unconfirmed user as signed in.
     if (data.session?.user) emit(data.session.user, "SIGNED_IN");
     return data;
+  }
+
+  async function resendSignupConfirmation(email) {
+    const { error } = await client.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: EMAIL_CONFIRM_REDIRECT },
+    });
+    if (error) throw error;
   }
 
   // True when the signed-in user has premium access (owner flag, or an active
@@ -419,6 +436,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     _sb: client,
     signIn,
     signUp,
+    resendSignupConfirmation,
     signOut,
     isSignedIn,
     isPremium,
