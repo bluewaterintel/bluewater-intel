@@ -407,7 +407,9 @@ const WP_CODE_TO_PANEL_TYPE = {
   wk:"wreck", rf:"reef", st:"ar", ld:"ledge", rk:"rock",
   hl:"hole", hp:"bump", cy:"canyon", tw:"tower", pf:"platform", rg:"rig",
 };
-const WP_CHARTED_MAX = 800;  // cap rendered charted cards (thousands are possible)
+function wpChartedListCap(){
+  return (typeof wpDrawCap === "function") ? wpDrawCap() : 1200;
+}
 let _wpFetchSeq = 0;
 
 // Which port's charted database should the panel load? Prefer the port the user
@@ -896,7 +898,8 @@ function wpRenderPublic(){
   // Curated public spots first, then the charted database (already nearest-first).
   const source = charted.length ? WP_PUBLIC.concat(charted) : WP_PUBLIC;
   const list = wpFilteredList(source);
-  const shown = list.length > WP_CHARTED_MAX ? list.slice(0, WP_CHARTED_MAX) : list;
+  const cap = wpChartedListCap();
+  const shown = list.length > cap ? list.slice(0, cap) : list;
   const curatedN = list.filter(p => !p.charted).length;
   const chartedN = list.filter(p => p.charted).length;
   const chartedExportN = (displayPort && WP_state.chartedPort === displayPort) ? charted.length : 0;

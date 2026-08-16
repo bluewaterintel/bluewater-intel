@@ -15145,6 +15145,15 @@ let wpRadiusNm = 40;                     // selected radius band (default 40nm)
 let wpTypeFilter = null;                 // null = all types, else Set of type codes
 const WP_RADII = [20, 40, 60, 100, 120, 140, 160];
 
+// How many waypoint markers / list rows to show at once. Scales with the selected
+// radius — wide bands (160 nm) can include thousands of spots near dense coasts.
+// PostgREST max_rows must be ≥ this (see supabase-fixes/WAYPOINT_ROW_LIMIT.md).
+function wpDrawCap(radiusNm){
+  const r = radiusNm != null ? radiusNm : wpRadiusNm;
+  return Math.min(6000, Math.max(1200, Math.round(300 + r * 25)));
+}
+window.wpDrawCap = wpDrawCap;
+
 // Per-type visual style: glyph + color. Codes match waypoints.js ("wk" etc).
 const WP_TYPE_STYLE = {
   wk: {label:"Wreck",     type:"wreck",     color:"#ef4444"},
@@ -15824,7 +15833,6 @@ function wpIcon(t){
   return icon;
 }
 
-const WP_MAX_DRAW = 1200;        // hard cap on markers in the DOM at once
 const WP_VIEW_BUFFER = 0.35;     // pad viewport bounds by 35% so panning feels seamless
 
 let _wpDrawSeq = 0;  // guards against out-of-order async responses (rapid port/radius changes)
@@ -15887,7 +15895,7 @@ async function drawWaypoints(){
   renderWaypointMarkers(true);
   updateWaypointPanel(
     fullCount,
-    Math.min(rows.length, WP_MAX_DRAW),
+    Math.min(rows.length, wpDrawCap()),
     status
   );
   updateWaypointControlVisibility();
@@ -15931,10 +15939,13 @@ function renderWaypointMarkers(force){
   if(bounds){
     candidates = _wpInRangeCache.filter(w => bounds.contains([w.lat, w.lng]));
   }
+  // Nearest-first within the viewport so the draw cap keeps close-in structure.
+  candidates = candidates.slice().sort((a, b) => (a.nm ?? 0) - (b.nm ?? 0));
 
+  const drawCap = wpDrawCap();
   let drawn = 0;
   for(const w of candidates){
-    if(drawn >= WP_MAX_DRAW) break;
+    if(drawn >= drawCap) break;
     const s = WP_TYPE_STYLE[w.t] || {label:"Spot"};
     const latStr = Math.abs(w.lat).toFixed(5) + (w.lat>=0 ? "° N" : "° S");
     const lngStr = Math.abs(w.lng).toFixed(5) + (w.lng>=0 ? "° E" : "° W");
@@ -16273,7 +16284,7 @@ function updateWaypointPanel(total, drawn, status){
   if(total === undefined){
     const items = waypointsInRange();
     total = items.length;
-    drawn = Math.min(total, 1200);
+    drawn = Math.min(total, wpDrawCap());
   }
   if(total === 0){ el.textContent = `none within ${wpRadiusNm} nm of ${PORTS[activePort]?.short||activePort}${tag}`; return; }
   const capped = drawn < total ? ` (showing nearest ${drawn})` : "";
