@@ -7,6 +7,13 @@
   window.BW_NATIVE = native;
   window.BW_APP_ORIGIN = native ? "com.bluewaterintel.app://" : "https://app.bluewaterintel.com/";
 
+  if (native) {
+    document.documentElement.classList.add("bw-native");
+    if (typeof cap.getPlatform === "function" && cap.getPlatform() === "ios") {
+      document.documentElement.classList.add("bw-ios");
+    }
+  }
+
   if (!native) {
     window.BW_CAPACITOR = {
       isNative: false,

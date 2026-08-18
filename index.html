@@ -946,6 +946,28 @@ body.modal-open #brief-toggle{
   background:rgba(255,255,255,.06);
 }
 .wp-fc-popup .leaflet-popup-close-button:hover{ background:rgba(255,255,255,.14); }
+/* iOS: buoy info bubbles — tuck the × inside the card (matches waypoint popups). */
+html.bw-ios .buoy-popup .leaflet-popup-content-wrapper{
+  background:rgba(15,28,52,.97) !important;
+  border-radius:12px;
+  padding-top:4px;
+}
+html.bw-ios .buoy-popup .leaflet-popup-content{ margin:14px 32px 12px 14px; }
+html.bw-ios .buoy-popup .leaflet-popup-close-button{
+  color:#9ec5e8 !important;
+  font-size:18px !important;
+  width:26px !important;height:26px !important;
+  padding:0 !important;
+  top:8px !important;right:8px !important;
+  display:flex !important;align-items:center;justify-content:center;
+  border-radius:50%;
+  background:rgba(255,255,255,.08);
+  line-height:1 !important;
+}
+html.bw-ios .buoy-popup .leaflet-popup-close-button:hover{ background:rgba(255,255,255,.16); }
+/* iOS: species detail uses the same back chevron as other full-screen pages. */
+html.bw-ios #enc-modal .enc-modal-back{ display:flex !important; }
+html.bw-ios #enc-modal .enc-modal-close-x{ display:none !important; }
 #layers-toggle, #ruler-toggle, #wpdrop-toggle, #basemap-toggle, #settings-toggle, #catch-log-toggle{
   width:52px;height:52px;
   background:rgba(10,22,40,.92);
@@ -4122,7 +4144,13 @@ body.nav-open .leaflet-control-attribution{
         border-bottom:1px solid rgba(107,191,234,.15);
         padding:18px 24px;display:flex;align-items:center;gap:14px;
       ">
-        <button onclick="encCloseModal()" style="
+        <button type="button" class="enc-modal-back nav-back-btn" onclick="encCloseModal()" aria-label="Back to species list" style="
+          width:38px;height:38px;flex-shrink:0;
+          background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
+          color:#cfe5ff;border-radius:10px;
+          display:none;align-items:center;justify-content:center;cursor:pointer;
+        "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+        <button type="button" class="enc-modal-close-x" onclick="encCloseModal()" aria-label="Close species detail" style="
           background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
           color:#cfe5ff;width:34px;height:34px;border-radius:50%;
           cursor:pointer;font-size:18px;
