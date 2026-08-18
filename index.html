@@ -965,8 +965,25 @@ html.bw-ios .buoy-popup .leaflet-popup-close-button{
   line-height:1 !important;
 }
 html.bw-ios .buoy-popup .leaflet-popup-close-button:hover{ background:rgba(255,255,255,.16); }
-/* iOS: species detail uses the same back chevron as other full-screen pages. */
-html.bw-ios #enc-modal .enc-modal-back{ display:flex !important; }
+/* iOS: species detail — full-screen page with safe-area header (not a centered card). */
+html.bw-ios #enc-modal{
+  background:#0a1a2e;
+  -webkit-overflow-scrolling:touch;
+}
+html.bw-ios #enc-modal > .enc-modal-panel{
+  max-width:none;margin:0;min-height:100%;
+  border-radius:0;border:none;box-shadow:none;
+}
+html.bw-ios #enc-modal .enc-modal-hdr{
+  position:sticky;top:0;z-index:2;
+  padding:calc(12px + env(safe-area-inset-top, 0px)) 16px 12px !important;
+  background:linear-gradient(180deg,#0d1e33,#0a1a2e);
+}
+html.bw-ios #enc-modal .enc-modal-back{
+  display:flex !important;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:rgba(125,211,252,.15);
+}
 html.bw-ios #enc-modal .enc-modal-close-x{ display:none !important; }
 #layers-toggle, #ruler-toggle, #wpdrop-toggle, #basemap-toggle, #settings-toggle, #catch-log-toggle{
   width:52px;height:52px;
@@ -4132,19 +4149,19 @@ body.nav-open .leaflet-control-attribution{
     display:none;position:fixed;inset:0;z-index:6000;
     background:rgba(0,0,0,.78);overflow-y:auto;
   " onclick="if(event.target.id==='enc-modal')encCloseModal()">
-    <div style="
+    <div class="enc-modal-panel" style="
       max-width:760px;margin:30px auto;
       background:#0d1e33;border:1px solid rgba(107,191,234,.25);
       border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.7);
       overflow:hidden;
     ">
-      <div style="
+      <div class="enc-modal-hdr" style="
         position:sticky;top:0;z-index:1;
         background:linear-gradient(180deg,#0d1e33,#0a1a2e);
         border-bottom:1px solid rgba(107,191,234,.15);
         padding:18px 24px;display:flex;align-items:center;gap:14px;
       ">
-        <button type="button" class="enc-modal-back nav-back-btn" onclick="encCloseModal()" aria-label="Back to species list" style="
+        <button type="button" class="enc-modal-back" onclick="encCloseModal()" aria-label="Back to species list" style="
           width:38px;height:38px;flex-shrink:0;
           background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
           color:#cfe5ff;border-radius:10px;

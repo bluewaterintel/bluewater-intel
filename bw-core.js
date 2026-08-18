@@ -19515,6 +19515,13 @@ function closeNav(){
 
 // Menu overlay back buttons — capture phase so iOS WebView reliably receives taps.
 document.addEventListener("click", (e) => {
+  const encBack = e.target.closest(".enc-modal-back");
+  if(encBack){
+    e.preventDefault();
+    e.stopPropagation();
+    if(typeof encCloseModal === "function") encCloseModal();
+    return;
+  }
   const btn = e.target.closest(".nav-back-btn");
   if(!btn) return;
   e.preventDefault();
