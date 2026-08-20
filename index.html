@@ -2736,6 +2736,14 @@ body.nav-open .leaflet-control-attribution{
       <button class="bw-buy" type="button" onclick="bwSubscribe('month',{trial:true})" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start free trial</button>
     </div>
 
+    <!-- App Store introductory offer — shown only when StoreKit reports a free
+         trial on the monthly product (see adaptPricingForNative). -->
+    <div class="bw-native-trial-block" style="display:none;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:12px;margin-bottom:14px">
+      <div class="bw-native-trial-title" style="font-size:14px;font-weight:800;color:#86efac;margin-bottom:3px">Start your free trial</div>
+      <div class="bw-native-trial-desc" style="font-size:11px;color:#cfe5ff;line-height:1.45;margin-bottom:9px"></div>
+      <button class="bw-buy bw-native-trial-btn" type="button" onclick="bwSubscribe('month')" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start free trial</button>
+    </div>
+
     <div id="pricing-sub-title" style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:12px 0 6px">Bluewater Intel Pro — auto-renewing subscription</div>
     <div style="font-size:11px;color:#9ec5e8;margin-bottom:8px">Full app access including the Bite Map, ocean &amp; wind layers, all charted waypoints for your home port, fishing reports, and up to 2 AI Captain's Briefs per day.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -2991,6 +2999,13 @@ body.nav-open .leaflet-control-attribution{
         style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start 7-day free trial</button>
     </div>
 
+    <!-- App Store introductory offer (native only) -->
+    <div class="bw-native-trial-block" style="display:none;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:14px;margin:16px 0 12px">
+      <div class="bw-native-trial-title" style="font-size:15px;font-weight:800;color:#86efac;margin-bottom:4px">Start your free trial</div>
+      <div class="bw-native-trial-desc" style="font-size:11.5px;color:#cfe5ff;line-height:1.5;margin-bottom:10px"></div>
+      <button class="bw-buy bw-native-trial-btn" type="button" onclick="bwSubscribe('month')" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start free trial</button>
+    </div>
+
     <!-- Subscription (no trial) -->
     <div style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:14px 0 6px">Bluewater Intel Pro — auto-renewing subscription</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -3008,7 +3023,7 @@ body.nav-open .leaflet-control-attribution{
   </div>
 </div>
 
-<script src="bw-billing.js?v=20260820a"></script>
+<script src="bw-billing.js?v=20260820b"></script>
 
 <!-- HEADER -->
 <div id="hdr">

@@ -448,6 +448,12 @@
     }
     const showManage = !isOwner && (st==="active" || st==="trialing");
     const manageLabel = st==="trialing" ? "Upgrade/Cancel" : "Manage";
+    // Entitled accounts lose the Upgrade button, which otherwise makes the plan
+    // list unreachable — including for App Review, who sign in already entitled.
+    const entitled = isOwner || st==="active" || st==="trialing";
+    const viewPlansHtml = entitled
+      ? `<button type="button" onclick="openPricing()" style="font-family:inherit;background:transparent;border:1px solid rgba(107,191,234,.35);color:#6bbfea;font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;cursor:pointer">View plans</button>`
+      : "";
     el.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(7,17,33,.5);border:1px solid rgba(107,191,234,.18);border-radius:9px;padding:8px 10px">
         <div style="min-width:0">
@@ -458,6 +464,7 @@
         <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
           ${actionHtml}
           ${showManage?`<button type="button" onclick="bwManageBilling()" style="font-family:inherit;background:transparent;border:1px solid rgba(107,191,234,.35);color:#6bbfea;font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;cursor:pointer">${manageLabel}</button>`:""}
+          ${viewPlansHtml}
         </div>
       </div>`;
   };
@@ -512,10 +519,55 @@ function bwAutoRenewDisclosure(){
   return "Payment is charged to your Apple ID account at confirmation of purchase. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Your account is charged for renewal within 24 hours prior to the end of the current period. Manage and cancel in Settings → [your name] → Subscriptions.";
 }
 
+function bwPriceString(p){
+  if(!p) return null;
+  return p.priceString || p.localizedPriceString || p.price_string || null;
+}
+
+// A free trial on iOS is an App Store *introductory offer* with a zero price.
+// Returns {label, period} when the monthly product carries one, else null.
+function bwIntroTrial(product){
+  const intro = product && (product.introPrice || product.intro_price);
+  if(!intro) return null;
+  const price = Number(intro.price);
+  if(!Number.isFinite(price) || price > 0) return null;
+  const n = Number(intro.periodNumberOfUnits ?? intro.period_number_of_units) || 0;
+  const unit = String(intro.periodUnit || intro.period_unit || "").toLowerCase().replace(/s$/, "");
+  if(!n || !unit) return { label: "Free trial", period: "free trial" };
+  return { label: `${n}-${unit} free trial`, period: `${n} ${unit}${n === 1 ? "" : "s"} free` };
+}
+
+function applyNativeTrialBlock(products){
+  const blocks = document.querySelectorAll(".bw-native-trial-block");
+  if(!blocks.length) return;
+  const monthly = products && products.monthly;
+  const trial = bwIntroTrial(monthly);
+  if(!trial){
+    blocks.forEach(el => { el.style.display = "none"; });
+    return;
+  }
+  const price = bwPriceString(monthly);
+  const after = price
+    ? `After the trial, Bluewater Intel Pro renews monthly at ${price} until you cancel.`
+    : "After the trial, Bluewater Intel Pro renews monthly until you cancel.";
+  blocks.forEach(el => {
+    const title = el.querySelector(".bw-native-trial-title");
+    const desc = el.querySelector(".bw-native-trial-desc");
+    const btn = el.querySelector(".bw-native-trial-btn");
+    if(title) title.textContent = `Start your ${trial.label}`;
+    if(desc){
+      desc.innerHTML = `Full app — the Bite Map, ocean &amp; wind layers, forecasts and all charted waypoints for your home port. `
+        + `<b>${trial.period}</b>, no charge today. ${after} Cancel anytime in Settings → [your name] → Subscriptions.`;
+    }
+    if(btn) btn.textContent = `Start ${trial.label}`;
+    el.style.display = "";
+  });
+}
+
 function applyNativeProductLabels(products){
   const fmt = (p, fallback) => {
     if(!p) return fallback;
-    const price = p.priceString || p.localizedPriceString || p.price_string;
+    const price = bwPriceString(p);
     const period = (p.subscriptionPeriod || p.subscription_period || "").toLowerCase();
     if(price && /year|annual|12/.test(period)) return `${price}/year`;
     if(price && /month/.test(period)) return `${price}/month`;
@@ -588,8 +640,11 @@ window.adaptPricingForNative = async function(){
   if(window.BW_IAP && window.BW_IAP.loadProducts){
     try {
       const products = await window.BW_IAP.loadProducts();
-      if(products && !products.error) applyNativeProductLabels(products);
-    } catch(e){ /* fall back to static button labels */ }
+      if(products && !products.error){
+        applyNativeProductLabels(products);
+        applyNativeTrialBlock(products);
+      }
+    } catch(e){ /* fall back to static button labels, no trial block */ }
   }
 };
 if(document.readyState === "loading"){
