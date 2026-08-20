@@ -1,5 +1,5 @@
 [build]
-  command = "node scripts/generate-bw-config.mjs"
+  command = "node scripts/generate-bw-config.mjs && node scripts/generate-legal-pages.mjs"
   publish = "."
 
 [build.environment]

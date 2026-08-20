@@ -53,7 +53,7 @@
   window.openPricing = async function(){
     const m = document.getElementById("pricing-modal"); if(!m) return;
     const msg = document.getElementById("pricing-msg"); if(msg) msg.style.display="none";
-    if(typeof adaptPricingForNative === "function") adaptPricingForNative();
+    if(typeof adaptPricingForNative === "function") await adaptPricingForNative();
     m.style.display = "flex";
   };
   window.closePricing = function(){ const m=document.getElementById("pricing-modal"); if(m) m.style.display="none"; };
@@ -101,14 +101,14 @@
   };
 
   // One-time plan selection after the user's first confirmed sign-in.
-  window.openPostSignupPlans = function(){
+  window.openPostSignupPlans = async function(){
     if(typeof navigator !== "undefined" && navigator.onLine === false) return;
     const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
     if(u && planSelectedLocally(u.id)) return;
     const g = document.getElementById("plan-gate");
     const m = document.getElementById("plan-gate-msg");
     if(m) m.style.display = "none";
-    if(typeof adaptPricingForNative === "function") adaptPricingForNative();
+    if(typeof adaptPricingForNative === "function") await adaptPricingForNative();
     const auth = document.getElementById("bw-auth-gate");
     const signedIn = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
     if(auth) auth.style.display = signedIn ? "none" : "flex";
@@ -489,14 +489,107 @@
 })();
 
 // iOS/Android: swap Stripe checkout copy for App Store billing on native builds.
-window.adaptPricingForNative = function(){
+window.BW_LEGAL_URLS = {
+  terms: "https://app.bluewaterintel.com/terms.html",
+  privacy: "https://app.bluewaterintel.com/privacy.html",
+  support: "https://app.bluewaterintel.com/support.html",
+  appleEula: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+};
+
+window.bwOpenLegalUrl = function(url){
+  if(window.BW_CAPACITOR && window.BW_CAPACITOR.openExternalUrl) return window.BW_CAPACITOR.openExternalUrl(url);
+  window.open(url, "_blank", "noopener");
+};
+
+function bwLegalLinksHtml(){
+  const u = window.BW_LEGAL_URLS || {};
+  const link = (href, label) =>
+    `<a href="#" onclick="event.preventDefault();bwOpenLegalUrl('${href}')" style="color:#7dd3fc;text-decoration:underline">${label}</a>`;
+  return `${link(u.terms, "Terms of Use")} · ${link(u.privacy, "Privacy Policy")} · ${link(u.appleEula, "Apple EULA")}`;
+}
+
+function bwAutoRenewDisclosure(){
+  return "Payment is charged to your Apple ID account at confirmation of purchase. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Your account is charged for renewal within 24 hours prior to the end of the current period. Manage and cancel in Settings → [your name] → Subscriptions.";
+}
+
+function applyNativeProductLabels(products){
+  const fmt = (p, fallback) => {
+    if(!p) return fallback;
+    const price = p.priceString || p.localizedPriceString || p.price_string;
+    const period = (p.subscriptionPeriod || p.subscription_period || "").toLowerCase();
+    if(price && /year|annual|12/.test(period)) return `${price}/year`;
+    if(price && /month/.test(period)) return `${price}/month`;
+    return price ? price : fallback;
+  };
+  const monthlyBtn = document.getElementById("pricing-monthly-btn");
+  const annualBtn = document.getElementById("pricing-annual-btn");
+  const planMonthlyBtn = document.getElementById("plan-gate-monthly-btn");
+  const planAnnualBtn = document.getElementById("plan-gate-annual-btn");
+  const mLabel = fmt(products && products.monthly, "Monthly");
+  const yLabel = fmt(products && products.annual, "Annual");
+  if(monthlyBtn) monthlyBtn.textContent = `Bluewater Intel Pro — 1 month · ${mLabel}`;
+  if(annualBtn) annualBtn.textContent = `Bluewater Intel Pro — 1 year · ${yLabel}`;
+  if(planMonthlyBtn) planMonthlyBtn.textContent = `Bluewater Intel Pro — 1 month · ${mLabel}`;
+  if(planAnnualBtn) planAnnualBtn.textContent = `Bluewater Intel Pro — 1 year · ${yLabel}`;
+}
+
+window.bwRestorePurchases = async function(){
+  const msg = document.getElementById("pricing-msg") || document.getElementById("plan-gate-msg");
+  const show = (t, ok) => {
+    if(!msg) return;
+    msg.textContent = t;
+    msg.style.display = "block";
+    msg.style.color = ok ? "#86efac" : "#fca5a5";
+  };
+  if(!window.BW_IAP || !window.BW_IAP.restore){
+    show("Restore is only available in the iOS app.", false);
+    return;
+  }
+  try {
+    await window.BW_IAP.restore();
+    if(window.BW_PREMIUM){
+      show("Purchases restored — Pro is active.", true);
+      closePricing();
+      if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
+    } else {
+      show("No active App Store subscription found for this account.", false);
+    }
+  } catch(e){
+    show(e.message || "Could not restore purchases.", false);
+  }
+};
+
+window.adaptPricingForNative = async function(){
   if(!window.BW_NATIVE) return;
+  const trialBlocks = document.querySelectorAll(".bw-stripe-trial-block");
+  trialBlocks.forEach(el => { el.style.display = "none"; });
+  const stripeLinks = document.querySelectorAll(".bw-stripe-only");
+  stripeLinks.forEach(el => { el.style.display = "none"; });
+
   const note = document.getElementById("pricing-checkout-note");
-  if(note) note.textContent = "Billed through the App Store. Manage or cancel in iPhone Settings → Subscriptions.";
+  if(note){
+    note.innerHTML = `<div style="margin-bottom:8px">${bwAutoRenewDisclosure()}</div>`
+      + `<div>${bwLegalLinksHtml()}</div>`;
+  }
   const planNote = document.getElementById("plan-gate-checkout-note");
   if(planNote){
-    planNote.innerHTML = 'Billed through the App Store. By continuing you agree to the '
-      + '<a href="#" onclick="event.preventDefault();if(typeof openLegal===\'function\')openLegal();" style="color:#7dd3fc;text-decoration:none">Terms &amp; subscription policy</a>.';
+    planNote.innerHTML = `<div style="margin-bottom:8px">${bwAutoRenewDisclosure()}</div>`
+      + `<div>${bwLegalLinksHtml()}</div>`;
+  }
+  const manage = document.getElementById("pricing-manage-link");
+  if(manage){
+    manage.textContent = "Manage subscription in App Store settings";
+    manage.onclick = (e) => {
+      e.preventDefault();
+      if(window.BW_IAP && window.BW_IAP.openAppStoreSubscriptions) window.BW_IAP.openAppStoreSubscriptions();
+    };
+  }
+
+  if(window.BW_IAP && window.BW_IAP.loadProducts){
+    try {
+      const products = await window.BW_IAP.loadProducts();
+      if(products && !products.error) applyNativeProductLabels(products);
+    } catch(e){ /* fall back to static button labels */ }
   }
 };
 if(document.readyState === "loading"){

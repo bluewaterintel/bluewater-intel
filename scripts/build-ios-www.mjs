@@ -16,6 +16,9 @@ const COPY_FILES = [
   "auth-gate.html",
   "manifest.json",
   "sw.js",
+  "terms.html",
+  "privacy.html",
+  "support.html",
 ];
 
 const COPY_GLOBS = [
@@ -36,6 +39,7 @@ function main() {
 
   // Native config (embeddedFallback: true for offshore offline use)
   execSync("node scripts/generate-bw-config.mjs --native --out www/bw-config.js", { cwd: root, stdio: "inherit" });
+  execSync("node scripts/generate-legal-pages.mjs", { cwd: root, stdio: "inherit" });
 
   for (const f of COPY_FILES) {
     cpSync(join(root, f), join(www, f));

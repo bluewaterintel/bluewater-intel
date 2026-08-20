@@ -61,6 +61,31 @@
     configured = true;
   }
 
+  /** Load App Store product metadata for subscription disclosure labels. */
+  async function loadProducts() {
+    if (!native) return null;
+    try {
+      await ensureConfigured();
+    } catch (e) {
+      return { error: e.message || String(e) };
+    }
+    const plugin = getPurchasesPlugin();
+    const ids = [PRODUCT.monthly, PRODUCT.annual];
+    try {
+      const { products } = await plugin.getProducts({ productIdentifiers: ids });
+      const byId = {};
+      for (const p of products || []) {
+        if (p && p.identifier) byId[p.identifier] = p;
+      }
+      return {
+        monthly: byId[PRODUCT.monthly] || null,
+        annual: byId[PRODUCT.annual] || null,
+      };
+    } catch (e) {
+      return { error: e.message || String(e) };
+    }
+  }
+
   async function refreshEntitlementAfterPurchase() {
     if (typeof window.refreshEntitlement === "function") {
       for (let i = 0; i < 8; i++) {
@@ -122,6 +147,7 @@
     productIds: PRODUCT,
     purchase,
     restore,
+    loadProducts,
     openAppStoreSubscriptions,
   };
 })();
