@@ -19304,10 +19304,13 @@ function escapeHtml(s){
 // Auth stubs — will be replaced by real backend calls once deployed.
 // For now they show a "coming soon" notice so QA can verify the UI flow.
 function signIn(){
-  document.getElementById("bw-auth-gate").style.display = "flex";
+  if(typeof window.showAuthGate === "function") window.showAuthGate();
+  else document.getElementById("bw-auth-gate").style.display = "flex";
 }
 function signUp(){
-  document.getElementById("bw-auth-gate").style.display = "flex";
+  if(typeof window.openCreateAccount === "function") window.openCreateAccount();
+  else if(typeof window.showAuthGate === "function") window.showAuthGate();
+  else document.getElementById("bw-auth-gate").style.display = "flex";
 }
 async function signOut(){
   await window.BW_AUTH.signOut();

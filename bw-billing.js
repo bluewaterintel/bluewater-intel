@@ -104,7 +104,11 @@
   window.openPostSignupPlans = async function(){
     if(typeof navigator !== "undefined" && navigator.onLine === false) return;
     const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
-    if(u && planSelectedLocally(u.id)) return;
+    if(!u){
+      if(typeof window.showAuthGate === "function") window.showAuthGate();
+      return;
+    }
+    if(planSelectedLocally(u.id)) return;
     const g = document.getElementById("plan-gate");
     const m = document.getElementById("plan-gate-msg");
     if(m) m.style.display = "none";
@@ -142,7 +146,7 @@
   window.verifyEmailContinue = function(){
     const p = document.getElementById("verify-email-page"); if(p) p.style.display = "none";
     // Take them to the sign-in screen; they'll sign in after confirming.
-    if(typeof showGate === "function") showGate();
+    if(typeof window.showAuthGate === "function") window.showAuthGate();
   };
   window.resendVerificationEmail = async function(){
     const page = document.getElementById("verify-email-page");
@@ -242,7 +246,7 @@
       if(typeof window.showVerifyEmailScreen === "function"){
         window.showVerifyEmailScreen(email);
       } else {
-        showGate();
+        if(typeof window.showAuthGate === "function") window.showAuthGate();
         const gmsg = document.getElementById("bw-auth-msg");
         if(gmsg){ gmsg.style.display="block"; gmsg.style.color="#86efac";
           gmsg.textContent = `Account created! Check your email (${email}) for a verification link, then sign in.`; }
@@ -357,10 +361,22 @@
 
   window.closePostSignupPlans = function(){
     const g = document.getElementById("plan-gate"); if(g) g.style.display = "none";
-    const auth = document.getElementById("bw-auth-gate"); if(auth) auth.style.display = "none";
-    if(typeof hideGate === "function"){ try { hideGate(); } catch(e){} }
+    const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+    if(!u){
+      // Never enter the app without a Supabase account — e.g. offline handler
+      // closing the plan picker must not bypass the sign-in gate.
+      if(typeof window.showAuthGate === "function") window.showAuthGate();
+      else {
+        const auth = document.getElementById("bw-auth-gate");
+        if(auth) auth.style.display = "flex";
+      }
+      return;
+    }
+    if(typeof window.hideAuthGate === "function") window.hideAuthGate();
+    else {
+      const auth = document.getElementById("bw-auth-gate"); if(auth) auth.style.display = "none";
+    }
     if(typeof window.markPlanSelected === "function") window.markPlanSelected();
-    // After first plan choice, show the one-time click-through tour if needed.
     try {
       const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
       if(u && typeof maybeShowFirstLoginOnboarding === "function") maybeShowFirstLoginOnboarding(u);
@@ -485,7 +501,9 @@
         const entitled = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
         if(entitled){
           if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
-          const auth = document.getElementById("bw-auth-gate"); if(auth) auth.style.display = "none";
+          else if(window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser() && typeof window.hideAuthGate === "function"){
+            window.hideAuthGate();
+          }
         } else if(n>0){
           setTimeout(()=>bump(n-1), 2500);
         }

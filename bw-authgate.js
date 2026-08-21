@@ -37,6 +37,24 @@
     if(gate) gate.style.display="flex";
     if(window.BW_NATIVE) authKeyboardScroll(true);
   }
+  // Other modules (billing offline handler, plan picker) must not hide the gate
+  // unless a real Supabase session exists.
+  window.showAuthGate = showGate;
+  window.hideAuthGate = hideGate;
+  function enforceAuthGate(){
+    const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+    if(u) return;
+    const ca = document.getElementById("create-account-page");
+    const pw = document.getElementById("password-recovery-page");
+    const caOpen = ca && ca.style.display !== "none";
+    const pwOpen = pw && pw.style.display !== "none";
+    if(caOpen || pwOpen) return;
+    showGate();
+  }
+  function sessionStill(user){
+    const live = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+    return !!(live && user && live.id === user.id);
+  }
 
   // iOS Capacitor sets scrollEnabled:false for the map, which blocks scrolling when
   // the keyboard covers auth fields. Re-enable scroll on auth screens and nudge
@@ -157,6 +175,7 @@
   }
 
   async function onSignedIn(user, event){
+    if(!user || !user.id || !sessionStill(user)){ enforceAuthGate(); return; }
     if(typeof USER_PREFS !== "undefined"){
       USER_PREFS.account = {
         name: (user.user_metadata && user.user_metadata.full_name) || (user.email ? user.email.split("@")[0] : "Captain"),
@@ -188,7 +207,8 @@
     if(_planOnboardCheckedFor === user.id){
       const pg = document.getElementById("plan-gate");
       const planOpen = pg && pg.style.display && pg.style.display !== "none";
-      if(!planOpen) hideGate();  // don't yank a plan gate the user is actively viewing
+      if(!planOpen && sessionStill(user)) hideGate();
+      else if(!sessionStill(user)) enforceAuthGate();
       return;
     }
     _planOnboardCheckedFor = user.id;  // set BEFORE awaiting so concurrent re-fires can't double-open
@@ -203,14 +223,25 @@
       return;
     }
     if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
+    if(!sessionStill(user)){ enforceAuthGate(); return; }
     hideGate();
     if(typeof maybeShowFirstLoginOnboarding === "function"){
       try { await maybeShowFirstLoginOnboarding(user); } catch(e){}
     }
   }
 
+  let _wireAttempts = 0;
   function wireAuth(){
-    if(!window.BW_AUTH){ setTimeout(wireAuth, 100); return; }
+    if(!window.BW_AUTH){
+      _wireAttempts++;
+      if(_wireAttempts > 50){
+        hideBootChrome();
+        enforceAuthGate();
+        return;
+      }
+      setTimeout(wireAuth, 100);
+      return;
+    }
     window.BW_AUTH.onAuthChange(async (user, event) => {
       if(user){
         hideBootChrome();
@@ -219,18 +250,43 @@
       // Don't flash the sign-in gate while the saved session is still loading.
       else if(window.BW_AUTH.isAuthInitDone && window.BW_AUTH.isAuthInitDone()){
         hideBootChrome();
-        showGate();
+        enforceAuthGate();
       }
     });
-    window.BW_AUTH.whenReady().then((session) => {
+    window.BW_AUTH.whenReady().then(async (session) => {
       hideBootChrome();
-      if(!session) showGate();
+      // Validate persisted session — stale tokens must not skip the sign-in gate.
+      let user = session && session.user ? session.user : null;
+      if(user && typeof navigator !== "undefined" && navigator.onLine !== false){
+        try {
+          const { data: { user: live }, error } = await window.BW_AUTH._sb.auth.getUser();
+          if(error || !live){
+            try { await window.BW_AUTH.signOut(); } catch(e){}
+            user = null;
+          } else {
+            user = live;
+          }
+        } catch(e){
+          user = null;
+        }
+      }
+      if(!user) enforceAuthGate();
     }).catch(() => {
       hideBootChrome();
-      showGate();
+      enforceAuthGate();
     });
   }
   wireAuth();
+
+  // Safety net: if anything hid the gate while unsigned, put it back.
+  function authWatchdog(){
+    if(window.BW_AUTH && window.BW_AUTH.isAuthInitDone && !window.BW_AUTH.isAuthInitDone()) return;
+    const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+    if(u) return;
+    if(gate && gate.style.display === "none") enforceAuthGate();
+  }
+  setTimeout(authWatchdog, 1200);
+  setTimeout(authWatchdog, 3500);
 
   // Email-confirmation return: ?confirmed=1 on the sign-in gate.
   try {

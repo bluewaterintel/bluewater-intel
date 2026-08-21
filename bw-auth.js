@@ -413,9 +413,26 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     }
   });
 
-  const _ready = client.auth.getSession().then(({ data: { session } }) => {
+  const _ready = client.auth.getSession().then(async ({ data: { session } }) => {
+    let user = session?.user ?? null;
+    // Drop stale persisted tokens before any UI listener runs hideGate().
+    if (user && typeof navigator !== "undefined" && navigator.onLine !== false) {
+      try {
+        const { data: { user: live }, error } = await client.auth.getUser();
+        if (error || !live) {
+          await client.auth.signOut();
+          user = null;
+          session = null;
+        } else {
+          user = live;
+        }
+      } catch (e) {
+        user = null;
+        session = null;
+      }
+    }
     _authInitDone = true;
-    emit(session ? session.user : null, "INITIAL_SESSION");
+    emit(user, "INITIAL_SESSION");
     return session;
   }).catch((e) => {
     _authInitDone = true;
