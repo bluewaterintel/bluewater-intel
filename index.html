@@ -2716,7 +2716,7 @@ body.nav-open .leaflet-control-attribution{
       font-weight:600;font-size:15px;cursor:pointer;font-family:inherit">Create New Account</button>
   </div>
 </div>
-<script src="bw-authgate.js?v=20260821c"></script>
+<script src="bw-authgate.js?v=20260821e"></script>
 
 <!-- PRICING / UPGRADE MODAL ------------------------------------------------- -->
 <div id="pricing-modal" style="display:none;position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.62);
@@ -2765,22 +2765,26 @@ body.nav-open .leaflet-control-attribution{
 .bw-buy:hover{background:#3287c7}
 .bw-buy:disabled{opacity:.55;cursor:default}
 /* Auth screens — scroll when the iOS keyboard is open (Capacitor has scrollEnabled:false). */
+/* No -webkit-overflow-scrolling:touch here. On iOS WKWebView that legacy property
+   builds a separate momentum-scroll compositing layer, and once this container
+   overflows, taps inside it stop reaching buttons. Standard overflow-y:auto only. */
 .auth-fullscreen{
   position:fixed;inset:0;
-  overflow-y:auto;overflow-x:hidden;
-  -webkit-overflow-scrolling:touch;
+  /* Not scrollable by default: the decorative watermarks hang past the bottom
+     edge, and any scrollable ancestor on iOS risks swallowing button taps.
+     Scrolling is enabled only while the keyboard is up (.auth-kb-open). */
+  overflow:hidden;
   overscroll-behavior:contain;
   box-sizing:border-box;
   padding:max(16px, env(safe-area-inset-top, 0px)) 24px max(24px, env(safe-area-inset-bottom, 0px));
-  display:flex;flex-direction:column;align-items:center;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
   min-height:100%;min-height:100dvh;
 }
 .auth-fullscreen-panel{
   position:relative;z-index:1;
   width:100%;max-width:420px;
-  margin:24px 0 48px;
+  margin:auto 0;
   flex-shrink:0;
-  padding-bottom:var(--auth-kb-pad, 0px);
 }
 /* iOS WebView: scrollable auth overlays swallow button taps unless manipulation is set. */
 .auth-fullscreen button,
@@ -2800,17 +2804,17 @@ body.bw-auth-screen-open #hdr,
 body.bw-auth-screen-open .leaflet-container{
   pointer-events:none !important;
 }
-/* iOS: start at top (not vertically centered) so keyboard doesn't hide actions. */
-html.bw-ios .auth-fullscreen{
+/* Keyboard open: drop the marketing copy and top-align so the fields plus
+   Sign in / Forgot / Create account all fit the shrunken viewport without
+   needing to scroll (scrolling is what broke taps on iOS). */
+.auth-fullscreen.auth-kb-open{
   justify-content:flex-start;
-  padding-top:max(12px, env(safe-area-inset-top, 0px));
+  padding-top:max(10px, env(safe-area-inset-top, 0px));
+  overflow-y:auto;overflow-x:hidden;
 }
-html.bw-ios .auth-fullscreen-panel{ margin-top:8px; }
-html.bw-ios .auth-fullscreen.auth-kb-open .auth-marketing-copy > div:nth-child(3){
-  display:none;
-}
-html.bw-ios .auth-fullscreen.auth-kb-open .auth-fullscreen-panel{
-  margin-bottom:calc(var(--auth-kb-pad, 0px) + 32px);
+.auth-fullscreen.auth-kb-open .auth-marketing-copy{ display:none; }
+.auth-fullscreen.auth-kb-open .auth-fullscreen-panel{
+  margin:4px 0 calc(var(--auth-kb-pad, 0px) + 24px);
 }
 /* Auth page decorative watermarks — marlin + bluefin silhouettes behind cards */
 .auth-wm{

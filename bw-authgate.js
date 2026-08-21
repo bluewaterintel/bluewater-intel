@@ -35,7 +35,6 @@
   function hideGate(){
     if(gate) gate.style.display="none";
     clearAuthKbOpen(gate);
-    authKeyboardScroll(false);
     syncAuthScreenBodyClass();
   }
   function showGate(){
@@ -65,15 +64,11 @@
   // iOS Capacitor sets scrollEnabled:false for the map, which blocks scrolling when
   // the keyboard covers auth fields. Re-enable scroll on auth screens and nudge
   // focused inputs into view.
-  let _authKbScrollOn = false;
   let _kbListenerBound = false;
-  async function authKeyboardScroll(on){
-    const K = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard;
-    if(!K || typeof K.setScroll !== "function") return;
-    if(_authKbScrollOn === on) return;
-    _authKbScrollOn = on;
-    try { await K.setScroll({ isDisabled: !on }); } catch(e){ /* non-fatal */ }
-  }
+  // Deliberately no Keyboard.setScroll() here. Toggling the WKWebView scroll view
+  // at runtime moves its content offset out from under our position:fixed overlay,
+  // so buttons render in one place but hit-test in another. The overlay does its
+  // own scrolling while .auth-kb-open is set, which needs no native scrolling.
   function authScreensOpen(){
     const ca = document.getElementById("create-account-page");
     const pw = document.getElementById("password-recovery-page");
@@ -110,7 +105,6 @@
     const root = el.closest(".auth-fullscreen");
     if(!root) return;
     root.classList.add("auth-kb-open");
-    authKeyboardScroll(true);
     syncAuthKbPad(root);
     const doScroll = () => {
       try {
@@ -150,7 +144,6 @@
     K.addListener("keyboardWillHide", () => {
       applyAuthKbHeight(0);
       document.querySelectorAll(".auth-fullscreen.auth-kb-open").forEach(clearAuthKbOpen);
-      if(!authScreensOpen()) authKeyboardScroll(false);
     }).catch(() => {});
   }
   function wireAuthFormScroll(root){
@@ -171,7 +164,6 @@
           if(!root.contains(active) || !(active && active.matches && active.matches("input,textarea,select"))){
             clearAuthKbOpen(root);
             root.style.setProperty("--auth-kb-pad", "0px");
-            if(!authScreensOpen()) authKeyboardScroll(false);
           }
         }, 120);
       });
@@ -391,30 +383,11 @@
     if(p) p.style.display = "flex";
     syncAuthScreenBodyClass();
   }
-  function wireAuthTap(el, fn){
-    if(!el || !fn) return;
-    let last = 0;
-    const run = (e) => {
-      if(e){ e.preventDefault(); e.stopPropagation(); }
-      const now = Date.now();
-      if(now - last < 500) return;
-      last = now;
-      fn(e);
-    };
-    el.addEventListener("click", run);
-    el.addEventListener("touchend", run, { passive: false });
-  }
-  window.bwAuthGateSignIn = function(e){
-    if(e){ e.preventDefault(); e.stopPropagation(); }
-    doSignIn();
-  };
-  window.bwAuthGateOpenSignup = function(e){
-    if(e){ e.preventDefault(); e.stopPropagation(); }
+  function openSignup(){
     if(typeof window.openCreateAccount === "function") window.openCreateAccount();
     else openCreateAccountLocal();
-  };
-  window.bwAuthGateForgot = async function(e){
-    if(e){ e.preventDefault(); e.stopPropagation(); }
+  }
+  async function doForgot(){
     msg.style.display="none";
     const em = emailEl.value.trim();
     if(!em) return showErr("Enter your email above first, then tap Forgot password.");
@@ -426,7 +399,29 @@
       await window.BW_AUTH.resetPassword(em);
       showResetSentBanner();
     } catch(err){ showErr(err?.message || "Could not send reset email."); }
+  }
+
+  const AUTH_ACTION_SEL = "#bw-auth-signin,#bw-auth-signup,#bw-auth-forgot";
+  const AUTH_ACTIONS = {
+    "bw-auth-signin": doSignIn,
+    "bw-auth-signup": openSignup,
+    "bw-auth-forgot": doForgot,
   };
+  // One shared debounce: the same tap can arrive via inline onclick, the element
+  // listener, and the coordinate fallback below.
+  let _lastAuthAction = 0;
+  function runAuthAction(id, e){
+    const fn = AUTH_ACTIONS[id];
+    if(!fn) return;
+    if(e){ e.preventDefault(); e.stopPropagation(); }
+    const now = Date.now();
+    if(now - _lastAuthAction < 600) return;
+    _lastAuthAction = now;
+    fn();
+  }
+  window.bwAuthGateSignIn = (e) => runAuthAction("bw-auth-signin", e);
+  window.bwAuthGateOpenSignup = (e) => runAuthAction("bw-auth-signup", e);
+  window.bwAuthGateForgot = (e) => runAuthAction("bw-auth-forgot", e);
   if(!window.closeCreateAccount){
     window.closeCreateAccount = function(){
       const p = document.getElementById("create-account-page");
@@ -436,11 +431,25 @@
       else syncAuthScreenBodyClass();
     };
   }
-  const signInBtn = document.getElementById("bw-auth-signin");
-  const signUpBtn = document.getElementById("bw-auth-signup");
-  wireAuthTap(signInBtn, () => doSignIn());
-  wireAuthTap(signUpBtn, (e) => window.bwAuthGateOpenSignup(e));
-  wireAuthTap(forgotEl, (e) => window.bwAuthGateForgot(e));
+  Object.keys(AUTH_ACTIONS).forEach((id) => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener("click", (e) => runAuthAction(id, e));
+  });
+  // iOS fallback: if the WebView routes the touch to a scroll layer instead of the
+  // button, recover the intended target from the touch coordinates.
+  if(gate){
+    gate.addEventListener("touchend", (e) => {
+      const t = e.changedTouches && e.changedTouches[0];
+      if(!t) return;
+      const direct = e.target && e.target.closest && e.target.closest(AUTH_ACTION_SEL);
+      let hit = direct;
+      if(!hit){
+        const at = document.elementFromPoint(t.clientX, t.clientY);
+        hit = at && at.closest ? at.closest(AUTH_ACTION_SEL) : null;
+      }
+      if(hit) runAuthAction(hit.id, e);
+    }, { passive: false });
+  }
   // Let the user submit with Enter from either the email or password field,
   // instead of forcing a click on the Sign In button.
   [emailEl, passEl].forEach((el) => {
