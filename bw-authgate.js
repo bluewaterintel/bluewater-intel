@@ -32,13 +32,17 @@
     if(welcome) welcome.style.display="block";
     showGate();
   }
-  function hideGate(){ if(gate) gate.style.display="none"; authKeyboardScroll(false); }
-  function showGate(){ if(gate) gate.style.display="flex"; }
+  function hideGate(){ if(gate) gate.style.display="none"; clearAuthKbOpen(gate); authKeyboardScroll(false); }
+  function showGate(){
+    if(gate) gate.style.display="flex";
+    if(window.BW_NATIVE) authKeyboardScroll(true);
+  }
 
   // iOS Capacitor sets scrollEnabled:false for the map, which blocks scrolling when
   // the keyboard covers auth fields. Re-enable scroll on auth screens and nudge
   // focused inputs into view.
   let _authKbScrollOn = false;
+  let _kbListenerBound = false;
   async function authKeyboardScroll(on){
     const K = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard;
     if(!K || typeof K.setScroll !== "function") return;
@@ -46,20 +50,76 @@
     _authKbScrollOn = on;
     try { await K.setScroll({ isDisabled: !on }); } catch(e){ /* non-fatal */ }
   }
+  function authScreensOpen(){
+    const ca = document.getElementById("create-account-page");
+    const pw = document.getElementById("password-recovery-page");
+    return (gate && gate.style.display !== "none")
+      || (ca && ca.style.display !== "none")
+      || (pw && pw.style.display !== "none");
+  }
+  function clearAuthKbOpen(root){
+    if(root) root.classList.remove("auth-kb-open");
+  }
+  function applyAuthKbHeight(h){
+    const px = Math.max(0, Number(h) || 0);
+    document.querySelectorAll(".auth-fullscreen").forEach((root) => {
+      if(root.style.display === "none") return;
+      root.style.setProperty("--auth-kb-pad", px > 50 ? (px + 40) + "px" : "0px");
+    });
+  }
   function syncAuthKbPad(root){
     const vv = window.visualViewport;
     if(!vv || !root) return;
     const kb = Math.max(0, window.innerHeight - vv.height - (vv.offsetTop || 0));
-    root.style.setProperty("--auth-kb-pad", kb > 50 ? (kb + 24) + "px" : "0px");
+    applyAuthKbHeight(kb);
   }
   function scrollAuthFieldIntoView(el){
     if(!el) return;
     const root = el.closest(".auth-fullscreen");
+    if(!root) return;
+    root.classList.add("auth-kb-open");
+    authKeyboardScroll(true);
     syncAuthKbPad(root);
-    setTimeout(() => {
-      try { el.scrollIntoView({ block: "center", behavior: "smooth" }); }
-      catch(e){ el.scrollIntoView(true); }
-    }, 300);
+    const doScroll = () => {
+      try {
+        // Scroll the auth overlay itself — WebView scroll is often disabled.
+        const rootRect = root.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const pad = 24;
+        const overflow = elRect.bottom + pad - rootRect.bottom;
+        if(overflow > 0) root.scrollTop += overflow;
+        // Ensure bottom actions (Forgot / Create account) stay reachable on password focus.
+        const tail = root.querySelector("#bw-auth-signup, #ca-submit, #pw-submit");
+        if(tail && el.matches("#bw-auth-password, #ca-password, #pw-email")){
+          const tailRect = tail.getBoundingClientRect();
+          const tailOverflow = tailRect.bottom + pad - rootRect.bottom;
+          if(tailOverflow > 0) root.scrollTop += tailOverflow;
+        }
+      } catch(e){
+        try { el.scrollIntoView({ block: "center", behavior: "smooth" }); }
+        catch(e2){ el.scrollIntoView(true); }
+      }
+    };
+    setTimeout(doScroll, 80);
+    setTimeout(doScroll, 320);
+  }
+  function bindKeyboardHeightListeners(){
+    if(_kbListenerBound) return;
+    const K = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard;
+    if(!K || !K.addListener) return;
+    _kbListenerBound = true;
+    K.addListener("keyboardWillShow", (info) => {
+      applyAuthKbHeight(info && info.keyboardHeight);
+      const active = document.activeElement;
+      if(active && active.matches && active.matches("input,textarea,select")){
+        scrollAuthFieldIntoView(active);
+      }
+    }).catch(() => {});
+    K.addListener("keyboardWillHide", () => {
+      applyAuthKbHeight(0);
+      document.querySelectorAll(".auth-fullscreen.auth-kb-open").forEach(clearAuthKbOpen);
+      if(!authScreensOpen()) authKeyboardScroll(false);
+    }).catch(() => {});
   }
   function wireAuthFormScroll(root){
     if(!root || root._bwKbWired) return;
@@ -71,25 +131,21 @@
     }
     root.querySelectorAll("input, textarea, select").forEach((el) => {
       el.addEventListener("focus", () => {
-        authKeyboardScroll(true);
         scrollAuthFieldIntoView(el);
       });
       el.addEventListener("blur", () => {
         setTimeout(() => {
           const active = document.activeElement;
           if(!root.contains(active) || !(active && active.matches && active.matches("input,textarea,select"))){
+            clearAuthKbOpen(root);
             root.style.setProperty("--auth-kb-pad", "0px");
-            const gateOpen = gate && gate.style.display !== "none";
-            const ca = document.getElementById("create-account-page");
-            const pw = document.getElementById("password-recovery-page");
-            const caOpen = ca && ca.style.display !== "none";
-            const pwOpen = pw && pw.style.display !== "none";
-            if(!gateOpen && !caOpen && !pwOpen) authKeyboardScroll(false);
+            if(!authScreensOpen()) authKeyboardScroll(false);
           }
         }, 120);
       });
     });
   }
+  bindKeyboardHeightListeners();
   wireAuthFormScroll(gate);
   wireAuthFormScroll(document.getElementById("create-account-page"));
   wireAuthFormScroll(document.getElementById("password-recovery-page"));

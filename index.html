@@ -2679,7 +2679,7 @@ body.nav-open .leaflet-control-attribution{
   <img src="/icons/bluefin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-bluefin-bl">
   <div class="auth-fullscreen-panel" style="background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);
               border-radius:18px;padding:34px 30px;box-shadow:0 20px 60px rgba(0,0,0,.45);backdrop-filter:blur(2px)">
-    <div style="text-align:center;margin-bottom:26px">
+    <div class="auth-marketing-copy" style="text-align:center;margin-bottom:26px">
       <div style="font-size:28px;font-weight:800;color:#f0f6ff;letter-spacing:.02em">Bluewater Intel</div>
       <div style="font-size:16px;color:#cfe5ff;margin-top:10px;font-weight:600;line-height:1.45">Know where the fish are before you leave the dock.</div>
       <div style="font-size:13.5px;color:#9ec5e8;margin-top:10px;line-height:1.55">AI-powered bite forecasts, live ocean &amp; weather intel, canyon and structure waypoints, and your personal catch log — from Maine to Southern California.</div>
@@ -2716,7 +2716,7 @@ body.nav-open .leaflet-control-attribution{
       font-weight:600;font-size:15px;cursor:pointer;font-family:inherit">Create New Account</button>
   </div>
 </div>
-<script src="bw-authgate.js?v=20260814b"></script>
+<script src="bw-authgate.js?v=20260820c"></script>
 
 <!-- PRICING / UPGRADE MODAL ------------------------------------------------- -->
 <div id="pricing-modal" style="display:none;position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.62);
@@ -2770,6 +2770,7 @@ body.nav-open .leaflet-control-attribution{
   overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
+  touch-action:pan-y;
   box-sizing:border-box;
   padding:max(16px, env(safe-area-inset-top, 0px)) 24px max(24px, env(safe-area-inset-bottom, 0px));
   display:flex;flex-direction:column;align-items:center;
@@ -2778,9 +2779,21 @@ body.nav-open .leaflet-control-attribution{
 .auth-fullscreen-panel{
   position:relative;z-index:1;
   width:100%;max-width:420px;
-  margin:auto 0;
+  margin:24px 0 48px;
   flex-shrink:0;
   padding-bottom:var(--auth-kb-pad, 0px);
+}
+/* iOS: start at top (not vertically centered) so keyboard doesn't hide actions. */
+html.bw-ios .auth-fullscreen{
+  justify-content:flex-start;
+  padding-top:max(12px, env(safe-area-inset-top, 0px));
+}
+html.bw-ios .auth-fullscreen-panel{ margin-top:8px; }
+html.bw-ios .auth-fullscreen.auth-kb-open .auth-marketing-copy > div:nth-child(3){
+  display:none;
+}
+html.bw-ios .auth-fullscreen.auth-kb-open .auth-fullscreen-panel{
+  margin-bottom:calc(var(--auth-kb-pad, 0px) + 32px);
 }
 /* Auth page decorative watermarks — marlin + bluefin silhouettes behind cards */
 .auth-wm{
