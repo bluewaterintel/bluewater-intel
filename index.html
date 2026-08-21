@@ -2671,7 +2671,7 @@ body.nav-open .leaflet-control-attribution{
 <body>
 <!-- Auth gate — shown until Supabase session exists -->
 <div id="bw-auth-gate" class="auth-fullscreen" style="
-  z-index:99999;background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
+  z-index:100010;background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
   display:flex;font-family:'Segoe UI',system-ui,sans-serif">
   <!-- Translucent marlin + bluefin watermarks from the brand mark, behind the sign-in card. -->
   <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-marlin-br">
@@ -2705,18 +2705,18 @@ body.nav-open .leaflet-control-attribution{
     <input id="bw-auth-password" type="password" autocomplete="current-password" placeholder="••••••••" style="
       width:100%;box-sizing:border-box;margin-bottom:22px;padding:13px 14px;border-radius:9px;border:1px solid rgba(107,191,234,.3);
       background:#0a1628;color:#f0f6ff;font-size:16px;font-family:inherit"/>
-    <button id="bw-auth-signin" type="button" style="
+    <button id="bw-auth-signin" type="button" onclick="window.bwAuthGateSignIn && window.bwAuthGateSignIn(event)" style="
       width:100%;padding:14px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:17px;
       cursor:pointer;font-family:inherit;margin-bottom:12px">Sign In</button>
     <div style="text-align:center;margin-top:0;margin-bottom:12px">
-      <a id="bw-auth-forgot" href="#" style="color:#7dd3fc;font-size:14px;text-decoration:none">Forgot password?</a>
+      <a id="bw-auth-forgot" href="#" onclick="window.bwAuthGateForgot && window.bwAuthGateForgot(event)" style="color:#7dd3fc;font-size:14px;text-decoration:none">Forgot password?</a>
     </div>
-    <button id="bw-auth-signup" type="button" style="
+    <button id="bw-auth-signup" type="button" onclick="window.bwAuthGateOpenSignup && window.bwAuthGateOpenSignup(event)" style="
       width:100%;padding:13px;border:1px solid rgba(107,191,234,.35);border-radius:10px;background:transparent;color:#6bbfea;
       font-weight:600;font-size:15px;cursor:pointer;font-family:inherit">Create New Account</button>
   </div>
 </div>
-<script src="bw-authgate.js?v=20260820d"></script>
+<script src="bw-authgate.js?v=20260820e"></script>
 
 <!-- PRICING / UPGRADE MODAL ------------------------------------------------- -->
 <div id="pricing-modal" style="display:none;position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.62);
@@ -2782,6 +2782,18 @@ body.nav-open .leaflet-control-attribution{
   margin:24px 0 48px;
   flex-shrink:0;
   padding-bottom:var(--auth-kb-pad, 0px);
+}
+/* iOS WebView: scrollable auth overlays swallow button taps unless manipulation is set. */
+.auth-fullscreen button,
+.auth-fullscreen a[href]{
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:rgba(125,211,252,.15);
+  cursor:pointer;
+  pointer-events:auto;
+}
+#bw-auth-gate{
+  pointer-events:auto;
+  isolation:isolate;
 }
 /* iOS: start at top (not vertically centered) so keyboard doesn't hide actions. */
 html.bw-ios .auth-fullscreen{

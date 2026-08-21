@@ -175,7 +175,7 @@
   }
 
   async function onSignedIn(user, event){
-    if(!user || !user.id || !sessionStill(user)){ enforceAuthGate(); return; }
+    if(!user || !user.id){ enforceAuthGate(); return; }
     if(typeof USER_PREFS !== "undefined"){
       USER_PREFS.account = {
         name: (user.user_metadata && user.user_metadata.full_name) || (user.email ? user.email.split("@")[0] : "Captain"),
@@ -353,11 +353,61 @@
   async function doSignIn(){
     msg.style.display="none";
     const c = validCreds(); if(!c) return;
+    const btn = document.getElementById("bw-auth-signin");
+    if(btn){ btn.disabled = true; btn.textContent = "Signing in…"; }
     try {
+      if(!window.BW_AUTH || !window.BW_AUTH.signIn){
+        showErr("Sign-in is still loading. Check your connection and try again.");
+        return;
+      }
       await window.BW_AUTH.signIn(c.email, c.password);
     } catch(e){ showErr(e.message || "Sign in failed"); }
+    finally {
+      if(btn){ btn.disabled = false; btn.textContent = "Sign In"; }
+    }
   }
-  document.getElementById("bw-auth-signin").addEventListener("click", doSignIn);
+  function openCreateAccountLocal(){
+    const p = document.getElementById("create-account-page");
+    const m = document.getElementById("ca-msg");
+    if(m){ m.style.display = "none"; m.textContent = ""; }
+    const em = document.getElementById("bw-auth-email");
+    const caEm = document.getElementById("ca-email");
+    if(em && caEm && em.value) caEm.value = em.value.trim();
+    if(p) p.style.display = "flex";
+  }
+  window.bwAuthGateSignIn = function(e){
+    if(e){ e.preventDefault(); e.stopPropagation(); }
+    doSignIn();
+  };
+  window.bwAuthGateOpenSignup = function(e){
+    if(e){ e.preventDefault(); e.stopPropagation(); }
+    if(typeof window.openCreateAccount === "function") window.openCreateAccount();
+    else openCreateAccountLocal();
+  };
+  window.bwAuthGateForgot = async function(e){
+    if(e){ e.preventDefault(); e.stopPropagation(); }
+    msg.style.display="none";
+    const em = emailEl.value.trim();
+    if(!em) return showErr("Enter your email above first, then tap Forgot password.");
+    if(!window.BW_AUTH || !window.BW_AUTH.resetPassword){
+      showErr("Sign-in is still loading. Check your connection and try again.");
+      return;
+    }
+    try {
+      await window.BW_AUTH.resetPassword(em);
+      showResetSentBanner();
+    } catch(err){ showErr(err?.message || "Could not send reset email."); }
+  };
+  if(!window.closeCreateAccount){
+    window.closeCreateAccount = function(){
+      const p = document.getElementById("create-account-page");
+      if(p) p.style.display = "none";
+    };
+  }
+  document.getElementById("bw-auth-signin").addEventListener("click", (e) => {
+    e.preventDefault();
+    doSignIn();
+  });
   // Let the user submit with Enter from either the email or password field,
   // instead of forcing a click on the Sign In button.
   [emailEl, passEl].forEach((el) => {
@@ -365,17 +415,6 @@
       if(e.key === "Enter"){ e.preventDefault(); doSignIn(); }
     });
   });
-  forgotEl.addEventListener("click", async (e) => {
-    e.preventDefault();
-    msg.style.display="none";
-    const em = emailEl.value.trim();
-    if(!em) return showErr("Enter your email above first, then tap Forgot password.");
-    try {
-      await window.BW_AUTH.resetPassword(em);
-      showResetSentBanner();
-    } catch(err){ showErr(err?.message || "Could not send reset email."); }
-  });
-  document.getElementById("bw-auth-signup").addEventListener("click", () => {
-    if(typeof window.openCreateAccount === "function") window.openCreateAccount();
-  });
+  forgotEl.addEventListener("click", (e) => window.bwAuthGateForgot(e));
+  document.getElementById("bw-auth-signup").addEventListener("click", (e) => window.bwAuthGateOpenSignup(e));
 })();
