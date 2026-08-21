@@ -32,15 +32,21 @@
     if(welcome) welcome.style.display="block";
     showGate();
   }
-  function hideGate(){ if(gate) gate.style.display="none"; clearAuthKbOpen(gate); authKeyboardScroll(false); }
+  function hideGate(){
+    if(gate) gate.style.display="none";
+    clearAuthKbOpen(gate);
+    authKeyboardScroll(false);
+    syncAuthScreenBodyClass();
+  }
   function showGate(){
     if(gate) gate.style.display="flex";
-    if(window.BW_NATIVE) authKeyboardScroll(true);
+    syncAuthScreenBodyClass();
   }
   // Other modules (billing offline handler, plan picker) must not hide the gate
   // unless a real Supabase session exists.
   window.showAuthGate = showGate;
   window.hideAuthGate = hideGate;
+  window.syncAuthScreenBodyClass = syncAuthScreenBodyClass;
   function enforceAuthGate(){
     const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
     if(u) return;
@@ -71,9 +77,17 @@
   function authScreensOpen(){
     const ca = document.getElementById("create-account-page");
     const pw = document.getElementById("password-recovery-page");
+    const verify = document.getElementById("verify-email-page");
+    const verifyOpen = verify && verify.style.display !== "none";
     return (gate && gate.style.display !== "none")
       || (ca && ca.style.display !== "none")
-      || (pw && pw.style.display !== "none");
+      || (pw && pw.style.display !== "none")
+      || verifyOpen;
+  }
+  function syncAuthScreenBodyClass(){
+    try {
+      document.body.classList.toggle("bw-auth-screen-open", authScreensOpen());
+    } catch(e){ /* non-fatal */ }
   }
   function clearAuthKbOpen(root){
     if(root) root.classList.remove("auth-kb-open");
@@ -373,7 +387,22 @@
     const em = document.getElementById("bw-auth-email");
     const caEm = document.getElementById("ca-email");
     if(em && caEm && em.value) caEm.value = em.value.trim();
+    if(gate) gate.style.display = "none";
     if(p) p.style.display = "flex";
+    syncAuthScreenBodyClass();
+  }
+  function wireAuthTap(el, fn){
+    if(!el || !fn) return;
+    let last = 0;
+    const run = (e) => {
+      if(e){ e.preventDefault(); e.stopPropagation(); }
+      const now = Date.now();
+      if(now - last < 500) return;
+      last = now;
+      fn(e);
+    };
+    el.addEventListener("click", run);
+    el.addEventListener("touchend", run, { passive: false });
   }
   window.bwAuthGateSignIn = function(e){
     if(e){ e.preventDefault(); e.stopPropagation(); }
@@ -402,19 +431,23 @@
     window.closeCreateAccount = function(){
       const p = document.getElementById("create-account-page");
       if(p) p.style.display = "none";
+      const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+      if(!u) enforceAuthGate();
+      else syncAuthScreenBodyClass();
     };
   }
-  document.getElementById("bw-auth-signin").addEventListener("click", (e) => {
-    e.preventDefault();
-    doSignIn();
-  });
+  const signInBtn = document.getElementById("bw-auth-signin");
+  const signUpBtn = document.getElementById("bw-auth-signup");
+  wireAuthTap(signInBtn, () => doSignIn());
+  wireAuthTap(signUpBtn, (e) => window.bwAuthGateOpenSignup(e));
+  wireAuthTap(forgotEl, (e) => window.bwAuthGateForgot(e));
   // Let the user submit with Enter from either the email or password field,
   // instead of forcing a click on the Sign In button.
   [emailEl, passEl].forEach((el) => {
+    if(!el) return;
     el.addEventListener("keydown", (e) => {
       if(e.key === "Enter"){ e.preventDefault(); doSignIn(); }
     });
   });
-  forgotEl.addEventListener("click", (e) => window.bwAuthGateForgot(e));
-  document.getElementById("bw-auth-signup").addEventListener("click", (e) => window.bwAuthGateOpenSignup(e));
+  syncAuthScreenBodyClass();
 })();

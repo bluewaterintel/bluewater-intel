@@ -2671,7 +2671,7 @@ body.nav-open .leaflet-control-attribution{
 <body>
 <!-- Auth gate — shown until Supabase session exists -->
 <div id="bw-auth-gate" class="auth-fullscreen" style="
-  z-index:100010;background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
+  z-index:99999;background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
   display:flex;font-family:'Segoe UI',system-ui,sans-serif">
   <!-- Translucent marlin + bluefin watermarks from the brand mark, behind the sign-in card. -->
   <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-marlin-br">
@@ -2716,7 +2716,7 @@ body.nav-open .leaflet-control-attribution{
       font-weight:600;font-size:15px;cursor:pointer;font-family:inherit">Create New Account</button>
   </div>
 </div>
-<script src="bw-authgate.js?v=20260820e"></script>
+<script src="bw-authgate.js?v=20260821a"></script>
 
 <!-- PRICING / UPGRADE MODAL ------------------------------------------------- -->
 <div id="pricing-modal" style="display:none;position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.62);
@@ -2770,7 +2770,6 @@ body.nav-open .leaflet-control-attribution{
   overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
-  touch-action:pan-y;
   box-sizing:border-box;
   padding:max(16px, env(safe-area-inset-top, 0px)) 24px max(24px, env(safe-area-inset-bottom, 0px));
   display:flex;flex-direction:column;align-items:center;
@@ -2794,6 +2793,12 @@ body.nav-open .leaflet-control-attribution{
 #bw-auth-gate{
   pointer-events:auto;
   isolation:isolate;
+}
+/* Block map/header taps while any auth overlay is open (iOS WebView bleed-through). */
+body.bw-auth-screen-open #map,
+body.bw-auth-screen-open #hdr,
+body.bw-auth-screen-open .leaflet-container{
+  pointer-events:none !important;
 }
 /* iOS: start at top (not vertically centered) so keyboard doesn't hide actions. */
 html.bw-ios .auth-fullscreen{

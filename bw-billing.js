@@ -126,10 +126,16 @@
     const em = document.getElementById("bw-auth-email");
     const caEm = document.getElementById("ca-email");
     if(em && caEm && em.value) caEm.value = em.value.trim();
+    const auth = document.getElementById("bw-auth-gate");
+    if(auth) auth.style.display = "none";
     if(p) p.style.display = "flex";
+    if(typeof window.syncAuthScreenBodyClass === "function") window.syncAuthScreenBodyClass();
   };
   window.closeCreateAccount = function(){
     const p = document.getElementById("create-account-page"); if(p) p.style.display = "none";
+    const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
+    if(!u && typeof window.showAuthGate === "function") window.showAuthGate();
+    else if(typeof window.syncAuthScreenBodyClass === "function") window.syncAuthScreenBodyClass();
   };
   // Dedicated "check your email to verify" screen shown after signup, so the
   // user isn't dropped on the login form before they've confirmed (which caused

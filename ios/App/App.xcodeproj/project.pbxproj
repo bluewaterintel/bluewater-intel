@@ -215,7 +215,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\ncd \"${SRCROOT}/../..\"\nexport PATH=\"/usr/local/bin:/opt/homebrew/bin:$PATH\"\nif ! command -v npm >/dev/null 2>&1; then\n  echo \"warning: npm not in PATH — ios/App/App/public may be stale. From repo root run: npm run build:ios && npx cap copy ios\"\n  exit 0\nfi\nnpm run build:ios\nnpx cap copy ios\n";
+			shellScript = "set -e\nexport PATH=\"/usr/local/bin:/opt/homebrew/bin:$PATH\"\n# Capacitor must run from the repo root (where capacitor.config.json lives).\nROOT=\"${SRCROOT}\"\nwhile [ ! -f \"${ROOT}/capacitor.config.json\" ] && [ \"${ROOT}\" != \"/\" ]; do\n  ROOT=\"$(dirname \"${ROOT}\")\"\ndone\nif [ ! -f \"${ROOT}/capacitor.config.json\" ]; then\n  echo \"error: could not find repo root (capacitor.config.json). Run from bluewater-intel/: npm run build:ios && npx cap copy ios\"\n  exit 1\nfi\ncd \"${ROOT}\"\nif ! command -v npm >/dev/null 2>&1; then\n  echo \"warning: npm not in PATH — ios/App/App/public may be stale. From repo root run: npm run build:ios && npx cap copy ios\"\n  exit 0\nfi\nnpm run build:ios\nnpx cap copy ios\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -365,7 +365,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = 7WR7LJY4ZM;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -387,7 +387,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = 7WR7LJY4ZM;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
