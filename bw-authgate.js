@@ -129,22 +129,29 @@
     setTimeout(doScroll, 80);
     setTimeout(doScroll, 320);
   }
+  // Capacitor's web implementation of addListener() returns a Promise, but the
+  // native iOS bridge returns a plain { remove } handle. Chaining .catch() on it
+  // throws a TypeError, so always feature-check before treating it as a promise.
+  function addNativeListener(target, event, handler){
+    const h = target.addListener(event, handler);
+    if(h && typeof h.catch === "function") h.catch(() => {});
+  }
   function bindKeyboardHeightListeners(){
     if(_kbListenerBound) return;
     const K = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard;
     if(!K || !K.addListener) return;
     _kbListenerBound = true;
-    K.addListener("keyboardWillShow", (info) => {
+    addNativeListener(K, "keyboardWillShow", (info) => {
       applyAuthKbHeight(info && info.keyboardHeight);
       const active = document.activeElement;
       if(active && active.matches && active.matches("input,textarea,select")){
         scrollAuthFieldIntoView(active);
       }
-    }).catch(() => {});
-    K.addListener("keyboardWillHide", () => {
+    });
+    addNativeListener(K, "keyboardWillHide", () => {
       applyAuthKbHeight(0);
       document.querySelectorAll(".auth-fullscreen.auth-kb-open").forEach(clearAuthKbOpen);
-    }).catch(() => {});
+    });
   }
   function wireAuthFormScroll(root){
     if(!root || root._bwKbWired) return;
@@ -169,15 +176,27 @@
       });
     });
   }
-  bindKeyboardHeightListeners();
-  wireAuthFormScroll(gate);
-  wireAuthFormScroll(document.getElementById("create-account-page"));
-  wireAuthFormScroll(document.getElementById("password-recovery-page"));
+  // Keyboard/scroll polish is optional. It must never throw past this point,
+  // because everything below — including wiring the Sign In and Create Account
+  // buttons — lives in the same script. A TypeError here previously aborted the
+  // whole file on iOS and shipped a login screen with dead buttons.
+  function safeInit(label, fn){
+    try { fn(); }
+    catch(e){
+      try { console.error("[authgate] " + label + " failed:", e); } catch(e2){ /* ignore */ }
+    }
+  }
+  safeInit("keyboard listeners", bindKeyboardHeightListeners);
+  safeInit("gate form scroll", () => wireAuthFormScroll(gate));
+  safeInit("signup form scroll", () => wireAuthFormScroll(document.getElementById("create-account-page")));
+  safeInit("recovery form scroll", () => wireAuthFormScroll(document.getElementById("password-recovery-page")));
 
   function hideBootChrome(){
-    if(typeof window.BW_hideNativeSplash === "function"){
-      window.BW_hideNativeSplash().catch(() => {});
-    }
+    if(typeof window.BW_hideNativeSplash !== "function") return;
+    try {
+      const r = window.BW_hideNativeSplash();
+      if(r && typeof r.catch === "function") r.catch(() => {});
+    } catch(e){ /* never let splash teardown break auth */ }
   }
 
   async function onSignedIn(user, event){
