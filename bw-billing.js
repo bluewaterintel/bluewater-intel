@@ -648,13 +648,13 @@ function applyNativeTrialBlock(products){
       if(title){
         title.style.color = "#cfe5ff";
         title.textContent = eligibility === "ineligible"
-          ? "Free trial already used"
+          ? "Free trial already used on this iPhone"
           : "Free trial may not apply";
       }
       if(desc){
         desc.textContent = eligibility === "ineligible"
-          ? `Your Apple ID has already used the ${trial.label} for Bluewater Intel Pro, so a new subscription starts billing today.${priceNote} Pick a plan below — it renews until you cancel.`
-          : `We couldn't confirm free-trial eligibility for your Apple ID. Apple will show the exact terms — including any free trial — on the confirmation screen before you're charged.${priceNote}`;
+          ? `This is tied to the Apple ID signed in under Settings → Developer → Sandbox Apple Account — not your Bluewater Intel login. That Apple ID already used the ${trial.label}, so a new subscription starts billing today.${priceNote} Pick Monthly or Annual below, or sign in with a fresh sandbox Apple ID to test the trial again.`
+          : `We couldn't confirm free-trial eligibility for the Apple ID on this device. Apple will show the exact terms on the confirmation screen before you're charged.${priceNote}`;
       }
       if(btn) btn.style.display = "none";
       el.style.display = "";

@@ -104,7 +104,9 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   }
 
   function authRedirectUrl(query) {
-    if (window.BW_NATIVE) return "com.bluewaterintel.app://?" + query;
+    // Email links always open in Mail/Safari first. Custom URL schemes
+    // (com.bluewaterintel.app://) render a blank page when iOS does not hand
+    // off to the app — use the HTTPS site so the user sees a confirmation page.
     if (typeof window !== "undefined" && window.location && /^https?:\/\/(localhost|127\.0\.0\.1)/.test(window.location.origin)) {
       return window.location.origin + "/?" + query;
     }
