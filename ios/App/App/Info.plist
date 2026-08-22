@@ -57,7 +57,9 @@
 		</dict>
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Bluewater Intel uses your location to center the fishing map on your position.</string>
+	<string>Bluewater Intel uses your location to center the fishing map on your position and log catch locations when you tap Use my location.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Bluewater Intel uses your location while you are using the app to center the fishing map and log catch locations when you choose to use GPS.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo of your catch for length and weight estimation.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
