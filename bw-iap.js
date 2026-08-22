@@ -119,11 +119,31 @@
     }
   }
 
+  async function syncIapEntitlement() {
+    try {
+      const res = await fetch(`${fnBase()}/iap-sync`, {
+        method: "POST",
+        headers: await authHeaders(),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.warn("iap-sync failed", j.error || res.status);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.warn("iap-sync failed", e);
+      return false;
+    }
+  }
+
   async function refreshEntitlementAfterPurchase() {
+    await syncIapEntitlement();
     if (typeof window.refreshEntitlement === "function") {
       for (let i = 0; i < 8; i++) {
         await window.refreshEntitlement();
         if (window.BW_PREMIUM) return;
+        if (i === 2) await syncIapEntitlement();
         await new Promise((r) => setTimeout(r, 1500));
       }
     }
@@ -182,6 +202,7 @@
     restore,
     loadProducts,
     trialEligibility,
+    syncIapEntitlement,
     openAppStoreSubscriptions,
   };
 })();

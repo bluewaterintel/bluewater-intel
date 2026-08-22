@@ -233,16 +233,18 @@ REVENUECAT_IOS_API_KEY=appl_your_key_here
 npm run build:ios && npx cap sync ios
 ```
 
-### 6.4 Webhook → Supabase
+### 6.4 Webhook + post-purchase sync → Supabase
 
-1. Deploy the webhook function:
+1. Set secrets and deploy both functions:
 
 ```bash
 supabase secrets set REVENUECAT_WEBHOOK_AUTH=your-long-random-secret
+supabase secrets set REVENUECAT_SECRET_API_KEY=sk_your_revenuecat_secret_key
 supabase functions deploy revenuecat-webhook --no-verify-jwt
+supabase functions deploy iap-sync
 ```
 
-Your webhook URL will be:
+Webhook URL:
 ```
 https://YOURPROJECT.supabase.co/functions/v1/revenuecat-webhook
 ```
@@ -252,7 +254,9 @@ https://YOURPROJECT.supabase.co/functions/v1/revenuecat-webhook
    - Authorization header: `Bearer your-long-random-secret` (same as `REVENUECAT_WEBHOOK_AUTH`)
    - Events: send all subscription events
 
-When a user buys Pro on iOS, RevenueCat notifies Supabase → `profiles.subscription_status = 'active'` → **same Pro access on the website**.
+When a user buys Pro on iOS, RevenueCat notifies Supabase via the webhook. The app also calls **`iap-sync`** immediately after purchase/restore so Pro unlocks even if the webhook is delayed.
+
+**Entitlement name must be exactly `pro`** in RevenueCat, with both App Store products attached.
 
 ### 6.5 Enable In-App Purchase in Xcode
 

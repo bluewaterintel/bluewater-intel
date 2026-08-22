@@ -10,6 +10,7 @@
 // ============================================================================
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { mapRcWebhookEvent } from "../_shared/revenuecat.ts";
 
 const WEBHOOK_AUTH = Deno.env.get("REVENUECAT_WEBHOOK_AUTH") ?? "";
 const admin = createClient(
@@ -17,35 +18,6 @@ const admin = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   { auth: { persistSession: false } },
 );
-
-const PRO_ENTITLEMENT = "pro";
-
-function mapRcEvent(event: Record<string, unknown>) {
-  const type = String(event.type ?? "");
-  const appUserId = String(event.app_user_id ?? "");
-  const entitlementIds: string[] = Array.isArray(event.entitlement_ids)
-    ? event.entitlement_ids.map(String)
-    : [];
-  const hasPro = entitlementIds.includes(PRO_ENTITLEMENT)
-    || String(event.entitlement_id ?? "") === PRO_ENTITLEMENT;
-  const expires = event.expiration_at_ms
-    ? new Date(Number(event.expiration_at_ms)).toISOString()
-    : null;
-  const productId = String(event.product_id ?? "");
-  const interval = /annual|year/i.test(productId) ? "year" : "month";
-  const originalTx = event.original_transaction_id
-    ? String(event.original_transaction_id)
-    : null;
-
-  let status = "none";
-  if (hasPro) {
-    status = type.includes("TRIAL") ? "trialing" : "active";
-  } else if (["EXPIRATION", "CANCELLATION"].some((t) => type.includes(t))) {
-    status = "canceled";
-  }
-
-  return { appUserId, status, expires, interval, originalTx, type };
-}
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
@@ -63,7 +35,15 @@ Deno.serve(async (req) => {
   }
 
   const event = (body.event as Record<string, unknown>) ?? body;
-  const { appUserId, status, expires, interval, originalTx } = mapRcEvent(event);
+  const mapped = mapRcWebhookEvent(event);
+
+  if (!mapped) {
+    return new Response(JSON.stringify({ ok: true, skipped: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const { appUserId, patch } = mapped;
 
   // app_user_id is the Supabase user UUID (set in bw-iap.js Purchases.configure).
   if (!appUserId || !/^[0-9a-f-]{36}$/i.test(appUserId)) {
@@ -73,23 +53,13 @@ Deno.serve(async (req) => {
     });
   }
 
-  const patch: Record<string, unknown> = {
-    id: appUserId,
-    billing_source: "apple",
-    subscription_status: status,
-    subscription_interval: status === "none" || status === "canceled" ? null : interval,
-    current_period_end: expires,
-    updated_at: new Date().toISOString(),
-  };
-  if (originalTx) patch.apple_original_transaction_id = originalTx;
-
   const { error } = await admin.from("profiles").upsert(patch, { onConflict: "id" });
   if (error) {
     console.error("revenuecat-webhook upsert failed", error.message);
     return new Response(JSON.stringify({ error: error.message }), { status: 502 });
   }
 
-  return new Response(JSON.stringify({ ok: true }), {
+  return new Response(JSON.stringify({ ok: true, status: patch.subscription_status }), {
     headers: { "Content-Type": "application/json" },
   });
 });
