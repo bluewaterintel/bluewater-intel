@@ -289,6 +289,10 @@
     if(label && detail && actions){
       let planLabel = "Free", planDetail = "You're on the free version — maps, ports, catches, and your own waypoints. Upgrade to Pro to unlock the Bite Map, ocean intel, waypoints, and the AI Captain's Brief.";
       let actionsHtml = `<button class="bw-buy" type="button" style="flex:1;background:#16a34a;border-color:rgba(134,239,172,.55)" onclick="closeAccountPage();openPricing()">Upgrade to Pro</button>`;
+      const manageBtn = (p) => {
+        const l = bwManageBillingLabel(p);
+        return `<button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">${l}</button>`;
+      };
       const fillPlan = (p) => {
         const st = p && p.subscription_status;
         const interval = p && p.subscription_interval;
@@ -299,23 +303,30 @@
         } else if(st === "active"){
           planLabel = interval === "year" ? "PRO Annual" : "PRO Monthly";
           planDetail = "Full app — Bite Map, ocean & weather layers, all waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.";
-          actionsHtml = `<span style="${badgeStyle}">${planLabel}</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
+          actionsHtml = `<span style="${badgeStyle}">${planLabel}</span>${manageBtn(p)}`;
         } else if(st === "trialing"){
           planLabel = "7 Day Trial";
           planDetail = "Full app · all waypoints · 1 free AI Captain's Brief for the trial";
-          actionsHtml = `<span style="${badgeStyle}">7 Day Trial</span><button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Upgrade/Cancel</button>`;
+          actionsHtml = `<span style="${badgeStyle}">7 Day Trial</span>${manageBtn(p)}`;
         } else if(paid){
           planLabel = "Pro";
           planDetail = "Full app — Bite Map, ocean & weather layers, all waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.";
-          actionsHtml = `<button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">Manage Billing</button>`;
+          actionsHtml = manageBtn(p);
         }
+      };
+      const paint = (p) => {
+        fillPlan(p);
+        label.textContent = planLabel;
+        detail.textContent = planDetail;
+        actions.innerHTML = actionsHtml;
+        renderBillingGuidance(p);
       };
       try {
         const s = sb();
         if(s){
-          s.from("profiles").select("is_owner, subscription_status, subscription_interval").maybeSingle()
-            .then(({ data:p }) => { fillPlan(p); label.textContent = planLabel; detail.textContent = planDetail; actions.innerHTML = actionsHtml; })
-            .catch(() => { if(paid){ fillPlan(null); label.textContent = planLabel; detail.textContent = planDetail; actions.innerHTML = actionsHtml; } });
+          s.from("profiles").select("is_owner, subscription_status, subscription_interval, billing_source").maybeSingle()
+            .then(({ data:p }) => paint(p))
+            .catch(() => { if(paid) paint(null); });
         } else if(paid){
           fillPlan(null);
         }
@@ -329,20 +340,68 @@
     const dmsg = document.getElementById("acct-delete-msg"); if(dmsg){ dmsg.style.display="none"; dmsg.textContent=""; }
     page.style.display = "block";
   };
+  // Where the subscription was bought decides who can cancel it. Apple's rules
+  // (and Stripe's) mean we cannot cancel the other platform's subscription for
+  // the user, so the Account page has to name the exact path for their case.
+  const APPLE_PATH = "Settings \u2192 [your name] \u2192 Subscriptions \u2192 Bluewater Intel";
+  function bwBillingSource(p){
+    const st = p && p.subscription_status;
+    if(!p || p.is_owner || !(st === "active" || st === "trialing")) return "none";
+    if(p.billing_source === "apple") return "apple";
+    if(p.billing_source === "stripe") return "stripe";
+    return "unknown";
+  }
+  window.bwManageBillingLabel = function(p){
+    const src = bwBillingSource(p);
+    if(src === "apple") return "Manage in App Store";
+    if(src === "stripe" && window.BW_NATIVE) return "How to cancel";
+    return "Manage Billing";
+  };
+  window.bwOpenAppStoreSubscriptions = function(){
+    if(window.BW_IAP && window.BW_IAP.openAppStoreSubscriptions) window.BW_IAP.openAppStoreSubscriptions();
+  };
+  function renderBillingGuidance(p){
+    const help = document.getElementById("acct-billing-help");
+    const note = document.getElementById("acct-delete-note");
+    const src = bwBillingSource(p);
+    if(src === "none"){
+      if(help){ help.style.display = "none"; help.innerHTML = ""; }
+      if(note){ note.style.display = "none"; note.textContent = ""; }
+      return;
+    }
+    const appleBtn = `<button class="bw-buy" type="button" style="width:100%;margin-top:10px" onclick="bwOpenAppStoreSubscriptions()">Open App Store Subscriptions</button>`;
+    let helpHtml = "", noteText = "";
+    if(src === "apple"){
+      helpHtml = `<b style="color:#f0f6ff">Billed by Apple</b><br>`
+        + `You subscribed in the app, so Apple handles payment and cancellation. `
+        + `Cancel or switch plans in <b>${APPLE_PATH}</b>. `
+        + `Canceling stops future renewals — you keep Pro until the end of the period you already paid for.`
+        + appleBtn;
+      noteText = `You have a live App Store subscription. Deleting your account does not cancel it — cancel in ${APPLE_PATH} first, or Apple will keep billing your Apple ID.`;
+    } else if(src === "stripe" && window.BW_NATIVE){
+      helpHtml = `<b style="color:#f0f6ff">Billed on our website</b><br>`
+        + `You subscribed at bluewaterintel.com, so this subscription is not managed by the App Store. `
+        + `Open <b>app.bluewaterintel.com</b> in Safari, sign in, then use <b>Menu \u2192 Account \u2192 Manage Billing</b> to change your card, switch plans, or cancel.`;
+      noteText = `You have a live website subscription. Deleting your account does not cancel it — cancel at app.bluewaterintel.com first, or billing continues.`;
+    } else if(src === "stripe"){
+      helpHtml = `<b style="color:#f0f6ff">Billed by card (Stripe)</b><br>`
+        + `Use <b>Manage Billing</b> above to update your card, switch between monthly and annual, or cancel. `
+        + `Canceling stops future charges — you keep Pro through the end of the current period.`;
+      noteText = `You have a live subscription. Deleting your account does not cancel it — cancel with Manage Billing first, or billing continues.`;
+    } else {
+      helpHtml = `<b style="color:#f0f6ff">How to cancel</b><br>`
+        + `If you subscribed <b>in the iPhone app</b>, cancel in <b>${APPLE_PATH}</b>. `
+        + `If you subscribed <b>on our website</b>, sign in at <b>app.bluewaterintel.com</b> and use <b>Menu \u2192 Account \u2192 Manage Billing</b>. `
+        + `Either way you keep Pro until the end of the period you already paid for.`
+        + appleBtn;
+      noteText = `You have a live subscription. Deleting your account does not cancel it — cancel it first (App Store subscriptions in ${APPLE_PATH}; website subscriptions at app.bluewaterintel.com), or billing continues.`;
+    }
+    if(help){ help.innerHTML = helpHtml; help.style.display = "block"; }
+    if(note){ note.textContent = noteText; note.style.display = "block"; }
+  }
   window.closeAccountPage = function(){
     const page = document.getElementById("account-page");
     if(page) page.style.display = "none";
-  };
-  // Manage Billing → opens the Stripe customer portal (backend returns a URL).
-  window.bwManageBilling = async function(){
-    try {
-      const res = await fetch(`${fnBase()}/stripe-portal`, { method:"POST", headers: await authHeaders() });
-      const j = await res.json();
-      if(j && j.url){ window.location.href = j.url; return; }
-      throw new Error((j && j.error) || "Could not open billing portal.");
-    } catch(e){
-      if(typeof showToast === "function") showToast(e.message || "Billing portal unavailable.", "error");
-    }
   };
   // Account deletion — two-step confirm, then calls the backend delete endpoint.
   window.deleteAccountFlow = async function(){
@@ -361,7 +420,7 @@
       show("Account deleted. Signing you out…", "#86efac");
       setTimeout(()=>{ try { location.reload(); } catch(e){} }, 1200);
     } catch(e){
-      show(e.message || "Could not delete account. If you have an active subscription, cancel it first from Manage Billing.", "#f87171");
+      show(e.message || `Could not delete account. If you have an active subscription, cancel it first — App Store subscriptions in ${APPLE_PATH}, website subscriptions at app.bluewaterintel.com.`, "#f87171");
     }
   };
 
@@ -419,17 +478,18 @@
       try {
         const s = sb();
         if(s){
-          const { data:p } = await s.from("profiles").select("billing_source, subscription_status").maybeSingle();
-          if(p && p.billing_source === "stripe" && ["active","trialing"].includes(p.subscription_status)){
-            const note = "You subscribed on our website. Manage billing at app.bluewaterintel.com in Safari.";
+          const { data:p } = await s.from("profiles").select("billing_source, subscription_status, is_owner").maybeSingle();
+          if(bwBillingSource(p) === "stripe"){
+            const note = "This subscription was purchased on our website, so it can't be canceled from the App Store. "
+              + "Open app.bluewaterintel.com in Safari, sign in, then use Menu \u2192 Account \u2192 Manage Billing.";
             if(msg){ msg.textContent = note; msg.style.display = "block"; }
             else if(typeof showToast === "function") showToast(note, "info");
             return;
           }
         }
-        if(window.BW_IAP && window.BW_IAP.openAppStoreSubscriptions) window.BW_IAP.openAppStoreSubscriptions();
+        bwOpenAppStoreSubscriptions();
       } catch(e){
-        if(window.BW_IAP && window.BW_IAP.openAppStoreSubscriptions) window.BW_IAP.openAppStoreSubscriptions();
+        bwOpenAppStoreSubscriptions();
       }
       return;
     }
@@ -445,11 +505,12 @@
   window.renderNavPlan = async function(){
     const el = document.getElementById("nav-plan"); if(!el) return;
     let tier = "Free", detail = "Maps, ports, catches & your own waypoints";
-    let st = "none", interval = null, isOwner = false;
+    let st = "none", interval = null, isOwner = false, profile = null;
     try {
       const s = sb();
       if(s){
-        const { data:p } = await s.from("profiles").select("is_owner, subscription_status, subscription_interval").maybeSingle();
+        const { data:p } = await s.from("profiles").select("is_owner, subscription_status, subscription_interval, billing_source").maybeSingle();
+        profile = p;
         st = (p && p.subscription_status) || "none";
         interval = p && p.subscription_interval;
         isOwner = !!(p && p.is_owner);
@@ -469,7 +530,8 @@
       actionHtml = `<span style="${badgeStyle}">7 Day Trial</span>`;
     }
     const showManage = !isOwner && (st==="active" || st==="trialing");
-    const manageLabel = st==="trialing" ? "Upgrade/Cancel" : "Manage";
+    // Kept generic here — the Account page spells out the exact cancel path.
+    const manageLabel = bwBillingSource(profile) === "apple" ? "App Store" : "Manage Billing";
     // Entitled accounts lose the Upgrade button, which otherwise makes the plan
     // list unreachable — including for App Review, who sign in already entitled.
     const entitled = isOwner || st==="active" || st==="trialing";
@@ -566,8 +628,37 @@ function applyNativeTrialBlock(products){
   if(!blocks.length) return;
   const monthly = products && products.monthly;
   const trial = bwIntroTrial(monthly);
-  if(!trial){
+  const eligibility = (products && products.monthlyTrial) || "unknown";
+  // Only promise a free trial when Apple says this Apple ID can still use the
+  // introductory offer. Otherwise the purchase sheet charges immediately and the
+  // "no charge today" copy would be a lie.
+  if(!trial || eligibility === "none"){
     blocks.forEach(el => { el.style.display = "none"; });
+    return;
+  }
+  if(eligibility === "ineligible" || eligibility === "unknown"){
+    const price = bwPriceString(monthly);
+    const priceNote = price ? ` Monthly is ${price}.` : "";
+    blocks.forEach(el => {
+      const title = el.querySelector(".bw-native-trial-title");
+      const desc = el.querySelector(".bw-native-trial-desc");
+      const btn = el.querySelector(".bw-native-trial-btn");
+      el.style.background = "rgba(107,191,234,.08)";
+      el.style.borderColor = "rgba(107,191,234,.3)";
+      if(title){
+        title.style.color = "#cfe5ff";
+        title.textContent = eligibility === "ineligible"
+          ? "Free trial already used"
+          : "Free trial may not apply";
+      }
+      if(desc){
+        desc.textContent = eligibility === "ineligible"
+          ? `Your Apple ID has already used the ${trial.label} for Bluewater Intel Pro, so a new subscription starts billing today.${priceNote} Pick a plan below — it renews until you cancel.`
+          : `We couldn't confirm free-trial eligibility for your Apple ID. Apple will show the exact terms — including any free trial — on the confirmation screen before you're charged.${priceNote}`;
+      }
+      if(btn) btn.style.display = "none";
+      el.style.display = "";
+    });
     return;
   }
   const price = bwPriceString(monthly);
@@ -583,7 +674,7 @@ function applyNativeTrialBlock(products){
       desc.innerHTML = `Full app — the Bite Map, ocean &amp; wind layers, forecasts and all charted waypoints for your home port. `
         + `<b>${trial.period}</b>, no charge today. ${after} Cancel anytime in Settings → [your name] → Subscriptions.`;
     }
-    if(btn) btn.textContent = `Start ${trial.label}`;
+    if(btn){ btn.style.display = ""; btn.textContent = `Start ${trial.label}`; }
     el.style.display = "";
   });
 }
@@ -651,6 +742,18 @@ window.adaptPricingForNative = async function(){
   if(planNote){
     planNote.innerHTML = `<div style="margin-bottom:8px">${bwAutoRenewDisclosure()}</div>`
       + `<div>${bwLegalLinksHtml()}</div>`;
+  }
+  // The tutorial copy describes Stripe checkout, which does not apply in the
+  // native app — App Store purchases are billed and canceled through Apple.
+  const tutSub = document.getElementById("tut-subscription-desc");
+  if(tutSub){
+    tutSub.innerHTML = `Bluewater Intel offers a free tier plus a paid <b>Subscription</b> that unlocks the full app — the Bite Map, `
+      + `ocean &amp; wind layers, forecasts, and more. Pick <b>monthly</b> or a discounted <b>annual</b> plan. `
+      + `Purchases in this app are handled by the <b>App Store</b> and billed to your Apple ID — we never see your card. `
+      + `If a free trial is available to your Apple ID, Apple shows the exact terms on the confirmation screen before you're charged. `
+      + `To cancel or switch plans, go to <b>Settings → [your name] → Subscriptions → Bluewater Intel</b> `
+      + `(also reachable from <b>Menu → Manage Account</b>). Subscriptions auto-renew until canceled; `
+      + `see <b>Menu → Legal &amp; Privacy</b> for full terms.`;
   }
   const manage = document.getElementById("pricing-manage-link");
   if(manage){

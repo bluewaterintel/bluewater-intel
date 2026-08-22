@@ -34,7 +34,7 @@
   }
   function hideGate(){
     if(gate) gate.style.display="none";
-    clearAuthKbOpen(gate);
+    resetAuthKbPad(gate);
     syncAuthScreenBodyClass();
   }
   function showGate(){
@@ -67,8 +67,7 @@
   let _kbListenerBound = false;
   // Deliberately no Keyboard.setScroll() here. Toggling the WKWebView scroll view
   // at runtime moves its content offset out from under our position:fixed overlay,
-  // so buttons render in one place but hit-test in another. The overlay does its
-  // own scrolling while .auth-kb-open is set, which needs no native scrolling.
+  // so buttons render in one place but hit-test in another.
   function authScreensOpen(){
     const ca = document.getElementById("create-account-page");
     const pw = document.getElementById("password-recovery-page");
@@ -84,50 +83,133 @@
       document.body.classList.toggle("bw-auth-screen-open", authScreensOpen());
     } catch(e){ /* non-fatal */ }
   }
-  function clearAuthKbOpen(root){
-    if(root) root.classList.remove("auth-kb-open");
+  function keyboardHeightPx(){
+    const vv = window.visualViewport;
+    if(vv) return Math.max(0, window.innerHeight - vv.height - (vv.offsetTop || 0));
+    return 0;
+  }
+  function resetAuthKeyboardLayout(root){
+    if(!root) return;
+    root.classList.remove("auth-kb-open");
+    root.style.top = "";
+    root.style.left = "";
+    root.style.right = "";
+    root.style.bottom = "";
+    root.style.height = "";
+    root.style.setProperty("--auth-kb-pad", "0px");
+  }
+  function resetAuthKbPad(root){ resetAuthKeyboardLayout(root); }
+  function authGateUsesPinnedActions(root){
+    return !!(root && root.classList && root.classList.contains("auth-gate-shell"));
+  }
+  function scrollAuthGateField(root, el){
+    const scroller = root.querySelector(".auth-gate-scroll");
+    if(!scroller || !el) return;
+    const sr = scroller.getBoundingClientRect();
+    const ar = el.getBoundingClientRect();
+    const pad = 12;
+    if(ar.bottom > sr.bottom - pad) scroller.scrollTop += ar.bottom - sr.bottom + pad;
+    else if(ar.top < sr.top + pad) scroller.scrollTop -= sr.top + pad - ar.top;
+  }
+  function pinAuthGateToViewport(root){
+    if(!root || !authGateUsesPinnedActions(root)) return;
+    const vv = window.visualViewport;
+    if(!vv){
+      resetAuthKeyboardLayout(root);
+      return;
+    }
+    const kb = keyboardHeightPx();
+    const inputFocused = root.querySelector("input:focus,textarea:focus,select:focus");
+    if(kb > 50 || inputFocused){
+      root.classList.add("auth-kb-open");
+      root.style.top = Math.max(0, vv.offsetTop || 0) + "px";
+      root.style.left = "0";
+      root.style.right = "0";
+      root.style.bottom = "auto";
+      root.style.height = vv.height + "px";
+      const active = document.activeElement;
+      if(active && root.contains(active)) scrollAuthGateField(root, active);
+    } else {
+      resetAuthKeyboardLayout(root);
+    }
   }
   function applyAuthKbHeight(h){
     const px = Math.max(0, Number(h) || 0);
     document.querySelectorAll(".auth-fullscreen").forEach((root) => {
       if(root.style.display === "none") return;
-      root.style.setProperty("--auth-kb-pad", px > 50 ? (px + 40) + "px" : "0px");
+      if(authGateUsesPinnedActions(root)){
+        pinAuthGateToViewport(root);
+        return;
+      }
+      if(px > 50){
+        root.classList.add("auth-kb-open");
+        root.style.bottom = px + "px";
+        root.style.setProperty("--auth-kb-pad", (px + 80) + "px");
+      } else {
+        resetAuthKeyboardLayout(root);
+      }
     });
   }
   function syncAuthKbPad(root){
+    if(!root) return;
+    if(authGateUsesPinnedActions(root)){
+      pinAuthGateToViewport(root);
+      return;
+    }
+    const kb = keyboardHeightPx();
+    if(kb > 50) applyAuthKbHeight(kb);
+    else resetAuthKeyboardLayout(root);
+  }
+  function visibleBottomPx(){
     const vv = window.visualViewport;
-    if(!vv || !root) return;
-    const kb = Math.max(0, window.innerHeight - vv.height - (vv.offsetTop || 0));
-    applyAuthKbHeight(kb);
+    if(vv) return vv.height + (vv.offsetTop || 0);
+    return window.innerHeight;
+  }
+  function ensureAuthTailVisible(root){
+    const tail = root.querySelector("#bw-auth-signup, #ca-submit, #pw-submit");
+    if(!tail) return;
+    const pad = 12;
+    const vis = visibleBottomPx();
+    const tailRect = tail.getBoundingClientRect();
+    if(tailRect.bottom > vis - pad){
+      root.scrollTop += tailRect.bottom - vis + pad;
+    }
   }
   function scrollAuthFieldIntoView(el){
     if(!el) return;
     const root = el.closest(".auth-fullscreen");
     if(!root) return;
-    root.classList.add("auth-kb-open");
     syncAuthKbPad(root);
+    if(authGateUsesPinnedActions(root)){
+      const doScroll = () => {
+        pinAuthGateToViewport(root);
+        scrollAuthGateField(root, el);
+      };
+      requestAnimationFrame(doScroll);
+      setTimeout(doScroll, 120);
+      setTimeout(doScroll, 360);
+      return;
+    }
     const doScroll = () => {
       try {
-        // Scroll the auth overlay itself — WebView scroll is often disabled.
+        syncAuthKbPad(root);
         const rootRect = root.getBoundingClientRect();
         const elRect = el.getBoundingClientRect();
-        const pad = 24;
-        const overflow = elRect.bottom + pad - rootRect.bottom;
-        if(overflow > 0) root.scrollTop += overflow;
-        // Ensure bottom actions (Forgot / Create account) stay reachable on password focus.
-        const tail = root.querySelector("#bw-auth-signup, #ca-submit, #pw-submit");
-        if(tail && el.matches("#bw-auth-password, #ca-password, #pw-email")){
-          const tailRect = tail.getBoundingClientRect();
-          const tailOverflow = tailRect.bottom + pad - rootRect.bottom;
-          if(tailOverflow > 0) root.scrollTop += tailOverflow;
+        const visibleBottom = Math.min(rootRect.bottom, visibleBottomPx());
+        const pad = 16;
+        if(elRect.bottom > visibleBottom - pad){
+          root.scrollTop += elRect.bottom - visibleBottom + pad;
+        } else if(elRect.top < rootRect.top + pad){
+          root.scrollTop -= rootRect.top + pad - elRect.top;
         }
+        ensureAuthTailVisible(root);
       } catch(e){
-        try { el.scrollIntoView({ block: "center", behavior: "smooth" }); }
-        catch(e2){ el.scrollIntoView(true); }
+        try { el.scrollIntoView({ block: "nearest", behavior: "auto" }); } catch(e2){}
       }
     };
-    setTimeout(doScroll, 80);
-    setTimeout(doScroll, 320);
+    requestAnimationFrame(doScroll);
+    setTimeout(doScroll, 120);
+    setTimeout(doScroll, 360);
   }
   // Capacitor's web implementation of addListener() returns a Promise, but the
   // native iOS bridge returns a plain { remove } handle. Chaining .catch() on it
@@ -150,7 +232,10 @@
     });
     addNativeListener(K, "keyboardWillHide", () => {
       applyAuthKbHeight(0);
-      document.querySelectorAll(".auth-fullscreen.auth-kb-open").forEach(clearAuthKbOpen);
+      document.querySelectorAll(".auth-fullscreen").forEach(resetAuthKeyboardLayout);
+    });
+    addNativeListener(K, "keyboardDidShow", () => {
+      if(gate && gate.style.display !== "none") pinAuthGateToViewport(gate);
     });
   }
   function wireAuthFormScroll(root){
@@ -169,12 +254,12 @@
         setTimeout(() => {
           const active = document.activeElement;
           if(!root.contains(active) || !(active && active.matches && active.matches("input,textarea,select"))){
-            clearAuthKbOpen(root);
-            root.style.setProperty("--auth-kb-pad", "0px");
+            if(keyboardHeightPx() <= 50) resetAuthKeyboardLayout(root);
           }
         }, 120);
       });
     });
+    if(authGateUsesPinnedActions(root)) pinAuthGateToViewport(root);
   }
   // Keyboard/scroll polish is optional. It must never throw past this point,
   // because everything below — including wiring the Sign In and Create Account

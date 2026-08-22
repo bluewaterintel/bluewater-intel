@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="bw-config.js"></script>
 <script src="bw-capacitor.js"></script>
-<script src="bw-iap.js?v=20260820a"></script>
+<script src="bw-iap.js?v=20260822a"></script>
 <script src="bw-data-source.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bw-auth.js?v=20260813a"></script>
@@ -2670,53 +2670,59 @@ body.nav-open .leaflet-control-attribution{
 </head>
 <body>
 <!-- Auth gate — shown until Supabase session exists -->
-<div id="bw-auth-gate" class="auth-fullscreen" style="
+<div id="bw-auth-gate" class="auth-fullscreen auth-gate-shell" style="
   z-index:99999;background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
   display:flex;font-family:'Segoe UI',system-ui,sans-serif">
   <!-- Translucent marlin + bluefin watermarks from the brand mark, behind the sign-in card. -->
   <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-marlin-br">
   <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-marlin-tl">
   <img src="/icons/bluefin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-bluefin-bl">
-  <div class="auth-fullscreen-panel" style="background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);
-              border-radius:18px;padding:34px 30px;box-shadow:0 20px 60px rgba(0,0,0,.45);backdrop-filter:blur(2px)">
-    <div class="auth-marketing-copy" style="text-align:center;margin-bottom:26px">
-      <div style="font-size:28px;font-weight:800;color:#f0f6ff;letter-spacing:.02em">Bluewater Intel</div>
-      <div style="font-size:16px;color:#cfe5ff;margin-top:10px;font-weight:600;line-height:1.45">Know where the fish are before you leave the dock.</div>
-      <div style="font-size:13.5px;color:#9ec5e8;margin-top:10px;line-height:1.55">AI-powered bite forecasts, live ocean &amp; weather intel, canyon and structure waypoints, and your personal catch log — from Maine to Southern California.</div>
-    </div>
-    <div id="bw-auth-welcome" style="display:none;margin-bottom:14px;padding:12px 14px;border-radius:10px;
-         background:rgba(34,197,94,.12);border:1px solid rgba(134,239,172,.45);text-align:center">
-      <div style="font-size:13px;font-weight:700;color:#86efac;line-height:1.45">
-        ✓ Welcome to Bluewater Intel! Your email is confirmed — sign in to get started.
+  <div class="auth-gate-shell-inner">
+    <div class="auth-gate-scroll">
+      <div class="auth-fullscreen-panel" style="background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);
+                  border-radius:18px;padding:34px 30px;box-shadow:0 20px 60px rgba(0,0,0,.45);backdrop-filter:blur(2px)">
+        <div class="auth-marketing-copy" style="text-align:center;margin-bottom:26px">
+          <div style="font-size:28px;font-weight:800;color:#f0f6ff;letter-spacing:.02em">Bluewater Intel</div>
+          <div style="font-size:16px;color:#cfe5ff;margin-top:10px;font-weight:600;line-height:1.45">Know where the fish are before you leave the dock.</div>
+          <div style="font-size:13.5px;color:#9ec5e8;margin-top:10px;line-height:1.55">AI-powered bite forecasts, live ocean &amp; weather intel, canyon and structure waypoints, and your personal catch log — from Maine to Southern California.</div>
+        </div>
+        <div id="bw-auth-welcome" style="display:none;margin-bottom:14px;padding:12px 14px;border-radius:10px;
+             background:rgba(34,197,94,.12);border:1px solid rgba(134,239,172,.45);text-align:center">
+          <div style="font-size:13px;font-weight:700;color:#86efac;line-height:1.45">
+            ✓ Welcome to Bluewater Intel! Your email is confirmed — sign in to get started.
+          </div>
+        </div>
+        <div id="bw-auth-reset-sent" style="display:none;margin-bottom:14px;padding:12px 14px;border-radius:10px;
+             background:rgba(56,189,248,.10);border:1px solid rgba(56,189,248,.35);text-align:center">
+          <div style="font-size:13px;font-weight:700;color:#7dd3fc;line-height:1.45">
+            Password reset email sent. Check your inbox (and spam folder) — the link expires in one hour.
+          </div>
+        </div>
+        <div id="bw-auth-msg" style="display:none;font-size:13.5px;color:#fca5a5;margin-bottom:12px;text-align:center"></div>
+        <label style="display:block;font-size:13px;color:#9ec5e8;margin-bottom:6px">Email</label>
+        <input id="bw-auth-email" type="email" autocomplete="email" placeholder="you@example.com" style="
+          width:100%;box-sizing:border-box;margin-bottom:16px;padding:13px 14px;border-radius:9px;border:1px solid rgba(107,191,234,.3);
+          background:#0a1628;color:#f0f6ff;font-size:16px;font-family:inherit"/>
+        <label style="display:block;font-size:13px;color:#9ec5e8;margin-bottom:6px">Password</label>
+        <input id="bw-auth-password" type="password" autocomplete="current-password" placeholder="••••••••" style="
+          width:100%;box-sizing:border-box;margin-bottom:0;padding:13px 14px;border-radius:9px;border:1px solid rgba(107,191,234,.3);
+          background:#0a1628;color:#f0f6ff;font-size:16px;font-family:inherit"/>
       </div>
     </div>
-    <div id="bw-auth-reset-sent" style="display:none;margin-bottom:14px;padding:12px 14px;border-radius:10px;
-         background:rgba(56,189,248,.10);border:1px solid rgba(56,189,248,.35);text-align:center">
-      <div style="font-size:13px;font-weight:700;color:#7dd3fc;line-height:1.45">
-        Password reset email sent. Check your inbox (and spam folder) — the link expires in one hour.
+    <div class="auth-gate-actions">
+      <button id="bw-auth-signin" type="button" onclick="window.bwAuthGateSignIn && window.bwAuthGateSignIn(event)" style="
+        width:100%;padding:14px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:17px;
+        cursor:pointer;font-family:inherit;margin-bottom:12px">Sign In</button>
+      <div style="text-align:center;margin-top:0;margin-bottom:12px">
+        <a id="bw-auth-forgot" href="#" onclick="window.bwAuthGateForgot && window.bwAuthGateForgot(event)" style="color:#7dd3fc;font-size:14px;text-decoration:none">Forgot password?</a>
       </div>
+      <button id="bw-auth-signup" type="button" onclick="window.bwAuthGateOpenSignup && window.bwAuthGateOpenSignup(event)" style="
+        width:100%;padding:13px;border:1px solid rgba(107,191,234,.35);border-radius:10px;background:transparent;color:#6bbfea;
+        font-weight:600;font-size:15px;cursor:pointer;font-family:inherit">Create New Account</button>
     </div>
-    <div id="bw-auth-msg" style="display:none;font-size:13.5px;color:#fca5a5;margin-bottom:12px;text-align:center"></div>
-    <label style="display:block;font-size:13px;color:#9ec5e8;margin-bottom:6px">Email</label>
-    <input id="bw-auth-email" type="email" autocomplete="email" placeholder="you@example.com" style="
-      width:100%;box-sizing:border-box;margin-bottom:16px;padding:13px 14px;border-radius:9px;border:1px solid rgba(107,191,234,.3);
-      background:#0a1628;color:#f0f6ff;font-size:16px;font-family:inherit"/>
-    <label style="display:block;font-size:13px;color:#9ec5e8;margin-bottom:6px">Password</label>
-    <input id="bw-auth-password" type="password" autocomplete="current-password" placeholder="••••••••" style="
-      width:100%;box-sizing:border-box;margin-bottom:22px;padding:13px 14px;border-radius:9px;border:1px solid rgba(107,191,234,.3);
-      background:#0a1628;color:#f0f6ff;font-size:16px;font-family:inherit"/>
-    <button id="bw-auth-signin" type="button" onclick="window.bwAuthGateSignIn && window.bwAuthGateSignIn(event)" style="
-      width:100%;padding:14px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:17px;
-      cursor:pointer;font-family:inherit;margin-bottom:12px">Sign In</button>
-    <div style="text-align:center;margin-top:0;margin-bottom:12px">
-      <a id="bw-auth-forgot" href="#" onclick="window.bwAuthGateForgot && window.bwAuthGateForgot(event)" style="color:#7dd3fc;font-size:14px;text-decoration:none">Forgot password?</a>
-    </div>
-    <button id="bw-auth-signup" type="button" onclick="window.bwAuthGateOpenSignup && window.bwAuthGateOpenSignup(event)" style="
-      width:100%;padding:13px;border:1px solid rgba(107,191,234,.35);border-radius:10px;background:transparent;color:#6bbfea;
-      font-weight:600;font-size:15px;cursor:pointer;font-family:inherit">Create New Account</button>
   </div>
 </div>
-<script src="bw-authgate.js?v=20260821f"></script>
+<script src="bw-authgate.js?v=20260821k"></script>
 
 <!-- PRICING / UPGRADE MODAL ------------------------------------------------- -->
 <div id="pricing-modal" style="display:none;position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.62);
@@ -2764,28 +2770,61 @@ body.nav-open .leaflet-control-attribution{
   font-weight:700;font-size:13px;padding:11px 12px;border-radius:10px;cursor:pointer}
 .bw-buy:hover{background:#3287c7}
 .bw-buy:disabled{opacity:.55;cursor:default}
-/* Auth screens — scroll when the iOS keyboard is open (Capacitor has scrollEnabled:false). */
-/* No -webkit-overflow-scrolling:touch here. On iOS WKWebView that legacy property
-   builds a separate momentum-scroll compositing layer, and once this container
-   overflows, taps inside it stop reaching buttons. Standard overflow-y:auto only. */
+/* Auth screens — scrollable overlay; user scrolls to fields when the keyboard is up. */
 .auth-fullscreen{
   position:fixed;inset:0;
-  /* Not scrollable by default: the decorative watermarks hang past the bottom
-     edge, and any scrollable ancestor on iOS risks swallowing button taps.
-     Scrolling is enabled only while the keyboard is up (.auth-kb-open). */
-  overflow:hidden;
+  overflow-y:auto;overflow-x:hidden;
   overscroll-behavior:contain;
   box-sizing:border-box;
   padding:max(16px, env(safe-area-inset-top, 0px)) 24px max(24px, env(safe-area-inset-bottom, 0px));
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  /* flex-start so overflow scroll can reach the bottom buttons; margin:auto on the
+     panel centers it vertically when the keyboard is closed. */
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
   min-height:100%;min-height:100dvh;
 }
 .auth-fullscreen-panel{
   position:relative;z-index:1;
   width:100%;max-width:420px;
-  margin:auto 0;
+  margin:auto 0 48px;
   flex-shrink:0;
 }
+/* Auth gate: split scroll body + pinned action bar. Capacitor sets scrollEnabled:false
+   on the WebView, so scrolling the full-screen overlay does not work on iOS — the
+   action buttons must live outside the scroll region. */
+#bw-auth-gate.auth-gate-shell{
+  overflow:hidden;
+  padding-bottom:max(12px, env(safe-area-inset-bottom, 0px));
+}
+.auth-gate-shell-inner{
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;
+  width:100%;max-width:420px;
+  height:100%;
+  min-height:0;
+  margin:auto;
+}
+.auth-gate-scroll{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;overflow-x:hidden;
+  overscroll-behavior:contain;
+  padding-top:8px;
+}
+.auth-gate-scroll .auth-fullscreen-panel{
+  margin:0 0 12px;
+}
+.auth-gate-actions{
+  flex:0 0 auto;
+  width:100%;
+  padding:8px 0 4px;
+}
+html.bw-ios .auth-gate-shell .auth-marketing-copy > div:nth-child(3){ display:none; }
+.auth-gate-shell.auth-kb-open .auth-marketing-copy > div:nth-child(2),
+.auth-gate-shell.auth-kb-open .auth-marketing-copy > div:nth-child(3){ display:none; }
+.auth-gate-shell.auth-kb-open .auth-gate-scroll .auth-fullscreen-panel{
+  padding:22px 22px 16px;
+}
+.auth-gate-shell.auth-kb-open .auth-marketing-copy{ margin-bottom:14px; }
 /* iOS WebView: scrollable auth overlays swallow button taps unless manipulation is set. */
 .auth-fullscreen button,
 .auth-fullscreen a[href]{
@@ -2803,18 +2842,6 @@ body.bw-auth-screen-open #map,
 body.bw-auth-screen-open #hdr,
 body.bw-auth-screen-open .leaflet-container{
   pointer-events:none !important;
-}
-/* Keyboard open: drop the marketing copy and top-align so the fields plus
-   Sign in / Forgot / Create account all fit the shrunken viewport without
-   needing to scroll (scrolling is what broke taps on iOS). */
-.auth-fullscreen.auth-kb-open{
-  justify-content:flex-start;
-  padding-top:max(10px, env(safe-area-inset-top, 0px));
-  overflow-y:auto;overflow-x:hidden;
-}
-.auth-fullscreen.auth-kb-open .auth-marketing-copy{ display:none; }
-.auth-fullscreen.auth-kb-open .auth-fullscreen-panel{
-  margin:4px 0 calc(var(--auth-kb-pad, 0px) + 24px);
 }
 /* Auth page decorative watermarks — marlin + bluefin silhouettes behind cards */
 .auth-wm{
@@ -2973,6 +3000,10 @@ body.bw-auth-screen-open .leaflet-container{
       <div id="acct-plan-label" style="font-size:20px;font-weight:800;color:#f0f6ff;margin-bottom:6px">Free</div>
       <div id="acct-plan-detail" style="font-size:13px;color:#9ec5e8;line-height:1.55;margin-bottom:16px">Maps, ports, catches &amp; your own waypoints.</div>
       <div id="acct-plan-actions" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+      <!-- Cancellation path depends on where the subscription was purchased
+           (App Store vs. our website), so this is filled in by openAccountPage(). -->
+      <div id="acct-billing-help" style="display:none;margin-top:14px;padding:12px 14px;border-radius:10px;
+           background:rgba(41,121,181,.14);border:1px solid rgba(107,191,234,.3);font-size:12.5px;color:#cfe5ff;line-height:1.55"></div>
     </div>
 
     <!-- HELP / LEGAL -->
@@ -2991,7 +3022,9 @@ body.bw-auth-screen-open .leaflet-container{
     <!-- DANGER ZONE -->
     <div style="border:1px solid rgba(220,38,38,.35);border-radius:18px;padding:18px 18px 16px;background:rgba(127,29,29,.12);box-shadow:0 12px 36px rgba(0,0,0,.25)">
       <div style="font-size:11px;font-weight:700;color:#fca5a5;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Danger zone</div>
-      <div style="font-size:13px;color:#e2e8f0;line-height:1.55;margin-bottom:14px">Deleting your account permanently removes your profile, saved waypoints, and catch log. If you have an active subscription, cancel it first from Manage Billing. This cannot be undone.</div>
+      <div style="font-size:13px;color:#e2e8f0;line-height:1.55;margin-bottom:12px">Deleting your account permanently removes your profile, saved waypoints, and catch log. This cannot be undone.</div>
+      <!-- Only shown when there is a live subscription — see openAccountPage(). -->
+      <div id="acct-delete-note" style="display:none;font-size:12.5px;color:#fde68a;line-height:1.55;margin-bottom:14px"></div>
       <button type="button" onclick="deleteAccountFlow()" style="width:100%;background:rgba(220,38,38,.12);border:1px solid rgba(248,113,113,.55);color:#fca5a5;font-family:inherit;font-weight:700;font-size:14px;padding:13px;border-radius:10px;cursor:pointer">Delete my account</button>
       <div id="acct-delete-msg" style="display:none;font-size:12px;margin-top:10px;line-height:1.5"></div>
     </div>
@@ -3026,8 +3059,8 @@ body.bw-auth-screen-open .leaflet-container{
       <div style="font-size:11.5px;color:#cfe5ff;line-height:1.5;margin-bottom:10px">
         Full app — the Bite Map, ocean &amp; wind layers, forecasts, and <b>1 free AI Captain's Brief</b> for the trial. A card is required.
         <b style="color:#fde68a">After your 7-day trial, your card is automatically charged $12.99/month</b>
-        and your subscription renews monthly until you cancel. You can cancel anytime before the
-        trial ends to avoid being charged, from Manage Billing.
+        and your subscription renews monthly until you cancel. Cancel anytime before the trial ends
+        to avoid being charged — go to <b>Menu → Account → Manage Billing</b>.
       </div>
       <button class="bw-buy" type="button" onclick="bwSubscribe('month',{trial:true})"
         style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start 7-day free trial</button>
@@ -3057,7 +3090,7 @@ body.bw-auth-screen-open .leaflet-container{
   </div>
 </div>
 
-<script src="bw-billing.js?v=20260820b"></script>
+<script src="bw-billing.js?v=20260822a"></script>
 
 <!-- HEADER -->
 <div id="hdr">
@@ -4139,7 +4172,7 @@ body.bw-auth-screen-open .leaflet-container{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260816b"></script>
+<script src="bw-core.js?v=20260822a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
@@ -4725,7 +4758,7 @@ body.bw-auth-screen-open .leaflet-container{
       <div class="tut-feature-icon">⭐</div>
       <div class="tut-feature-body">
         <div class="tut-feature-title">Plans &amp; subscription</div>
-        <div class="tut-feature-desc">Bluewater Intel offers a free tier plus a paid <b>Subscription</b> that unlocks the full app — the Bite Map, ocean &amp; wind layers, forecasts, and more. Pick <b>monthly</b> or a discounted <b>annual</b> plan, and you can start with a <b>7-day free trial</b> (a card is required; you're billed only if you don't cancel before the trial ends). Checkout and billing are handled securely by <b>Stripe</b> — we never see or store your card number. Manage or cancel anytime from <b>Menu → your account → Manage billing</b>, which opens the Stripe customer portal. Subscriptions auto-renew until canceled; see <b>Menu → Legal &amp; Privacy</b> for the full subscription, payment, and refund terms.</div>
+        <div class="tut-feature-desc" id="tut-subscription-desc">Bluewater Intel offers a free tier plus a paid <b>Subscription</b> that unlocks the full app — the Bite Map, ocean &amp; wind layers, forecasts, and more. Pick <b>monthly</b> or a discounted <b>annual</b> plan, and you can start with a <b>7-day free trial</b> (a card is required; you're billed only if you don't cancel before the trial ends). Checkout and billing are handled securely by <b>Stripe</b> — we never see or store your card number. Manage or cancel anytime from <b>Menu → Manage Account → Manage Billing</b>, which opens the Stripe customer portal. Subscriptions auto-renew until canceled; see <b>Menu → Legal &amp; Privacy</b> for the full subscription, payment, and refund terms.</div>
       </div>
     </div>
 

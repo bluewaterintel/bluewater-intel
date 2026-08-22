@@ -61,6 +61,36 @@
     configured = true;
   }
 
+  // StoreKit reports a product's introductory offer regardless of whether THIS
+  // Apple ID may still use it (it is once per Apple ID / Family per subscription
+  // group). Advertising "7 days free" to an ineligible account is misleading —
+  // Apple's purchase sheet correctly says "Starting today" and charges at once.
+  // RevenueCat's eligibility check tells us which copy we're allowed to show.
+  const ELIGIBILITY = { UNKNOWN: 0, INELIGIBLE: 1, ELIGIBLE: 2, NO_OFFER: 3 };
+
+  async function trialEligibility(productIds) {
+    const plugin = getPurchasesPlugin();
+    if (!plugin || !plugin.checkTrialOrIntroductoryPriceEligibility) return {};
+    try {
+      const res = await plugin.checkTrialOrIntroductoryPriceEligibility({
+        productIdentifiers: productIds,
+      });
+      const map = {};
+      for (const id of productIds) {
+        const entry = res && res[id];
+        const status = entry && typeof entry.status === "number" ? entry.status : ELIGIBILITY.UNKNOWN;
+        map[id] = status === ELIGIBILITY.ELIGIBLE ? "eligible"
+          : status === ELIGIBILITY.INELIGIBLE ? "ineligible"
+          : status === ELIGIBILITY.NO_OFFER ? "none"
+          : "unknown";
+      }
+      return map;
+    } catch (e) {
+      console.warn("Intro offer eligibility check failed", e);
+      return {};
+    }
+  }
+
   /** Load App Store product metadata for subscription disclosure labels. */
   async function loadProducts() {
     if (!native) return null;
@@ -77,9 +107,12 @@
       for (const p of products || []) {
         if (p && p.identifier) byId[p.identifier] = p;
       }
+      const eligibility = await trialEligibility(ids);
       return {
         monthly: byId[PRODUCT.monthly] || null,
         annual: byId[PRODUCT.annual] || null,
+        monthlyTrial: eligibility[PRODUCT.monthly] || "unknown",
+        annualTrial: eligibility[PRODUCT.annual] || "unknown",
       };
     } catch (e) {
       return { error: e.message || String(e) };
@@ -148,6 +181,7 @@
     purchase,
     restore,
     loadProducts,
+    trialEligibility,
     openAppStoreSubscriptions,
   };
 })();

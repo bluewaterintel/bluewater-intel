@@ -7,6 +7,51 @@
   window.BW_NATIVE = native;
   window.BW_APP_ORIGIN = native ? "com.bluewaterintel.app://" : "https://app.bluewaterintel.com/";
 
+  // On native iOS, navigator.geolocation triggers TWO permission sheets: the app's
+  // own prompt plus a separate WebKit "localhost" prompt. Capacitor Geolocation uses
+  // CLLocationManager directly so the user sees one dialog with the app name.
+  window.bwGetCurrentPosition = async function(options = {}){
+    const opts = {
+      enableHighAccuracy: !!options.enableHighAccuracy,
+      timeout: options.timeout || 10000,
+      maximumAge: options.maximumAge ?? 60000,
+    };
+    const Geo = native && cap && cap.Plugins && cap.Plugins.Geolocation;
+    if(Geo && Geo.getCurrentPosition){
+      const perm = await Geo.checkPermissions?.().catch(() => ({}));
+      const granted = perm && (perm.location === "granted" || perm.coarseLocation === "granted");
+      if(!granted && Geo.requestPermissions){
+        const req = await Geo.requestPermissions().catch(() => ({}));
+        const ok = req && (req.location === "granted" || req.coarseLocation === "granted");
+        if(!ok){
+          const err = new Error("Location permission denied");
+          err.code = 1;
+          throw err;
+        }
+      }
+      const pos = await Geo.getCurrentPosition({
+        enableHighAccuracy: opts.enableHighAccuracy,
+        timeout: opts.timeout,
+        maximumAge: opts.maximumAge,
+      });
+      return {
+        coords: {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        },
+      };
+    }
+    if(!navigator.geolocation){
+      const err = new Error("Geolocation not supported");
+      err.code = 2;
+      throw err;
+    }
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, opts);
+    });
+  };
+
   if (native) {
     document.documentElement.classList.add("bw-native");
     if (typeof cap.getPlatform === "function" && cap.getPlatform() === "ios") {

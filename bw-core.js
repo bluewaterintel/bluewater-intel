@@ -1144,8 +1144,6 @@ async function initMap(){
   updateEmptyState();
   updateBriefFab();
 
-  initUserGeoTimezone();
-
   // If we opened with no connectivity and a trip is saved, load it straight onto
   // the map — the whole point of "Download my trip".
   try{
@@ -2238,11 +2236,8 @@ function forecastTimeMs(){
 }
 
 // ── Local time for forecast UI ───────────────────────────────────────────────
-// Bite-score times follow the selected home port when set; otherwise the user's
-// GPS fix; otherwise the browser timezone. Longitude buckets cover US fishing
-// coasts without pulling in a timezone library.
-let _userGeoTz = null;  // { lat, lng, tz } from a one-shot geolocation read
-
+// Bite-score times follow the selected home port when set; otherwise the device
+// timezone. Longitude buckets cover US fishing coasts without a timezone library.
 function ianaTimezoneForCoords(lat, lng){
   if(lng == null || !Number.isFinite(lng)) return null;
   if(lat != null && lng < -154 && lat >= 18 && lat <= 23) return "America/Honolulu";
@@ -2258,7 +2253,6 @@ function displayTimezone(){
     const tz = ianaTimezoneForCoords(p.lat, p.lng);
     if(tz) return tz;
   }
-  if(_userGeoTz && _userGeoTz.tz) return _userGeoTz.tz;
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   } catch(e){
@@ -2291,22 +2285,6 @@ function formatWeekdayInTz(ms, tz){
   return new Intl.DateTimeFormat("en-US", {
     timeZone: tz, weekday: "short",
   }).format(new Date(ms));
-}
-
-function initUserGeoTimezone(){
-  if(!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-      _userGeoTz = { lat, lng, tz: ianaTimezoneForCoords(lat, lng) };
-      if(typeof updateBiteBanner === "function") updateBiteBanner();
-      if(typeof updateForecastSliderDisplay === "function") updateForecastSliderDisplay();
-      if(typeof updateWindForecastDisplay === "function") updateWindForecastDisplay();
-    },
-    () => {},
-    { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
-  );
 }
 
 // Forecast horizons with labels for UI
@@ -11959,28 +11937,24 @@ document.addEventListener("keydown", e => {
 });
 
 function catchLocFromDevice(){
-  if(!navigator.geolocation){
+  const getPos = window.bwGetCurrentPosition;
+  if(typeof getPos !== "function"){
     showToast("Your browser doesn't support GPS location.", "warning");
     return;
   }
   catchSetLocationMode("exact");
-  navigator.geolocation.getCurrentPosition(
-    pos => {
+  getPos({ enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 })
+    .then(pos => {
       _catchPendingLat = pos.coords.latitude;
       _catchPendingLng = pos.coords.longitude;
       catchUpdateLocationDisplay();
-    },
-    err => {
-      // GPS access needs HTTPS in modern browsers — this commonly fails in
-      // the artifact sandbox preview. Give a clear message instead of a
-      // mystery silent failure.
-      const msg = location.protocol === "https:" || location.hostname === "localhost"
+    })
+    .catch(() => {
+      const msg = (window.BW_NATIVE || location.protocol === "https:" || location.hostname === "localhost")
         ? "Couldn't get your location. Make sure GPS is enabled and you've granted permission."
         : "GPS requires HTTPS. Try the 'Use map center' button instead.";
       showToast(msg, "error");
-    },
-    {enableHighAccuracy: true, timeout: 10000, maximumAge: 60000}
-  );
+    });
 }
 
 // Refresh the location display + auto-filled conditions preview when
@@ -19269,7 +19243,7 @@ function renderAccountSection(){
         </div>
         <button type="button" onclick="openAccountPage()" style="font-family:inherit;background:transparent;border:1px solid rgba(107,191,234,.35);
                 color:#6bbfea;font-size:11px;font-weight:600;padding:6px 11px;border-radius:6px;cursor:pointer;flex-shrink:0">
-          Manage
+          Manage Account
         </button>
       </div>
       <div id="nav-plan" style="margin-top:12px"></div>`;
