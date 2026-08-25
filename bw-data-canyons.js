@@ -211,9 +211,6 @@ const CANYONS=[
    fish:["striper","bluefish","tautog"]},
 
   // ── MID-ATLANTIC ──
-  {name:"The Triple Wrecks", type:"wreck", color:"#dc7c2c", lat:38.40, lng:-74.55,
-   desc:"~30nm off Indian River/Ocean City. Cluster of sunken vessels — sea bass, flounder, tog magnet. Tuna troll the area in summer.",
-   fish:["blackseabass","flounder","tautog","yellowfin"]},
   {name:"Jackspot (Jack Spot)", type:"shoal", color:"#0ea5a5", lat:38.16, lng:-74.73,
    desc:"~22nm SE of Ocean City MD. Famous shoal/lump — historic white marlin & tuna grounds, the OC tournament run.",
    fish:["whitemarlin","yellowfin","bluefin","mahi"]},
