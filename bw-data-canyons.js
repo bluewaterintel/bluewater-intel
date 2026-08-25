@@ -200,12 +200,6 @@ const CANYONS=[
   // ════════════════════════════════════════════════════════════════════════
 
   // ── NORTHEAST ──
-  {name:"The Mud Hole", type:"lump", color:"#0ea5a5", lat:40.30, lng:-73.60,
-   desc:"~20nm SE of Manasquan/NY Bight. Ancient Hudson riverbed depression — holds bait, sea bass, ling, summer tuna pushes. Classic NJ/NY structure.",
-   fish:["blackseabass","bluefin","yellowfin","bluefish"]},
-  {name:"Cholera Bank", type:"lump", color:"#0ea5a5", lat:40.42, lng:-73.72,
-   desc:"~15nm off Sandy Hook. Productive bottom lump — sea bass, porgy, summer bonito & false albacore on the surface.",
-   fish:["blackseabass","bonito","bluefish"]},
   {name:"Shrewsbury Rocks", type:"rock", color:"#16a34a", lat:40.32, lng:-73.95,
    desc:"Nearshore rock structure off NJ. Striped bass & bluefish in season, tog on the rocks.",
    fish:["striper","bluefish","tautog"]},
