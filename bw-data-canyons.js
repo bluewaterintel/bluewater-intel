@@ -46,9 +46,6 @@ const CANYONS=[
   {name:"Hatteras Canyon",   color:"#1a4fa8", lat:34.96587, lng:-75.21584,
    desc:"34°58N 75°13W — Hatteras Canyon tip / primary offshore grounds (~1737 ft). Gulf Stream runs tight off Hatteras; billfish, yellowfin, wahoo, and mahi on the thermal wall.",
    fish:["bluemarlin","whitemarlin","yellowfin","wahoo","sailfish","mahi"]},
-  {name:"Cape Lookout Canyon",color:"#1e63c0", lat:34.10, lng:-76.18,
-   desc:"~55nm SE of Beaufort/Morehead City. Reliable mahi and billfish. Good blue marlin July-August.",
-   fish:["mahi","bluemarlin","sailfish","wahoo"]},
 
   // ── SOUTH ATLANTIC / FLORIDA OFFSHORE GROUNDS ────────────────────────
   {name:"Charleston Bump", color:"#1a4fa8", lat:31.70, lng:-79.10,
@@ -63,9 +60,6 @@ const CANYONS=[
   {name:"St. Augustine Reef", color:"#1e63c0", lat:29.85, lng:-80.85,
    desc:"~35nm E of St. Augustine. Hard-bottom reefs. Cobia, king mackerel, grouper, snapper.",
    fish:["cobia","kingmack","grouper","snapper"]},
-  {name:"Steeples (8A Reef)", color:"#1e63c0", lat:29.20, lng:-80.55,
-   desc:"~25-30nm E of Daytona. Famous live-bottom area. Snapper, grouper, king mackerel; sailfish on the edge.",
-   fish:["snapper","grouper","kingmack","sailfish"]},
   {name:"Cape Canaveral Edge", color:"#1a4fa8", lat:28.40, lng:-80.10,
    desc:"Gulf Stream edge ~30nm E of the Cape. Famous sailfish grounds Dec-March; wahoo, mahi, blackfin year-round.",
    fish:["sailfish","wahoo","mahi","blackfin","kingmack"]},
@@ -81,9 +75,6 @@ const CANYONS=[
   {name:"Miami Sword Hole", color:"#7c2d8e", lat:25.85, lng:-79.85,
    desc:"~20nm E of Miami. Deep-drop swordfish grounds 1500-2000ft. Daytime sword pioneered here.",
    fish:["swordfish","tilefish","mahi"]},
-  {name:"Islamorada Hump", color:"#1a4fa8", lat:24.65, lng:-80.45,
-   desc:"Famous seamount ~12nm SE of Islamorada. Blackfin tuna, AJs, kingfish. Bottom rises from 1100ft to 480ft.",
-   fish:["blackfin","kingmack","amberjack","mahi"]},
   {name:"Marathon Hump",   color:"#1a4fa8", lat:24.45, lng:-80.95,
    desc:"~17nm S of Marathon. Smaller hump than Islamorada's but consistent for blackfin and kings.",
    fish:["blackfin","kingmack","mahi","wahoo"]},
@@ -122,9 +113,6 @@ const CANYONS=[
 
   // ═════════════════ GULF OF MEXICO STRUCTURES ════════════════════════
   // ── FLORIDA GULF COAST ──────────────────────────────────────────────
-  {name:"Florida Middle Grounds", color:"#1e63c0", lat:28.50, lng:-84.30,
-   desc:"~80-100nm W of Tampa. Vast natural reef system, Florida's signature Gulf bottom-fishing ground. Red grouper, mangrove snapper, AJs, kingfish.",
-   fish:["gaggrouper","snapper","amberjack","kingmack","grouper"]},
   {name:"Madison-Swanson",  color:"#1e63c0", lat:29.20, lng:-85.60,
    desc:"Marine protected area + edge ~70nm S of Panama City. Famous gag grouper aggregation site. Closed certain months — check FWC.",
    fish:["gaggrouper","amberjack","snapper"]},
