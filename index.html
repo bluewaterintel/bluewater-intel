@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="bw-config.js"></script>
 <script src="bw-capacitor.js"></script>
-<script src="bw-iap.js?v=20260822b"></script>
+<script src="bw-iap.js?v=20260828a"></script>
 <script src="bw-data-source.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bw-auth.js?v=20260822c"></script>
@@ -2722,7 +2722,7 @@ body.nav-open .leaflet-control-attribution{
     </div>
   </div>
 </div>
-<script src="bw-authgate.js?v=20260821k"></script>
+<script src="bw-authgate.js?v=20260828a"></script>
 
 <!-- PRICING / UPGRADE MODAL ------------------------------------------------- -->
 <div id="pricing-modal" style="display:none;position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.62);
@@ -2737,15 +2737,19 @@ body.nav-open .leaflet-control-attribution{
     <div id="pricing-msg" style="display:none;font-size:12px;color:#fca5a5;margin-bottom:8px"></div>
 
     <div class="bw-stripe-trial-block" style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:12px;margin-bottom:14px">
-      <div style="font-size:14px;font-weight:800;color:#86efac;margin-bottom:3px">Start your 7-day free trial</div>
-      <div style="font-size:11px;color:#cfe5ff;line-height:1.45;margin-bottom:9px">Full app — the Bite Map, ocean &amp; wind layers, forecasts and more, plus <b>1 free AI Captain's Brief</b> for the trial. A card is required; you'll be billed $12.99/mo after 7 days unless you cancel first.</div>
-      <button class="bw-buy" type="button" onclick="bwSubscribe('month',{trial:true})" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start free trial</button>
+      <div style="font-size:10.5px;color:#86efac;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin-bottom:5px">Bluewater Intel Pro — auto-renewing subscription</div>
+      <div style="font-size:15px;font-weight:800;color:#f0f6ff;line-height:1.35;margin-bottom:6px">7 days free, then $12.99/month</div>
+      <div style="font-size:11px;color:#cfe5ff;line-height:1.45;margin-bottom:9px">Full app — the Bite Map, ocean &amp; wind layers, forecasts and more, plus <b>1 free AI Captain's Brief</b> for the trial. A card is required. After the 7-day free trial ends, your card is charged <b>$12.99/month</b> and the subscription renews monthly until you cancel.</div>
+      <button class="bw-buy" type="button" onclick="bwSubscribe('month',{trial:true})" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start 7-day free trial — then $12.99/month</button>
     </div>
 
     <!-- App Store introductory offer — shown only when StoreKit reports a free
-         trial on the monthly product (see adaptPricingForNative). -->
+         trial on the monthly product (see adaptPricingForNative).
+         Guideline 3.1.2(c): .bw-native-trial-terms must state the trial length
+         AND the post-trial price together, at least as prominently as the trial. -->
     <div class="bw-native-trial-block" style="display:none;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:12px;margin-bottom:14px">
-      <div class="bw-native-trial-title" style="font-size:14px;font-weight:800;color:#86efac;margin-bottom:3px">Start your free trial</div>
+      <div class="bw-native-trial-title" style="font-size:10.5px;color:#86efac;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin-bottom:5px">Bluewater Intel Pro — auto-renewing subscription</div>
+      <div class="bw-native-trial-terms" style="font-size:15px;font-weight:800;color:#f0f6ff;line-height:1.35;margin-bottom:6px"></div>
       <div class="bw-native-trial-desc" style="font-size:11px;color:#cfe5ff;line-height:1.45;margin-bottom:9px"></div>
       <button class="bw-buy bw-native-trial-btn" type="button" onclick="bwSubscribe('month')" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start free trial</button>
     </div>
@@ -2767,9 +2771,14 @@ body.nav-open .leaflet-control-attribution{
 </div>
 <style>
 .bw-buy{flex:1;min-width:150px;background:#2979b5;border:1px solid rgba(107,191,234,.4);color:#fff;font-family:inherit;
-  font-weight:700;font-size:13px;padding:11px 12px;border-radius:10px;cursor:pointer}
+  font-weight:700;font-size:13px;padding:11px 12px;border-radius:10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:rgba(125,211,252,.15)}
 .bw-buy:hover{background:#3287c7}
 .bw-buy:disabled{opacity:.55;cursor:default}
+#plan-gate,#pricing-modal{pointer-events:auto;isolation:isolate}
+#plan-gate button,#pricing-modal button,#plan-gate a[href],#pricing-modal a[href]{touch-action:manipulation;-webkit-tap-highlight-color:rgba(125,211,252,.15);pointer-events:auto}
+body.bw-plan-screen-open #map,
+body.bw-plan-screen-open #hdr,
+body.bw-plan-screen-open .leaflet-container{pointer-events:none !important}
 /* Auth screens — scrollable overlay; user scrolls to fields when the keyboard is up. */
 .auth-fullscreen{
   position:fixed;inset:0;
@@ -3055,20 +3064,24 @@ body.bw-auth-screen-open .leaflet-container{
 
     <!-- 7-day trial (web / Stripe only) -->
     <div class="bw-stripe-trial-block" style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:14px;margin:16px 0 12px">
-      <div style="font-size:15px;font-weight:800;color:#86efac;margin-bottom:4px">7-day free trial</div>
+      <div style="font-size:10.5px;color:#86efac;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin-bottom:5px">Bluewater Intel Pro — auto-renewing subscription</div>
+      <div style="font-size:16px;font-weight:800;color:#f0f6ff;line-height:1.35;margin-bottom:7px">7 days free, then $12.99/month</div>
       <div style="font-size:11.5px;color:#cfe5ff;line-height:1.5;margin-bottom:10px">
         Full app — the Bite Map, ocean &amp; wind layers, forecasts, and <b>1 free AI Captain's Brief</b> for the trial. A card is required.
-        <b style="color:#fde68a">After your 7-day trial, your card is automatically charged $12.99/month</b>
+        After the 7-day free trial ends, your card is automatically charged <b>$12.99/month</b>
         and your subscription renews monthly until you cancel. Cancel anytime before the trial ends
         to avoid being charged — go to <b>Menu → Account → Manage Billing</b>.
       </div>
       <button class="bw-buy" type="button" onclick="bwSubscribe('month',{trial:true})"
-        style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start 7-day free trial</button>
+        style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start 7-day free trial — then $12.99/month</button>
     </div>
 
-    <!-- App Store introductory offer (native only) -->
+    <!-- App Store introductory offer (native only).
+         Guideline 3.1.2(c): .bw-native-trial-terms must state the trial length
+         AND the post-trial price together, at least as prominently as the trial. -->
     <div class="bw-native-trial-block" style="display:none;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:14px;margin:16px 0 12px">
-      <div class="bw-native-trial-title" style="font-size:15px;font-weight:800;color:#86efac;margin-bottom:4px">Start your free trial</div>
+      <div class="bw-native-trial-title" style="font-size:10.5px;color:#86efac;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin-bottom:5px">Bluewater Intel Pro — auto-renewing subscription</div>
+      <div class="bw-native-trial-terms" style="font-size:16px;font-weight:800;color:#f0f6ff;line-height:1.35;margin-bottom:7px"></div>
       <div class="bw-native-trial-desc" style="font-size:11.5px;color:#cfe5ff;line-height:1.5;margin-bottom:10px"></div>
       <button class="bw-buy bw-native-trial-btn" type="button" onclick="bwSubscribe('month')" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start free trial</button>
     </div>
@@ -3090,7 +3103,7 @@ body.bw-auth-screen-open .leaflet-container{
   </div>
 </div>
 
-<script src="bw-billing.js?v=20260822c"></script>
+<script src="bw-billing.js?v=20260831a"></script>
 
 <!-- HEADER -->
 <div id="hdr">

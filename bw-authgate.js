@@ -471,8 +471,13 @@
         return;
       }
       await window.BW_AUTH.signIn(c.email, c.password);
-    } catch(e){ showErr(e.message || "Sign in failed"); }
-    finally {
+    } catch(e){
+      if(e && e.code === "EMAIL_NOT_CONFIRMED" && typeof window.showVerifyEmailScreen === "function"){
+        const em = emailEl && emailEl.value ? emailEl.value.trim() : "";
+        if(em) window.showVerifyEmailScreen(em);
+      }
+      showErr(e.message || "Sign in failed");
+    } finally {
       if(btn){ btn.disabled = false; btn.textContent = "Sign In"; }
     }
   }

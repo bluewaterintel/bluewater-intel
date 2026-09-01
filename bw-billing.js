@@ -30,10 +30,66 @@
     const origin = (typeof location !== "undefined" && location.origin) ? location.origin : "https://app.bluewaterintel.com";
     return origin + "/?" + q;
   }
+
+  let _purchaseBusy = false;
+  let _lastSubscribeAt = 0;
+  function setPlanScreenOpen(open){
+    try { document.body.classList.toggle("bw-plan-screen-open", !!open); } catch(e){ /* ignore */ }
+  }
+  function setPurchaseBusy(busy, label){
+    _purchaseBusy = !!busy;
+    document.querySelectorAll("#plan-gate .bw-buy, #pricing-modal .bw-buy").forEach((btn) => {
+      if(busy){
+        if(!btn.dataset.bwOrigText) btn.dataset.bwOrigText = btn.textContent;
+        btn.disabled = true;
+        if(label) btn.textContent = label;
+      } else {
+        btn.disabled = false;
+        if(btn.dataset.bwOrigText){
+          btn.textContent = btn.dataset.bwOrigText;
+          delete btn.dataset.bwOrigText;
+        }
+      }
+    });
+    const restore = document.getElementById("plan-gate-restore-link");
+    const restorePricing = document.getElementById("pricing-restore-link");
+    [restore, restorePricing].forEach((el) => { if(el) el.style.pointerEvents = busy ? "none" : ""; });
+    const freeBtn = document.querySelector('#plan-gate button[onclick*="closePostSignupPlans"]');
+    if(freeBtn) freeBtn.disabled = !!busy;
+  }
+  function showBillingErr(msgEl, text){
+    if(!msgEl) return;
+    msgEl.textContent = text;
+    msgEl.style.display = "block";
+    msgEl.style.color = "#fca5a5";
+  }
+  function wireIosBillingTapFallback(root){
+    if(!root || root._bwBillingTapWired || !window.BW_NATIVE) return;
+    root._bwBillingTapWired = true;
+    root.addEventListener("touchend", (e) => {
+      if(_purchaseBusy) return;
+      const t = e.changedTouches && e.changedTouches[0];
+      if(!t) return;
+      let hit = e.target && e.target.closest && e.target.closest("button, a[href]");
+      if(!hit){
+        const at = document.elementFromPoint(t.clientX, t.clientY);
+        hit = at && at.closest ? at.closest("button, a[href]") : null;
+      }
+      if(!hit || !root.contains(hit) || hit.disabled) return;
+      e.preventDefault();
+      e.stopPropagation();
+      hit.click();
+    }, { passive: false });
+  }
+
   window.bwSubscribe = async function(interval, opts){
+    const now = Date.now();
+    if(_purchaseBusy || (now - _lastSubscribeAt < 700)) return;
+    _lastSubscribeAt = now;
     const msg = document.getElementById("pricing-msg") || document.getElementById("plan-gate-msg");
-    const showErr = (t) => { if(msg){ msg.textContent = t; msg.style.display = "block"; msg.style.color = "#fca5a5"; } };
+    if(msg) msg.style.display = "none";
     if(window.BW_NATIVE && window.BW_IAP && window.BW_IAP.available){
+      setPurchaseBusy(true, "Opening App Store…");
       try {
         await window.BW_IAP.purchase(interval);
         closePricing();
@@ -42,7 +98,9 @@
         if(typeof window.renderNavPlan === "function") window.renderNavPlan();
       } catch(e){
         if(e && (e.userCancelled || /cancel/i.test(String(e.message||"")))) return;
-        showErr(e.message || "Purchase could not be completed.");
+        showBillingErr(msg, e.message || "Purchase could not be completed.");
+      } finally {
+        setPurchaseBusy(false);
       }
       return;
     }
@@ -53,10 +111,20 @@
   window.openPricing = async function(){
     const m = document.getElementById("pricing-modal"); if(!m) return;
     const msg = document.getElementById("pricing-msg"); if(msg) msg.style.display="none";
-    if(typeof adaptPricingForNative === "function") await adaptPricingForNative();
     m.style.display = "flex";
+    setPlanScreenOpen(true);
+    wireIosBillingTapFallback(m);
+    wireIosBillingTapFallback(document.getElementById("plan-gate"));
+    if(typeof adaptPricingForNative === "function") adaptPricingForNative().catch(() => {});
+    if(window.BW_IAP && window.BW_IAP.prewarm) window.BW_IAP.prewarm().catch(() => {});
   };
-  window.closePricing = function(){ const m=document.getElementById("pricing-modal"); if(m) m.style.display="none"; };
+  window.closePricing = function(){
+    const m=document.getElementById("pricing-modal");
+    if(m) m.style.display="none";
+    const pg = document.getElementById("plan-gate");
+    if(!pg || pg.style.display === "none") setPlanScreenOpen(false);
+    setPurchaseBusy(false);
+  };
 
   window.markPlanSelected = async function(){
     try {
@@ -112,11 +180,17 @@
     const g = document.getElementById("plan-gate");
     const m = document.getElementById("plan-gate-msg");
     if(m) m.style.display = "none";
-    if(typeof adaptPricingForNative === "function") await adaptPricingForNative();
     const auth = document.getElementById("bw-auth-gate");
     const signedIn = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
     if(auth) auth.style.display = signedIn ? "none" : "flex";
     if(g) g.style.display = "flex";
+    setPlanScreenOpen(true);
+    wireIosBillingTapFallback(g);
+    wireIosBillingTapFallback(document.getElementById("pricing-modal"));
+    // Show the gate immediately; load StoreKit metadata and pre-warm RevenueCat
+    // in the background so a tap never sits on a silent configure() call.
+    if(typeof adaptPricingForNative === "function") adaptPricingForNative().catch(() => {});
+    if(window.BW_IAP && window.BW_IAP.prewarm) window.BW_IAP.prewarm().catch(() => {});
   };
   // ── Create account page ──────────────────────────────────────────────────
   window.openCreateAccount = function(){
@@ -245,18 +319,28 @@
       const meta = { full_name: name, tos_accepted_at: new Date().toISOString() };
       const res = await window.BW_AUTH.signUp(email, pass, meta);
       closeCreateAccount();
-      // With email confirmation ON, the user must verify before they have a
-      // usable session. Do NOT drop them on the sign-in form (they'd try to log
-      // in and hit "invalid login credentials" because they haven't confirmed).
-      // Show a dedicated "check your email" welcome screen instead.
-      if(typeof window.showVerifyEmailScreen === "function"){
-        window.showVerifyEmailScreen(email);
-      } else {
-        if(typeof window.showAuthGate === "function") window.showAuthGate();
-        const gmsg = document.getElementById("bw-auth-msg");
-        if(gmsg){ gmsg.style.display="block"; gmsg.style.color="#86efac";
-          gmsg.textContent = `Account created! Check your email (${email}) for a verification link, then sign in.`; }
+      const hasSession = !!(res && res.session && res.session.user);
+      const user = (res && res.user) || (res && res.session && res.session.user);
+      const confirmed = window.BW_AUTH.isEmailConfirmed
+        ? window.BW_AUTH.isEmailConfirmed(user)
+        : !!(user && (user.email_confirmed_at || user.confirmed_at));
+      // Email confirmation required — no session yet. Stay on verify screen.
+      if(!hasSession || !confirmed){
+        if(typeof window.showVerifyEmailScreen === "function"){
+          window.showVerifyEmailScreen(email);
+        } else if(typeof window.showAuthGate === "function"){
+          window.showAuthGate();
+          const gmsg = document.getElementById("bw-auth-msg");
+          if(gmsg){
+            gmsg.style.display = "block";
+            gmsg.style.color = "#86efac";
+            gmsg.textContent = `Account created! Check your email (${email}) for a verification link, then sign in.`;
+          }
+        }
+        return;
       }
+      // Auto-confirmed signup (Confirm email disabled in Supabase) — onSignedIn
+      // opens the plan picker; do not also flash the verify-email screen.
     } catch(e){
       show(e && e.message ? e.message : "Could not create account. Try again.");
     } finally {
@@ -426,6 +510,8 @@
 
   window.closePostSignupPlans = function(){
     const g = document.getElementById("plan-gate"); if(g) g.style.display = "none";
+    setPlanScreenOpen(false);
+    setPurchaseBusy(false);
     const u = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
     if(!u){
       // Never enter the app without a Supabase account — e.g. offline handler
@@ -554,6 +640,8 @@
   };
   // If returning from a successful Stripe checkout, refresh entitlement shortly
   // after load (webhook may take a second) and clean the URL.
+  window._bwSetPurchaseBusy = setPurchaseBusy;
+  window._bwIsPurchaseBusy = () => _purchaseBusy;
   try {
     const q = new URLSearchParams(location.search);
     if(q.get("checkout")==="success"){
@@ -611,7 +699,8 @@ function bwPriceString(p){
 }
 
 // A free trial on iOS is an App Store *introductory offer* with a zero price.
-// Returns {label, period} when the monthly product carries one, else null.
+// Returns {label, period, duration} when the monthly product carries one, else
+// null. `duration` is null when StoreKit does not report a usable period.
 function bwIntroTrial(product){
   const intro = product && (product.introPrice || product.intro_price);
   if(!intro) return null;
@@ -619,16 +708,24 @@ function bwIntroTrial(product){
   if(!Number.isFinite(price) || price > 0) return null;
   const n = Number(intro.periodNumberOfUnits ?? intro.period_number_of_units) || 0;
   const unit = String(intro.periodUnit || intro.period_unit || "").toLowerCase().replace(/s$/, "");
-  if(!n || !unit) return { label: "Free trial", period: "free trial" };
-  return { label: `${n}-${unit} free trial`, period: `${n} ${unit}${n === 1 ? "" : "s"} free` };
+  if(!n || !unit) return { label: "Free trial", period: "free trial", duration: null };
+  const duration = `${n} ${unit}${n === 1 ? "" : "s"}`;
+  return { label: `${n}-${unit} free trial`, period: `${duration} free`, duration };
 }
 
+// Guideline 3.1.2(c): the billed amount must be at least as clear and
+// conspicuous as the free trial. The headline (.bw-native-trial-terms) always
+// carries BOTH the trial length and the price that follows it, in the same line
+// at the same size/weight, and the CTA repeats the post-trial price.
 function applyNativeTrialBlock(products){
   const blocks = document.querySelectorAll(".bw-native-trial-block");
   if(!blocks.length) return;
   const monthly = products && products.monthly;
   const trial = bwIntroTrial(monthly);
   const eligibility = (products && products.monthlyTrial) || "unknown";
+  const price = bwPriceString(monthly);
+  const perMonth = price ? `${price}/month` : "the monthly price";
+  const SUB_NAME = "Bluewater Intel Pro — auto-renewing subscription";
   // Only promise a free trial when Apple says this Apple ID can still use the
   // introductory offer. Otherwise the purchase sheet charges immediately and the
   // "no charge today" copy would be a lie.
@@ -636,45 +733,45 @@ function applyNativeTrialBlock(products){
     blocks.forEach(el => { el.style.display = "none"; });
     return;
   }
+  const dur = trial.duration;
   if(eligibility === "ineligible" || eligibility === "unknown"){
-    const price = bwPriceString(monthly);
-    const priceNote = price ? ` Monthly is ${price}.` : "";
     blocks.forEach(el => {
       const title = el.querySelector(".bw-native-trial-title");
+      const terms = el.querySelector(".bw-native-trial-terms");
       const desc = el.querySelector(".bw-native-trial-desc");
       const btn = el.querySelector(".bw-native-trial-btn");
       el.style.background = "rgba(107,191,234,.08)";
       el.style.borderColor = "rgba(107,191,234,.3)";
-      if(title){
-        title.style.color = "#cfe5ff";
-        title.textContent = eligibility === "ineligible"
-          ? "Free trial already used on this iPhone"
-          : "Free trial may not apply";
-      }
+      if(title){ title.style.color = "#9ec5e8"; title.textContent = SUB_NAME; }
+      if(terms) terms.textContent = `${perMonth}, billed today`;
       if(desc){
         desc.textContent = eligibility === "ineligible"
-          ? `This is tied to the Apple ID signed in under Settings → Developer → Sandbox Apple Account — not your Bluewater Intel login. That Apple ID already used the ${trial.label}, so a new subscription starts billing today.${priceNote} Pick Monthly or Annual below, or sign in with a fresh sandbox Apple ID to test the trial again.`
-          : `We couldn't confirm free-trial eligibility for the Apple ID on this device. Apple will show the exact terms on the confirmation screen before you're charged.${priceNote}`;
+          ? `The ${dur ? dur + " " : ""}free trial has already been used by the Apple ID signed in on this device, so a new subscription is billed ${perMonth} today and renews automatically each month until you cancel. Choose Monthly or Annual below.`
+          : `We couldn't confirm free-trial eligibility for the Apple ID on this device. If the trial does not apply, you are billed ${perMonth} today and the subscription renews automatically each month until you cancel. Apple shows the exact terms on the confirmation screen before you are charged.`;
       }
       if(btn) btn.style.display = "none";
       el.style.display = "";
     });
     return;
   }
-  const price = bwPriceString(monthly);
-  const after = price
-    ? `After the trial, Bluewater Intel Pro renews monthly at ${price} until you cancel.`
-    : "After the trial, Bluewater Intel Pro renews monthly until you cancel.";
   blocks.forEach(el => {
     const title = el.querySelector(".bw-native-trial-title");
+    const terms = el.querySelector(".bw-native-trial-terms");
     const desc = el.querySelector(".bw-native-trial-desc");
     const btn = el.querySelector(".bw-native-trial-btn");
-    if(title) title.textContent = `Start your ${trial.label}`;
+    if(title) title.textContent = SUB_NAME;
+    if(terms) terms.textContent = dur ? `${dur} free, then ${perMonth}` : `Free trial, then ${perMonth}`;
     if(desc){
-      desc.innerHTML = `Full app — the Bite Map, ocean &amp; wind layers, forecasts and all charted waypoints for your home port. `
-        + `<b>${trial.period}</b>, no charge today. ${after} Cancel anytime in Settings → [your name] → Subscriptions.`;
+      desc.textContent = `Full app — the Bite Map, ocean and wind layers, forecasts and all charted waypoints for your home port. `
+        + `After the ${dur ? dur + " " : ""}free trial ends, Bluewater Intel Pro renews automatically at ${perMonth} until you cancel. `
+        + `Cancel at least 24 hours before the trial ends in Settings → [your name] → Subscriptions.`;
     }
-    if(btn){ btn.style.display = ""; btn.textContent = `Start ${trial.label}`; }
+    if(btn){
+      btn.style.display = "";
+      btn.textContent = dur
+        ? `Start ${dur} free trial — then ${perMonth}`
+        : `Start free trial — then ${perMonth}`;
+    }
     el.style.display = "";
   });
 }
@@ -708,10 +805,12 @@ window.bwRestorePurchases = async function(){
     msg.style.display = "block";
     msg.style.color = ok ? "#86efac" : "#fca5a5";
   };
+  if(window._bwIsPurchaseBusy && window._bwIsPurchaseBusy()) return;
   if(!window.BW_IAP || !window.BW_IAP.restore){
     show("Restore is only available in the iOS app.", false);
     return;
   }
+  if(window._bwSetPurchaseBusy) window._bwSetPurchaseBusy(true, "Restoring…");
   try {
     await window.BW_IAP.restore();
     if(window.BW_PREMIUM){
@@ -723,6 +822,8 @@ window.bwRestorePurchases = async function(){
     }
   } catch(e){
     show(e.message || "Could not restore purchases.", false);
+  } finally {
+    if(window._bwSetPurchaseBusy) window._bwSetPurchaseBusy(false);
   }
 };
 

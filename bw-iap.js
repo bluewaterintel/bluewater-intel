@@ -12,6 +12,15 @@
   let configured = false;
   let Purchases = null;
 
+  function withTimeout(promise, ms, message) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(message || "Timed out")), ms);
+      }),
+    ]);
+  }
+
   function fnBase() {
     const cfg = window.BW_SUPABASE_CONFIG || window.BW_DATA_CONFIG || {};
     return ((cfg.supabaseUrl || cfg.url || "").replace(/\/$/, "")) + "/functions/v1";
@@ -57,8 +66,21 @@
     if (!plugin || !plugin.configure) {
       throw new Error("StoreKit plugin not loaded. Run: npm install && npx cap sync ios");
     }
-    await plugin.configure({ apiKey, appUserID: user.id });
+    await withTimeout(
+      plugin.configure({ apiKey, appUserID: user.id }),
+      20000,
+      "Store setup timed out. Check your connection and try again.",
+    );
     configured = true;
+  }
+
+  async function prewarm() {
+    if (!native || configured) return;
+    try {
+      await ensureConfigured();
+    } catch (e) {
+      console.warn("BW_IAP prewarm failed", e);
+    }
   }
 
   // StoreKit reports a product's introductory offer regardless of whether THIS
@@ -138,14 +160,15 @@
   }
 
   async function refreshEntitlementAfterPurchase() {
-    await syncIapEntitlement();
-    if (typeof window.refreshEntitlement === "function") {
-      for (let i = 0; i < 8; i++) {
+    syncIapEntitlement().catch(() => {});
+    if (typeof window.refreshEntitlement !== "function") return;
+    for (let i = 0; i < 4; i++) {
+      try {
         await window.refreshEntitlement();
         if (window.BW_PREMIUM) return;
-        if (i === 2) await syncIapEntitlement();
-        await new Promise((r) => setTimeout(r, 1500));
-      }
+      } catch (e) { /* retry */ }
+      if (i === 1) syncIapEntitlement().catch(() => {});
+      await new Promise((r) => setTimeout(r, 900));
     }
   }
 
@@ -156,33 +179,54 @@
 
     // Prefer offerings when configured; fall back to direct StoreKit product purchase.
     try {
-      const offerings = await plugin.getOfferings();
+      const offerings = await withTimeout(
+        plugin.getOfferings(),
+        15000,
+        "Could not load subscription options. Try again.",
+      );
       const pkg = offerings?.current?.availablePackages?.find(
         (p) => p.product && p.product.identifier === productId,
       ) || offerings?.current?.availablePackages?.[0];
       if (pkg) {
-        const { customerInfo } = await plugin.purchasePackage({ aPackage: pkg });
-        await refreshEntitlementAfterPurchase();
+        const { customerInfo } = await withTimeout(
+          plugin.purchasePackage({ aPackage: pkg }),
+          120000,
+          "Purchase timed out. If Apple charged you, tap Restore Purchases.",
+        );
+        refreshEntitlementAfterPurchase();
         return customerInfo;
       }
     } catch (e) {
+      if (e && (e.userCancelled || /cancel/i.test(String(e.message || "")))) throw e;
       console.warn("RevenueCat offerings unavailable, trying direct product purchase", e);
     }
 
-    const { products } = await plugin.getProducts({ productIdentifiers: [productId] });
+    const { products } = await withTimeout(
+      plugin.getProducts({ productIdentifiers: [productId] }),
+      15000,
+      "Could not load App Store products. Try again in a moment.",
+    );
     const product = products && products.find((p) => p.identifier === productId);
     if (!product) {
       throw new Error("Subscription not available in the App Store yet. Check App Store Connect + RevenueCat product catalog.");
     }
-    const { customerInfo } = await plugin.purchaseStoreProduct({ product });
-    await refreshEntitlementAfterPurchase();
+    const { customerInfo } = await withTimeout(
+      plugin.purchaseStoreProduct({ product }),
+      120000,
+      "Purchase timed out. If Apple charged you, tap Restore Purchases.",
+    );
+    refreshEntitlementAfterPurchase();
     return customerInfo;
   }
 
   async function restore() {
     await ensureConfigured();
     const plugin = getPurchasesPlugin();
-    await plugin.restorePurchases();
+    await withTimeout(
+      plugin.restorePurchases(),
+      45000,
+      "Restore timed out. Check your connection and try again.",
+    );
     await refreshEntitlementAfterPurchase();
   }
 
@@ -200,6 +244,7 @@
     productIds: PRODUCT,
     purchase,
     restore,
+    prewarm,
     loadProducts,
     trialEligibility,
     syncIapEntitlement,

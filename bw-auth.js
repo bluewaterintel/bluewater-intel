@@ -96,9 +96,25 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     if (error) throw error;
   }
 
+  function isEmailConfirmed(user) {
+    if (!user) return false;
+    if (user.email_confirmed_at) return true;
+    // Some JWT payloads expose confirmed_at instead of email_confirmed_at.
+    if (user.confirmed_at) return true;
+    return false;
+  }
+
   async function signIn(email, password) {
     const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    if (data.user && !isEmailConfirmed(data.user)) {
+      try { await client.auth.signOut(); } catch (e) { /* ignore */ }
+      const err = new Error(
+        "Please confirm your email before signing in. Check your inbox and spam folder, or tap Resend verification email on the signup screen.",
+      );
+      err.code = "EMAIL_NOT_CONFIRMED";
+      throw err;
+    }
     emit(data.user, "SIGNED_IN");
     return data.user;
   }
@@ -136,7 +152,13 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     }
     // With "Confirm email" enabled, signUp returns user but no session until
     // the user clicks the link — do not emit an unconfirmed user as signed in.
-    if (data.session?.user) emit(data.session.user, "SIGNED_IN");
+    if (data.session?.user && isEmailConfirmed(data.session.user)) {
+      emit(data.session.user, "SIGNED_IN");
+    } else if (data.session?.user) {
+      // Rare edge case: session returned before confirmation — drop it so the
+      // verify-email screen is shown instead of jumping into the app.
+      try { await client.auth.signOut(); } catch (e) { /* ignore */ }
+    }
     return data;
   }
 
@@ -455,6 +477,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     _sb: client,
     signIn,
     signUp,
+    isEmailConfirmed,
     resendSignupConfirmation,
     signOut,
     isSignedIn,
