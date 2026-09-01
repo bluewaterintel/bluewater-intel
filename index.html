@@ -2722,7 +2722,7 @@ body.nav-open .leaflet-control-attribution{
     </div>
   </div>
 </div>
-<script src="bw-authgate.js?v=20260828a"></script>
+<script src="bw-authgate.js?v=20260901a"></script>
 
 <!-- PRICING / UPGRADE MODAL ------------------------------------------------- -->
 <div id="pricing-modal" style="display:none;position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.62);
@@ -2834,6 +2834,25 @@ html.bw-ios .auth-gate-shell .auth-marketing-copy > div:nth-child(3){ display:no
   padding:22px 22px 16px;
 }
 .auth-gate-shell.auth-kb-open .auth-marketing-copy{ margin-bottom:14px; }
+/* Web: single centered login card — no split shell / keyboard collapse (iOS-only). */
+html:not(.bw-native) #bw-auth-gate.auth-gate-shell{
+  overflow-y:auto;
+}
+html:not(.bw-native) #bw-auth-gate .auth-gate-shell-inner{
+  height:auto;
+  min-height:0;
+  flex:0 0 auto;
+  margin:auto;
+  justify-content:center;
+}
+html:not(.bw-native) #bw-auth-gate .auth-gate-scroll{
+  flex:none;
+  overflow:visible;
+  padding-top:0;
+}
+html:not(.bw-native) #bw-auth-gate .auth-gate-actions{
+  padding-top:0;
+}
 /* iOS WebView: scrollable auth overlays swallow button taps unless manipulation is set. */
 .auth-fullscreen button,
 .auth-fullscreen a[href]{

@@ -100,7 +100,7 @@
   }
   function resetAuthKbPad(root){ resetAuthKeyboardLayout(root); }
   function authGateUsesPinnedActions(root){
-    return !!(root && root.classList && root.classList.contains("auth-gate-shell"));
+    return !!(window.BW_NATIVE && root && root.classList && root.classList.contains("auth-gate-shell"));
   }
   function scrollAuthGateField(root, el){
     const scroller = root.querySelector(".auth-gate-scroll");
@@ -134,6 +134,7 @@
     }
   }
   function applyAuthKbHeight(h){
+    if(!window.BW_NATIVE) return;
     const px = Math.max(0, Number(h) || 0);
     document.querySelectorAll(".auth-fullscreen").forEach((root) => {
       if(root.style.display === "none") return;
@@ -190,6 +191,7 @@
       setTimeout(doScroll, 360);
       return;
     }
+    if(!window.BW_NATIVE && root.classList.contains("auth-gate-shell")) return;
     const doScroll = () => {
       try {
         syncAuthKbPad(root);

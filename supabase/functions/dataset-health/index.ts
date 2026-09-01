@@ -81,8 +81,10 @@ const COOPS_MD = "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/statio
 // non-null for every gridded product we use).
 const PROBE_LAT = 35.0;
 const PROBE_LNG = -75.0;
-// A representative always-reporting buoy for the NDBC probe.
-const PROBE_BUOY = "41001";
+// Representative coastal buoys for the NDBC probe — freshest observation wins.
+// Individual stations go offline for maintenance (41001 has been down for weeks);
+// the feed is healthy if any station in this set is reporting fresh data.
+const PROBE_BUOYS = ["41002", "44100", "44025", "41008", "41001"];
 
 type Severity = "green" | "amber" | "red" | "unknown";
 const SEV_RANK: Record<Severity, number> = { green: 0, unknown: 1, amber: 2, red: 3 };
@@ -248,9 +250,10 @@ async function probeRtofs(): Promise<Probe> {
 }
 
 // ── NDBC buoy probe (supporting) ─────────────────────────────────────────────
-async function probeBuoy(): Promise<Probe> {
-  const amberAfter = 6, redAfter = 24;
-  const url = `https://www.ndbc.noaa.gov/data/realtime2/${PROBE_BUOY}.txt`;
+async function probeBuoyStation(id: string): Promise<{
+  id: string; obsMs: number | null; ms: number; httpOk: boolean; httpStatus: number | null;
+}> {
+  const url = `https://www.ndbc.noaa.gov/data/realtime2/${id}.txt`;
   const { res, ms } = await timedFetch(url, 9000);
   const httpOk = !!res && res.ok;
   let obsMs: number | null = null;
@@ -266,15 +269,30 @@ async function probeBuoy(): Promise<Probe> {
       }
     } catch { /* null */ }
   }
+  return { id, obsMs, ms, httpOk, httpStatus: res?.status ?? null };
+}
+
+async function probeBuoy(): Promise<Probe> {
+  const amberAfter = 6, redAfter = 24;
+  const results = await Promise.all(PROBE_BUOYS.map(probeBuoyStation));
+  const fresh = results.filter((r) => r.httpOk && r.obsMs != null);
+  const best = fresh.length
+    ? fresh.reduce((a, b) => ((b.obsMs as number) > (a.obsMs as number) ? b : a))
+    : (results.find((r) => r.httpOk) ?? results[0]);
+  const httpOk = results.some((r) => r.httpOk);
+  const obsMs = best?.obsMs ?? null;
   const ageHours = obsMs != null ? Math.max(0, (Date.now() - obsMs) / H) : null;
   const { status, note } = classify({ httpOk, hasValue: obsMs != null, ageHours, amberAfter, redAfter });
+  const latencyMs = Math.max(...results.map((r) => r.ms));
+  const buoyId = best?.id ?? PROBE_BUOYS[0];
+  const detail = fresh.length > 1 ? `${note} · ${fresh.length}/${PROBE_BUOYS.length} stations fresh` : note;
   return {
-    id: "ndbc", label: `Buoy observations — NDBC (${PROBE_BUOY})`, category: "supporting", status,
-    http_status: res?.status ?? null, latest_obs_at: obsMs != null ? new Date(obsMs).toISOString() : null,
+    id: "ndbc", label: `Buoy observations — NDBC (${buoyId})`, category: "supporting", status,
+    http_status: best?.httpStatus ?? null, latest_obs_at: obsMs != null ? new Date(obsMs).toISOString() : null,
     age_hours: ageHours != null ? Math.round(ageHours * 10) / 10 : null,
     amber_after_hours: amberAfter, red_after_hours: redAfter,
-    sample_value: null, latency_ms: ms,
-    message: httpOk ? note : `NDBC ${res?.status ?? "timeout"} — ${note}`,
+    sample_value: null, latency_ms: latencyMs,
+    message: httpOk ? detail : `NDBC ${best?.httpStatus ?? "timeout"} — ${note}`,
   };
 }
 
