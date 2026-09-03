@@ -6,6 +6,7 @@
   "scripts": {
     "build:waypoints": "node scripts/build-waypoints.mjs",
     "pull:waypoints": "node scripts/pull-waypoints.mjs",
+    "rename:waypoints": "node scripts/rename-generic-waypoints.mjs",
     "setup:waypoint-backup": "node scripts/setup-github-waypoint-secrets.mjs",
     "build:ramps": "node scripts/build-ramps.mjs",
     "build:platforms": "node scripts/build-platforms-gom.mjs",
