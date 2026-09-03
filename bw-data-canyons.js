@@ -80,7 +80,7 @@ const CANYONS=[
    fish:["sailfish","blackfin","wahoo","mahi","kingmack"]},
 
   // ── BAHAMAS (marquee grounds off the Florida crossings) ──────────────
-  {name:"Bimini Wall",     color:"#1a4fa8", lat:25.750, lng:-79.280, type:"ledge",
+  {name:"Bimini Wall",     color:"#1a4fa8", lat:25.760, lng:-79.304, type:"ledge",
    desc:"The drop-off just W of Bimini where the Gulf Stream sweeps the island shelf into 1,000+ fathoms — ~50nm from Miami. Blue & white marlin, wahoo, tuna, and mahi push right to the edge.",
    fish:["bluemarlin","whitemarlin","sailfish","spearfish","wahoo","yellowfin","blackfin","mahi"]},
   {name:"Tongue of the Ocean", color:"#1a4fa8", lat:24.700, lng:-77.750, type:"canyon",
@@ -248,10 +248,7 @@ const CANYONS=[
    fish:["yellowtail","snapper","gaggrouper","sailfish"]},
 
   // ── GULF — WEST FLORIDA ──
-  {name:"The Middle Grounds", type:"reef", color:"#16a34a", lat:28.55, lng:-84.30,
-   desc:"Florida Middle Grounds — vast live-bottom reef system ~80-100nm off Tampa/Clearwater. Grouper, snapper, amberjack stronghold.",
-   fish:["gaggrouper","snapper","amberjack","kingmack"]},
-  {name:"The Elbow", type:"reef", color:"#16a34a", lat:27.68, lng:-84.15,
+   {name:"The Elbow", type:"reef", color:"#16a34a", lat:27.68, lng:-84.15,
    desc:"Hard-bottom area off the central Gulf coast. Gag & red grouper, mangrove & red snapper.",
    fish:["gaggrouper","snapper","muttonsnap"]},
 
