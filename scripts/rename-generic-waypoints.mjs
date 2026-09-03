@@ -144,17 +144,28 @@ async function applyViaPg(renames) {
 
 async function applyViaRest(renames) {
   const db = createClient(URL, KEY, { auth: { persistSession: false } });
-  const chunkSize = 200;
-  for (let i = 0; i < renames.length; i += chunkSize) {
-    const chunk = renames.slice(i, i + chunkSize);
-    const { error } = await db.from('waypoints').upsert(
-      chunk.map((r) => ({ id: r.id, name: r.newName })),
-      { onConflict: 'id' },
+  const concurrency = 25;
+  let done = 0;
+  for (let i = 0; i < renames.length; i += concurrency) {
+    const chunk = renames.slice(i, i + concurrency);
+    await Promise.all(
+      chunk.map(async (r) => {
+        const { data, error } = await db
+          .from('waypoints')
+          .update({ name: r.newName })
+          .eq('id', r.id)
+          .eq('name', r.oldName)
+          .select('id');
+        if (error) throw error;
+        if (!data?.length) {
+          throw new Error(
+            `Expected to update id=${r.id} "${r.oldName}" but no rows matched`,
+          );
+        }
+      }),
     );
-    if (error) throw error;
-    process.stdout.write(
-      `\rUpdated ${Math.min(i + chunk.length, renames.length)}/${renames.length}`,
-    );
+    done += chunk.length;
+    process.stdout.write(`\rUpdated ${done}/${renames.length}`);
   }
   process.stdout.write('\n');
 }
