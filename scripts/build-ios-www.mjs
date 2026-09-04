@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Stage the web app into www/ for Capacitor iOS packaging.
+ * Stage the web app into www/ for Capacitor iOS/Android packaging.
  * Copies only runtime assets — not backend, scripts, or dev tooling.
  */
 import { cpSync, mkdirSync, rmSync, readdirSync, statSync, existsSync } from "node:fs";
@@ -31,7 +31,7 @@ function copyDir(src, dest) {
 }
 
 function main() {
-  console.log("Building www/ for Capacitor iOS…");
+  console.log("Building www/ for Capacitor native (iOS + Android)…");
 
   // Fresh staging dir
   if (existsSync(www)) rmSync(www, { recursive: true, force: true });

@@ -22,6 +22,12 @@ type RcSubscriber = {
   };
 };
 
+function billingSourceFromStore(store?: string): "apple" | "google" {
+  const s = String(store ?? "").toUpperCase();
+  if (s === "PLAY_STORE" || s === "PLAYSTORE") return "google";
+  return "apple";
+}
+
 export function isProProduct(productId: string): boolean {
   if (!productId) return false;
   return PRO_PRODUCT_IDS.some((id) => productId === id || productId.includes(id));
@@ -83,7 +89,7 @@ export function mapRcWebhookEvent(event: Record<string, unknown>) {
     appUserId,
     patch: {
       id: appUserId,
-      billing_source: "apple",
+      billing_source: billingSourceFromStore(event.store as string | undefined),
       subscription_status: status,
       subscription_interval: status === "canceled" ? null : interval,
       current_period_end: expires,
@@ -104,6 +110,11 @@ export async function fetchRcProfilePatch(appUserId: string, secretKey: string) 
     throw new Error(`RevenueCat API ${res.status}: ${text.slice(0, 200)}`);
   }
   const body = (await res.json()) as RcSubscriber;
+  const subs = body.subscriber?.subscriptions ?? {};
+
+  const storeForProduct = (productId: string) =>
+    billingSourceFromStore(subs[productId]?.store);
+
   const ent = body.subscriber?.entitlements?.[PRO_ENTITLEMENT];
   if (ent && entitlementActive(ent.expires_date)) {
     const productId = ent.product_identifier ?? "";
@@ -111,7 +122,7 @@ export async function fetchRcProfilePatch(appUserId: string, secretKey: string) 
     const isTrial = periodType === "TRIAL" || periodType === "INTRO";
     return {
       id: appUserId,
-      billing_source: "apple",
+      billing_source: storeForProduct(productId),
       subscription_status: isTrial ? "trialing" : "active",
       subscription_interval: /annual|year/i.test(productId) ? "year" : "month",
       current_period_end: ent.expires_date ?? null,
@@ -120,7 +131,6 @@ export async function fetchRcProfilePatch(appUserId: string, secretKey: string) 
   }
 
   // Fall back to any active Pro product subscription if entitlement name differs.
-  const subs = body.subscriber?.subscriptions ?? {};
   for (const [productId, sub] of Object.entries(subs)) {
     if (!isProProduct(productId)) continue;
     if (!entitlementActive(sub.expires_date)) continue;
@@ -128,7 +138,7 @@ export async function fetchRcProfilePatch(appUserId: string, secretKey: string) 
     const isTrial = periodType === "TRIAL" || periodType === "INTRO";
     return {
       id: appUserId,
-      billing_source: "apple",
+      billing_source: billingSourceFromStore(sub.store),
       subscription_status: isTrial ? "trialing" : "active",
       subscription_interval: /annual|year/i.test(productId) ? "year" : "month",
       current_period_end: sub.expires_date ?? null,

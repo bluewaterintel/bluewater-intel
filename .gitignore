@@ -11,6 +11,8 @@ bw-config.js
 www/
 ios/App/Pods/
 ios/App/App/public/
+*.jks
+*.keystore
 data/tmp-*/
 chart-basemap/tiles*/
 chart-basemap/*.mbtiles

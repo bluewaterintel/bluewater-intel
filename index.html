@@ -16,7 +16,8 @@
 <script src="bw-iap.js?v=20260828a"></script>
 <script src="bw-data-source.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="bw-auth.js?v=20260822c"></script>
+<script src="bw-auth.js?v=20260903a"></script>
+<script src="bw-biometric-auth.js?v=20260903a"></script>
 <script src="bw-freshness.js"></script>
 <script src="bw-ocean.js?v=20260719j"></script>
 <script src="bw-wind.js?v=20260712c"></script>
@@ -946,14 +947,14 @@ body.modal-open #brief-toggle{
   background:rgba(255,255,255,.06);
 }
 .wp-fc-popup .leaflet-popup-close-button:hover{ background:rgba(255,255,255,.14); }
-/* iOS: buoy info bubbles — tuck the × inside the card (matches waypoint popups). */
-html.bw-ios .buoy-popup .leaflet-popup-content-wrapper{
+/* Native: buoy info bubbles — tuck the × inside the card (matches waypoint popups). */
+html.bw-native .buoy-popup .leaflet-popup-content-wrapper{
   background:rgba(15,28,52,.97) !important;
   border-radius:12px;
   padding-top:4px;
 }
-html.bw-ios .buoy-popup .leaflet-popup-content{ margin:14px 32px 12px 14px; }
-html.bw-ios .buoy-popup .leaflet-popup-close-button{
+html.bw-native .buoy-popup .leaflet-popup-content{ margin:14px 32px 12px 14px; }
+html.bw-native .buoy-popup .leaflet-popup-close-button{
   color:#9ec5e8 !important;
   font-size:18px !important;
   width:26px !important;height:26px !important;
@@ -964,27 +965,27 @@ html.bw-ios .buoy-popup .leaflet-popup-close-button{
   background:rgba(255,255,255,.08);
   line-height:1 !important;
 }
-html.bw-ios .buoy-popup .leaflet-popup-close-button:hover{ background:rgba(255,255,255,.16); }
-/* iOS: species detail — full-screen page with safe-area header (not a centered card). */
-html.bw-ios #enc-modal{
+html.bw-native .buoy-popup .leaflet-popup-close-button:hover{ background:rgba(255,255,255,.16); }
+/* Native: species detail — full-screen page with safe-area header (not a centered card). */
+html.bw-native #enc-modal{
   background:#0a1a2e;
   -webkit-overflow-scrolling:touch;
 }
-html.bw-ios #enc-modal > .enc-modal-panel{
+html.bw-native #enc-modal > .enc-modal-panel{
   max-width:none;margin:0;min-height:100%;
   border-radius:0;border:none;box-shadow:none;
 }
-html.bw-ios #enc-modal .enc-modal-hdr{
+html.bw-native #enc-modal .enc-modal-hdr{
   position:sticky;top:0;z-index:2;
   padding:calc(12px + env(safe-area-inset-top, 0px)) 16px 12px !important;
   background:linear-gradient(180deg,#0d1e33,#0a1a2e);
 }
-html.bw-ios #enc-modal .enc-modal-back{
+html.bw-native #enc-modal .enc-modal-back{
   display:flex !important;
   touch-action:manipulation;
   -webkit-tap-highlight-color:rgba(125,211,252,.15);
 }
-html.bw-ios #enc-modal .enc-modal-close-x{ display:none !important; }
+html.bw-native #enc-modal .enc-modal-close-x{ display:none !important; }
 html.bw-native .bw-native-only{ display:inline !important; }
 html.bw-native .bw-stripe-only{ display:none !important; }
 #layers-toggle, #ruler-toggle, #wpdrop-toggle, #basemap-toggle, #settings-toggle, #catch-log-toggle{
@@ -2712,7 +2713,11 @@ body.nav-open .leaflet-control-attribution{
     <div class="auth-gate-actions">
       <button id="bw-auth-signin" type="button" onclick="window.bwAuthGateSignIn && window.bwAuthGateSignIn(event)" style="
         width:100%;padding:14px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:17px;
-        cursor:pointer;font-family:inherit;margin-bottom:12px">Sign In</button>
+        cursor:pointer;font-family:inherit;margin-bottom:10px">Sign In</button>
+      <button id="bw-auth-biometric" type="button" onclick="window.bwAuthGateBiometric && window.bwAuthGateBiometric(event)" style="
+        display:none;width:100%;padding:14px;border:1px solid rgba(52,211,153,.45);border-radius:10px;
+        background:rgba(52,211,153,.12);color:#86efac;font-weight:700;font-size:16px;
+        cursor:pointer;font-family:inherit;margin-bottom:12px">Sign in with Face ID</button>
       <div style="text-align:center;margin-top:0;margin-bottom:12px">
         <a id="bw-auth-forgot" href="#" onclick="window.bwAuthGateForgot && window.bwAuthGateForgot(event)" style="color:#7dd3fc;font-size:14px;text-decoration:none">Forgot password?</a>
       </div>
@@ -2827,7 +2832,7 @@ body.bw-plan-screen-open .leaflet-container{pointer-events:none !important}
   width:100%;
   padding:8px 0 4px;
 }
-html.bw-ios .auth-gate-shell .auth-marketing-copy > div:nth-child(3){ display:none; }
+html.bw-native .auth-gate-shell .auth-marketing-copy > div:nth-child(3){ display:none; }
 .auth-gate-shell.auth-kb-open .auth-marketing-copy > div:nth-child(2),
 .auth-gate-shell.auth-kb-open .auth-marketing-copy > div:nth-child(3){ display:none; }
 .auth-gate-shell.auth-kb-open .auth-gate-scroll .auth-fullscreen-panel{
@@ -3034,6 +3039,9 @@ body.bw-auth-screen-open .leaflet-container{
            background:rgba(41,121,181,.14);border:1px solid rgba(107,191,234,.3);font-size:12.5px;color:#cfe5ff;line-height:1.55"></div>
     </div>
 
+    <!-- QUICK SIGN-IN (native Face ID / Touch ID / fingerprint — filled by JS) -->
+    <div id="acct-biometric-row" style="display:none;background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);border-radius:18px;padding:20px;margin-bottom:14px;box-shadow:0 16px 48px rgba(0,0,0,.35);backdrop-filter:blur(2px)"></div>
+
     <!-- HELP / LEGAL -->
     <div style="background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);border-radius:18px;padding:6px;margin-bottom:14px;box-shadow:0 16px 48px rgba(0,0,0,.35);backdrop-filter:blur(2px);overflow:hidden">
       <button type="button" onclick="closeAccountPage();if(typeof openLegal==='function')openLegal();" style="width:100%;text-align:left;background:transparent;border:none;color:#e8f4ff;font-family:inherit;font-size:14px;font-weight:600;padding:14px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
@@ -3122,7 +3130,7 @@ body.bw-auth-screen-open .leaflet-container{
   </div>
 </div>
 
-<script src="bw-billing.js?v=20260831a"></script>
+<script src="bw-billing.js?v=20260902a"></script>
 
 <!-- HEADER -->
 <div id="hdr">
@@ -4204,7 +4212,7 @@ body.bw-auth-screen-open .leaflet-container{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260822a"></script>
+<script src="bw-core.js?v=20260903a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
@@ -4505,9 +4513,30 @@ body.bw-auth-screen-open .leaflet-container{
   background-size:cover;background-position:center;
 }
 
-#cm-canvas-wrap{position:relative;display:inline-block;max-width:100%}
+#cm-canvas-wrap{
+  position:relative;display:inline-block;max-width:100%;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+}
 #cm-canvas{max-width:100%;border-radius:10px;display:block;background:#000}
 #cm-overlay-canvas{position:absolute;top:0;left:0;pointer-events:auto;cursor:crosshair}
+/* Default: the photo is inert so a swipe over it scrolls the page. Only marking /
+   adjusting mode claims the gesture (see cm-editing below). */
+#cm-canvas-wrap #cm-overlay-canvas{touch-action:pan-y}
+#cm-canvas-wrap.cm-editing #cm-overlay-canvas{touch-action:none}
+#cm-canvas-wrap.cm-editing{outline:2px solid rgba(251,191,36,.75);outline-offset:2px;border-radius:12px}
+
+.cm-photo-tools{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+.cm-zoom-btn{
+  width:36px;height:36px;flex-shrink:0;font-size:19px;font-weight:700;line-height:1;
+  background:rgba(107,191,234,.12);border:1px solid rgba(107,191,234,.32);
+  color:#cfe5ff;border-radius:9px;cursor:pointer;font-family:inherit;
+  touch-action:manipulation;
+}
+.cm-zoom-btn:active{background:rgba(107,191,234,.26)}
+.cm-zoom-label{font-size:12px;font-weight:700;color:#9ec5e8;min-width:42px;text-align:center}
+.cm-photo-tools .cm-tool-btn{width:auto;flex:0 0 auto;padding:9px 14px;font-size:12px}
+.cm-photo-hint{margin-top:8px;font-size:11px;color:#7d9bb8;line-height:1.5}
+.cm-photo-hint.on{color:#fbbf24;font-weight:600}
 
 .cm-marker-dot{
   position:absolute;width:18px;height:18px;border-radius:50%;
@@ -5263,8 +5292,12 @@ body.bw-auth-screen-open .leaflet-container{
       <select class="rp-filter" id="rp-species" onchange="rpRender()">
         <option value="all">All Species</option>
       </select>
-      <select class="rp-filter" id="rp-time" onchange="rpRender()">
-        <option value="all">Any Time</option>
+      <select class="rp-filter" id="rp-time" onchange="rpSetTimeFilter()">
+        <option value="8760">Last 12 months</option>
+        <option value="all">Any time (full archive)</option>
+        <option value="4380">Last 6 months</option>
+        <option value="2160">Last 90 days</option>
+        <option value="720">Last 30 days</option>
         <option value="168">Last 7 days</option>
         <option value="48">Last 48 hours</option>
         <option value="24">Last 24 hours</option>
@@ -5475,7 +5508,7 @@ input[type="date"].rp-post-input::-webkit-calendar-picker-indicator{
 }
 </style>
 
-<script src="bw-reports.js?v=20260816b"></script>
+<script src="bw-reports.js?v=20260903a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TERMINAL TACKLE — Knots, Crimps, Connections

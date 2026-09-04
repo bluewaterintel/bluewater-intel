@@ -18,6 +18,7 @@ function loadNativeDefaults() {
       SUPABASE_URL: j.supabaseUrl || '',
       SUPABASE_ANON_KEY: j.supabaseAnonKey || '',
       REVENUECAT_IOS_API_KEY: j.revenueCatIosApiKey || '',
+      REVENUECAT_ANDROID_API_KEY: j.revenueCatAndroidApiKey || '',
     };
   } catch {
     return {};
@@ -43,6 +44,7 @@ const env = loadEnv();
 const url = env.SUPABASE_URL || env.VITE_SUPABASE_URL || '';
 const anon = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || '';
 const rcKey = env.REVENUECAT_IOS_API_KEY || '';
+const rcAndroidKey = env.REVENUECAT_ANDROID_API_KEY || '';
 
 if (!url || !anon || url.includes('YOURPROJECT') || anon.includes('YOUR_ANON')) {
   console.warn('Warning: SUPABASE_URL or SUPABASE_ANON_KEY not set — bw-config.js will use placeholders.');
@@ -54,7 +56,8 @@ window.BW_DATA_CONFIG = {
   supabaseAnonKey: ${JSON.stringify(anon || 'YOUR_ANON_KEY')},
   embeddedFallback: ${native},
   queryTimeoutMs: 8000,${native ? `
-  revenueCatIosApiKey: ${JSON.stringify(rcKey || 'YOUR_REVENUECAT_IOS_KEY')},` : ''}
+  revenueCatIosApiKey: ${JSON.stringify(rcKey || 'YOUR_REVENUECAT_IOS_KEY')},
+  revenueCatAndroidApiKey: ${JSON.stringify(rcAndroidKey || 'YOUR_REVENUECAT_ANDROID_KEY')},` : ''}
   contoursTilesBaseUrl: ${JSON.stringify(url && !url.includes('YOURPROJECT') ? `${url.replace(/\/$/, '')}/storage/v1/object/public/chart-tiles` : '')},
   contoursTilesVersion: 'v2',
 };

@@ -78,6 +78,18 @@ npm run cap:sync
 npm run cap:open:ios
 ```
 
+## Android App (Capacitor)
+
+The same bundle also ships as an Android app. See **[docs/ANDROID.md](docs/ANDROID.md)**
+for Android Studio, the emulator on a Mac, and sharing a test APK with friends.
+
+```bash
+npm install
+npm run android:icon
+npm run cap:sync:android
+npm run cap:open:android
+```
+
 ## Charted waypoints
 
 ~12,000 fishing waypoints (wrecks, reefs, canyons, etc.) live in **Supabase

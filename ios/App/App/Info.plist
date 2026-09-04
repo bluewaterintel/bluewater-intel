@@ -64,6 +64,8 @@
 	<string>Take a photo of your catch for length and weight estimation.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Select a catch photo for measurement.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Sign in to Bluewater Intel quickly with Face ID instead of typing your password each time.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

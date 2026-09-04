@@ -10,6 +10,7 @@
     "build:ramps": "node scripts/build-ramps.mjs",
     "build:platforms": "node scripts/build-platforms-gom.mjs",
     "build:ios": "node scripts/build-ios-www.mjs",
+    "build:native": "node scripts/build-ios-www.mjs",
     "seed": "node supabase-m1/seed/load.mjs",
     "integrity": "node scripts/integrity-check.mjs",
     "config": "node scripts/generate-bw-config.mjs",
@@ -31,12 +32,17 @@
     "sync:auth-smtp": "node scripts/sync-auth-smtp.mjs",
     "deploy": "node scripts/generate-bw-config.mjs && node scripts/generate-legal-pages.mjs && netlify deploy --prod --dir=.",
     "cap:sync": "npm run build:ios && npx cap sync ios",
+    "cap:sync:android": "npm run build:native && npx cap sync android",
     "cap:open:ios": "npx cap open ios",
+    "cap:open:android": "npx cap open android",
     "ios:icon": "node scripts/copy-ios-app-icon.mjs",
+    "android:icon": "node scripts/copy-android-app-icon.mjs",
     "legal:pages": "node scripts/generate-legal-pages.mjs",
-    "ios:sync": "npm run cap:sync && npm run cap:open:ios"
+    "ios:sync": "npm run cap:sync && npm run cap:open:ios",
+    "android:sync": "npm run cap:sync:android && npm run cap:open:android"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.9",
     "@capacitor/app": "^7.0.0",
     "@capacitor/browser": "^7.0.0",
     "@capacitor/core": "^7.0.0",
@@ -46,6 +52,7 @@
     "@capacitor/preferences": "^7.0.4",
     "@capacitor/splash-screen": "^7.0.0",
     "@capacitor/status-bar": "^7.0.0",
+    "@capgo/capacitor-native-biometric": "^7.6.0",
     "@revenuecat/purchases-capacitor": "^10.0.0",
     "@supabase/supabase-js": "^2.49.0",
     "pg": "^8.22.0"
@@ -57,7 +64,8 @@
   },
   "capacitor": {
     "platforms": [
-      "ios"
+      "ios",
+      "android"
     ]
   }
 }

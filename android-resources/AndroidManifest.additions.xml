@@ -1,0 +1,16 @@
+<!-- Already merged into android/app/src/main/AndroidManifest.xml after `npx cap add android`.
+     Re-apply if Capacitor ever regenerates the manifest. -->
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="com.android.vending.BILLING" />
+<uses-feature android:name="android.hardware.location.gps" android:required="false" />
+<uses-feature android:name="android.hardware.camera" android:required="false" />
+
+<!-- Inside MainActivity: email confirm / password recovery deep links -->
+<intent-filter>
+    <action android:name="android.intent.action.VIEW" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <category android:name="android.intent.category.BROWSABLE" />
+    <data android:scheme="@string/custom_url_scheme" />
+</intent-filter>

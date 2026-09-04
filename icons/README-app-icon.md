@@ -1,4 +1,6 @@
-# iOS app icon (home screen tile)
+# Native app icon (home screen tile)
+
+## iOS
 
 Xcode hides this — the fastest path:
 
@@ -37,3 +39,18 @@ icon is teal; the app body is navy, and a teal splash would flash on hand-off.
 ## Optional: set in Xcode
 
 Open **`ios/App/App.xcworkspace`** → left sidebar **App** (yellow folder) → **Assets.xcassets** → **AppIcon** → drag PNG onto the **1024×1024** slot labeled *App Store iOS*.
+
+## Android
+
+```bash
+npm run android:icon
+```
+
+Then uninstall the app on the emulator and Run in Android Studio (icon resources
+are not updated by `cap:sync:android`).
+
+This builds an **Android-specific** full-bleed icon (teal to the corners of
+the 108dp canvas, marlin in the circular safe zone). That can look slightly
+tighter than the iOS tile; Pixel’s dock only treats the outer band as “ours”
+when the adaptive layers occupy it, the way Chrome’s art does. Then copies
+the iOS navy splash into `android/app/src/main/res/drawable/splash.png`.

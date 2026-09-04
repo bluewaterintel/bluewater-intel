@@ -395,13 +395,15 @@ supabase functions deploy stripe-portal
 ## File map
 
 ```
-capacitor.config.json        Capacitor app ID, webDir, iOS plugins
+capacitor.config.json        Capacitor app ID, webDir, iOS/Android plugins
 bw-capacitor.js                  Deep links, status bar
-bw-iap.js                        Apple IAP (RevenueCat / StoreKit)
-bw-billing.js                    Stripe (web) vs IAP (iOS) routing
+bw-iap.js                        Native IAP (RevenueCat / StoreKit / Play Billing)
+bw-billing.js                    Stripe (web) vs IAP (native) routing
 scripts/build-ios-www.mjs        Stages www/ for Capacitor
+docs/ANDROID.md                  Android Studio, emulator, friend APK testing
 supabase/migrations/0015_*.sql   billing_source + Apple transaction ID
 supabase/functions/revenuecat-webhook/  IAP → profiles sync
 ios/                             Xcode project (after cap add ios)
+android/                         Gradle project (after cap add android)
 www/                             Built web bundle (gitignored)
 ```

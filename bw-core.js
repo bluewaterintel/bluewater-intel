@@ -295,11 +295,23 @@ function mapReport(r){
   };
 }
 
-// Load recent community reports (de-identified) into SOCIAL; refresh dependent UI.
+// Load community reports (de-identified) into SOCIAL; refresh dependent UI.
+// ────────────────────────────────────────────────────────────────────────────
+// HOW FAR BACK: the bite-map factor never looks past 72h (reportsBoost drops
+// anything older), so the history window exists purely for the FORUM — anglers
+// want to read what was biting this week last season, not just this month. Boot
+// loads a light 90 days; opening the forum widens to a year, and its "Any time"
+// filter drops the date bound entirely. The window only ever GROWS during a
+// session, so a background refresh can't silently discard history the user
+// already pulled in.
+const REPORTS_DEFAULT_DAYS = 90;
+let _reportsLoadedDays = 0;          // days of history currently in SOCIAL (Infinity = all)
 let _reportsLoading = false;
-async function loadReports(){
+async function loadReports(opts = {}){
   if(_reportsLoading) return;
   if(typeof window === "undefined" || !window.BW_AUTH || !window.BW_AUTH.fetchReports) return;
+  const requested = opts.sinceDays === null ? Infinity : (opts.sinceDays || REPORTS_DEFAULT_DAYS);
+  const wantDays = Math.max(requested, _reportsLoadedDays || 0);
   _reportsLoading = true;
   const prevReportSig = (typeof SOCIAL !== "undefined" && SOCIAL.length)
     ? `${SOCIAL.length}:${SOCIAL[0]?.hoursAgo ?? ""}:${SOCIAL[0]?.id ?? ""}`
@@ -311,7 +323,11 @@ async function loadReports(){
     } else {
       _myReportIds = new Set();
     }
-    const rows = await window.BW_AUTH.fetchReports({ sinceDays: 21, limit: 400 });
+    const rows = await window.BW_AUTH.fetchReports({
+      sinceDays: wantDays === Infinity ? null : wantDays,
+      limit: opts.limit || (wantDays > 180 ? 3000 : 800),
+    });
+    _reportsLoadedDays = wantDays;
     SOCIAL = (rows || []).map(mapReport);
     const newReportSig = SOCIAL.length
       ? `${SOCIAL.length}:${SOCIAL[0]?.hoursAgo ?? ""}:${SOCIAL[0]?.id ?? ""}`

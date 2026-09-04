@@ -422,27 +422,38 @@
       actions.innerHTML = actionsHtml;
     }
     const dmsg = document.getElementById("acct-delete-msg"); if(dmsg){ dmsg.style.display="none"; dmsg.textContent=""; }
+    if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.renderAccountToggle){
+      window.BW_BIOMETRIC.renderAccountToggle().catch(() => {});
+    }
     page.style.display = "block";
   };
   // Where the subscription was bought decides who can cancel it. Apple's rules
   // (and Stripe's) mean we cannot cancel the other platform's subscription for
   // the user, so the Account page has to name the exact path for their case.
   const APPLE_PATH = "Settings \u2192 [your name] \u2192 Subscriptions \u2192 Bluewater Intel";
+  const PLAY_PATH = "Google Play \u2192 Payments & subscriptions \u2192 Bluewater Intel";
   function bwBillingSource(p){
     const st = p && p.subscription_status;
     if(!p || p.is_owner || !(st === "active" || st === "trialing")) return "none";
     if(p.billing_source === "apple") return "apple";
+    if(p.billing_source === "google") return "google";
     if(p.billing_source === "stripe") return "stripe";
     return "unknown";
   }
   window.bwManageBillingLabel = function(p){
     const src = bwBillingSource(p);
     if(src === "apple") return "Manage in App Store";
+    if(src === "google") return "Manage in Google Play";
     if(src === "stripe" && window.BW_NATIVE) return "How to cancel";
     return "Manage Billing";
   };
   window.bwOpenAppStoreSubscriptions = function(){
     if(window.BW_IAP && window.BW_IAP.openAppStoreSubscriptions) window.BW_IAP.openAppStoreSubscriptions();
+  };
+  window.bwOpenPlaySubscriptions = function(){
+    const url = "https://play.google.com/store/account/subscriptions";
+    if(window.BW_CAPACITOR && window.BW_CAPACITOR.openExternalUrl) window.BW_CAPACITOR.openExternalUrl(url);
+    else window.open(url, "_blank");
   };
   function renderBillingGuidance(p){
     const help = document.getElementById("acct-billing-help");
@@ -454,6 +465,7 @@
       return;
     }
     const appleBtn = `<button class="bw-buy" type="button" style="width:100%;margin-top:10px" onclick="bwOpenAppStoreSubscriptions()">Open App Store Subscriptions</button>`;
+    const playBtn = `<button class="bw-buy" type="button" style="width:100%;margin-top:10px" onclick="bwOpenPlaySubscriptions()">Open Google Play Subscriptions</button>`;
     let helpHtml = "", noteText = "";
     if(src === "apple"){
       helpHtml = `<b style="color:#f0f6ff">Billed by Apple</b><br>`
@@ -462,6 +474,13 @@
         + `Canceling stops future renewals — you keep Pro until the end of the period you already paid for.`
         + appleBtn;
       noteText = `You have a live App Store subscription. Deleting your account does not cancel it — cancel in ${APPLE_PATH} first, or Apple will keep billing your Apple ID.`;
+    } else if(src === "google"){
+      helpHtml = `<b style="color:#f0f6ff">Billed by Google Play</b><br>`
+        + `You subscribed in the Android app, so Google handles payment and cancellation. `
+        + `Cancel or switch plans in <b>${PLAY_PATH}</b>. `
+        + `Canceling stops future renewals — you keep Pro until the end of the period you already paid for.`
+        + playBtn;
+      noteText = `You have a live Google Play subscription. Deleting your account does not cancel it — cancel in ${PLAY_PATH} first, or Google will keep billing your Google account.`;
     } else if(src === "stripe" && window.BW_NATIVE){
       helpHtml = `<b style="color:#f0f6ff">Billed on our website</b><br>`
         + `You subscribed at bluewaterintel.com, so this subscription is not managed by the App Store. `
@@ -475,10 +494,11 @@
     } else {
       helpHtml = `<b style="color:#f0f6ff">How to cancel</b><br>`
         + `If you subscribed <b>in the iPhone app</b>, cancel in <b>${APPLE_PATH}</b>. `
+        + `If you subscribed <b>in the Android app</b>, cancel in <b>${PLAY_PATH}</b>. `
         + `If you subscribed <b>on our website</b>, sign in at <b>app.bluewaterintel.com</b> and use <b>Menu \u2192 Account \u2192 Manage Billing</b>. `
         + `Either way you keep Pro until the end of the period you already paid for.`
-        + appleBtn;
-      noteText = `You have a live subscription. Deleting your account does not cancel it — cancel it first (App Store subscriptions in ${APPLE_PATH}; website subscriptions at app.bluewaterintel.com), or billing continues.`;
+        + appleBtn + playBtn;
+      noteText = `You have a live subscription. Deleting your account does not cancel it — cancel it first (App Store in ${APPLE_PATH}; Google Play in ${PLAY_PATH}; website at app.bluewaterintel.com), or billing continues.`;
     }
     if(help){ help.innerHTML = helpHtml; help.style.display = "block"; }
     if(note){ note.textContent = noteText; note.style.display = "block"; }
@@ -501,10 +521,13 @@
       if(!res.ok){ const j = await res.json().catch(()=>({})); throw new Error(j.error || `Delete failed (${res.status})`); }
       // Sign out locally and reload to the signed-out state.
       try { if(window.BW_AUTH && window.BW_AUTH.signOut) await window.BW_AUTH.signOut(); } catch(e){}
+      if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.setEnabled){
+        try { await window.BW_BIOMETRIC.setEnabled(false); } catch(e2){}
+      }
       show("Account deleted. Signing you out…", "#86efac");
       setTimeout(()=>{ try { location.reload(); } catch(e){} }, 1200);
     } catch(e){
-      show(e.message || `Could not delete account. If you have an active subscription, cancel it first — App Store subscriptions in ${APPLE_PATH}, website subscriptions at app.bluewaterintel.com.`, "#f87171");
+      show(e.message || `Could not delete account. If you have an active subscription, cancel it first — App Store in ${APPLE_PATH}; Google Play in ${PLAY_PATH}; website at app.bluewaterintel.com.`, "#f87171");
     }
   };
 
@@ -566,10 +589,14 @@
         if(s){
           const { data:p } = await s.from("profiles").select("billing_source, subscription_status, is_owner").maybeSingle();
           if(bwBillingSource(p) === "stripe"){
-            const note = "This subscription was purchased on our website, so it can't be canceled from the App Store. "
+            const note = "This subscription was purchased on our website, so it can't be canceled from the App Store or Google Play. "
               + "Open app.bluewaterintel.com in Safari, sign in, then use Menu \u2192 Account \u2192 Manage Billing.";
             if(msg){ msg.textContent = note; msg.style.display = "block"; }
             else if(typeof showToast === "function") showToast(note, "info");
+            return;
+          }
+          if(bwBillingSource(p) === "google"){
+            bwOpenPlaySubscriptions();
             return;
           }
         }
@@ -617,7 +644,8 @@
     }
     const showManage = !isOwner && (st==="active" || st==="trialing");
     // Kept generic here — the Account page spells out the exact cancel path.
-    const manageLabel = bwBillingSource(profile) === "apple" ? "App Store" : "Manage Billing";
+    const src = bwBillingSource(profile);
+    const manageLabel = src === "apple" ? "App Store" : src === "google" ? "Google Play" : "Manage Billing";
     // Entitled accounts lose the Upgrade button, which otherwise makes the plan
     // list unreachable — including for App Review, who sign in already entitled.
     const entitled = isOwner || st==="active" || st==="trialing";
@@ -675,7 +703,15 @@ window.BW_LEGAL_URLS = {
   privacy: "https://app.bluewaterintel.com/privacy.html",
   support: "https://app.bluewaterintel.com/support.html",
   appleEula: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+  playTerms: "https://play.google.com/about/play-terms/",
 };
+
+window.bwNativePlatform = function(){
+  const cap = window.Capacitor;
+  if(cap && typeof cap.getPlatform === "function") return cap.getPlatform();
+  return "";
+};
+window.bwIsAndroid = function(){ return window.bwNativePlatform() === "android"; };
 
 window.bwOpenLegalUrl = function(url){
   if(window.BW_CAPACITOR && window.BW_CAPACITOR.openExternalUrl) return window.BW_CAPACITOR.openExternalUrl(url);
@@ -686,10 +722,16 @@ function bwLegalLinksHtml(){
   const u = window.BW_LEGAL_URLS || {};
   const link = (href, label) =>
     `<a href="#" onclick="event.preventDefault();bwOpenLegalUrl('${href}')" style="color:#7dd3fc;text-decoration:underline">${label}</a>`;
+  if(window.bwIsAndroid && window.bwIsAndroid()){
+    return `${link(u.terms, "Terms of Use")} · ${link(u.privacy, "Privacy Policy")} · ${link(u.playTerms, "Google Play Terms")}`;
+  }
   return `${link(u.terms, "Terms of Use")} · ${link(u.privacy, "Privacy Policy")} · ${link(u.appleEula, "Apple EULA")}`;
 }
 
 function bwAutoRenewDisclosure(){
+  if(window.bwIsAndroid && window.bwIsAndroid()){
+    return "Payment is charged to your Google Play account at confirmation of purchase. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Your account is charged for renewal within 24 hours prior to the end of the current period. Manage and cancel in Google Play → Payments & subscriptions.";
+  }
   return "Payment is charged to your Apple ID account at confirmation of purchase. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Your account is charged for renewal within 24 hours prior to the end of the current period. Manage and cancel in Settings → [your name] → Subscriptions.";
 }
 
@@ -720,13 +762,14 @@ function bwIntroTrial(product){
 function applyNativeTrialBlock(products){
   const blocks = document.querySelectorAll(".bw-native-trial-block");
   if(!blocks.length) return;
+  const android = window.bwIsAndroid && window.bwIsAndroid();
   const monthly = products && products.monthly;
   const trial = bwIntroTrial(monthly);
   const eligibility = (products && products.monthlyTrial) || "unknown";
   const price = bwPriceString(monthly);
   const perMonth = price ? `${price}/month` : "the monthly price";
   const SUB_NAME = "Bluewater Intel Pro — auto-renewing subscription";
-  // Only promise a free trial when Apple says this Apple ID can still use the
+  // Only promise a free trial when the store says this account can still use the
   // introductory offer. Otherwise the purchase sheet charges immediately and the
   // "no charge today" copy would be a lie.
   if(!trial || eligibility === "none"){
@@ -746,8 +789,8 @@ function applyNativeTrialBlock(products){
       if(terms) terms.textContent = `${perMonth}, billed today`;
       if(desc){
         desc.textContent = eligibility === "ineligible"
-          ? `The ${dur ? dur + " " : ""}free trial has already been used by the Apple ID signed in on this device, so a new subscription is billed ${perMonth} today and renews automatically each month until you cancel. Choose Monthly or Annual below.`
-          : `We couldn't confirm free-trial eligibility for the Apple ID on this device. If the trial does not apply, you are billed ${perMonth} today and the subscription renews automatically each month until you cancel. Apple shows the exact terms on the confirmation screen before you are charged.`;
+          ? `The ${dur ? dur + " " : ""}free trial has already been used by the ${android ? "Google account" : "Apple ID"} signed in on this device, so a new subscription is billed ${perMonth} today and renews automatically each month until you cancel. Choose Monthly or Annual below.`
+          : `We couldn't confirm free-trial eligibility for the ${android ? "Google account" : "Apple ID"} on this device. If the trial does not apply, you are billed ${perMonth} today and the subscription renews automatically each month until you cancel. ${android ? "Google Play" : "Apple"} shows the exact terms on the confirmation screen before you are charged.`;
       }
       if(btn) btn.style.display = "none";
       el.style.display = "";
@@ -764,7 +807,7 @@ function applyNativeTrialBlock(products){
     if(desc){
       desc.textContent = `Full app — the Bite Map, ocean and wind layers, forecasts and all charted waypoints for your home port. `
         + `After the ${dur ? dur + " " : ""}free trial ends, Bluewater Intel Pro renews automatically at ${perMonth} until you cancel. `
-        + `Cancel at least 24 hours before the trial ends in Settings → [your name] → Subscriptions.`;
+        + `Cancel at least 24 hours before the trial ends in ${android ? "Google Play → Payments & subscriptions" : "Settings → [your name] → Subscriptions"}.`;
     }
     if(btn){
       btn.style.display = "";
@@ -807,7 +850,7 @@ window.bwRestorePurchases = async function(){
   };
   if(window._bwIsPurchaseBusy && window._bwIsPurchaseBusy()) return;
   if(!window.BW_IAP || !window.BW_IAP.restore){
-    show("Restore is only available in the iOS app.", false);
+    show("Restore is only available in the iOS or Android app.", false);
     return;
   }
   if(window._bwSetPurchaseBusy) window._bwSetPurchaseBusy(true, "Restoring…");
@@ -818,7 +861,9 @@ window.bwRestorePurchases = async function(){
       closePricing();
       if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
     } else {
-      show("No active App Store subscription found for this account.", false);
+      show((window.bwIsAndroid && window.bwIsAndroid())
+        ? "No active Google Play subscription found for this account."
+        : "No active App Store subscription found for this account.", false);
     }
   } catch(e){
     show(e.message || "Could not restore purchases.", false);
@@ -844,21 +889,30 @@ window.adaptPricingForNative = async function(){
     planNote.innerHTML = `<div style="margin-bottom:8px">${bwAutoRenewDisclosure()}</div>`
       + `<div>${bwLegalLinksHtml()}</div>`;
   }
-  // The tutorial copy describes Stripe checkout, which does not apply in the
-  // native app — App Store purchases are billed and canceled through Apple.
+  const android = window.bwIsAndroid && window.bwIsAndroid();
   const tutSub = document.getElementById("tut-subscription-desc");
   if(tutSub){
-    tutSub.innerHTML = `Bluewater Intel offers a free tier plus a paid <b>Subscription</b> that unlocks the full app — the Bite Map, `
-      + `ocean &amp; wind layers, forecasts, and more. Pick <b>monthly</b> or a discounted <b>annual</b> plan. `
-      + `Purchases in this app are handled by the <b>App Store</b> and billed to your Apple ID — we never see your card. `
-      + `If a free trial is available to your Apple ID, Apple shows the exact terms on the confirmation screen before you're charged. `
-      + `To cancel or switch plans, go to <b>Settings → [your name] → Subscriptions → Bluewater Intel</b> `
-      + `(also reachable from <b>Menu → Manage Account</b>). Subscriptions auto-renew until canceled; `
-      + `see <b>Menu → Legal &amp; Privacy</b> for full terms.`;
+    tutSub.innerHTML = android
+      ? `Bluewater Intel offers a free tier plus a paid <b>Subscription</b> that unlocks the full app — the Bite Map, `
+        + `ocean &amp; wind layers, forecasts, and more. Pick <b>monthly</b> or a discounted <b>annual</b> plan. `
+        + `Purchases in this app are handled by <b>Google Play</b> and billed to your Google account — we never see your card. `
+        + `If a free trial is available, Google Play shows the exact terms on the confirmation screen before you're charged. `
+        + `To cancel or switch plans, go to <b>Google Play → Payments &amp; subscriptions</b> `
+        + `(also reachable from <b>Menu → Manage Account</b>). Subscriptions auto-renew until canceled; `
+        + `see <b>Menu → Legal &amp; Privacy</b> for full terms.`
+      : `Bluewater Intel offers a free tier plus a paid <b>Subscription</b> that unlocks the full app — the Bite Map, `
+        + `ocean &amp; wind layers, forecasts, and more. Pick <b>monthly</b> or a discounted <b>annual</b> plan. `
+        + `Purchases in this app are handled by the <b>App Store</b> and billed to your Apple ID — we never see your card. `
+        + `If a free trial is available to your Apple ID, Apple shows the exact terms on the confirmation screen before you're charged. `
+        + `To cancel or switch plans, go to <b>Settings → [your name] → Subscriptions → Bluewater Intel</b> `
+        + `(also reachable from <b>Menu → Manage Account</b>). Subscriptions auto-renew until canceled; `
+        + `see <b>Menu → Legal &amp; Privacy</b> for full terms.`;
   }
   const manage = document.getElementById("pricing-manage-link");
   if(manage){
-    manage.textContent = "Manage subscription in App Store settings";
+    manage.textContent = android
+      ? "Manage subscription in Google Play"
+      : "Manage subscription in App Store settings";
     manage.onclick = (e) => {
       e.preventDefault();
       if(window.BW_IAP && window.BW_IAP.openAppStoreSubscriptions) window.BW_IAP.openAppStoreSubscriptions();
