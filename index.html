@@ -3068,18 +3068,9 @@ body.bw-auth-screen-open .leaflet-container{
        background:#0f2444;border:1px solid rgba(107,191,234,.25);border-radius:16px;padding:24px 20px;box-shadow:0 24px 70px rgba(0,0,0,.6)">
     <div style="text-align:center;margin-bottom:6px">
       <div style="font-size:20px;font-weight:800;color:#f0f6ff">Choose your plan</div>
-      <div style="font-size:12.5px;color:#9ec5e8;margin-top:5px">Pick Free to use the baseline app, or upgrade for the Bite Map, ocean layers, charted waypoints, fishing reports &amp; the AI Captain's Brief.</div>
+      <div style="font-size:12.5px;color:#9ec5e8;margin-top:5px">Upgrade for the Bite Map, ocean &amp; wind layers, charted waypoints, fishing reports &amp; the AI Captain's Brief.</div>
     </div>
     <div id="plan-gate-msg" style="display:none;font-size:12px;color:#fca5a5;margin:10px 0;text-align:center"></div>
-
-    <!-- Free -->
-    <div style="background:rgba(107,191,234,.08);border:1px solid rgba(107,191,234,.28);border-radius:11px;padding:14px;margin:16px 0 12px">
-      <div style="font-size:15px;font-weight:800;color:#cfe5ff;margin-bottom:4px">Free</div>
-      <div style="font-size:11.5px;color:#9ec5e8;line-height:1.5;margin-bottom:10px">
-        Maps, ports, catches, and your own waypoints — no credit card required.
-      </div>
-      <button type="button" onclick="window.closePostSignupPlans()" style="width:100%;padding:11px;border:1px solid rgba(107,191,234,.45);border-radius:9px;background:transparent;color:#6bbfea;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">Continue with Free</button>
-    </div>
 
     <!-- 7-day trial (web / Stripe only) -->
     <div class="bw-stripe-trial-block" style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:14px;margin:16px 0 12px">
@@ -3113,6 +3104,15 @@ body.bw-auth-screen-open .leaflet-container{
     </div>
     <div style="margin-top:12px;text-align:center">
       <a href="#" id="plan-gate-restore-link" class="bw-native-only" onclick="event.preventDefault();bwRestorePurchases()" style="display:none;color:#7dd3fc;font-size:12.5px;text-decoration:none">Restore Purchases</a>
+    </div>
+
+    <!-- Free — last so paid options are seen first -->
+    <div id="plan-gate-free" style="background:rgba(107,191,234,.06);border:1px solid rgba(107,191,234,.22);border-radius:11px;padding:14px;margin:20px 0 0">
+      <div style="font-size:15px;font-weight:800;color:#cfe5ff;margin-bottom:4px">Free</div>
+      <div style="font-size:11.5px;color:#9ec5e8;line-height:1.5;margin-bottom:10px">
+        No ocean or map layers. Ports, catches, and your own waypoints only.
+      </div>
+      <button type="button" onclick="window.closePostSignupPlans()" style="width:100%;padding:11px;border:1px solid rgba(107,191,234,.35);border-radius:9px;background:transparent;color:#6bbfea;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">Free</button>
     </div>
 
     <div id="plan-gate-checkout-note" style="font-size:10px;color:#7d9bb8;margin-top:16px;line-height:1.5;text-align:center">
