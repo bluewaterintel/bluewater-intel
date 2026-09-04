@@ -4,6 +4,7 @@
 (function(){
   const SERVER = "com.bluewaterintel.app";
   const PREF_ENABLED = "bwi_biometric_login_v1";
+  const PREF_SKIP_AUTO = "bwi_biometric_skip_auto_v1"; // set on explicit sign-out
   const BiometryType = { NONE: 0, TOUCH_ID: 1, FACE_ID: 2, FINGERPRINT: 3, FACE_AUTHENTICATION: 4 };
 
   function native(){ return !!(window.BW_NATIVE); }
@@ -64,6 +65,22 @@
     if(!on) await deleteCredentials();
   }
 
+  async function shouldSkipAutoSignIn(){
+    if(!native()) return false;
+    return (await prefGet(PREF_SKIP_AUTO)) === "1";
+  }
+
+  /** User chose Sign Out — require manual Face ID tap on the login screen. */
+  async function markExplicitSignOut(){
+    if(!native()) return;
+    await prefSet(PREF_SKIP_AUTO, "1");
+  }
+
+  /** Successful sign-in re-enables auto Face ID on the next cold app open. */
+  async function clearSkipAutoSignIn(){
+    await prefSet(PREF_SKIP_AUTO, "");
+  }
+
   async function hasSavedCredentials(){
     if(!native() || !plugin()) return false;
     try {
@@ -109,6 +126,7 @@
 
     if(!window.BW_AUTH || !window.BW_AUTH.signIn) throw new Error("Sign-in is still loading.");
     await window.BW_AUTH.signIn(creds.username, creds.password);
+    await clearSkipAutoSignIn();
     return creds.username;
   }
 
@@ -150,9 +168,10 @@
     btn.style.display = "block";
   }
 
-  /** Optional one-shot auto-prompt when the sign-in gate opens. */
+  /** Auto-prompt when the sign-in gate opens (app launch), not after explicit sign-out. */
   async function tryAutoSignIn(){
     if(!native() || !await isEnabled() || !await hasSavedCredentials()) return false;
+    if(await shouldSkipAutoSignIn()) return false;
     if(window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser()) return false;
     try {
       await signInWithBiometric();
@@ -255,6 +274,8 @@
     offerEnableAfterSignIn,
     syncLoginButton,
     tryAutoSignIn,
+    markExplicitSignOut,
+    clearSkipAutoSignIn,
     renderAccountToggle,
   };
 })();

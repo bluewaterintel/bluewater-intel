@@ -512,6 +512,9 @@
         return;
       }
       await window.BW_AUTH.signIn(c.email, c.password);
+      if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.clearSkipAutoSignIn){
+        try { await window.BW_BIOMETRIC.clearSkipAutoSignIn(); } catch(e){}
+      }
       if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.offerEnableAfterSignIn){
         try { await window.BW_BIOMETRIC.offerEnableAfterSignIn(c.email, c.password); } catch(e){}
         try { await window.BW_BIOMETRIC.syncLoginButton(); } catch(e2){}

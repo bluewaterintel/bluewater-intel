@@ -19303,6 +19303,9 @@ function signUp(){
   else document.getElementById("bw-auth-gate").style.display = "flex";
 }
 async function signOut(){
+  if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.markExplicitSignOut){
+    try { await window.BW_BIOMETRIC.markExplicitSignOut(); } catch(e){}
+  }
   await window.BW_AUTH.signOut();
   location.reload();
 }

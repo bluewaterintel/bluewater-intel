@@ -520,6 +520,9 @@
       const res = await fetch(`${fnBase()}/delete-account`, { method:"POST", headers: await authHeaders() });
       if(!res.ok){ const j = await res.json().catch(()=>({})); throw new Error(j.error || `Delete failed (${res.status})`); }
       // Sign out locally and reload to the signed-out state.
+      if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.markExplicitSignOut){
+        try { await window.BW_BIOMETRIC.markExplicitSignOut(); } catch(e0){}
+      }
       try { if(window.BW_AUTH && window.BW_AUTH.signOut) await window.BW_AUTH.signOut(); } catch(e){}
       if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.setEnabled){
         try { await window.BW_BIOMETRIC.setEnabled(false); } catch(e2){}
@@ -557,6 +560,9 @@
     } catch(e){}
   };
   window.bwSignOutFromPlanGate = async function(){
+    if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.markExplicitSignOut){
+      try { await window.BW_BIOMETRIC.markExplicitSignOut(); } catch(e0){}
+    }
     try { if(window.BW_AUTH && window.BW_AUTH.signOut) await window.BW_AUTH.signOut(); } catch(e){}
     window.closePostSignupPlans();
     // Fall back to a reload so auth state resets cleanly to the sign-in screen.
