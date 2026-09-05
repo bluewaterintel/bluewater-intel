@@ -40,6 +40,14 @@
   function showGate(){
     if(gate) gate.style.display="flex";
     syncAuthScreenBodyClass();
+    if(window.BW_BIOMETRIC){
+      try { window.BW_BIOMETRIC.syncLoginButton(); } catch(e){ /* non-fatal */ }
+      setTimeout(() => {
+        if(gate && gate.style.display !== "none" && window.BW_BIOMETRIC && window.BW_BIOMETRIC.tryAutoSignIn){
+          window.BW_BIOMETRIC.tryAutoSignIn().catch(() => {});
+        }
+      }, 450);
+    }
   }
   // Other modules (billing offline handler, plan picker) must not hide the gate
   // unless a real Supabase session exists.
@@ -462,6 +470,37 @@
     return { email: em, password: passEl.value };
   }
 
+  async function doBiometricSignIn(){
+    msg.style.display="none";
+    const btn = document.getElementById("bw-auth-biometric");
+    if(btn){ btn.disabled = true; btn.textContent = "Checking…"; }
+    try {
+      if(!window.BW_BIOMETRIC || !window.BW_BIOMETRIC.signInWithBiometric){
+        showErr("Biometric sign-in is not available.");
+        return;
+      }
+      const email = await window.BW_BIOMETRIC.signInWithBiometric();
+      if(emailEl && email) emailEl.value = email;
+    } catch(e){
+      if(e && e.code === "EMAIL_NOT_CONFIRMED" && typeof window.showVerifyEmailScreen === "function"){
+        const em = emailEl && emailEl.value ? emailEl.value.trim() : "";
+        if(em) window.showVerifyEmailScreen(em);
+      }
+      const m = (e && e.message) ? e.message : "Biometric sign-in failed";
+      if(!/cancel/i.test(m)) showErr(m);
+    } finally {
+      if(btn && window.BW_BIOMETRIC && window.BW_BIOMETRIC.methodLabel){
+        window.BW_BIOMETRIC.methodLabel().then((name) => {
+          btn.disabled = false;
+          btn.textContent = "Sign in with " + name;
+        }).catch(() => { btn.disabled = false; btn.textContent = "Sign in with biometrics"; });
+      } else if(btn){
+        btn.disabled = false;
+        btn.textContent = "Sign in with biometrics";
+      }
+    }
+  }
+
   async function doSignIn(){
     msg.style.display="none";
     const c = validCreds(); if(!c) return;
@@ -473,6 +512,13 @@
         return;
       }
       await window.BW_AUTH.signIn(c.email, c.password);
+      if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.clearSkipAutoSignIn){
+        try { await window.BW_BIOMETRIC.clearSkipAutoSignIn(); } catch(e){}
+      }
+      if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.offerEnableAfterSignIn){
+        try { await window.BW_BIOMETRIC.offerEnableAfterSignIn(c.email, c.password); } catch(e){}
+        try { await window.BW_BIOMETRIC.syncLoginButton(); } catch(e2){}
+      }
     } catch(e){
       if(e && e.code === "EMAIL_NOT_CONFIRMED" && typeof window.showVerifyEmailScreen === "function"){
         const em = emailEl && emailEl.value ? emailEl.value.trim() : "";
@@ -512,9 +558,10 @@
     } catch(err){ showErr(err?.message || "Could not send reset email."); }
   }
 
-  const AUTH_ACTION_SEL = "#bw-auth-signin,#bw-auth-signup,#bw-auth-forgot";
+  const AUTH_ACTION_SEL = "#bw-auth-signin,#bw-auth-biometric,#bw-auth-signup,#bw-auth-forgot";
   const AUTH_ACTIONS = {
     "bw-auth-signin": doSignIn,
+    "bw-auth-biometric": doBiometricSignIn,
     "bw-auth-signup": openSignup,
     "bw-auth-forgot": doForgot,
   };
@@ -531,6 +578,7 @@
     fn();
   }
   window.bwAuthGateSignIn = (e) => runAuthAction("bw-auth-signin", e);
+  window.bwAuthGateBiometric = (e) => runAuthAction("bw-auth-biometric", e);
   window.bwAuthGateOpenSignup = (e) => runAuthAction("bw-auth-signup", e);
   window.bwAuthGateForgot = (e) => runAuthAction("bw-auth-forgot", e);
   if(!window.closeCreateAccount){

@@ -295,11 +295,54 @@ function mapReport(r){
   };
 }
 
-// Load recent community reports (de-identified) into SOCIAL; refresh dependent UI.
+// Load community reports (de-identified) into SOCIAL; refresh dependent UI.
+// ────────────────────────────────────────────────────────────────────────────
+// HOW FAR BACK: the bite-map factor never looks past 72h (reportsBoost drops
+// anything older), so the history window exists purely for the FORUM — anglers
+// want to read what was biting this week last season, not just this month. Boot
+// loads a light 90 days; opening the forum widens to a year, and its "Any time"
+// filter drops the date bound entirely. The window only ever GROWS during a
+// session, so a background refresh can't silently discard history the user
+// already pulled in.
+const REPORTS_DEFAULT_DAYS = 90;
+let _reportsLoadedDays = 0;          // days of history currently in SOCIAL (Infinity = all)
 let _reportsLoading = false;
-async function loadReports(){
-  if(_reportsLoading) return;
+let _reportsLoadPromise = null;
+let _reportsQueuedOpts = null;
+
+function _mergeReportOpts(a, b){
+  if(!a) return { ...b };
+  if(!b) return { ...a };
+  const toDays = (o) => o.sinceDays === null ? Infinity : (o.sinceDays || REPORTS_DEFAULT_DAYS);
+  const maxDays = Math.max(toDays(a), toDays(b));
+  return {
+    sinceDays: maxDays === Infinity ? null : maxDays,
+    limit: Math.max(a.limit || 0, b.limit || 0) || undefined,
+    region: b.region || a.region,
+  };
+}
+
+async function loadReports(opts = {}){
   if(typeof window === "undefined" || !window.BW_AUTH || !window.BW_AUTH.fetchReports) return;
+  if(_reportsLoadPromise){
+    _reportsQueuedOpts = _mergeReportOpts(_reportsQueuedOpts, opts);
+    return _reportsLoadPromise;
+  }
+  _reportsLoadPromise = _loadReportsOnce(opts).finally(async () => {
+    _reportsLoadPromise = null;
+    if(_reportsQueuedOpts){
+      const next = _reportsQueuedOpts;
+      _reportsQueuedOpts = null;
+      await loadReports(next);
+    }
+  });
+  return _reportsLoadPromise;
+}
+
+async function _loadReportsOnce(opts = {}){
+  if(_reportsLoading) return;
+  const requested = opts.sinceDays === null ? Infinity : (opts.sinceDays || REPORTS_DEFAULT_DAYS);
+  const wantDays = Math.max(requested, _reportsLoadedDays || 0);
   _reportsLoading = true;
   const prevReportSig = (typeof SOCIAL !== "undefined" && SOCIAL.length)
     ? `${SOCIAL.length}:${SOCIAL[0]?.hoursAgo ?? ""}:${SOCIAL[0]?.id ?? ""}`
@@ -311,7 +354,11 @@ async function loadReports(){
     } else {
       _myReportIds = new Set();
     }
-    const rows = await window.BW_AUTH.fetchReports({ sinceDays: 21, limit: 400 });
+    const rows = await window.BW_AUTH.fetchReports({
+      sinceDays: wantDays === Infinity ? null : wantDays,
+      limit: opts.limit || (wantDays > 180 ? 3000 : 800),
+    });
+    _reportsLoadedDays = wantDays;
     SOCIAL = (rows || []).map(mapReport);
     const newReportSig = SOCIAL.length
       ? `${SOCIAL.length}:${SOCIAL[0]?.hoursAgo ?? ""}:${SOCIAL[0]?.id ?? ""}`
@@ -19287,6 +19334,9 @@ function signUp(){
   else document.getElementById("bw-auth-gate").style.display = "flex";
 }
 async function signOut(){
+  if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.markExplicitSignOut){
+    try { await window.BW_BIOMETRIC.markExplicitSignOut(); } catch(e){}
+  }
   await window.BW_AUTH.signOut();
   location.reload();
 }
@@ -19435,13 +19485,25 @@ window.bwOnSignedIn = async function (user) {
     if(typeof drawCatchPins === "function") drawCatchPins();
   }
   try {
-    CM_state.log = await window.BW_AUTH.fetchLog("catch_meter");
-    TB_state.favorites = await window.BW_AUTH.fetchLog("tide_favorites");
-
-    // Load community fishing reports (de-identified) for the forum + reports factor.
-    if (typeof loadReports === "function") loadReports();
+    try {
+      CM_state.log = await window.BW_AUTH.fetchLog("catch_meter");
+    } catch(e){
+      console.warn("catch_meter log hydrate failed", e);
+      if(!CM_state.log) CM_state.log = [];
+    }
+    try {
+      TB_state.favorites = await window.BW_AUTH.fetchLog("tide_favorites");
+    } catch(e){
+      console.warn("tide_favorites log hydrate failed", e);
+      if(!TB_state.favorites) TB_state.favorites = [];
+    }
   } catch (e) {
-    console.error("logs/reports hydrate failed", e);
+    console.error("logs hydrate failed", e);
+  }
+  try {
+    if (typeof loadReports === "function") await loadReports();
+  } catch (e) {
+    console.error("reports hydrate failed", e);
   }
 };
 

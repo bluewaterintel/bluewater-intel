@@ -18,6 +18,9 @@
     "backgroundColor": "#0a1628",
     "scheme": "App"
   },
+  "android": {
+    "backgroundColor": "#0a1628"
+  },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 0,

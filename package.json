@@ -35,10 +35,11 @@
     "cap:sync:android": "npm run build:android && npx cap sync android",
     "cap:open:ios": "npx cap open ios",
     "cap:open:android": "npx cap open android",
-    "android:sync": "npm run cap:sync:android && npm run cap:open:android",
     "ios:icon": "node scripts/copy-ios-app-icon.mjs",
+    "android:icon": "node scripts/copy-android-app-icon.mjs",
     "legal:pages": "node scripts/generate-legal-pages.mjs",
-    "ios:sync": "npm run cap:sync && npm run cap:open:ios"
+    "ios:sync": "npm run cap:sync && npm run cap:open:ios",
+    "android:sync": "npm run cap:sync:android && npm run cap:open:android"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",
@@ -51,6 +52,7 @@
     "@capacitor/preferences": "^7.0.4",
     "@capacitor/splash-screen": "^7.0.0",
     "@capacitor/status-bar": "^7.0.0",
+    "@capgo/capacitor-native-biometric": "^7.6.0",
     "@revenuecat/purchases-capacitor": "^10.0.0",
     "@supabase/supabase-js": "^2.49.0",
     "pg": "^8.22.0"
