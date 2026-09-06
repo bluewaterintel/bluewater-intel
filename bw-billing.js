@@ -433,6 +433,8 @@
           planDetail = "Full app — Bite Map, ocean & weather layers, all waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.";
           actionsHtml = manageBtn(p);
         } else if(!window.BW_NATIVE && p && p.stripe_customer_id){
+          planLabel = "Free";
+          planDetail = "Your Stripe subscription is canceled. Restart monthly or annual Pro anytime — you're only charged when you subscribe again.";
           actionsHtml = actionsHtml + refreshBtn;
         }
       };
@@ -730,6 +732,12 @@
         if(typeof renderNavPlan==="function") renderNavPlan();
         const entitled = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
         if(entitled){
+          if(typeof showToast === "function"){
+            const msg = (typeof BW_TRIALING !== "undefined" && BW_TRIALING)
+              ? "7-day trial started — Pro is unlocked!"
+              : "Pro unlocked — tight lines!";
+            showToast(msg, "success");
+          }
           if(typeof window.closePostSignupPlans === "function") window.closePostSignupPlans();
           else if(window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser() && typeof window.hideAuthGate === "function"){
             window.hideAuthGate();

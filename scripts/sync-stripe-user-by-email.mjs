@@ -117,6 +117,9 @@ if (entitled) {
     subscription_status: status,
     subscription_interval: interval,
     current_period_end: isoFromUnix(periodEndUnix(entitled)),
+    trial_end: status === "trialing" && entitled.trial_end
+      ? isoFromUnix(entitled.trial_end)
+      : null,
     updated_at: new Date().toISOString(),
   };
 } else {
@@ -125,6 +128,9 @@ if (entitled) {
     stripe_customer_id: customerId,
     billing_source: "stripe",
     subscription_status: "canceled",
+    subscription_interval: null,
+    current_period_end: null,
+    trial_end: null,
     updated_at: new Date().toISOString(),
   };
 }

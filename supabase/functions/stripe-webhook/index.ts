@@ -30,6 +30,7 @@ import {
 import {
   applySubscription,
   userIdForCustomer,
+  markProfileCanceled,
 } from "../_shared/stripe-entitlements.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20" });
@@ -179,9 +180,8 @@ Deno.serve(async (req) => {
           const customerId = typeof sub.customer === "string" ? sub.customer : null;
           const userId = (sub.metadata?.user_id) || (await userIdForCustomer(admin, stripe, customerId));
           if (userId) {
-            await admin.from("profiles").update({
-              subscription_status: "canceled", updated_at: new Date().toISOString(),
-            }).eq("id", userId);
+            const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;
+            await markProfileCanceled(admin, userId, customerId);
           }
         } else {
           await applySubscription(admin, sub, stripe);

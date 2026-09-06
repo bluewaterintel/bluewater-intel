@@ -66,14 +66,35 @@ export async function applySubscription(
   }
 
   const status = sub.status === "past_due" ? "active" : (entitled.has(sub.status) ? sub.status : "canceled");
-  const { error } = await admin.from("profiles").upsert({
+  const patch: Record<string, unknown> = {
     ...base,
     subscription_status: status,
-    subscription_interval: interval,
-    current_period_end: isoFromUnix(periodEndUnix(sub)),
-  }, { onConflict: "id" });
+    subscription_interval: status === "canceled" ? null : interval,
+    current_period_end: status === "canceled" ? null : isoFromUnix(periodEndUnix(sub)),
+    trial_end: status === "trialing" ? isoFromUnix(sub.trial_end) : null,
+  };
+  const { error } = await admin.from("profiles").upsert(patch, { onConflict: "id" });
   if (error) throw error;
   return { userId, subscription_status: status, subscription_interval: interval };
+}
+
+/** Clear paid access when Stripe shows no live subscription (cancel / lapse). */
+export async function markProfileCanceled(
+  admin: SupabaseClient,
+  userId: string,
+  customerId?: string | null,
+) {
+  const { error } = await admin.from("profiles").upsert({
+    id: userId,
+    ...(customerId ? { stripe_customer_id: customerId } : {}),
+    billing_source: "stripe",
+    subscription_status: "canceled",
+    subscription_interval: null,
+    current_period_end: null,
+    trial_end: null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "id" });
+  if (error) throw error;
 }
 
 export async function syncStripeEntitlementForUser(
@@ -123,13 +144,7 @@ export async function syncStripeEntitlementForUser(
     };
   }
 
-  await admin.from("profiles").upsert({
-    id: userId,
-    stripe_customer_id: customerId,
-    billing_source: "stripe",
-    subscription_status: "canceled",
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "id" });
+  await markProfileCanceled(admin, userId, customerId);
 
   return { ok: true, synced: true, subscription_status: "canceled" as const };
 }
