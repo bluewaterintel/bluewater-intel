@@ -347,7 +347,9 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   }
 
   // Reads the DE-IDENTIFIED public view (no user_id/PII; coords rounded; hashed handle).
-  async function fetchReports({ region = null, sinceDays = 21, limit = 400 } = {}) {
+  // Pass sinceDays: null to read the full archive — the forum offers "Any time"
+  // so anglers can compare this week against the same week in past seasons.
+  async function fetchReports({ region = null, sinceDays = 365, limit = 1000 } = {}) {
     let q = client.from("fishing_reports_public").select("*").order("created_at", { ascending: false }).limit(limit);
     if (region && region !== "all") q = q.eq("region", region);
     if (sinceDays) q = q.gte("created_at", new Date(Date.now() - sinceDays * 86400000).toISOString());

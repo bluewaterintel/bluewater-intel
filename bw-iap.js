@@ -1,4 +1,4 @@
-/* Bluewater Intel — Apple In-App Purchase (iOS App Store only).
+/* Bluewater Intel — native in-app purchase (App Store / Google Play via RevenueCat).
  * Stripe is NOT used in the native app. Website billing stays in bw-billing.js.
  * Unified accounts: same Supabase login everywhere; entitlements sync via profiles. */
 (function () {
@@ -11,6 +11,22 @@
 
   let configured = false;
   let Purchases = null;
+
+  function nativePlatform() {
+    const cap = window.Capacitor;
+    if (cap && typeof cap.getPlatform === "function") return cap.getPlatform();
+    return "";
+  }
+
+  function isAndroid() {
+    return nativePlatform() === "android";
+  }
+
+  function revenueCatApiKey() {
+    const cfg = window.BW_DATA_CONFIG || {};
+    if (isAndroid()) return cfg.revenueCatAndroidApiKey || "";
+    return cfg.revenueCatIosApiKey || "";
+  }
 
   function withTimeout(promise, ms, message) {
     return Promise.race([
@@ -58,13 +74,21 @@
     if (!native || configured) return;
     const user = window.BW_AUTH && window.BW_AUTH.getUser && window.BW_AUTH.getUser();
     if (!user) throw new Error("Sign in to subscribe.");
-    const apiKey = (window.BW_DATA_CONFIG && window.BW_DATA_CONFIG.revenueCatIosApiKey) || "";
+    const apiKey = revenueCatApiKey();
     if (!apiKey || apiKey.includes("YOUR_")) {
-      throw new Error("In-app purchases are not configured yet. Add REVENUECAT_IOS_API_KEY to .env and rebuild.");
+      throw new Error(
+        isAndroid()
+          ? "Google Play billing is not configured yet. Add REVENUECAT_ANDROID_API_KEY to .env and rebuild."
+          : "In-app purchases are not configured yet. Add REVENUECAT_IOS_API_KEY to .env and rebuild.",
+      );
     }
     const plugin = getPurchasesPlugin();
     if (!plugin || !plugin.configure) {
-      throw new Error("StoreKit plugin not loaded. Run: npm install && npx cap sync ios");
+      throw new Error(
+        isAndroid()
+          ? "Play Billing plugin not loaded. Run: npm install && npx cap sync android"
+          : "StoreKit plugin not loaded. Run: npm install && npx cap sync ios",
+      );
     }
     await withTimeout(
       plugin.configure({ apiKey, appUserID: user.id }),
@@ -191,7 +215,9 @@
         const { customerInfo } = await withTimeout(
           plugin.purchasePackage({ aPackage: pkg }),
           120000,
-          "Purchase timed out. If Apple charged you, tap Restore Purchases.",
+          isAndroid()
+            ? "Purchase timed out. If Google charged you, tap Restore Purchases."
+            : "Purchase timed out. If Apple charged you, tap Restore Purchases.",
         );
         refreshEntitlementAfterPurchase();
         return customerInfo;
@@ -204,16 +230,24 @@
     const { products } = await withTimeout(
       plugin.getProducts({ productIdentifiers: [productId] }),
       15000,
-      "Could not load App Store products. Try again in a moment.",
+      isAndroid()
+        ? "Could not load Google Play products. Try again in a moment."
+        : "Could not load App Store products. Try again in a moment.",
     );
     const product = products && products.find((p) => p.identifier === productId);
     if (!product) {
-      throw new Error("Subscription not available in the App Store yet. Check App Store Connect + RevenueCat product catalog.");
+      throw new Error(
+        isAndroid()
+          ? "Subscription not available on Google Play yet. Check Play Console + RevenueCat product catalog."
+          : "Subscription not available in the App Store yet. Check App Store Connect + RevenueCat product catalog.",
+      );
     }
     const { customerInfo } = await withTimeout(
       plugin.purchaseStoreProduct({ product }),
       120000,
-      "Purchase timed out. If Apple charged you, tap Restore Purchases.",
+      isAndroid()
+        ? "Purchase timed out. If Google charged you, tap Restore Purchases."
+        : "Purchase timed out. If Apple charged you, tap Restore Purchases.",
     );
     refreshEntitlementAfterPurchase();
     return customerInfo;
@@ -231,7 +265,9 @@
   }
 
   function openAppStoreSubscriptions() {
-    const url = "https://apps.apple.com/account/subscriptions";
+    const url = isAndroid()
+      ? "https://play.google.com/store/account/subscriptions"
+      : "https://apps.apple.com/account/subscriptions";
     if (window.BW_CAPACITOR && window.BW_CAPACITOR.openExternalUrl) {
       window.BW_CAPACITOR.openExternalUrl(url);
     } else {

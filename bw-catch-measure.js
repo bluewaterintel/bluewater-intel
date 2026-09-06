@@ -74,6 +74,12 @@ let CM_state = {
   refPoints: [],          // [{x,y},{x,y}] — pixel coords of ref object endpoints
   fishPoints: [],         // [{x,y},{x,y}] — pixel coords of fish endpoints
   marking: null,          // "ref" | "fish" | null — what we're currently marking
+  editing: false,         // photo captures touches (marking/panning) vs. lets the page scroll
+  zoom: 1,                // photo magnification, 1 = fit to width
+  panX: 0, panY: 0,       // top-left of the visible source rect, in image pixels
+  dispW: 0, dispH: 0,     // on-screen canvas size, in CSS pixels
+  drag: null,             // active gesture: {kind:"ref"|"fish"|"pan", …}
+  loupe: null,            // magnifier anchor while dragging: {ip:{x,y}, d:{x,y}}
   refObject: "creditcard",
   refLengthCustom: "",
   species: "yellowfin",
@@ -186,10 +192,20 @@ function cmRenderMeasure(){
           <input id="cm-file-input" type="file" accept="image/*" capture="environment" style="display:none" onchange="cmHandleFile(event)"/>
         </div>
       ` : `
-        <div id="cm-canvas-wrap">
+        <div id="cm-canvas-wrap" class="${CM_state.editing ? "cm-editing" : ""}">
           <canvas id="cm-canvas"></canvas>
           <canvas id="cm-overlay-canvas"></canvas>
         </div>
+        <div class="cm-photo-tools">
+          <button class="cm-zoom-btn" onclick="cmZoomBy(-1)" aria-label="Zoom out">−</button>
+          <span class="cm-zoom-label">${CM_state.zoom.toFixed(1)}×</span>
+          <button class="cm-zoom-btn" onclick="cmZoomBy(1)" aria-label="Zoom in">+</button>
+          <button class="cm-btn cm-btn-secondary cm-tool-btn" onclick="cmZoomReset()">Fit</button>
+          ${(CM_state.refPoints.length || CM_state.fishPoints.length) ? `
+            <button class="cm-btn cm-btn-secondary cm-tool-btn" onclick="cmToggleEditing()">${CM_state.editing ? "✓ Done" : "✎ Adjust points"}</button>
+          ` : ""}
+        </div>
+        <div class="cm-photo-hint ${CM_state.editing ? "on" : ""}">${cmPhotoHint()}</div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
           <button class="cm-btn cm-btn-secondary" onclick="cmRetake()">🔄 Retake</button>
         </div>
@@ -209,10 +225,10 @@ function cmRenderMeasure(){
       `}
       ${hasImage ? `
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <button class="cm-btn" onclick="cmStartMarking('ref')">${refDone ? "✓ Tap two ends of reference" : "📍 Mark Reference Endpoints"}</button>
+          <button class="cm-btn" onclick="cmStartMarking('ref')">${refDone ? "✓ Re-mark reference ends" : "📍 Mark Reference Endpoints"}</button>
           ${refDone ? `<button class="cm-btn cm-btn-secondary" onclick="cmClearRef()">Clear</button>` : ""}
         </div>
-        ${CM_state.marking === "ref" ? `<div style="margin-top:8px;font-size:11px;color:#fbbf24;font-weight:600">→ Tap the two ends of the reference object on the photo</div>` : ""}
+        ${CM_state.marking === "ref" ? `<div style="margin-top:8px;font-size:11px;color:#fbbf24;font-weight:600">→ Press and drag on each end of the reference object — a magnifier shows the exact spot. Lift to drop the point. Zoom in first for a small reference.</div>` : ""}
       ` : ""}
     </div>
 
@@ -231,10 +247,10 @@ function cmRenderMeasure(){
         </optgroup>
       </select>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-        <button class="cm-btn" onclick="cmStartMarking('fish')" ${!refDone ? "disabled" : ""}>${fishDone ? "✓ Tap nose and tail" : "🐟 Mark Fish Endpoints"}</button>
+        <button class="cm-btn" onclick="cmStartMarking('fish')" ${!refDone ? "disabled" : ""}>${fishDone ? "✓ Re-mark nose and tail" : "🐟 Mark Fish Endpoints"}</button>
         ${fishDone ? `<button class="cm-btn cm-btn-secondary" onclick="cmClearFish()">Clear</button>` : ""}
       </div>
-      ${CM_state.marking === "fish" ? `<div style="margin-top:8px;font-size:11px;color:#fbbf24;font-weight:600">→ Tap the tip of the fish\'s nose, then tip of tail</div>` : ""}
+      ${CM_state.marking === "fish" ? `<div style="margin-top:8px;font-size:11px;color:#fbbf24;font-weight:600">→ Press and drag to the tip of the nose, lift, then do the same at the tip of the tail.</div>` : ""}
     </div>
 
     <!-- STEP 4: Result -->
@@ -342,7 +358,8 @@ function cmRenderHelp(){
         <p style="margin-top:10px"><b>2. Place the reference flat next to the fish.</b> Both should be on the same plane (deck, cooler lid). The reference must NOT be tilted toward or away from the camera.</p>
         <p style="margin-top:10px"><b>3. Shoot from directly above.</b> Hold the camera perpendicular to the fish — think of looking straight down. Side-angle shots distort the measurement.</p>
         <p style="margin-top:10px"><b>4. Get the whole fish + reference in frame</b> with a little space around the edges. Don't crop tight.</p>
-        <p style="margin-top:10px"><b>5. Tap precisely.</b> When marking endpoints, tap the exact tip of the nose and the exact tip of the tail. Pinch to zoom for precision.</p>
+        <p style="margin-top:10px"><b>5. Mark precisely.</b> Press and drag on the photo instead of tapping — a magnifier bubble shows the pixels under your fingertip, and the point drops where the crosshair sits when you lift. Pinch or use the <b>+</b> / <b>−</b> buttons to zoom in first; this matters most on a big fish where the reference object is small in frame. Already placed a point? Tap <b>✎ Adjust points</b> and drag any marker to nudge it.</p>
+        <p style="margin-top:10px"><b>6. Scrolling.</b> Swiping over the photo scrolls the page normally. The photo only captures your finger while you're marking or adjusting — tap <b>✓ Done</b> to hand scrolling back.</p>
       </div>
     </div>
 
@@ -404,7 +421,9 @@ function cmHandleFile(e){
     // Resize image to max 1600px for performance, preserve aspect
     const img = new Image();
     img.onload = () => {
-      const maxDim = 1600;
+      // Generous ceiling so zooming in to place endpoints still has real pixels
+      // to show rather than an upscaled blur.
+      const maxDim = 2400;
       const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
       const w = Math.round(img.width * scale);
       const h = Math.round(img.height * scale);
@@ -418,6 +437,8 @@ function cmHandleFile(e){
       CM_state.refPoints = [];
       CM_state.fishPoints = [];
       CM_state.result = null;
+      CM_img = null;
+      cmResetView();
       cmRender();
     };
     img.src = ev.target.result;
@@ -427,36 +448,84 @@ function cmHandleFile(e){
 
 // ════════════════════════════════════════════════════════════════════════════
 // CANVAS DRAWING & POINT MARKING
+// ────────────────────────────────────────────────────────────────────────────
+// The photo is INERT by default, so swiping across it scrolls the page like any
+// other content. It only captures touches while CM_state.editing is set (after
+// tapping a "Mark" or "Adjust points" button), which is also when touch-action
+// flips to none. The old handler called preventDefault() on every touchstart,
+// which killed scrolling over the photo entirely.
+//
+// Precision: endpoints are placed on RELEASE, not on touch-down, and while the
+// finger is down a magnifier loupe shows the pixels under the crosshair. Paired
+// with zoom + pan, that makes a small reference object (a credit card next to a
+// big fish) markable to the pixel instead of guessing under a fat fingertip.
 // ════════════════════════════════════════════════════════════════════════════
+let CM_img = null;              // decoded photo, cached so redraws stay synchronous
+const CM_HIT_SLOP_PX = 22;      // how close a touch must be to grab an existing marker
+const CM_MAX_ZOOM = 8;
+
+// Visible source rect (image pixels) for the current zoom/pan, clamped in place.
+function cmViewRect(){
+  const z = Math.max(1, Math.min(CM_MAX_ZOOM, CM_state.zoom || 1));
+  const sw = CM_state.imageWidth / z;
+  const sh = CM_state.imageHeight / z;
+  const sx = Math.max(0, Math.min(CM_state.imageWidth  - sw, CM_state.panX || 0));
+  const sy = Math.max(0, Math.min(CM_state.imageHeight - sh, CM_state.panY || 0));
+  CM_state.zoom = z; CM_state.panX = sx; CM_state.panY = sy;
+  return { sx, sy, sw, sh };
+}
+function cmImgToDisp(p){
+  const v = cmViewRect();
+  return { x: (p.x - v.sx) / v.sw * CM_state.dispW, y: (p.y - v.sy) / v.sh * CM_state.dispH };
+}
+function cmDispToImg(dx, dy){
+  const v = cmViewRect();
+  return { x: v.sx + (dx / CM_state.dispW) * v.sw, y: v.sy + (dy / CM_state.dispH) * v.sh };
+}
+function cmPhotoHint(){
+  if(CM_state.marking) return "Press, drag to the exact spot, then lift. Pinch or use +/− to zoom.";
+  if(CM_state.editing) return "Drag a marker to fine-tune · drag the photo to pan · tap ✓ Done to scroll the page.";
+  return "Swipe to scroll. Tap a Mark button below to place or adjust points.";
+}
+
 function cmDrawCanvas(){
   const canvas = document.getElementById("cm-canvas");
   const overlay = document.getElementById("cm-overlay-canvas");
   if(!canvas || !overlay) return;
 
-  const img = new Image();
-  img.onload = () => {
-    // Fit image to container width
+  const paint = () => {
     const wrap = document.getElementById("cm-canvas-wrap");
+    if(!wrap || !CM_img) return;
     const maxW = wrap.parentElement.clientWidth - 4;
-    const scale = Math.min(1, maxW / img.width);
-    const dw = Math.round(img.width * scale);
-    const dh = Math.round(img.height * scale);
-
+    const scale = Math.min(1, maxW / CM_img.width);
+    const dw = Math.round(CM_img.width * scale);
+    const dh = Math.round(CM_img.height * scale);
+    CM_state.dispW = dw; CM_state.dispH = dh;
     canvas.width = dw; canvas.height = dh;
     overlay.width = dw; overlay.height = dh;
-    canvas.style.width = dw + "px";
-    canvas.style.height = dh + "px";
-    overlay.style.width = dw + "px";
-    overlay.style.height = dh + "px";
-
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0, dw, dh);
-
+    canvas.style.width = overlay.style.width = dw + "px";
+    canvas.style.height = overlay.style.height = dh + "px";
+    cmDrawPhoto();
     cmDrawOverlay();
-    overlay.onclick = cmCanvasClick;
-    overlay.ontouchstart = e => { e.preventDefault(); cmCanvasClick(e.touches[0]); };
+    cmBindCanvas(overlay);
   };
+
+  if(CM_img && CM_img.src === CM_state.imageData){ paint(); return; }
+  const img = new Image();
+  img.onload = () => { CM_img = img; paint(); };
   img.src = CM_state.imageData;
+}
+
+function cmDrawPhoto(){
+  const canvas = document.getElementById("cm-canvas");
+  if(!canvas || !CM_img) return;
+  const v = cmViewRect();
+  const ctx = canvas.getContext("2d");
+  // Keep hard pixel edges once magnified — smoothing blurs the very detail the
+  // user zoomed in to aim at.
+  ctx.imageSmoothingEnabled = CM_state.zoom < 2;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(CM_img, v.sx, v.sy, v.sw, v.sh, 0, 0, canvas.width, canvas.height);
 }
 
 function cmDrawOverlay(){
@@ -464,78 +533,233 @@ function cmDrawOverlay(){
   if(!overlay) return;
   const ctx = overlay.getContext("2d");
   ctx.clearRect(0, 0, overlay.width, overlay.height);
-
-  const sx = overlay.width / CM_state.imageWidth;
-  const sy = overlay.height / CM_state.imageHeight;
-
-  // Reference line (yellow)
-  if(CM_state.refPoints.length === 2){
-    cmDrawLine(ctx, CM_state.refPoints, sx, sy, "#fbbf24", "REF");
-  } else {
-    CM_state.refPoints.forEach(p => cmDrawDot(ctx, p, sx, sy, "#fbbf24"));
-  }
-  // Fish line (cyan)
-  if(CM_state.fishPoints.length === 2){
-    cmDrawLine(ctx, CM_state.fishPoints, sx, sy, "#06b6d4", "FISH");
-  } else {
-    CM_state.fishPoints.forEach(p => cmDrawDot(ctx, p, sx, sy, "#06b6d4"));
-  }
+  const activeRef  = (CM_state.drag && CM_state.drag.kind === "ref")  ? CM_state.drag.idx : -1;
+  const activeFish = (CM_state.drag && CM_state.drag.kind === "fish") ? CM_state.drag.idx : -1;
+  cmDrawMeasure(ctx, CM_state.refPoints,  "#fbbf24", "REF",  activeRef);
+  cmDrawMeasure(ctx, CM_state.fishPoints, "#06b6d4", "FISH", activeFish);
+  if(CM_state.loupe) cmDrawLoupe(ctx, CM_state.loupe);
 }
-function cmDrawDot(ctx, p, sx, sy, color){
-  const x = p.x * sx, y = p.y * sy;
-  ctx.beginPath(); ctx.arc(x, y, 8, 0, 2*Math.PI);
+
+function cmDrawMeasure(ctx, pts, color, label, activeIdx){
+  const d = pts.map(cmImgToDisp);
+  if(d.length === 2){
+    ctx.beginPath(); ctx.moveTo(d[0].x, d[0].y); ctx.lineTo(d[1].x, d[1].y);
+    ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.lineWidth = 4; ctx.stroke();
+    ctx.strokeStyle = color; ctx.lineWidth = 1.75; ctx.stroke();
+    const mx = (d[0].x + d[1].x) / 2, my = (d[0].y + d[1].y) / 2;
+    ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const lw = ctx.measureText(label).width + 12;
+    ctx.fillStyle = "rgba(0,0,0,.8)";
+    ctx.fillRect(mx - lw / 2, my - 21, lw, 17);
+    ctx.fillStyle = color;
+    ctx.fillText(label, mx, my - 12);
+  }
+  d.forEach((p, i) => cmDrawHandle(ctx, p, color, i === activeIdx));
+}
+
+// Open crosshair ring instead of a filled disc: the exact pixel stays visible,
+// so the marker no longer swallows a short reference object.
+function cmDrawHandle(ctx, d, color, active){
+  const r = active ? 12 : 9;
+  const arm = 6;
+  const stroke = (w, s) => { ctx.lineWidth = w; ctx.strokeStyle = s; ctx.stroke(); };
+  ctx.beginPath(); ctx.arc(d.x, d.y, r, 0, 2 * Math.PI);
+  stroke(3.5, "rgba(0,0,0,.55)"); stroke(1.75, color);
+  ctx.beginPath();
+  ctx.moveTo(d.x - r - arm, d.y); ctx.lineTo(d.x - 3, d.y);
+  ctx.moveTo(d.x + 3, d.y);       ctx.lineTo(d.x + r + arm, d.y);
+  ctx.moveTo(d.x, d.y - r - arm); ctx.lineTo(d.x, d.y - 3);
+  ctx.moveTo(d.x, d.y + 3);       ctx.lineTo(d.x, d.y + r + arm);
+  stroke(3.5, "rgba(0,0,0,.55)"); stroke(1.5, color);
+  ctx.beginPath(); ctx.arc(d.x, d.y, 1.4, 0, 2 * Math.PI);
   ctx.fillStyle = color; ctx.fill();
-  ctx.lineWidth = 3; ctx.strokeStyle = "white"; ctx.stroke();
 }
-function cmDrawLine(ctx, pts, sx, sy, color, label){
-  const a = {x:pts[0].x*sx, y:pts[0].y*sy};
-  const b = {x:pts[1].x*sx, y:pts[1].y*sy};
-  ctx.lineWidth = 4; ctx.strokeStyle = color;
-  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-  ctx.beginPath(); ctx.arc(a.x, a.y, 7, 0, 2*Math.PI); ctx.fillStyle = color; ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = "white"; ctx.stroke();
-  ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, 2*Math.PI); ctx.fillStyle = color; ctx.fill(); ctx.stroke();
-  // Label
-  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-  ctx.font = "bold 12px sans-serif";
-  ctx.fillStyle = "rgba(0,0,0,.85)";
-  const lw = ctx.measureText(label).width + 10;
-  ctx.fillRect(mx - lw/2, my - 18, lw, 18);
-  ctx.fillStyle = color;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(label, mx, my - 9);
-}
-function cmCanvasClick(e){
-  if(!CM_state.marking) return;
-  const overlay = document.getElementById("cm-overlay-canvas");
-  const rect = overlay.getBoundingClientRect();
-  const cx = (e.clientX - rect.left) / rect.width;
-  const cy = (e.clientY - rect.top) / rect.height;
-  // Convert to image-space coords
-  const x = cx * CM_state.imageWidth;
-  const y = cy * CM_state.imageHeight;
 
-  if(CM_state.marking === "ref"){
-    CM_state.refPoints.push({x, y});
-    if(CM_state.refPoints.length >= 2){
-      CM_state.refPoints = CM_state.refPoints.slice(-2);
-      CM_state.marking = null;
-      cmCompute();
-      cmRender();
-      return;
-    }
-  } else if(CM_state.marking === "fish"){
-    CM_state.fishPoints.push({x, y});
-    if(CM_state.fishPoints.length >= 2){
-      CM_state.fishPoints = CM_state.fishPoints.slice(-2);
-      CM_state.marking = null;
-      cmCompute();
-      cmRender();
-      return;
-    }
+// Magnifier bubble showing the pixels under the (finger-obscured) crosshair.
+function cmDrawLoupe(ctx, loupe){
+  if(!CM_img) return;
+  const R = 56, MAG = 4.5;
+  const cx = loupe.d.x < CM_state.dispW / 2 ? CM_state.dispW - R - 10 : R + 10;
+  const cy = R + 10;
+  const v = cmViewRect();
+  const imgPerDisp = v.sw / CM_state.dispW;
+  const half = (R / MAG) * imgPerDisp;
+
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI); ctx.closePath();
+  ctx.fillStyle = "#04121f"; ctx.fill();
+  ctx.clip();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(CM_img, loupe.ip.x - half, loupe.ip.y - half, half * 2, half * 2, cx - R, cy - R, R * 2, R * 2);
+  ctx.strokeStyle = "rgba(255,255,255,.75)"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - R, cy); ctx.lineTo(cx - 5, cy);
+  ctx.moveTo(cx + 5, cy); ctx.lineTo(cx + R, cy);
+  ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy - 5);
+  ctx.moveTo(cx, cy + 5); ctx.lineTo(cx, cy + R);
+  ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 2 * Math.PI);
+  ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.restore();
+
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+  ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.lineWidth = 4; ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = 2; ctx.stroke();
+}
+
+// ── Pointer gestures (mouse + touch + pencil via Pointer Events) ─────────────
+const CM_ptrs = new Map();
+let CM_pinch = null;
+
+function cmBindCanvas(overlay){
+  if(overlay._cmBound) return;      // cmRender() rebuilds the canvas, so this resets
+  overlay._cmBound = true;
+  overlay.addEventListener("pointerdown", cmPointerDown);
+  overlay.addEventListener("pointermove", cmPointerMove);
+  overlay.addEventListener("pointerup", cmPointerUp);
+  overlay.addEventListener("pointercancel", cmPointerUp);
+}
+function cmLocal(e){
+  const rect = e.currentTarget.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+// Nearest existing endpoint within touch slop, so markers can be nudged later.
+function cmHitHandle(d){
+  let best = null, bestDist = CM_HIT_SLOP_PX;
+  for(const kind of ["ref", "fish"]){
+    const pts = kind === "ref" ? CM_state.refPoints : CM_state.fishPoints;
+    pts.forEach((p, idx) => {
+      const q = cmImgToDisp(p);
+      const dist = Math.hypot(q.x - d.x, q.y - d.y);
+      if(dist <= bestDist){ bestDist = dist; best = { kind, idx }; }
+    });
   }
+  return best;
+}
+function cmPointerDown(e){
+  if(!CM_state.editing) return;     // inert photo → the page scrolls normally
+  const d = cmLocal(e);
+  CM_ptrs.set(e.pointerId, d);
+  e.preventDefault();
+  try { e.currentTarget.setPointerCapture(e.pointerId); } catch(err){ /* non-fatal */ }
+
+  if(CM_ptrs.size === 2){           // second finger → pinch-zoom, abandon any drag
+    const [a, b] = [...CM_ptrs.values()];
+    const v = cmViewRect();
+    CM_pinch = {
+      dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+      zoom: CM_state.zoom,
+      cx: v.sx + ((a.x + b.x) / 2 / CM_state.dispW) * v.sw,
+      cy: v.sy + ((a.y + b.y) / 2 / CM_state.dispH) * v.sh,
+    };
+    // The first finger of a pinch would otherwise leave a stray endpoint behind.
+    if(CM_state.drag && CM_state.drag.fresh){
+      const pts = CM_state.drag.kind === "ref" ? CM_state.refPoints : CM_state.fishPoints;
+      pts.splice(CM_state.drag.idx, 1);
+    }
+    CM_state.drag = null; CM_state.loupe = null;
+    cmDrawOverlay();
+    return;
+  }
+  if(CM_ptrs.size > 2) return;
+
+  const ip = cmDispToImg(d.x, d.y);
+  if(CM_state.marking){
+    const pts = CM_state.marking === "ref" ? CM_state.refPoints : CM_state.fishPoints;
+    if(pts.length >= 2) pts.length = 0;
+    pts.push(ip);
+    CM_state.drag = { kind: CM_state.marking, idx: pts.length - 1, fresh: true };
+  } else {
+    const hit = cmHitHandle(d);
+    if(hit) CM_state.drag = hit;
+    else if(CM_state.zoom > 1) CM_state.drag = { kind: "pan", d, panX: CM_state.panX, panY: CM_state.panY };
+    else return;
+  }
+  CM_state.loupe = CM_state.drag.kind === "pan" ? null : { ip, d };
   cmDrawOverlay();
+}
+function cmPointerMove(e){
+  if(!CM_ptrs.has(e.pointerId)) return;
+  const d = cmLocal(e);
+  CM_ptrs.set(e.pointerId, d);
+  e.preventDefault();
+
+  if(CM_pinch && CM_ptrs.size >= 2){
+    const [a, b] = [...CM_ptrs.values()];
+    const dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+    const z = Math.max(1, Math.min(CM_MAX_ZOOM, CM_pinch.zoom * (dist / CM_pinch.dist)));
+    CM_state.zoom = z;
+    CM_state.panX = CM_pinch.cx - (CM_state.imageWidth  / z) / 2;
+    CM_state.panY = CM_pinch.cy - (CM_state.imageHeight / z) / 2;
+    cmDrawPhoto(); cmDrawOverlay(); cmSyncZoomLabel();
+    return;
+  }
+  const drag = CM_state.drag;
+  if(!drag) return;
+
+  if(drag.kind === "pan"){
+    const v = cmViewRect();
+    CM_state.panX = drag.panX - (d.x - drag.d.x) / CM_state.dispW * v.sw;
+    CM_state.panY = drag.panY - (d.y - drag.d.y) / CM_state.dispH * v.sh;
+    cmDrawPhoto(); cmDrawOverlay();
+    return;
+  }
+  const ip = cmDispToImg(d.x, d.y);
+  const pts = drag.kind === "ref" ? CM_state.refPoints : CM_state.fishPoints;
+  pts[drag.idx] = ip;
+  CM_state.loupe = { ip, d };
+  cmDrawOverlay();
+}
+function cmPointerUp(e){
+  CM_ptrs.delete(e.pointerId);
+  try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(err){ /* non-fatal */ }
+  if(CM_ptrs.size < 2) CM_pinch = null;
+
+  const drag = CM_state.drag;
+  CM_state.drag = null;
+  CM_state.loupe = null;
+  if(!drag){ cmDrawOverlay(); return; }
+  if(drag.kind === "pan"){ cmDrawOverlay(); return; }
+
+  const pts = drag.kind === "ref" ? CM_state.refPoints : CM_state.fishPoints;
+  // Second endpoint just landed — leave marking mode and hand the page back so
+  // the result card below is reachable by scrolling.
+  if(CM_state.marking === drag.kind && pts.length >= 2){
+    CM_state.marking = null;
+    CM_state.editing = false;
+    cmCompute();
+    cmRender();
+    return;
+  }
+  cmCompute();
+  cmDrawOverlay();
+  if(CM_state.result) cmRender();
+}
+
+// ── Zoom / edit-mode controls ───────────────────────────────────────────────
+function cmSyncZoomLabel(){
+  const el = document.querySelector(".cm-zoom-label");
+  if(el) el.textContent = CM_state.zoom.toFixed(1) + "×";
+}
+function cmZoomBy(dir){
+  const v = cmViewRect();
+  const cx = v.sx + v.sw / 2, cy = v.sy + v.sh / 2;
+  const z = Math.max(1, Math.min(CM_MAX_ZOOM, CM_state.zoom * (dir > 0 ? 1.6 : 1 / 1.6)));
+  CM_state.zoom = z;
+  CM_state.panX = cx - (CM_state.imageWidth  / z) / 2;
+  CM_state.panY = cy - (CM_state.imageHeight / z) / 2;
+  if(z > 1) CM_state.editing = true;   // zoomed in → drag pans instead of scrolling
+  cmRender();
+}
+function cmZoomReset(){
+  CM_state.zoom = 1; CM_state.panX = 0; CM_state.panY = 0;
+  if(!CM_state.marking) CM_state.editing = false;
+  cmRender();
+}
+function cmToggleEditing(){
+  CM_state.editing = !CM_state.editing;
+  if(!CM_state.editing) CM_state.marking = null;
+  cmRender();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -543,6 +767,7 @@ function cmCanvasClick(e){
 // ════════════════════════════════════════════════════════════════════════════
 function cmStartMarking(what){
   CM_state.marking = what;
+  CM_state.editing = true;
   if(what === "ref")  CM_state.refPoints  = [];
   if(what === "fish") CM_state.fishPoints = [];
   cmRender();
@@ -553,14 +778,23 @@ function cmSetRef(id){ CM_state.refObject = id; cmCompute(); cmRender(); }
 function cmSetSpecies(id){ CM_state.species = id; cmCompute(); cmRender(); }
 function cmRetake(){
   CM_state.imageData = null;
+  CM_img = null;
   CM_state.refPoints = []; CM_state.fishPoints = [];
   CM_state.result = null; CM_state.marking = null;
+  cmResetView();
   cmRender();
 }
 function cmStartOver(){
   CM_state.refPoints = []; CM_state.fishPoints = [];
   CM_state.result = null; CM_state.marking = null;
+  cmResetView();
   cmRender();
+}
+function cmResetView(){
+  CM_state.editing = false;
+  CM_state.zoom = 1; CM_state.panX = 0; CM_state.panY = 0;
+  CM_state.drag = null; CM_state.loupe = null;
+  CM_ptrs.clear(); CM_pinch = null;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
