@@ -309,6 +309,10 @@
     // We still refresh entitlement so the correct gating is applied, but we no
     // longer trap unentitled users on the plan picker.
     try {
+      if(!window.BW_NATIVE && fullHydrate && typeof window.bwSyncStripeEntitlement === "function"){
+        const paid = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
+        if(!paid) await window.bwSyncStripeEntitlement();
+      }
       if(typeof refreshEntitlement === "function") await refreshEntitlement();
     } catch(e){}
     // Plan onboarding is a ONE-TIME step. Supabase re-fires onAuthChange

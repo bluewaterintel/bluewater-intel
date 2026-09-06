@@ -27,6 +27,11 @@ import {
   trialAlreadyConsumed,
 } from "../_shared/trial.ts";
 
+import {
+  applySubscription,
+  userIdForCustomer,
+} from "../_shared/stripe-entitlements.ts";
+
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20" });
 const WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET") ?? "";
 const admin = createClient(
@@ -34,39 +39,6 @@ const admin = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   { auth: { persistSession: false } },
 );
-
-const isoFromUnix = (s: number | null | undefined) =>
-  (s && isFinite(s)) ? new Date(s * 1000).toISOString() : null;
-
-async function userIdForCustomer(customerId: string | null): Promise<string | null> {
-  if (!customerId) return null;
-  const { data } = await admin.from("profiles").select("id").eq("stripe_customer_id", customerId).maybeSingle();
-  if (data?.id) return data.id;
-  // Fall back to the customer's metadata.user_id (set at customer creation).
-  try {
-    const c = await stripe.customers.retrieve(customerId);
-    const uid = (c as Stripe.Customer)?.metadata?.user_id;
-    return uid || null;
-  } catch { return null; }
-}
-
-async function applySubscription(sub: Stripe.Subscription) {
-  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;
-  const userId = (sub.metadata?.user_id) || (await userIdForCustomer(customerId));
-  if (!userId) { console.warn("no user for subscription", sub.id); return; }
-  // Map Stripe statuses → our gate. active/trialing unlock; everything else locks.
-  const status = ["active", "trialing"].includes(sub.status) ? sub.status : "canceled";
-  const interval = sub.items?.data?.[0]?.price?.recurring?.interval ?? null;
-  await admin.from("profiles").upsert({
-    id: userId,
-    stripe_customer_id: customerId ?? undefined,
-    billing_source: "stripe",
-    subscription_status: status,
-    subscription_interval: interval,
-    current_period_end: isoFromUnix(sub.current_period_end),
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "id" });
-}
 
 // ── Owner notification: a new subscriber just signed up ─────────────────────
 // Fired only from checkout.session.completed — the single "just subscribed"
@@ -127,7 +99,7 @@ Deno.serve(async (req) => {
         if (s.mode === "subscription" && s.subscription) {
           const sub = await stripe.subscriptions.retrieve(typeof s.subscription === "string" ? s.subscription : s.subscription.id);
           const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;
-          const userId = (sub.metadata?.user_id) || (await userIdForCustomer(customerId));
+          const userId = (sub.metadata?.user_id) || (await userIdForCustomer(admin, stripe, customerId));
           const email = normalizeEmail(
             s.customer_details?.email
               ?? (typeof s.customer === "object" ? (s.customer as Stripe.Customer)?.email : null)
@@ -181,7 +153,7 @@ Deno.serve(async (req) => {
               }
             }
 
-            await applySubscription(sub);
+            await applySubscription(admin, sub, stripe);
             if (email) {
               await recordTrialConsumed(admin, {
                 email,
@@ -193,7 +165,7 @@ Deno.serve(async (req) => {
             }
             await notifyOwnerNewSubscriber(s, sub);
           } else {
-            await applySubscription(sub);
+            await applySubscription(admin, sub, stripe);
             await notifyOwnerNewSubscriber(s, sub);
           }
         }
@@ -205,14 +177,14 @@ Deno.serve(async (req) => {
         const sub = event.data.object as Stripe.Subscription;
         if (event.type === "customer.subscription.deleted") {
           const customerId = typeof sub.customer === "string" ? sub.customer : null;
-          const userId = (sub.metadata?.user_id) || (await userIdForCustomer(customerId));
+          const userId = (sub.metadata?.user_id) || (await userIdForCustomer(admin, stripe, customerId));
           if (userId) {
             await admin.from("profiles").update({
               subscription_status: "canceled", updated_at: new Date().toISOString(),
             }).eq("id", userId);
           }
         } else {
-          await applySubscription(sub);
+          await applySubscription(admin, sub, stripe);
         }
         break;
       }
@@ -220,7 +192,7 @@ Deno.serve(async (req) => {
         const inv = event.data.object as Stripe.Invoice;
         if (inv.subscription) {
           const sub = await stripe.subscriptions.retrieve(typeof inv.subscription === "string" ? inv.subscription : inv.subscription.id);
-          await applySubscription(sub);
+          await applySubscription(admin, sub, stripe);
         }
         break;
       }
