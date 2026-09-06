@@ -15444,6 +15444,7 @@ function adminRenderDetail(){
         <button type="button" class="admin-btn ok" onclick="adminPreset('grant_pro')">Grant Pro (1yr)</button>
         <button type="button" class="admin-btn" onclick="adminPreset('grant_trial')">Grant Trial (7d)</button>
         <button type="button" class="admin-btn" onclick="adminPreset('grant_owner')">Make Owner</button>
+        <button type="button" class="admin-btn" onclick="adminSyncStripe()">Sync from Stripe</button>
         <button type="button" class="admin-btn danger" onclick="adminPreset('revoke')">Revoke Access</button>
       </div>
       <div class="admin-field"><label>Display name</label><input id="admin-f-name" value="${escapeHtml(u.display_name || "")}"></div>
@@ -15611,6 +15612,24 @@ async function adminPreset(preset){
     adminShowMsg("Updated.", true);
     adminLoadStats();
   } catch(e){ adminShowMsg(e.message || "Update failed", false); }
+}
+
+async function adminSyncStripe(){
+  const u = adminSelectedUser();
+  if(!u) return;
+  if(!confirm(`Pull live Stripe subscription for ${u.email || u.id} and update their profile?`)) return;
+  try {
+    const data = await adminApi({ action: "sync_stripe", userId: u.id });
+    if(data.user){
+      const idx = _adminState.users.findIndex(x => x.id === u.id);
+      if(idx >= 0) _adminState.users[idx] = data.user;
+      adminRenderList();
+      adminRenderDetail();
+    }
+    const st = data.sync && data.sync.subscription_status;
+    adminShowMsg(st ? `Stripe sync complete — status: ${st}` : "Stripe sync complete.", true);
+    adminLoadStats();
+  } catch(e){ adminShowMsg(e.message || "Stripe sync failed", false); }
 }
 
 async function adminDeleteUser(){

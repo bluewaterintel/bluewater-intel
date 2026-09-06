@@ -29,6 +29,8 @@
     "maintenance:branches": "node scripts/prune-remote-branches.mjs",
     "deploy:functions": "node scripts/deploy-m3-m4-functions.mjs",
     "deploy:health": "node scripts/deploy-health.mjs",
+    "deploy:stripe": "node scripts/deploy-stripe-functions.mjs",
+    "sync:stripe-user": "node scripts/sync-stripe-user-by-email.mjs",
     "sync:auth-smtp": "node scripts/sync-auth-smtp.mjs",
     "deploy": "node scripts/generate-bw-config.mjs && node scripts/generate-legal-pages.mjs && netlify deploy --prod --dir=.",
     "cap:sync": "npm run build:ios && npx cap sync ios",

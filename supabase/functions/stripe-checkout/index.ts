@@ -118,7 +118,12 @@ Deno.serve(async (req) => {
 
   try {
     // Reuse the customer if we already created one; otherwise create + persist it.
-    const { data: prof } = await supa.from("profiles").select("stripe_customer_id").eq("id", user.id).maybeSingle();
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+    const { data: prof } = await admin.from("profiles").select("stripe_customer_id").eq("id", user.id).maybeSingle();
     let customerId = prof?.stripe_customer_id as string | undefined;
     if (!customerId) {
       const customer = await stripe.customers.create({
@@ -126,7 +131,12 @@ Deno.serve(async (req) => {
         metadata: { user_id: user.id },
       });
       customerId = customer.id;
-      await supa.from("profiles").upsert({ id: user.id, stripe_customer_id: customerId }, { onConflict: "id" });
+      const { error: profErr } = await admin.from("profiles").upsert({
+        id: user.id,
+        stripe_customer_id: customerId,
+        billing_source: "stripe",
+      }, { onConflict: "id" });
+      if (profErr) console.error("profile stripe_customer_id upsert failed", profErr.message);
     }
 
     const meta: Record<string, string> = { user_id: user.id, kind };

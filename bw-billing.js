@@ -20,6 +20,41 @@
     const cfg = window.BW_SUPABASE_CONFIG || {};
     return { "Content-Type":"application/json", Authorization:`Bearer ${session.access_token}`, apikey: cfg.supabaseAnonKey || "" };
   }
+  async function syncStripeEntitlement(){
+    if(window.BW_NATIVE) return null;
+    try {
+      const res = await fetch(`${fnBase()}/stripe-sync`, { method:"POST", headers: await authHeaders() });
+      const j = await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(j.error || `Sync failed (${res.status})`);
+      return j;
+    } catch(e){
+      console.warn("stripe-sync", e);
+      return null;
+    }
+  }
+  window.bwSyncStripeEntitlement = syncStripeEntitlement;
+  window.bwRefreshStripeSubscription = async function(){
+    const msg = document.getElementById("acct-plan-msg");
+    const show = (text, ok) => {
+      if(!msg) return;
+      msg.style.display = "block";
+      msg.textContent = text;
+      msg.style.color = ok ? "#86efac" : "#fca5a5";
+    };
+    if(window.BW_NATIVE){
+      show("Stripe refresh is only for website subscriptions. Use Restore purchases in the app.", false);
+      return;
+    }
+    show("Checking your subscription…", true);
+    const result = await syncStripeEntitlement();
+    try { if(typeof refreshEntitlement === "function") await refreshEntitlement(); } catch(e){}
+    if(typeof renderNavPlan === "function") renderNavPlan();
+    if(typeof openAccountPage === "function") openAccountPage();
+    const entitled = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
+    if(entitled) show("Pro is active — you're all set.", true);
+    else if(result && result.subscription_status === "canceled") show("No active subscription found. If you were just charged, wait a minute and try again.", false);
+    else show("Could not verify subscription. Try again in a moment or contact support.", false);
+  };
   function openBillingUrl(url){
     if(window.BW_CAPACITOR && window.BW_CAPACITOR.openExternalUrl) return window.BW_CAPACITOR.openExternalUrl(url);
     window.location.href = url;
@@ -373,6 +408,7 @@
     if(label && detail && actions){
       let planLabel = "Free", planDetail = "You're on the free version — maps, ports, catches, and your own waypoints. Upgrade to Pro to unlock the Bite Map, ocean intel, waypoints, and the AI Captain's Brief.";
       let actionsHtml = `<button class="bw-buy" type="button" style="flex:1;background:#16a34a;border-color:rgba(134,239,172,.55)" onclick="closeAccountPage();openPricing()">Upgrade to Pro</button>`;
+      const refreshBtn = `<button class="bw-buy" type="button" style="flex:1;background:transparent;border:1px solid rgba(107,191,234,.35);color:#9ec5e8" onclick="bwRefreshStripeSubscription()">Refresh subscription</button>`;
       const manageBtn = (p) => {
         const l = bwManageBillingLabel(p);
         return `<button class="bw-buy" type="button" style="flex:1" onclick="bwManageBilling()">${l}</button>`;
@@ -396,6 +432,8 @@
           planLabel = "Pro";
           planDetail = "Full app — Bite Map, ocean & weather layers, all waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.";
           actionsHtml = manageBtn(p);
+        } else if(!window.BW_NATIVE && p && p.stripe_customer_id){
+          actionsHtml = actionsHtml + refreshBtn;
         }
       };
       const paint = (p) => {
@@ -408,7 +446,7 @@
       try {
         const s = sb();
         if(s){
-          s.from("profiles").select("is_owner, subscription_status, subscription_interval, billing_source").maybeSingle()
+          s.from("profiles").select("is_owner, subscription_status, subscription_interval, billing_source, stripe_customer_id").maybeSingle()
             .then(({ data:p }) => paint(p))
             .catch(() => { if(paid) paint(null); });
         } else if(paid){
@@ -422,6 +460,7 @@
       actions.innerHTML = actionsHtml;
     }
     const dmsg = document.getElementById("acct-delete-msg"); if(dmsg){ dmsg.style.display="none"; dmsg.textContent=""; }
+    const pmsg = document.getElementById("acct-plan-msg"); if(pmsg){ pmsg.style.display="none"; pmsg.textContent=""; }
     if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.renderAccountToggle){
       window.BW_BIOMETRIC.renderAccountToggle().catch(() => {});
     }
@@ -686,6 +725,7 @@
       // a few seconds. Re-check entitlement a few times; as soon as the plan is
       // active, drop the plan gate AND the auth gate so the user enters the app.
       const bump = async (n)=>{
+        try { await syncStripeEntitlement(); } catch(e){}
         try { if(typeof refreshEntitlement==="function") await refreshEntitlement(); } catch(e){}
         if(typeof renderNavPlan==="function") renderNavPlan();
         const entitled = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
@@ -698,7 +738,7 @@
           setTimeout(()=>bump(n-1), 2500);
         }
       };
-      setTimeout(()=>bump(4), 1500);
+      setTimeout(()=>bump(6), 800);
     }
   } catch(e){}
 })();

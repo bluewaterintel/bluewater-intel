@@ -99,6 +99,7 @@ const secrets = [
 run(SUPABASE, ["secrets", "set", ...secrets], cliEnv);
 run(SUPABASE, ["functions", "deploy", "dataset-health", "--no-verify-jwt"], cliEnv);
 run(SUPABASE, ["functions", "deploy", "stripe-webhook", "--no-verify-jwt"], cliEnv);
+run(SUPABASE, ["functions", "deploy", "stripe-sync"], cliEnv);
 
 // Write cron SQL with the real project ref + secret so it's ready to paste.
 const cronSql = `-- Run once in Supabase Dashboard → SQL Editor
@@ -119,7 +120,7 @@ select cron.schedule(
 `;
 writeFileSync(join(ROOT, "supabase-fixes", "dataset-health-cron.sql"), cronSql);
 
-console.log("\n✓ Secrets set; dataset-health + stripe-webhook deployed");
+console.log("\n✓ Secrets set; dataset-health + stripe-webhook + stripe-sync deployed");
 console.log("\nNext steps:");
 console.log("  1. npx supabase db push");
 console.log("  2. Paste supabase-fixes/dataset-health-cron.sql into Supabase → SQL Editor → Run");
