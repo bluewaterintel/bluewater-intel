@@ -58,6 +58,12 @@ function isoFromUnix(s) {
   return s && Number.isFinite(s) ? new Date(s * 1000).toISOString() : null;
 }
 
+function periodEndUnix(sub) {
+  if (sub.current_period_end && Number.isFinite(sub.current_period_end)) return sub.current_period_end;
+  const item = sub.items?.data?.[0]?.current_period_end;
+  return item && Number.isFinite(item) ? item : null;
+}
+
 let page = 1;
 let user = null;
 while (page <= 30) {
@@ -98,7 +104,7 @@ const subs = await stripeGet("/subscriptions", {
 
 const entitled = subs.data
   .filter((s) => ["active", "trialing", "past_due"].includes(s.status))
-  .sort((a, b) => (b.current_period_end ?? 0) - (a.current_period_end ?? 0))[0];
+  .sort((a, b) => (periodEndUnix(b) ?? 0) - (periodEndUnix(a) ?? 0))[0];
 
 let patch;
 if (entitled) {
@@ -110,7 +116,7 @@ if (entitled) {
     billing_source: "stripe",
     subscription_status: status,
     subscription_interval: interval,
-    current_period_end: isoFromUnix(entitled.current_period_end),
+    current_period_end: isoFromUnix(periodEndUnix(entitled)),
     updated_at: new Date().toISOString(),
   };
 } else {

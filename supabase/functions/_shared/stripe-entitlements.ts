@@ -4,6 +4,21 @@ import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 export const isoFromUnix = (s: number | null | undefined) =>
   (s && isFinite(s)) ? new Date(s * 1000).toISOString() : null;
 
+/** Stripe moved period fields onto subscription items in newer API versions. */
+export function periodEndUnix(sub: Stripe.Subscription): number | null {
+  const top = sub.current_period_end;
+  if (top && isFinite(top)) return top;
+  const item = sub.items?.data?.[0]?.current_period_end;
+  return (item && isFinite(item)) ? item : null;
+}
+
+export function periodStartUnix(sub: Stripe.Subscription): number | null {
+  const top = sub.current_period_start;
+  if (top && isFinite(top)) return top;
+  const item = sub.items?.data?.[0]?.current_period_start;
+  return (item && isFinite(item)) ? item : null;
+}
+
 export async function userIdForCustomer(
   admin: SupabaseClient,
   stripe: Stripe,
@@ -55,7 +70,7 @@ export async function applySubscription(
     ...base,
     subscription_status: status,
     subscription_interval: interval,
-    current_period_end: isoFromUnix(sub.current_period_end),
+    current_period_end: isoFromUnix(periodEndUnix(sub)),
   }, { onConflict: "id" });
   if (error) throw error;
   return { userId, subscription_status: status, subscription_interval: interval };
@@ -96,7 +111,7 @@ export async function syncStripeEntitlementForUser(
 
   const entitled = subs.data
     .filter((s) => ["active", "trialing", "past_due"].includes(s.status))
-    .sort((a, b) => (b.current_period_end ?? 0) - (a.current_period_end ?? 0))[0];
+    .sort((a, b) => (periodEndUnix(b) ?? 0) - (periodEndUnix(a) ?? 0))[0];
 
   if (entitled) {
     const applied = await applySubscription(admin, entitled, stripe);
