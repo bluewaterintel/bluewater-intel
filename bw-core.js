@@ -18297,7 +18297,7 @@ const ONBOARD_STEPS = [
       <p>Tap <b>Menu</b> (top right) anytime:</p>
       <ul class="onboard-list">
         <li><b>Map &amp; Data</b> — Offshore Chart, Fishing Reports</li>
-        <li><b>My Tools</b> — My Catches, AI Catch Measure, Virtual Tackle Box, Captain's Briefs, Download My Trip, Waypoints &amp; Structure</li>
+        <li><b>My Tools</b> — My Catches, Virtual Tackle Box, Captain's Briefs, Download My Trip, Waypoints &amp; Structure</li>
         <li><b>Reference</b> — Regulations, Terminal Tackle, Fish Encyclopedia, full Tutorial, Help &amp; Contact, Legal</li>
       </ul>
       <p>You're set — pick a port and species, then explore the layers.</p>
@@ -19504,12 +19504,6 @@ window.bwOnSignedIn = async function (user) {
     if(typeof drawCatchPins === "function") drawCatchPins();
   }
   try {
-    try {
-      CM_state.log = await window.BW_AUTH.fetchLog("catch_meter");
-    } catch(e){
-      console.warn("catch_meter log hydrate failed", e);
-      if(!CM_state.log) CM_state.log = [];
-    }
     try {
       TB_state.favorites = await window.BW_AUTH.fetchLog("tide_favorites");
     } catch(e){

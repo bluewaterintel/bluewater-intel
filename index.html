@@ -3274,14 +3274,6 @@ body.bw-auth-screen-open .leaflet-container{
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
-        <button type="button" class="nav-row" onclick="navOpenFromMenu(openCatchMeasure)">
-          <span class="nav-ico">📏</span>
-          <span class="nav-row-body">
-            <span class="nav-row-title">AI Catch Measure</span>
-            <span class="nav-row-sub">Offline camera fish measurement &amp; weight estimate</span>
-          </span>
-          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
-        </button>
         <button type="button" class="nav-row" onclick="navOpenFromMenu(openTackleBox)">
           <span class="nav-ico">🪝</span>
           <span class="nav-row-body">
@@ -4376,185 +4368,6 @@ body.bw-auth-screen-open .leaflet-container{
 <script src="bw-encyclopedia.js"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
-     AI CATCH MEASURE — fully offline-capable
-     ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="cm-overlay" class="menu-page-overlay" style="
-  display:none;position:fixed;inset:0;z-index:5000;
-  background:#0a1a2e;color:#e8f4ff;
-  overflow-y:auto;-webkit-overflow-scrolling:touch;
-  font-family:'Segoe UI',Arial,sans-serif;
-">
-  <!-- Header -->
-  <div class="menu-page-hdr" style="
-    position:sticky;top:0;z-index:10;
-    background:linear-gradient(180deg,#0a1a2e,#0f2444);
-    border-bottom:1px solid rgba(107,191,234,.18);
-    padding:12px 16px;display:flex;align-items:center;gap:12px;
-    box-shadow:0 4px 16px rgba(0,0,0,.5);
-  ">
-    <button type="button" class="nav-back-btn" data-nav-close="closeCatchMeasure" aria-label="Back to menu" style="
-      width:38px;height:38px;flex-shrink:0;
-      background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
-      color:#cfe5ff;border-radius:10px;
-      display:flex;align-items:center;justify-content:center;cursor:pointer;
-    "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📏 AI Catch Measure</div>
-      <div class="overlay-page-sub">Works Offline · Camera + Reference</div>
-    </div>
-    <div id="cm-online-pill" style="
-      font-size:9px;font-weight:700;letter-spacing:.08em;
-      padding:4px 10px;border-radius:10px;display:flex;align-items:center;gap:5px;
-      background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#34d399;
-    "><span id="cm-online-dot" style="width:6px;height:6px;border-radius:50%;background:#10b981"></span><span id="cm-online-txt">ONLINE</span></div>
-  </div>
-
-  <!-- Tab nav -->
-  <div style="display:flex;border-bottom:1px solid rgba(107,191,234,.1);background:rgba(0,0,0,.2)">
-    <button class="cm-tab active" data-tab="measure" onclick="cmSwitchTab('measure')">📐 Measure</button>
-    <button class="cm-tab" data-tab="log" onclick="cmSwitchTab('log')">📋 Catch Log</button>
-    <button class="cm-tab" data-tab="help" onclick="cmSwitchTab('help')">❓ How To</button>
-  </div>
-
-  <!-- Tab content -->
-  <div id="cm-content" style="padding:20px;max-width:760px;margin:0 auto"></div>
-</div>
-
-<style>
-.cm-tab{
-  flex:1;background:transparent;border:none;color:#5d96c4;
-  padding:14px 12px;font-size:12px;font-weight:600;letter-spacing:.05em;
-  cursor:pointer;border-bottom:3px solid transparent;
-  font-family:inherit;transition:all .15s;
-}
-.cm-tab:hover{color:#9ec5e8;background:rgba(255,255,255,.02)}
-.cm-tab.active{color:#7dd3fc;border-bottom-color:#2979b5;background:rgba(41,121,181,.08)}
-
-.cm-step{
-  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));
-  border:1px solid rgba(107,191,234,.15);
-  border-radius:14px;padding:18px;margin-bottom:14px;
-}
-.cm-step h3{
-  font-size:11px;color:#6bbfea;letter-spacing:.16em;
-  font-weight:700;text-transform:uppercase;margin-bottom:12px;
-  display:flex;align-items:center;gap:8px;
-}
-.cm-step-num{
-  background:rgba(41,121,181,.25);border:1px solid rgba(41,121,181,.5);
-  color:#7dd3fc;width:22px;height:22px;border-radius:50%;
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:bold;
-}
-.cm-step.done .cm-step-num{background:rgba(16,185,129,.25);border-color:rgba(16,185,129,.5);color:#34d399}
-.cm-step.done .cm-step-num::before{content:"✓"}
-.cm-step.disabled{opacity:.4;pointer-events:none}
-
-.cm-btn{
-  background:linear-gradient(180deg,#2979b5,#1a5a9a);
-  border:none;color:white;padding:12px 20px;border-radius:10px;
-  font-size:13px;font-weight:600;cursor:pointer;
-  font-family:inherit;transition:all .15s;
-  box-shadow:0 4px 12px rgba(41,121,181,.35);
-  display:inline-flex;align-items:center;gap:8px;
-}
-.cm-btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(41,121,181,.45)}
-.cm-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
-.cm-btn-secondary{
-  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
-  box-shadow:none;color:#cfe5ff;
-}
-.cm-btn-secondary:hover{background:rgba(255,255,255,.1);box-shadow:none}
-.cm-btn-danger{background:linear-gradient(180deg,#dc2626,#991b1b);box-shadow:0 4px 12px rgba(220,38,38,.3)}
-
-.cm-input,.cm-select{
-  width:100%;background:rgba(255,255,255,.05);
-  border:1px solid rgba(107,191,234,.2);color:#f0f6ff;
-  padding:11px 14px;border-radius:8px;font-size:14px;
-  font-family:inherit;outline:none;
-}
-.cm-input:focus,.cm-select:focus{border-color:rgba(107,191,234,.5);box-shadow:0 0 0 3px rgba(107,191,234,.1)}
-.cm-select option{background:#0f2444;color:#f0f6ff}
-
-.cm-photo-zone{
-  border:2px dashed rgba(107,191,234,.3);border-radius:14px;
-  padding:30px 20px;text-align:center;cursor:pointer;
-  transition:all .15s;background:rgba(255,255,255,.02);
-}
-.cm-photo-zone:hover{border-color:rgba(107,191,234,.6);background:rgba(107,191,234,.04)}
-
-.cm-result-card{
-  background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(34,197,94,.04));
-  border:1px solid rgba(16,185,129,.3);border-radius:12px;
-  padding:18px;margin-top:14px;
-}
-.cm-result-card.warning{
-  background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(245,158,11,.04));
-  border-color:rgba(245,158,11,.3);
-}
-.cm-result-card.danger{
-  background:linear-gradient(135deg,rgba(220,38,38,.12),rgba(220,38,38,.04));
-  border-color:rgba(220,38,38,.4);
-}
-
-.cm-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:10px}
-.cm-stat{background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:10px 12px}
-.cm-stat-label{font-size:9px;color:#5d96c4;letter-spacing:.1em;font-weight:600;text-transform:uppercase}
-.cm-stat-val{font-size:18px;color:#f0f6ff;font-weight:700;margin-top:3px}
-.cm-stat-sub{font-size:9px;color:#9ca3af;margin-top:1px}
-
-.cm-log-card{
-  background:rgba(255,255,255,.03);border:1px solid rgba(107,191,234,.15);
-  border-radius:10px;padding:12px 14px;margin-bottom:8px;
-  display:flex;align-items:center;gap:12px;
-}
-.cm-log-thumb{
-  width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.3);
-  display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;
-  background-size:cover;background-position:center;
-}
-
-#cm-canvas-wrap{
-  position:relative;display:inline-block;max-width:100%;
-  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
-}
-#cm-canvas{max-width:100%;border-radius:10px;display:block;background:#000}
-#cm-overlay-canvas{position:absolute;top:0;left:0;pointer-events:auto;cursor:crosshair}
-/* Default: the photo is inert so a swipe over it scrolls the page. Only marking /
-   adjusting mode claims the gesture (see cm-editing below). */
-#cm-canvas-wrap #cm-overlay-canvas{touch-action:pan-y}
-#cm-canvas-wrap.cm-editing #cm-overlay-canvas{touch-action:none}
-#cm-canvas-wrap.cm-editing{outline:2px solid rgba(251,191,36,.75);outline-offset:2px;border-radius:12px}
-
-.cm-photo-tools{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
-.cm-zoom-btn{
-  width:36px;height:36px;flex-shrink:0;font-size:19px;font-weight:700;line-height:1;
-  background:rgba(107,191,234,.12);border:1px solid rgba(107,191,234,.32);
-  color:#cfe5ff;border-radius:9px;cursor:pointer;font-family:inherit;
-  touch-action:manipulation;
-}
-.cm-zoom-btn:active{background:rgba(107,191,234,.26)}
-.cm-zoom-label{font-size:12px;font-weight:700;color:#9ec5e8;min-width:42px;text-align:center}
-.cm-photo-tools .cm-tool-btn{width:auto;flex:0 0 auto;padding:9px 14px;font-size:12px}
-.cm-photo-hint{margin-top:8px;font-size:11px;color:#7d9bb8;line-height:1.5}
-.cm-photo-hint.on{color:#fbbf24;font-weight:600}
-
-.cm-marker-dot{
-  position:absolute;width:18px;height:18px;border-radius:50%;
-  border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.6);
-  transform:translate(-50%,-50%);pointer-events:none;
-}
-
-@media (max-width:680px){
-  #cm-content{padding:14px!important}
-  .cm-step{padding:14px}
-  .cm-stat-val{font-size:16px}
-}
-</style>
-
-<script src="bw-catch-measure.js"></script>
-
-<!-- ═══════════════════════════════════════════════════════════════════════════
      VIRTUAL TACKLE BOX — smart lure/bait recommendations
      Fully offline. Recommendations driven by species + conditions matchscoring.
      ═══════════════════════════════════════════════════════════════════════════ -->
@@ -4807,7 +4620,7 @@ body.bw-auth-screen-open .leaflet-container{
       <div class="tut-step-num">5</div>
       <div class="tut-step-body">
         <div class="tut-step-title">Explore the menu</div>
-        <div class="tut-step-desc">Tap <b>MENU</b> in the top right. It's organized into grouped sections like iOS Settings: <b>Map &amp; Data</b> (Offshore Chart, Fishing Reports), <b>My Tools</b> (My Catches with logging + pattern analytics, Waypoints &amp; Structure, AI Catch Measure, Virtual Tackle Box, Download My Trip), and <b>Reference</b> (Regulations, Terminal Tackle, Fish Encyclopedia, Tutorial, Help &amp; Contact). Ocean layers — SST, chlorophyll, wind, radar, currents, and front convergence — are toggled on the map itself under <b>Layers</b>. To log a catch, open <b>My Catches</b> and tap <b>Log a Catch</b>.</div>
+        <div class="tut-step-desc">Tap <b>MENU</b> in the top right. It's organized into grouped sections like iOS Settings: <b>Map &amp; Data</b> (Offshore Chart, Fishing Reports), <b>My Tools</b> (My Catches with logging + pattern analytics, Waypoints &amp; Structure, Virtual Tackle Box, Download My Trip), and <b>Reference</b> (Regulations, Terminal Tackle, Fish Encyclopedia, Tutorial, Help &amp; Contact). Ocean layers — SST, chlorophyll, wind, radar, currents, and front convergence — are toggled on the map itself under <b>Layers</b>. To log a catch, open <b>My Catches</b> and tap <b>Log a Catch</b>.</div>
       </div>
     </div>
 
