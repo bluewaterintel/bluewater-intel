@@ -15366,6 +15366,13 @@ function applyEntitlementGating(){
     if(typeof updateRadarLoopControlVisibility === "function") updateRadarLoopControlVisibility();
     if(typeof updateAltiDateControlVisibility === "function") updateAltiDateControlVisibility();
   }
+  if(typeof wpSyncTabAccess === "function"){
+    const wpOv = document.getElementById("wp-overlay");
+    if(wpOv && wpOv.style.display === "block"){
+      wpSyncTabAccess();
+      if(typeof wpRender === "function") wpRender();
+    }
+  }
 }
 
 function applyAdminNavVisibility(){
@@ -16177,6 +16184,10 @@ function expOnSourceChange(v){
 }
 function expRun(){
   if(expSource === "dataset"){
+    if(typeof BW_PREMIUM !== "undefined" && !BW_PREMIUM){
+      if(typeof openPricing === "function") openPricing();
+      return;
+    }
     mceExport();
   } else {
     wpExportGPX();
@@ -19204,7 +19215,7 @@ function ensurePredictLayerOn(){
 // ════════════════════════════════════════════════════════════════════════════
 // Menu items that require a Pro subscription (Model B). Free users see them
 // with a PRO badge; tapping opens the upgrade modal instead of the feature.
-const PRO_MENU_FNS = ["openReports", "openWaypoints", "openDownloadTrip"];
+const PRO_MENU_FNS = ["openReports", "openDownloadTrip"];
 const PAID_MENU_FNS = ["openRecentBriefs"];
 let _navBackGuard = false;
 

@@ -576,30 +576,68 @@ function wpChartedSaveButtonHtml(lat, lng, name, panelType){
   </button>`;
 }
 
+function wpHasPremium(){
+  return (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM;
+}
+
+// Free users: personal waypoints + GPX import/export of their own spots only.
+const WP_FREE_TABS = new Set(["mine", "import"]);
+
+function wpSyncTabAccess(){
+  const premium = wpHasPremium();
+  document.querySelectorAll(".wp-tab").forEach(t => {
+    const tab = t.dataset.tab;
+    const allowed = premium || WP_FREE_TABS.has(tab);
+    t.style.display = allowed ? "" : "none";
+  });
+  const titleEl = document.querySelector("#wp-overlay .wp-page-title");
+  const subEl = document.querySelector("#wp-overlay .wp-page-sub");
+  if(titleEl) titleEl.textContent = premium ? "📍 Waypoints & Structure" : "⭐ My Waypoints";
+  if(subEl){
+    subEl.textContent = premium
+      ? "Waypoints · GPX Import/Export · Private Storage"
+      : "Your saved spots · GPX Import/Export";
+  }
+  if(!premium && !WP_FREE_TABS.has(WP_state.tab)){
+    WP_state.tab = "mine";
+    WP_state.regionFilter = "all";
+    document.querySelectorAll(".wp-tab").forEach(t => {
+      t.classList.toggle("active", t.dataset.tab === "mine");
+    });
+  }
+}
+window.wpSyncTabAccess = wpSyncTabAccess;
+
 function openWaypoints(){
   if(!WP_state.userPoints.length) WP_state.userPoints = wpLoadUser();
   WP_state.mapSource = wpLoadMapSource();
-  // Public tab always scopes to a port — default to the map's active home port.
-  // My Waypoints tab is global: always start on All Ports so saved spots aren't
-  // hidden by whichever port is selected on the map.
-  if(WP_state.tab === "public" && WP_state.regionFilter === "all" &&
-     typeof activePort !== "undefined" && activePort){
-    WP_state.regionFilter = activePort;
-  } else if(WP_state.tab === "mine"){
+  const premium = wpHasPremium();
+  if(premium){
+    if(WP_state.tab === "public" && WP_state.regionFilter === "all" &&
+       typeof activePort !== "undefined" && activePort){
+      WP_state.regionFilter = activePort;
+    } else if(WP_state.tab === "mine"){
+      WP_state.regionFilter = "all";
+    }
+  } else {
+    WP_state.tab = "mine";
     WP_state.regionFilter = "all";
   }
   document.getElementById("wp-overlay").style.display = "block";
   document.body.style.overflow = "hidden";
+  wpSyncTabAccess();
   wpRender();
-  // Pull the charted database for the active port so Pro users can browse the
-  // full ~13k dataset in the panel (not just the curated public spots).
-  if(typeof wpFetchCharted === "function") wpFetchCharted();
+  if(premium && typeof wpFetchCharted === "function") wpFetchCharted();
 }
 function closeWaypoints(){
   document.getElementById("wp-overlay").style.display = "none";
   document.body.style.overflow = "";
 }
 function wpSwitchTab(tab){
+  if(!wpHasPremium() && !WP_FREE_TABS.has(tab)){
+    if(typeof openPricing === "function") openPricing();
+    return;
+  }
   WP_state.tab = tab;
   WP_state.search = "";
   if(tab === "mine"){
@@ -610,7 +648,7 @@ function wpSwitchTab(tab){
   }
   document.querySelectorAll(".wp-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
   wpRender();
-  if(tab === "public" && typeof wpFetchCharted === "function") wpFetchCharted();
+  if(tab === "public" && wpHasPremium() && typeof wpFetchCharted === "function") wpFetchCharted();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1032,10 +1070,11 @@ function wpRenderMine(){
 
 // ── IMPORT / EXPORT TAB ───────────────────────────────────────────────────
 function wpRenderImport(){
+  const premium = wpHasPremium();
   return `
     <div style="max-width:760px;margin:0 auto;padding:20px">
       <div class="wp-info-box" style="margin:0 0 16px">
-        <b>📥 GPX is the universal standard</b> — every chartplotter brand (Garmin, Raymarine, Furuno, Simrad, Lowrance) and most fishing apps can import and export GPX files. Use <b>Fishing Waypoints by Port &amp; Range</b> below to download the full charted database around any home port — no need to save spots one at a time.
+        <b>📥 GPX is the universal standard</b> — every chartplotter brand (Garmin, Raymarine, Furuno, Simrad, Lowrance) and most fishing apps can import and export GPX files.${premium ? " Use <b>Fishing Waypoints by Port &amp; Range</b> below to download the full charted database around any home port — no need to save spots one at a time." : " Import your chartplotter file or export the waypoints you've saved here."}
       </div>
 
       <div style="background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));border:1px solid rgba(107,191,234,.18);border-radius:12px;padding:18px;margin-bottom:14px">
@@ -1056,7 +1095,7 @@ function wpRenderImport(){
 
         <label style="display:block;font-size:10px;font-weight:700;color:#6bbfea;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px">What to export</label>
         <select id="exp-source" onchange="expOnSourceChange(this.value)" style="width:100%;background:#0f2444;border:1px solid rgba(107,191,234,.3);color:#f0f6ff;font-size:14px;padding:10px 12px;border-radius:10px;font-family:inherit;margin-bottom:14px">
-          <option value="dataset">🌊 Fishing Waypoints by Port &amp; Range</option>
+          ${premium ? `<option value="dataset">🌊 Fishing Waypoints by Port &amp; Range</option>` : ""}
           <option value="mine">⭐ My Saved Waypoints (${WP_state.userPoints.length})</option>
         </select>
 
