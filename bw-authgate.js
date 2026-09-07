@@ -313,7 +313,7 @@
     // (trial / active subscription / owner) unlocks the PRO features — the Bite
     // Map, ocean layers, waypoints, fishing reports, and the AI brief — while
     // free users get the baseline app (maps, major areas, ports, catches,
-    // closures, catch-measure, regs) with those PRO features shown but locked.
+    // closures, regs) with those PRO features shown but locked.
     // We still refresh entitlement so the correct gating is applied, but we no
     // longer trap unentitled users on the plan picker.
     try {
