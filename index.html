@@ -2339,9 +2339,8 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
   transition:background .15s;
 }
 /* Inset hairline divider between rows (not after the last) */
-.nav-row:not(:last-child)::after{
-  content:"";position:absolute;left:55px;right:0;bottom:0;
-  height:1px;background:rgba(255,255,255,.07);
+.nav-row:not(:last-child){
+  border-bottom:1px solid rgba(255,255,255,.07);
 }
 .nav-row:active{background:rgba(125,211,252,.12)}
 @media (hover:hover){ .nav-row:hover{background:rgba(125,211,252,.08)} }
@@ -3274,6 +3273,14 @@ body.bw-auth-screen-open .leaflet-container{
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
+        <button type="button" class="nav-row" onclick="navOpenFromMenu(openWaypoints)">
+          <span class="nav-ico">📍</span>
+          <span class="nav-row-body">
+            <span class="nav-row-title">My Waypoints</span>
+            <span class="nav-row-sub">Your saved spots · Pro unlocks charted database</span>
+          </span>
+          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+        </button>
         <button type="button" class="nav-row" onclick="navOpenFromMenu(openTackleBox)">
           <span class="nav-ico">🪝</span>
           <span class="nav-row-body">
@@ -3295,14 +3302,6 @@ body.bw-auth-screen-open .leaflet-container{
           <span class="nav-row-body">
             <span class="nav-row-title">Download My Trip</span>
             <span class="nav-row-sub">Full offline snapshot — bite map, tides, waypoints &amp; charts</span>
-          </span>
-          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
-        </button>
-        <button type="button" class="nav-row" onclick="navOpenFromMenu(openWaypoints)">
-          <span class="nav-ico">📍</span>
-          <span class="nav-row-body">
-            <span class="nav-row-title">My Waypoints</span>
-            <span class="nav-row-sub">Your saved spots · Pro unlocks charted database</span>
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
