@@ -338,10 +338,25 @@
       });
       if (fh > 0) params.set("hours", String(fh));
       else params.set("daysBack", String(back));
-      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
-        headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: fetchTimeout(20000),
-      });
+      // NOAA blended SSH is still noaacwBLENDEDsshDaily on coastwatch.noaa.gov
+      // (probed 2026-09-09: last granule 2026-09-07, NC and CA boxes both 200
+      // in <1s). A 20s abort here painted the overlay "Unavailable" on a slow
+      // ERDDAP morning even though the URL had not changed — the edge function
+      // waits 25s×2. Match the SST overlay budget; new signal per attempt so a
+      // retry is not born already aborted.
+      let res = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+            headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
+            signal: fetchTimeout(55000),
+          });
+          if (res.ok || res.status < 500) break;
+        } catch (e) {
+          if (attempt === 2) throw e;
+        }
+        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+      }
       if (!res.ok) return null;
       const data = await res.json();
       if (!data || !Array.isArray(data.rows) || !data.rows.length) return null;

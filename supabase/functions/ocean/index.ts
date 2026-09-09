@@ -103,6 +103,8 @@ const CUDEM_MAX_TILES = Number(Deno.env.get("CUDEM_MAX_TILES") ?? "64");
 // Two sibling datasets on the same 0.25° grid: sla (m) from the SSH product,
 // u_current/v_current (m/s geostrophic) from the currents product. The older
 // nesdisSSH1day (pfeg host) stopped updating in March 2026 — do not use it.
+// Live check 2026-09-09: both IDs still resolve on coastwatch.noaa.gov,
+// time_coverage_end=2026-09-07 (normal NRT lag), sample sla at 35N/75W = 0.26 m.
 const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP")
   ?? "https://coastwatch.noaa.gov/erddap/griddap";
 const ALTIMETRY_SSH_DATASET = "noaacwBLENDEDsshDaily";
