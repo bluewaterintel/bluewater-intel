@@ -33,6 +33,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { esc, ownerEmailShell, sendOwnerEmail } from "../_shared/email.ts";
+import { ERDDAP_HEADERS, ERDDAP_POLARWATCH, fetchNoaa } from "../_shared/erddap.ts";
 
 // ── CORS (public GET) ────────────────────────────────────────────────────────
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -50,16 +51,12 @@ function cors(origin: string | null) {
   };
 }
 
-const ERDDAP_HEADERS = { "User-Agent": "BluewaterIntel/1.0 (+https://bluewaterintel.com; health monitor)" };
-const H = 3600 * 1000;
-
-// ── Dataset config (mirrors ocean/index.ts) ──────────────────────────────────
 const SST_ERDDAP = Deno.env.get("SST_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
 const SST_DATASET = Deno.env.get("SST_DATASET") ?? "jplMURSST41";
 const SST_VAR = Deno.env.get("SST_VAR") ?? "analysed_sst";
 const SST_HAS_ALTITUDE = (Deno.env.get("SST_HAS_ALTITUDE") ?? "false") === "true";
 
-const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? "https://coastwatch.noaa.gov/erddap/griddap";
+const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? ERDDAP_POLARWATCH;
 const CHL_DATASET = Deno.env.get("CHL_DATASET") ?? "noaacwNPPN20VIIRSDINEOFDaily";
 const CHL_VAR = Deno.env.get("CHL_VAR") ?? "chlor_a";
 const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true";
@@ -67,9 +64,10 @@ const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true"
 const ETOPO_ERDDAP = Deno.env.get("ETOPO_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
 const ETOPO_DATASET = Deno.env.get("ETOPO_DATASET") ?? "etopo180";
 
-const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP") ?? "https://coastwatch.noaa.gov/erddap/griddap";
+const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP") ?? ERDDAP_POLARWATCH;
 const ALTIMETRY_SSH_DATASET = "noaacwBLENDEDsshDaily";
 const ALTIMETRY_CUR_DATASET = "noaacwBLENDEDNRTcurrentsDaily";
+const H = 3600 * 1000;
 
 const RTOFS_DODS = Deno.env.get("RTOFS_DODS")
   ?? "https://tds.hycom.org/thredds/dodsC/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd";
@@ -132,7 +130,7 @@ function classify(opts: {
 async function timedFetch(url: string, timeoutMs = 12000): Promise<{ res: Response | null; ms: number }> {
   const t0 = Date.now();
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers: ERDDAP_HEADERS });
+    const res = await fetchNoaa(url, timeoutMs);
     return { res, ms: Date.now() - t0 };
   } catch {
     return { res: null, ms: Date.now() - t0 };

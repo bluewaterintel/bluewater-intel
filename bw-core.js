@@ -9356,6 +9356,7 @@ const AltimetryLayer = L.Layer.extend({
       if(typeof updateOceanLegend==="function") updateOceanLegend();
       this._draw();
     }).catch(()=>{
+      if(seq!==_altiFetchSeq||!layerVis.altimetry) return;
       ALTIMETRY_STATUS="unavailable";
       if(typeof updateOceanLegend==="function") updateOceanLegend();
     });
@@ -10678,8 +10679,7 @@ function updateSatDateDisplay(){
       // Canvas MUR date — not the GIBS slider offset (those diverged and made
       // it look like historical GIBS was on when the local canvas was freshest).
       const d = new Date(SST_FORECAST_GRID.observedAtMs);
-      const back = Math.max(0, Math.round((Date.now() - SST_FORECAST_GRID.observedAtMs) / 86400000));
-      const age = back <= 0 ? "today" : back === 1 ? "1 day ago" : back + " days ago";
+      const age = formatObservedAgeDays(calendarDaysBeforeToday(SST_FORECAST_GRID.observedAtMs));
       el.textContent = `Observed ${d.toLocaleDateString(undefined, {month:"short", day:"numeric"})} · ${age}`;
     } else {
       const back = satCurrentDaysBack();
@@ -10746,6 +10746,20 @@ function updateSatDateControlVisibility(){
 // ── ALTIMETRY DATE CONTROL ───────────────────────────────────────────────────
 // Daily SSH is observed backward-only. Step day-by-day (slider or ◀▶) to read
 // eddy drift. No autoplay — captains inspect each pass at their own pace.
+function localCalendarDayStartMs(msOrDate){
+  const d = msOrDate instanceof Date ? msOrDate : new Date(msOrDate);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+function calendarDaysBeforeToday(observedAtMs, nowMs){
+  const now = nowMs != null ? nowMs : Date.now();
+  const diff = localCalendarDayStartMs(now) - localCalendarDayStartMs(observedAtMs);
+  return Math.max(0, Math.round(diff / 86400000));
+}
+function formatObservedAgeDays(n){
+  if(n <= 0) return "today";
+  if(n === 1) return "1 day ago";
+  return n + " days ago";
+}
 function altiDateLabel(){
   if(ALTIMETRY_GRID && ALTIMETRY_GRID.observedAtMs){
     return new Date(ALTIMETRY_GRID.observedAtMs).toLocaleDateString(undefined, { month:"short", day:"numeric" });
@@ -10759,8 +10773,7 @@ function updateAltiDateDisplay(){
   if(el){
     if(ALTIMETRY_GRID && ALTIMETRY_GRID.observedAtMs){
       const obs = new Date(ALTIMETRY_GRID.observedAtMs);
-      const ageDays = Math.max(0, Math.round((Date.now() - ALTIMETRY_GRID.observedAtMs) / 86400000));
-      const ageTxt = ageDays <= 0 ? "today" : ageDays === 1 ? "1 day ago" : `${ageDays} days ago`;
+      const ageTxt = formatObservedAgeDays(calendarDaysBeforeToday(ALTIMETRY_GRID.observedAtMs));
       el.textContent = `Observed ${obs.toLocaleDateString(undefined, { month:"short", day:"numeric" })} · ${ageTxt}`;
     } else {
       const age = altiDayOffset <= 0 ? "latest pass" : altiDayOffset === 1 ? "1 day earlier" : `${altiDayOffset} days earlier`;
@@ -14264,7 +14277,7 @@ function updateOceanLegend(){
     const altiTitleRow = loading
       ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
           <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#e879f9;letter-spacing:.08em">FRONT CONVERGENCE (SSH)</div>
-          <span class="alti-spinner" aria-hidden="true"></span>
+          <div style="font-size:${legendMetaPx};font-weight:700;color:#e879f9;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;display:flex;align-items:center;gap:6px"><span class="alti-spinner" aria-hidden="true"></span>Loading…</div>
         </div>`
       : (ALTIMETRY_STATUS==="unavailable"
         ? `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">

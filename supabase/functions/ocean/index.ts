@@ -1,4 +1,5 @@
 import { NetCDFReader } from "npm:netcdfjs";
+import { ERDDAP_HEADERS, ERDDAP_POLARWATCH, fetchNoaa } from "../_shared/erddap.ts";
 
 // ============================================================================
 // Bluewater Intel — Milestone 4: ocean data proxy
@@ -53,9 +54,9 @@ const json = (body: unknown, cors: Record<string, string>, status = 200) =>
 // coastwatch.noaa.gov for some products. Point each dataset at its canonical host
 // directly so we don't depend on redirects.
 const SST_ERDDAP = Deno.env.get("SST_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
-const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? "https://coastwatch.noaa.gov/erddap/griddap";
-// A conventional User-Agent — some NOAA hosts 403 the default Deno UA.
-const ERDDAP_HEADERS = { "User-Agent": "BluewaterIntel/1.0 (+https://bluewaterintel.com; ocean data proxy)" };
+// coastwatch.noaa.gov 403s Deno's User-Agent (instant empty overlay). PolarWatch
+// serves the same CoastWatch griddap IDs and allows the edge runtime.
+const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? ERDDAP_POLARWATCH;
 // SST: JPL MUR, daily, global ~1km — reliable coverage, ~1-day latency.
 // (The previous default, nesdisGeoPolarSSTN5SQNRT, has been retired from CoastWatch
 // ERDDAP and now 404s, which returned null SST for every point and left the heat
@@ -103,10 +104,11 @@ const CUDEM_MAX_TILES = Number(Deno.env.get("CUDEM_MAX_TILES") ?? "64");
 // Two sibling datasets on the same 0.25° grid: sla (m) from the SSH product,
 // u_current/v_current (m/s geostrophic) from the currents product. The older
 // nesdisSSH1day (pfeg host) stopped updating in March 2026 — do not use it.
-// Live check 2026-09-09: both IDs still resolve on coastwatch.noaa.gov,
+// Live check 2026-09-09: both IDs resolve on polarwatch.noaa.gov (same granules
+// as coastwatch.noaa.gov). coastwatch.noaa.gov 403s Deno/x so the overlay
+// returned empty rows in <1s and painted UNAVAILABLE with no visible spinner.
 // time_coverage_end=2026-09-07 (normal NRT lag), sample sla at 35N/75W = 0.26 m.
-const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP")
-  ?? "https://coastwatch.noaa.gov/erddap/griddap";
+const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP") ?? ERDDAP_POLARWATCH;
 const ALTIMETRY_SSH_DATASET = "noaacwBLENDEDsshDaily";
 const ALTIMETRY_CUR_DATASET = "noaacwBLENDEDNRTcurrentsDaily";
 const ALTIMETRY_STEP = 0.25;
@@ -497,7 +499,8 @@ async function fetchAltimetryGrid(
   const fetchErddap = async (url: string): Promise<Response | null> => {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const r = await fetch(url, { signal: AbortSignal.timeout(25000), headers: ERDDAP_HEADERS });
+        const r = await fetchNoaa(url, 25000);
+        if (!r) continue;
         if (r.ok) return r;
         // 5xx from the ERDDAP proxy is worth a retry; 4xx is not.
         if (r.status < 500) return r;
@@ -1074,8 +1077,8 @@ async function fetchGridPoint(
   try {
     // Some NOAA ERDDAP hosts (e.g. coastwatch.noaa.gov) reject requests that lack
     // a conventional User-Agent (the default Deno UA gets a 403), so set one.
-    const r = await fetch(url, { signal: AbortSignal.timeout(9000), headers: ERDDAP_HEADERS });
-    if (!r.ok) return { value: null, observedAtMs: null };
+    const r = await fetchNoaa(url, 9000);
+    if (!r || !r.ok) return { value: null, observedAtMs: null };
     const d = await r.json();
     const cols: string[] = d?.table?.columnNames ?? [];
     const rows: unknown[][] = d?.table?.rows ?? [];
@@ -1697,8 +1700,8 @@ async function fetchChlorRowsWithLookback(
     + `?${CHL_VAR}${timeIdx}${altIdx}`
     + `%5B(${a1}):${strideIdx}:(${a0})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(20000), headers: ERDDAP_HEADERS });
-    if (!r.ok) return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
+    const r = await fetchNoaa(url, 20000);
+    if (!r || !r.ok) return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
     const d = await r.json();
     const cols: string[] = d?.table?.columnNames ?? [];
     const rawRows: unknown[][] = d?.table?.rows ?? [];
@@ -1824,6 +1827,14 @@ export const handler = async (req: Request): Promise<Response> => {
       ? await fetchRtofsModelAltimetryGrid(latMin, latMax, lngMin, lngMax, hoursAhead)
       : await fetchAltimetryGrid(latMin, latMax, lngMin, lngMax,
         Math.max(0, Math.min(6, Math.round(num(u.searchParams.get("daysBack")) ?? 0))));
+    if (!out.rows.length) {
+      // Empty 200 + max-age=21600 poisoned the overlay for 6h after a 403:
+      // the client painted UNAVAILABLE instantly with no visible spinner.
+      return new Response(JSON.stringify(out), {
+        status: 502,
+        headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
     return new Response(JSON.stringify(out), {
       headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" },
     });

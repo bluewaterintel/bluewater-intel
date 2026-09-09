@@ -338,18 +338,16 @@
       });
       if (fh > 0) params.set("hours", String(fh));
       else params.set("daysBack", String(back));
-      // NOAA blended SSH is still noaacwBLENDEDsshDaily on coastwatch.noaa.gov
-      // (probed 2026-09-09: last granule 2026-09-07, NC and CA boxes both 200
-      // in <1s). A 20s abort here painted the overlay "Unavailable" on a slow
-      // ERDDAP morning even though the URL had not changed — the edge function
-      // waits 25s×2. Match the SST overlay budget; new signal per attempt so a
-      // retry is not born already aborted.
+      // NOAA blended SSH is noaacwBLENDEDsshDaily. The edge function now reads
+      // PolarWatch (coastwatch.noaa.gov 403s Deno). Do not let the browser
+      // HTTP-cache an empty 200 — that painted UNAVAILABLE with no spinner.
       let res = null;
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
             headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
             signal: fetchTimeout(55000),
+            cache: "no-store",
           });
           if (res.ok || res.status < 500) break;
         } catch (e) {
