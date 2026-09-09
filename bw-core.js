@@ -18740,7 +18740,21 @@ function isPortOutOfSpeciesRange(portName, speciesId){
     // Per-region format — choose by port's coast
     const inGulf = (typeof isGulfContext === "function") && isGulfContext(port.lat, port.lng);
     band = inGulf ? range.gulf : range.atlantic;
-    if(!band) return true;  // species absent from this coast entirely
+    if(!band){
+      // Pacific-only species use {atlantic:null, gulf:null} in SPECIES_LAT_RANGE
+      // and their real band lives in PACIFIC_SPECIES — same split as
+      // speciesAllowedAtLat(). Without this, every CA port falsely triggers the
+      // empty-state warning because isGulfContext is false and atlantic is null.
+      if(typeof isPacificContext === "function" && isPacificContext(port.lat, port.lng)){
+        const pac = (typeof PACIFIC_SPECIES !== "undefined") ? PACIFIC_SPECIES[speciesId] : null;
+        if(pac){
+          if(port.lat < pac[0] - buffer) return true;
+          if(port.lat > pac[1] + buffer) return true;
+          return false;
+        }
+      }
+      return true;  // species absent from this coast entirely
+    }
   }
   if(port.lat < band[0] - buffer) return true;  // port too far south
   if(port.lat > band[1] + buffer) return true;  // port too far north
