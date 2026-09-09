@@ -5004,6 +5004,20 @@ function bathyRefDepth(lat, lng){
 // can't represent.
 function seaDepth(lat, lng){
   // Out of envelope → just return abyssal (irrelevant)
+  //
+  // KNOWN GAP — this static model is Atlantic/Gulf only. Everything west of
+  // -98° (i.e. the entire Pacific coast) returns 3000 m, and the land polygons
+  // behind isOnLand()/isFishableWater() carry no West Coast geometry either, so
+  // inland California reads as fishable water here.
+  //
+  // It does not bite in practice because predictDepth() and isPredictWater()
+  // both prefer the fetched bathymetry grid, and the ocean function's CUDEM
+  // bounds (lat 23-52, lng -127 to -65) plus its global ETOPO fallback do cover
+  // California. This path is only reached when that fetch is unavailable — and
+  // when it is, every Pacific nearshore species (cayellowtail, lingcod, calico
+  // bass) reads 3000 m and scores zero on depth. Giving the West Coast a real
+  // static shelf model + coastline is the fix; it needs a Pacific coastline
+  // dataset, so it is deliberately not attempted inline here.
   if(lat < 22 || lat > 45) return 3000;
   if(lng < -98 || lng > -64) return 3000;
 
@@ -5276,6 +5290,7 @@ const SPECIES_HABITAT = {
   croaker:       ["bay", "inshore"],
   sheepshead:    ["bay", "inshore"],
   tautog:        ["inshore", "nearshore"],
+  porgy:         ["inshore", "nearshore"],          // rockpiles, mussel beds, wrecks
   // ── FLORIDA / TROPICAL SPECIES ────────────────────────────────────
   tarpon:        ["bay", "inshore"],            // FL flats, lagoons, passes
   snook:         ["bay", "inshore"],            // FL east coast inlets & lagoons
@@ -5298,12 +5313,108 @@ const SPECIES_HABITAT = {
   vermilion:     ["nearshore", "offshore"],          // Deeper reefs / shelf ledges
   lanesnap:      ["nearshore", "inshore"],          // Gulf reefs
   yellowtail:    ["nearshore", "inshore"],          // FL Keys reefs, classic Keys species
-  // ── PACIFIC / SOUTHERN CALIFORNIA ─────────────────────────────────
+  // ── PACIFIC / CALIFORNIA ──────────────────────────────────────────
   cayellowtail:  ["nearshore", "offshore"],         // SoCal banks, kelp edges, hard bottom, paddies
+  lingcod:       ["nearshore", "offshore"],         // rocky reefs and pinnacles, 33-394 ft
+  calicobass:    ["nearshore", "inshore"],          // kelp line and shallow hard bottom
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// EFFECTIVE HABITAT — depth buckets derived from the species' own depth bands
+//
+// SPECIES_HABITAT above is a COARSE three-bucket proxy, but classifyWaterType()
+// resolves those buckets from real bathymetry with hard edges at 30 ft and
+// 100 ft — and the mask is a HARD VETO applied before scoreCell() ever looks at
+// the far more carefully researched depthBands. So whenever the mask and the
+// depth bands disagreed, the coarse mask won and the species silently vanished
+// at a bucket boundary.
+//
+// That bit us three times, each fixed by hand for one species at a time:
+//   • flounder — Triangle Wrecks off Virginia Beach sit right on the 100 ft
+//     line, so wreck cells flipped in and out of the map on one foot of depth.
+//   • vermilion — a nearshore-only mask blanked out the ENTIRE 100-300 ft band
+//     where they actually hold, so the bite map rendered nothing at all.
+//   • blackseabass — masked ["nearshore","inshore"] with depthBands reaching
+//     427 ft, which deleted every cell at or past 100 ft. That is exactly the
+//     100-115 ft of water off Virginia Beach that holds the biggest sea bass.
+//
+// Rather than keep patching individual species, derive the depth buckets from
+// each species' own depthBands and UNION them into the curated mask. This can
+// only ever ADD a bucket the species' own researched depth range already asks
+// for — it never removes one — and the depth FACTOR still scores normally, so a
+// species does not suddenly rate well at a depth it dislikes. It just stops
+// being hard-deleted from water it demonstrably lives in.
+//
+// "bay" is deliberately NOT derived: it comes from BAY_BOXES geometry, not from
+// depth, so it stays entirely under the curated mask's control.
+//
+// tests/habitat-depth-consistency.test.mjs slices the block between the two
+// markers below and pins this invariant.
+//
+// ── habitat-derivation:begin ───────────────────────────────────────────────
+// Mirrors classifyWaterType()'s depth ladder, in feet.
+const HABITAT_DEPTH_BUCKETS_FT = [
+  ["inshore",     0,  30],
+  ["nearshore",  30, 100],
+  ["offshore",  100, Infinity],
+];
+
+// Which depth buckets does this set of [minM, maxM] bands actually reach?
+function depthBucketsForBands(bands){
+  const out = [];
+  if(!Array.isArray(bands)) return out;
+  for(const [name, loFt, hiFt] of HABITAT_DEPTH_BUCKETS_FT){
+    for(const band of bands){
+      if(!Array.isArray(band)) continue;
+      const bLoFt = band[0] * 3.281, bHiFt = band[1] * 3.281;
+      if(bLoFt < hiFt && bHiFt >= loFt){ out.push(name); break; }
+    }
+  }
+  return out;
+}
+
+const _effHabitatCache = new Map();
+
+// Curated mask ∪ the depth buckets the species' own depthBands reach.
+// Returns null for species with no curated mask (caller treats that as
+// "allowed everywhere", the long-standing safe default).
+function effectiveSpeciesHabitat(speciesId){
+  if(_effHabitatCache.has(speciesId)) return _effHabitatCache.get(speciesId);
+  const curated = (typeof SPECIES_HABITAT !== "undefined") ? SPECIES_HABITAT[speciesId] : null;
+  if(!curated){
+    _effHabitatCache.set(speciesId, null);
+    return null;
+  }
+  // The two prefs tables are top-level `const` in classic scripts, so they are
+  // lexical bindings rather than globalThis properties and must be referenced by
+  // name. PACIFIC_SPECIES_PREFS is declared further down this same file, so a
+  // caller that ran during script evaluation (rather than on interaction, as all
+  // of today's callers do) would hit its temporal dead zone — and `typeof`
+  // does NOT shield against that. Catch it and skip the memo so an early call
+  // degrades to today's curated-mask-only behavior instead of poisoning the
+  // cache for the rest of the session.
+  const tables = [];
+  try {
+    if(typeof PREDICT_SPECIES_PREFS !== "undefined") tables.push(PREDICT_SPECIES_PREFS);
+    if(typeof PACIFIC_SPECIES_PREFS  !== "undefined") tables.push(PACIFIC_SPECIES_PREFS);
+  } catch(_){
+    return curated;
+  }
+  // Union across BOTH coasts' bands: PACIFIC_SPECIES_PREFS swaps in different
+  // depth bands for West-Coast cells, and a widening union is safe for either.
+  const merged = new Set(curated);
+  for(const table of tables){
+    const prefs = table[speciesId];
+    if(prefs && prefs.depthBands) depthBucketsForBands(prefs.depthBands).forEach(b => merged.add(b));
+  }
+  const out = [...merged];
+  _effHabitatCache.set(speciesId, out);
+  return out;
+}
+// ── habitat-derivation:end ─────────────────────────────────────────────────
+
 function speciesAllowedInWater(speciesId, waterType){
-  const allowed = SPECIES_HABITAT[speciesId];
+  const allowed = effectiveSpeciesHabitat(speciesId);
   if(!allowed) return true;  // unknown species: allow everywhere (safe default)
   return allowed.includes(waterType);
 }
@@ -5442,6 +5553,10 @@ const SPECIES_LAT_RANGE = {
   bluefin:       {atlantic: [32.5, 45.0], gulf: [26.0, 30.5]},
   striper:       [33.0, 45.0],   // NC north; some FL strays in winter
   tautog:        [37.5, 43.0],   // NJ to MA
+  // Scup: Cape Cod down to the Chesapeake mouth. They occur to Hatteras but are
+  // not a fishery south of the Bay, and the Gulf has none at all — the explicit
+  // null Gulf band keeps them off the Gulf shelf, which shares these latitudes.
+  porgy:         {atlantic: [36.5, 43.0], gulf: null},
   // ── NEW ENGLAND ONLY ─────────────────────────────────────────────────
   cod:           [40.0, 45.0],   // GOM + Georges Bank
   haddock:       [40.0, 45.0],   // GOM + Georges Bank
@@ -5452,6 +5567,12 @@ const SPECIES_LAT_RANGE = {
   // it in California water. (Without this it would have no entry and default to
   // "allowed everywhere," lighting up the East Coast.)
   cayellowtail:  {atlantic: null, gulf: null},
+  // Lingcod and calico bass are Pacific-only for the same reason. Without an
+  // entry here they would default to "allowed everywhere" and light up the
+  // Atlantic and Gulf; the PACIFIC_SPECIES gate below is what admits them to
+  // California water.
+  lingcod:       {atlantic: null, gulf: null},
+  calicobass:    {atlantic: null, gulf: null},
   // Everything else (yellowfin, blue marlin, mahi, wahoo, sailfish, etc.)
   // has no entry — they range coast-wide.
 };
@@ -5464,16 +5585,27 @@ const SPECIES_LAT_RANGE = {
 // Atlantic/Gulf ranges so that:
 //   • Atlantic/Gulf-only species (redfish, striper, snapper, etc.) never light
 //     up the bite map in Pacific water — anything NOT in this list is excluded.
-//   • Focused on the core West-Coast targets for now (yellowtail + bluefin),
-//     plus the obvious pelagics that share those grounds.
+//   • The list covers the pelagics that share the SoCal offshore grounds plus
+//     the rocky-reef/kelp targets that carry the CA nearshore fishery.
 // A value of [minLat, maxLat] bounds the species; the check runs only for
 // Pacific coordinates, so it can never affect the East Coast.
+//
+// NOTE: the upper bound cannot usefully exceed 42.5°N — that is the ceiling in
+// isPacificContext() and in the Pacific bite-map bounding box.
 const PACIFIC_SPECIES = {
   bluefin:      [28.0, 42.0],   // Pacific bluefin — Baja/SoCal through central CA
   cayellowtail: [28.0, 36.5],   // California yellowtail — SoCal banks/kelp; strays to Monterey
   yellowfin:    [28.0, 35.5],   // warm-water/warm-year SoCal yellowfin
   bonito:       [28.0, 40.0],   // Pacific bonito — abundant off SoCal
   mahi:         [28.0, 34.5],   // dorado — warm months off SoCal/Baja
+  // Lingcod run the whole coast and are strongest from Point Conception north —
+  // the one CA species whose core fishery is the CENTRAL coast (Monterey, Moss
+  // Landing, Morro Bay, Port San Luis) rather than the SoCal bight.
+  lingcod:      [30.0, 42.5],
+  // Calico (kelp) bass follow the kelp: Baja through the Channel Islands, then
+  // thinning fast north of Point Conception (34.45°N). 35.8 reaches Morro Bay
+  // and Port San Luis without claiming a Monterey fishery that isn't there.
+  calicobass:   [28.0, 35.8],
 };
 
 // ── Pacific habitat overrides (West-Coast tuning pass) ──────────────────────
@@ -5495,6 +5627,24 @@ const PACIFIC_SPECIES_PREFS = {
   //     the SSH / surface-current FRONT-FUSION path so the map lights up real
   //     fronts and offshore structure instead of every patch of warm water.
   bluefin: { tempIdeal:[63,70], tempWorking:[60,74], chlorPref:"edge", depthBands:[[50,200],[200,900]], breakPref:"edge" },
+  // SoCal yellowfin are a DIFFERENT fishery from Atlantic canyon yellowfin, so
+  // they get their own habitat rather than sharing the Atlantic numbers:
+  //   • TEMPERATURE — the base band is [70,78] ideal because that is Gulf Stream
+  //     water. The California Current is far cooler: SoCal yellowfin show up as
+  //     the water crosses ~65-66°F and the bite is best in the high 60s to low
+  //     70s. Scored against the Atlantic band, a banner 70°F San Diego day sat
+  //     at the very bottom edge of "ideal" and a very fishable 67°F day was
+  //     already penalized as too cold.
+  //   • DEPTH — the base band starts at 150 m (492 ft) to keep Atlantic
+  //     yellowfin off the shallow Mid-Atlantic shelf. That guard is wrong here:
+  //     the SoCal fishery is fought over BANKS and kelp paddies (Nine Mile, the
+  //     43 Fathom, the 267/277, 14 Mile) that top out well shallower than that,
+  //     and the shelf is so narrow that shallow water is not a proxy for "too
+  //     close to the beach" the way it is off Virginia. Two bands: the bank/
+  //     shelf-edge zone and the deep trough/offshore water.
+  // Everything else carries over — chlorPref/breakPref "edge" is if anything
+  // MORE true here, since the SoCal fleet runs on the temp/color break.
+  yellowfin: { tempIdeal:[66,74], tempWorking:[62,78], chlorPref:"edge", depthBands:[[40,200],[200,1500]], breakPref:"edge" },
 };
 
 // Bahamas / Bahama-Bank water east of the Florida crossings. Several US
@@ -5556,6 +5706,11 @@ function speciesAllowedAtLat(speciesId, lat, lng){
 }
 
 // Species valid for a brief run zone (inshore includes bay fish).
+// Deliberately uses the CURATED mask, not effectiveSpeciesHabitat(): this drives
+// a UI picker with no depth to score against, so the depth-derived union would
+// over-reach — tarpon's 3-40 m band touches the "offshore" bucket, but tarpon
+// does not belong in an offshore trip's species list. The widened habitat is for
+// the per-cell map veto, where the depth FACTOR still grades the actual depth.
 function speciesAllowedInBriefZone(speciesId, zone){
   const allowed = SPECIES_HABITAT[speciesId];
   if(!allowed) return true;
@@ -5590,6 +5745,9 @@ function briefPinForZone(port, zone){
   return pointNmFromBearing(port.lat, port.lng, nm, portOffshoreBearing(port));
 }
 
+// Curated mask on purpose (see speciesAllowedInBriefZone) — this picks the
+// DEFAULT trip zone, which should follow the species' primary habitat rather
+// than the deepest water its depth band happens to touch.
 function defaultBriefRunZone(speciesId){
   const hab = SPECIES_HABITAT[speciesId];
   if(!hab) return "offshore";
@@ -5877,6 +6035,8 @@ const SPECIES_RUN_NM = {
   falsealbacore: 30, bonito: 30, tripletail: 30,
   cobia: 35,
   tautog: 40, spadefish: 40, hogfish: 40,   // incl. winter offshore blackfish wrecks
+  porgy: 45,                                 // NE party-boat rockpiles + fall wrecks
+  calicobass: 65,                            // SoCal kelp line out to Catalina (22) / San Clemente (55)
   muttonsnap: 45, lanesnap: 45, yellowtail: 45,
   kingmack: 55,                              // SKA tournament boats run 40-70
   triggerfish: 60,
@@ -5885,6 +6045,7 @@ const SPECIES_RUN_NM = {
   snapper: 90, gaggrouper: 90, vermilion: 90, // wide west FL shelf runs
   cod: 100, haddock: 100, pollock: 100,      // Gulf of Maine banks: Cashes ~90
   cayellowtail: 100,                         // SoCal islands/banks: San Clemente 55
+  lingcod: 70,                               // CA reefs/pinnacles + island hard bottom
 };
 // Safety net for species added later without an explicit entry.
 const SPECIES_RUN_DEFAULT_NM = { inshore: 25, nearshore: 40 };
@@ -6842,7 +7003,7 @@ const HeatCanvasLayer = L.Layer.extend({
 
     const haveLandCheck = (typeof isFishableWater === "function");
     const sid = this._opts.speciesId;
-    const speciesHabitat = (sid && typeof SPECIES_HABITAT !== "undefined") ? SPECIES_HABITAT[sid] : null;
+    const speciesHabitat = (sid && typeof effectiveSpeciesHabitat === "function") ? effectiveSpeciesHabitat(sid) : null;
     const haveSpeciesMask = !!(speciesHabitat && typeof classifyWaterType === "function");
     // Geographic range mask — does this species have any lat/region restrictions?
     const haveLatRange = !!(sid && typeof SPECIES_LAT_RANGE !== "undefined" &&
@@ -19554,7 +19715,11 @@ function syncNavMenuPosition(){
 
 function toggleNav(){
   const m=document.getElementById('nav-menu');
-  const opening = m.style.display==='none';
+  // Read the COMPUTED display, not the inline one. #nav-menu is hidden by the
+  // stylesheet, so on a fresh load m.style.display is "" rather than "none" —
+  // reading the inline value made the first tap after launch decide it was
+  // already open and "close" it, so the menu only appeared on the second tap.
+  const opening = getComputedStyle(m).display === 'none';
   m.style.display = opening ? 'block' : 'none';
   // Toggle a body class so the map's floating UI (zoom buttons, right-side
   // icon column) can fade out via CSS while the menu is open.

@@ -1385,4 +1385,115 @@ const ENC_SPECIES = [
       "Fish current edges and structure high spots — they stack on relief",
       "Grey light is prime; the bite often shuts off once the sun is high",
       "Great eating fresh — bleed immediately and ice down hard"],
+  },
+  {
+    id:"lingcod", name:"Lingcod", color:"#3f6b52", cat:"nearshore",
+    snippet:"California's rocky-reef apex ambush predator. Not a true cod — a huge-mouthed, teeth-everywhere greenling that inhales anything that fits. High-relief rock, big jigs, and a hard bite.",
+    ident:{
+      marks:[
+        "Enormous mouth full of long needle teeth — unmistakable up close",
+        "Long, tapered body with one continuous dorsal fin notched in the middle",
+        "Mottled brown, olive, grey or copper; about one in twenty has blue-green flesh (harmless, cooks white)",
+        "No barbels and no scales on the head, unlike the true cods",
+        "Big females are the trophies — most fish over 20 lbs are hens"],
+      confusedWith:[
+        {species:"Cabezon", tell:"Cabezon has a broad, blunt, frog-like head with fleshy branched barbels above the eyes and NO scales at all. Lingcod's head is long and wedge-shaped with a far bigger tooth-filled mouth. Cabezon roe is toxic; lingcod roe is not."},
+        {species:"Kelp Greenling", tell:"Same family but far smaller (1-3 lbs) with a small mouth and fine blue or brown spotting. If it has the huge toothy gape, it's a lingcod."}]
+    },
+    facts:{ size:"5-15 lbs common; 20-30+ lbs on the central coast pinnacles", record:"~56 lbs (Alaska); CA fish over 40 lbs are exceptional", legal:"CA: 22\" minimum, 2/day in most areas — season and depth (RCA) limits vary by management area, verify current CDFW regs", season:"California — spring (Apr-Jun) and fall (Sep-Nov) peaks; groundfish season is closed over the winter in most areas." },
+    seasons:{Jan:0,Feb:0,Mar:1,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1},
+    where:"High-relief rock, pinnacles, and reef edges in 40-350 ft. Monterey Bay and Point Sur, the Big Sur pinnacles, Morro Bay and Port San Luis reefs, the Farallones, and the SoCal island and bank hard bottom (Catalina, San Clemente, Coronados). A Pacific-only species — never on the Atlantic or Gulf.",
+    tackle:[
+      "Medium-heavy 7-8 ft conventional or heavy spinning rod with a stout backbone",
+      "50-65 lb braid — you need to pull them off the rock before they get their head down",
+      "40-60 lb fluorocarbon or mono leader",
+      "Shrimp-fly / dropper-loop rigs above a 8-16 oz torpedo sinker",
+      "4-10 oz leadhead jigs and 6-10 in swimbaits; metal jigs (Point Wilson Dart, Shimano Butterfly) for deep pinnacles"],
+    bait:[
+      "Live sanddab or small rockfish — the single best big-lingcod bait on the coast",
+      "Whole squid or squid strips on a dropper loop",
+      "Big soft-plastic swimbaits (white, root beer, sardine) on a heavy leadhead",
+      "Herring or mackerel fillet when live bait isn't available",
+      "A hooked rockfish coming up will often get grabbed — drop back down to it"],
+    tips:[
+      "Fish the UP-current edge of the pinnacle and stay in contact with the bottom",
+      "They do not run — they clamp and hold. Keep steady pressure and never give slack",
+      "Lingcod frequently follow a hooked fish to the surface without being hooked themselves; keep a gaff and a second rod ready",
+      "Bigger baits genuinely mean bigger fish — a 10 in swimbait is not too big",
+      "Slack tide is the easiest to fish, but the bite is best on moving water",
+      "Watch the Rockfish Conservation Area depth limits for your management area — they change by season"],
+  },
+  {
+    id:"calicobass", name:"Calico Bass (Kelp Bass)", color:"#7d8a3a", cat:"nearshore",
+    snippet:"The bread-and-butter fish of the Southern California kelp line. A structure-glued ambush feeder that lives in the stringers and eats anything swimming past — the most reliable inshore bite in the bight.",
+    ident:{
+      marks:[
+        "Olive-brown back broken by pale cream blotches — the 'calico' pattern",
+        "Third dorsal spine roughly the same length as the fourth and fifth (a flat-topped spiny dorsal)",
+        "Long, lean body compared to the deeper-bodied sand basses",
+        "No dark spotting on the belly or fins",
+        "'Bull' calicos over 5 lbs turn dark and coppery from living deep in the kelp"],
+      confusedWith:[
+        {species:"Barred Sand Bass", tell:"Sand bass have obvious dark vertical bars on the sides and a much longer third dorsal spine that stands well above the rest. They also live over sand and flat bottom, not in the kelp."},
+        {species:"Spotted Bay Bass", tell:"Much smaller and covered in distinct dark spots including on the fins; a bay and harbor fish rather than an open-coast kelp fish."}]
+    },
+    facts:{ size:"1-4 lbs common; a 5-8 lb 'bull' is the fish of the trip", record:"~14 lbs (CA)", legal:"CA: 14\" minimum, 5/day within a 10-fish combined bass limit — verify current CDFW regs", season:"Southern California year-round resident; best late spring through fall, spawning May-July." },
+    seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
+    where:"The kelp line and shallow hard bottom in 10-130 ft — Point Loma and La Jolla kelp, Horseshoe Kelp off Long Beach, Catalina and San Clemente front-side stringers, the Channel Islands (Anacapa, Santa Cruz, Santa Barbara Island), and the Coronados. Thin out north of Point Conception. A Pacific-only species.",
+    tackle:[
+      "7-8 ft medium or medium-heavy rod — long enough to swing a bait into the kelp",
+      "20-40 lb braid or straight 20-25 lb mono; heavy enough to pull a bull out of the stringers",
+      "20-30 lb fluorocarbon leader",
+      "Live-bait hooks #4 to 2/0 — small and thin so a sardine swims naturally",
+      "1/2-2 oz leadheads for plastics; small surface iron for fish boiling on the canopy"],
+    bait:[
+      "Live sardines and anchovies fly-lined into the kelp — the classic presentation",
+      "Live squid when the squid show; nothing outfishes it",
+      "5-7 in swimbaits (MC Swimbaits, Big Hammer) in sardine, smelt, or root beer",
+      "Plastic grubs and swimbaits hopped along the shallow reef edges",
+      "Surface iron (Tady 45 light) worked over the canopy at grey light"],
+    tips:[
+      "Cast INTO the kelp, not around it — the fish live in the stringers and you have to go get them",
+      "Fly-line a live bait with no weight and let it swim; add a rubber-core sinker only in current",
+      "Bull calicos hold deepest and tightest to structure, and they bite best at grey light and dusk",
+      "Set the hook and crank immediately to pull them clear of the kelp; hesitate and you're wrapped",
+      "Chum a few live baits to fire up the school before you cast",
+      "Mostly a catch-and-release fishery now — they grow very slowly, so a big bull is decades old"],
+  },
+  {
+    id:"porgy", name:"Porgy (Scup)", color:"#b07a8a", cat:"nearshore",
+    snippet:"The Northeast's most dependable bottom fish. Scup swarm rockpiles, mussel beds and wrecks from May through October, and the big fall 'humpbacks' are a genuinely strong pull on light tackle.",
+    ident:{
+      marks:[
+        "Deep, almost round silvery body with a dusky blue or bronze sheen and faint vertical bars",
+        "Steep forehead that becomes a pronounced hump on big fish — hence 'humpback'",
+        "Small mouth with strong incisor-like front teeth for crushing shellfish",
+        "Single continuous spiny dorsal fin; deeply forked tail",
+        "Rough scales and sharp fin spines — handle with a towel"],
+      confusedWith:[
+        {species:"Pinfish", tell:"Pinfish are a southern fish with obvious yellow-gold horizontal stripes and a dark shoulder spot. Scup are plain silver with no spot and are found from the Chesapeake north."},
+        {species:"Sheepshead", tell:"Sheepshead carry bold black vertical bars and protruding human-like teeth, and they hold on pilings and bridges rather than open rockpiles and wrecks."}]
+    },
+    facts:{ size:"0.5-2 lbs typical; 3-4 lb 'humpbacks' or 'dinner plates' in the fall", record:"4 lbs 9 oz (MA)", legal:"Varies by state and mode — typically 9-10\" minimum with a 30-50 fish bag; party/charter seasons differ. Verify current state regs", season:"Northeast/Mid-Atlantic — inshore May through October, with the biggest fish on deeper wrecks in September-November. Not a Gulf or Pacific fishery." },
+    seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:0},
+    where:"Rockpiles, mussel beds, reefs and wrecks in 20-120 ft from Cape Cod to the Chesapeake mouth — Narragansett Bay and the RI reefs, Block Island, Montauk and the Long Island rockpiles, Raritan Bay and the NJ ocean wrecks, and the DelMarVa inshore wrecks. Bigger fish move deeper as the season goes on. Not present on the Gulf coast or the Pacific.",
+    tackle:[
+      "Light or medium-light 6-7 ft rod with a sensitive tip — the bite is a fast tap",
+      "Small conventional or 3000-4000 spinning reel with 15-30 lb braid",
+      "20-30 lb fluorocarbon leader",
+      "Hi-lo (two-hook) rigs with #1 to 1/0 baitholder or small circle hooks — go small, their mouths are small",
+      "2-8 oz bank sinkers depending on depth and current"],
+    bait:[
+      "Squid strips cut small — the everyday standard",
+      "Clam, especially for the bigger fish",
+      "Sandworms or bloodworms when they're being picky",
+      "Small pieces of Berkley Gulp! on a teaser above the rig",
+      "Fresh bait beats frozen; re-bait often, they strip a hook fast"],
+    tips:[
+      "Cut the bait SMALL — a big chunk just gets stolen off a small mouth",
+      "Two hooks means double-headers; lift slowly and steadily so the second fish stays on",
+      "Do not swing on the first tap; wait for the rod to load then lift",
+      "The biggest fish sit on the deeper wrecks late in the fall, not on the summer inshore rockpiles",
+      "Scup often stack right on top of black sea bass and tog — the same drop can produce all three",
+      "Excellent eating despite the small size; scale and pan-fry whole, or fillet the bigger humpbacks"],
   }];
