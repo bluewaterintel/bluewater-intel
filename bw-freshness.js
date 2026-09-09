@@ -36,7 +36,7 @@
   //  • Pressure trend is a slope over ~24h; tolerant but not multi-day.
   //  • Bathymetry is static — never stale.
   const FRESHNESS = {
-    sst:        { freshH: 24,  staleH: 72,  agingFloor: 0.6, label: "SST" },
+    sst:        { freshH: 48,  staleH: 96,  agingFloor: 0.6, label: "SST" }, // MUR L4 is a daily analysis with 1–2 day publish latency; a 48h granule is the normal "latest", not aging
     chlor:      { freshH: 96,  staleH: 504, agingFloor: 0.55, label: "Chlorophyll" }, // NRT gap-filled DINEOF publishes ~3 days back, so treat up to 4 days as fully fresh; color breaks change slowly, and an older real composite is still meaningful (used as aging, never invented)
     wind:       { freshH: 3,   staleH: 9,   agingFloor: 0.4, label: "Wind" },
     waves:      { freshH: 3,   staleH: 6,   agingFloor: 0.4, label: "Sea state" },

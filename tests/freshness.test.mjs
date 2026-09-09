@@ -23,8 +23,9 @@ const now = Date.UTC(2026, 5, 19, 12, 0, 0);
 
 console.log("freshnessOf tiers:");
 check("SST 1h = fresh, full weight", (() => { const f = freshnessOf("sst", now - 1 * H, now); return f.tier === "fresh" && f.weightFactor === 1; })());
-check("SST 48h = aging (your example), partial weight", (() => { const f = freshnessOf("sst", now - 48 * H, now); return f.tier === "aging" && f.weightFactor < 1 && f.weightFactor >= 0.6; })());
-check("SST 80h = stale, dropped", (() => { const f = freshnessOf("sst", now - 80 * H, now); return f.tier === "stale" && f.weightFactor === 0; })());
+check("SST 48h = fresh (MUR daily latency is 1–2 days)", (() => { const f = freshnessOf("sst", now - 48 * H, now); return f.tier === "fresh" && f.weightFactor === 1; })());
+check("SST 72h = aging, still used", (() => { const f = freshnessOf("sst", now - 72 * H, now); return f.tier === "aging" && f.weightFactor < 1 && f.weightFactor >= 0.6; })());
+check("SST 100h = stale, dropped", (() => { const f = freshnessOf("sst", now - 100 * H, now); return f.tier === "stale" && f.weightFactor === 0; })());
 check("Wind 2h = fresh", freshnessOf("wind", now - 2 * H, now).tier === "fresh");
 check("Wind 7h = aging", freshnessOf("wind", now - 7 * H, now).tier === "aging");
 check("Wind 12h = stale (fast variable)", freshnessOf("wind", now - 12 * H, now).tier === "stale");
@@ -33,9 +34,9 @@ check("Depth never stale", freshnessOf("depth", now - 10000 * H, now).tier === "
 check("missing observedAt = missing tier, 0 weight", freshnessOf("sst", null, now).weightFactor === 0);
 
 console.log("\naging decay is linear from 1.0→floor:");
-check("SST at freshH boundary (24h) ~ 1.0", approx(freshnessOf("sst", now - 24 * H, now).weightFactor, 1.0, 0.01));
-check("SST at staleH boundary (72h) ~ floor 0.6", approx(freshnessOf("sst", now - 72 * H, now).weightFactor, 0.6, 0.02));
-check("SST midpoint (48h) ~ 0.8", approx(freshnessOf("sst", now - 48 * H, now).weightFactor, 0.8, 0.02));
+check("SST at freshH boundary (48h) ~ 1.0", approx(freshnessOf("sst", now - 48 * H, now).weightFactor, 1.0, 0.01));
+check("SST at staleH boundary (96h) ~ floor 0.6", approx(freshnessOf("sst", now - 96 * H, now).weightFactor, 0.6, 0.02));
+check("SST midpoint of aging band (72h) ~ 0.8", approx(freshnessOf("sst", now - 72 * H, now).weightFactor, 0.8, 0.02));
 
 // Build a representative factor set (env + astro). baseWeights need not sum to 1.
 const baseFactors = (overrides = {}) => ([
@@ -57,13 +58,25 @@ console.log("\nall-fresh baseline:");
   check("score in 0..1", r.finalScore >= 0 && r.finalScore <= 1);
 }
 
-console.log("\nyour scenario: SST 48h stale-ish (aging), everything else fresh:");
+console.log("\nMUR-typical 48h SST is fully fresh, not aging:");
 {
   const r = combine(baseFactors({ sst: now - 48 * H }), now);
   const sstNote = r.annotations.find(a => a.variable === "sst");
-  check("SST still USED (aging, not dropped)", r.usedFactors.some(f => f.key === "temp"));
-  check("SST annotated as aging with age", sstNote && sstNote.tier === "aging" && sstNote.ageH === 48);
-  check("confidence dips but stays decent", r.confidence >= 60 && r.confidence < 90);
+  check("SST still USED", r.usedFactors.some(f => f.key === "temp"));
+  check("SST is not annotated as aging at 48h", !sstNote);
+  check("confidence stays high", r.confidence >= 75);
+}
+
+console.log("\npressure stale is dropped from usedFactors (UI must not list it as contributing):");
+{
+  const factors = [
+    ...baseFactors(),
+    { key: "pres", variable: "pressure", baseWeight: 0.12, score: 0.7, observedAtMs: now - 90 * H },
+  ];
+  const r = combine(factors, now);
+  check("stale pressure is in droppedFactors", r.droppedFactors.some(f => f.key === "pres"));
+  check("stale pressure is NOT in usedFactors", !r.usedFactors.some(f => f.key === "pres"));
+  check("pressure annotated as too old / excluded", r.annotations.some(a => a.variable === "pressure" && a.tier === "stale"));
 }
 
 console.log("\nwind goes stale (fast variable dropped):");
