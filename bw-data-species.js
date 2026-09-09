@@ -127,7 +127,14 @@ const PREDICT_SPECIES_PREFS = {
   // in August; with the cold pool modeled the same wrecks read ~50-55°F, which is
   // exactly where the summer mid-shelf fishery happens. Without this the accurate
   // bottom temp scored the NJ/NY August wreck bite at 16%.
-  blackseabass: {tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high",    depthBands:[[15,200]],   breakPref:"stable", demersal:true },
+  // Deep edge pulled 200 m → 130 m (656 ft → 427 ft). 130 m is the published
+  // depth limit for the species and still covers the whole real fishery: summer
+  // inshore wrecks/reefs at 50-120 ft, the 100-115 ft Virginia Beach wrecks that
+  // hold the biggest fish, and the NJ/NY winter deep-wreck run out to ~400 ft.
+  // 200 m was also tripping the canyon-edge bonus in scoreCell(), which is
+  // gated on a band reaching 150 m — a wreck fish should not collect a canyon
+  // bonus. Cells past 130 m still score via the gentle too-deep decay.
+  blackseabass: {tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high",    depthBands:[[15,130]],   breakPref:"stable", demersal:true },
   tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable", demersal:true },
   // Golden tilefish — two fisheries, not canyon-gated. Mid-Atlantic canyon mud
   // (MAFMC 250-450 ft ≈ 75-140 m) and a deeper shelf-edge / Gulf band (~575-1,380 ft

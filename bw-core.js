@@ -5302,8 +5302,102 @@ const SPECIES_HABITAT = {
   cayellowtail:  ["nearshore", "offshore"],         // SoCal banks, kelp edges, hard bottom, paddies
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// EFFECTIVE HABITAT — depth buckets derived from the species' own depth bands
+//
+// SPECIES_HABITAT above is a COARSE three-bucket proxy, but classifyWaterType()
+// resolves those buckets from real bathymetry with hard edges at 30 ft and
+// 100 ft — and the mask is a HARD VETO applied before scoreCell() ever looks at
+// the far more carefully researched depthBands. So whenever the mask and the
+// depth bands disagreed, the coarse mask won and the species silently vanished
+// at a bucket boundary.
+//
+// That bit us three times, each fixed by hand for one species at a time:
+//   • flounder — Triangle Wrecks off Virginia Beach sit right on the 100 ft
+//     line, so wreck cells flipped in and out of the map on one foot of depth.
+//   • vermilion — a nearshore-only mask blanked out the ENTIRE 100-300 ft band
+//     where they actually hold, so the bite map rendered nothing at all.
+//   • blackseabass — masked ["nearshore","inshore"] with depthBands reaching
+//     427 ft, which deleted every cell at or past 100 ft. That is exactly the
+//     100-115 ft of water off Virginia Beach that holds the biggest sea bass.
+//
+// Rather than keep patching individual species, derive the depth buckets from
+// each species' own depthBands and UNION them into the curated mask. This can
+// only ever ADD a bucket the species' own researched depth range already asks
+// for — it never removes one — and the depth FACTOR still scores normally, so a
+// species does not suddenly rate well at a depth it dislikes. It just stops
+// being hard-deleted from water it demonstrably lives in.
+//
+// "bay" is deliberately NOT derived: it comes from BAY_BOXES geometry, not from
+// depth, so it stays entirely under the curated mask's control.
+//
+// tests/habitat-depth-consistency.test.mjs slices the block between the two
+// markers below and pins this invariant.
+//
+// ── habitat-derivation:begin ───────────────────────────────────────────────
+// Mirrors classifyWaterType()'s depth ladder, in feet.
+const HABITAT_DEPTH_BUCKETS_FT = [
+  ["inshore",     0,  30],
+  ["nearshore",  30, 100],
+  ["offshore",  100, Infinity],
+];
+
+// Which depth buckets does this set of [minM, maxM] bands actually reach?
+function depthBucketsForBands(bands){
+  const out = [];
+  if(!Array.isArray(bands)) return out;
+  for(const [name, loFt, hiFt] of HABITAT_DEPTH_BUCKETS_FT){
+    for(const band of bands){
+      if(!Array.isArray(band)) continue;
+      const bLoFt = band[0] * 3.281, bHiFt = band[1] * 3.281;
+      if(bLoFt < hiFt && bHiFt >= loFt){ out.push(name); break; }
+    }
+  }
+  return out;
+}
+
+const _effHabitatCache = new Map();
+
+// Curated mask ∪ the depth buckets the species' own depthBands reach.
+// Returns null for species with no curated mask (caller treats that as
+// "allowed everywhere", the long-standing safe default).
+function effectiveSpeciesHabitat(speciesId){
+  if(_effHabitatCache.has(speciesId)) return _effHabitatCache.get(speciesId);
+  const curated = (typeof SPECIES_HABITAT !== "undefined") ? SPECIES_HABITAT[speciesId] : null;
+  if(!curated){
+    _effHabitatCache.set(speciesId, null);
+    return null;
+  }
+  // The two prefs tables are top-level `const` in classic scripts, so they are
+  // lexical bindings rather than globalThis properties and must be referenced by
+  // name. PACIFIC_SPECIES_PREFS is declared further down this same file, so a
+  // caller that ran during script evaluation (rather than on interaction, as all
+  // of today's callers do) would hit its temporal dead zone — and `typeof`
+  // does NOT shield against that. Catch it and skip the memo so an early call
+  // degrades to today's curated-mask-only behavior instead of poisoning the
+  // cache for the rest of the session.
+  const tables = [];
+  try {
+    if(typeof PREDICT_SPECIES_PREFS !== "undefined") tables.push(PREDICT_SPECIES_PREFS);
+    if(typeof PACIFIC_SPECIES_PREFS  !== "undefined") tables.push(PACIFIC_SPECIES_PREFS);
+  } catch(_){
+    return curated;
+  }
+  // Union across BOTH coasts' bands: PACIFIC_SPECIES_PREFS swaps in different
+  // depth bands for West-Coast cells, and a widening union is safe for either.
+  const merged = new Set(curated);
+  for(const table of tables){
+    const prefs = table[speciesId];
+    if(prefs && prefs.depthBands) depthBucketsForBands(prefs.depthBands).forEach(b => merged.add(b));
+  }
+  const out = [...merged];
+  _effHabitatCache.set(speciesId, out);
+  return out;
+}
+// ── habitat-derivation:end ─────────────────────────────────────────────────
+
 function speciesAllowedInWater(speciesId, waterType){
-  const allowed = SPECIES_HABITAT[speciesId];
+  const allowed = effectiveSpeciesHabitat(speciesId);
   if(!allowed) return true;  // unknown species: allow everywhere (safe default)
   return allowed.includes(waterType);
 }
@@ -5556,6 +5650,11 @@ function speciesAllowedAtLat(speciesId, lat, lng){
 }
 
 // Species valid for a brief run zone (inshore includes bay fish).
+// Deliberately uses the CURATED mask, not effectiveSpeciesHabitat(): this drives
+// a UI picker with no depth to score against, so the depth-derived union would
+// over-reach — tarpon's 3-40 m band touches the "offshore" bucket, but tarpon
+// does not belong in an offshore trip's species list. The widened habitat is for
+// the per-cell map veto, where the depth FACTOR still grades the actual depth.
 function speciesAllowedInBriefZone(speciesId, zone){
   const allowed = SPECIES_HABITAT[speciesId];
   if(!allowed) return true;
@@ -5590,6 +5689,9 @@ function briefPinForZone(port, zone){
   return pointNmFromBearing(port.lat, port.lng, nm, portOffshoreBearing(port));
 }
 
+// Curated mask on purpose (see speciesAllowedInBriefZone) — this picks the
+// DEFAULT trip zone, which should follow the species' primary habitat rather
+// than the deepest water its depth band happens to touch.
 function defaultBriefRunZone(speciesId){
   const hab = SPECIES_HABITAT[speciesId];
   if(!hab) return "offshore";
@@ -6842,7 +6944,7 @@ const HeatCanvasLayer = L.Layer.extend({
 
     const haveLandCheck = (typeof isFishableWater === "function");
     const sid = this._opts.speciesId;
-    const speciesHabitat = (sid && typeof SPECIES_HABITAT !== "undefined") ? SPECIES_HABITAT[sid] : null;
+    const speciesHabitat = (sid && typeof effectiveSpeciesHabitat === "function") ? effectiveSpeciesHabitat(sid) : null;
     const haveSpeciesMask = !!(speciesHabitat && typeof classifyWaterType === "function");
     // Geographic range mask — does this species have any lat/region restrictions?
     const haveLatRange = !!(sid && typeof SPECIES_LAT_RANGE !== "undefined" &&
