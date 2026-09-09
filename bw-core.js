@@ -10679,8 +10679,7 @@ function updateSatDateDisplay(){
       // Canvas MUR date — not the GIBS slider offset (those diverged and made
       // it look like historical GIBS was on when the local canvas was freshest).
       const d = new Date(SST_FORECAST_GRID.observedAtMs);
-      const back = Math.max(0, Math.round((Date.now() - SST_FORECAST_GRID.observedAtMs) / 86400000));
-      const age = back <= 0 ? "today" : back === 1 ? "1 day ago" : back + " days ago";
+      const age = formatObservedAgeDays(calendarDaysBeforeToday(SST_FORECAST_GRID.observedAtMs));
       el.textContent = `Observed ${d.toLocaleDateString(undefined, {month:"short", day:"numeric"})} · ${age}`;
     } else {
       const back = satCurrentDaysBack();
@@ -10747,6 +10746,20 @@ function updateSatDateControlVisibility(){
 // ── ALTIMETRY DATE CONTROL ───────────────────────────────────────────────────
 // Daily SSH is observed backward-only. Step day-by-day (slider or ◀▶) to read
 // eddy drift. No autoplay — captains inspect each pass at their own pace.
+function localCalendarDayStartMs(msOrDate){
+  const d = msOrDate instanceof Date ? msOrDate : new Date(msOrDate);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+function calendarDaysBeforeToday(observedAtMs, nowMs){
+  const now = nowMs != null ? nowMs : Date.now();
+  const diff = localCalendarDayStartMs(now) - localCalendarDayStartMs(observedAtMs);
+  return Math.max(0, Math.round(diff / 86400000));
+}
+function formatObservedAgeDays(n){
+  if(n <= 0) return "today";
+  if(n === 1) return "1 day ago";
+  return n + " days ago";
+}
 function altiDateLabel(){
   if(ALTIMETRY_GRID && ALTIMETRY_GRID.observedAtMs){
     return new Date(ALTIMETRY_GRID.observedAtMs).toLocaleDateString(undefined, { month:"short", day:"numeric" });
@@ -10760,8 +10773,7 @@ function updateAltiDateDisplay(){
   if(el){
     if(ALTIMETRY_GRID && ALTIMETRY_GRID.observedAtMs){
       const obs = new Date(ALTIMETRY_GRID.observedAtMs);
-      const ageDays = Math.max(0, Math.round((Date.now() - ALTIMETRY_GRID.observedAtMs) / 86400000));
-      const ageTxt = ageDays <= 0 ? "today" : ageDays === 1 ? "1 day ago" : `${ageDays} days ago`;
+      const ageTxt = formatObservedAgeDays(calendarDaysBeforeToday(ALTIMETRY_GRID.observedAtMs));
       el.textContent = `Observed ${obs.toLocaleDateString(undefined, { month:"short", day:"numeric" })} · ${ageTxt}`;
     } else {
       const age = altiDayOffset <= 0 ? "latest pass" : altiDayOffset === 1 ? "1 day earlier" : `${altiDayOffset} days earlier`;
