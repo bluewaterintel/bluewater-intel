@@ -608,10 +608,19 @@ function wpSyncTabAccess(){
 }
 window.wpSyncTabAccess = wpSyncTabAccess;
 
+function wpOnPanelRadiusChange(nm){
+  if(typeof setWpRadius !== "function") return;
+  setWpRadius(nm);
+  if(typeof wpFetchCharted === "function") wpFetchCharted(true);
+}
+
 function openWaypoints(){
   if(!WP_state.userPoints.length) WP_state.userPoints = wpLoadUser();
   WP_state.mapSource = wpLoadMapSource();
   const premium = wpHasPremium();
+  if(premium && typeof setWpRadius === "function"){
+    setWpRadius((typeof WP_DEFAULT_RADIUS_NM !== "undefined") ? WP_DEFAULT_RADIUS_NM : 120);
+  }
   if(premium){
     if(WP_state.tab === "public" && WP_state.regionFilter === "all" &&
        typeof activePort !== "undefined" && activePort){
@@ -627,7 +636,7 @@ function openWaypoints(){
   document.body.style.overflow = "hidden";
   wpSyncTabAccess();
   wpRender();
-  if(premium && typeof wpFetchCharted === "function") wpFetchCharted();
+  if(premium && typeof wpFetchCharted === "function") wpFetchCharted(true);
 }
 function closeWaypoints(){
   document.getElementById("wp-overlay").style.display = "none";
@@ -709,8 +718,16 @@ function mceInitControls(){
   } else if(sel){
     sel.value = mcePort || "";
   }
+  if(typeof wpRadiusNm !== "undefined"){
+    mceRangeNm = Math.min(
+      (typeof MCE_SLIDER_MAX_NM !== "undefined") ? MCE_SLIDER_MAX_NM : 120,
+      wpRadiusNm,
+    );
+  }
   const slider = document.getElementById("mce-range");
   if(slider) slider.value = mceRangeNm;
+  const rangeLabel = document.getElementById("mce-range-label");
+  if(rangeLabel) rangeLabel.textContent = mceRangeNm + " nm";
   if(defaultSource === "dataset") mceUpdate();
 }
 
@@ -783,6 +800,8 @@ function wpFilteredList(list){
 function wpToolbar(includeAdd){
   const ports = (typeof PORTS !== "undefined") ? Object.keys(PORTS).sort() : [];
   const publicTab = WP_state.tab === "public";
+  const radii = (typeof WP_RADII !== "undefined") ? WP_RADII : [20, 40, 60, 100, 120, 140, 160];
+  const radiusNm = (typeof wpRadiusNm !== "undefined") ? wpRadiusNm : 120;
   return `
     <div class="wp-toolbar">
       <input class="wp-search" type="text" placeholder="Search by name, region, or description..."
@@ -797,6 +816,10 @@ function wpToolbar(includeAdd){
         ${publicTab ? "" : `<option value="all">All Ports</option>`}
         ${ports.map(r => `<option value="${r}" ${WP_state.regionFilter===r?"selected":""}>${r}</option>`).join("")}
       </select>
+      ${publicTab ? `
+      <select class="wp-filter" aria-label="Distance from port" onchange="wpOnPanelRadiusChange(Number(this.value))">
+        ${radii.map(nm => `<option value="${nm}" ${radiusNm === nm ? "selected" : ""}>Within ${nm} nm</option>`).join("")}
+      </select>` : ""}
       ${includeAdd ? `<button class="wp-btn primary" onclick="wpNewWaypoint()">+ Add Waypoint</button>` : ""}
     </div>
   `;
@@ -809,6 +832,7 @@ function wpStatsBar(list, label, extra){
       ${extra || ""}
       ${WP_state.typeFilter !== "all" ? `<span>· Type: <b>${wpType(WP_state.typeFilter).name}</b></span>` : ""}
       ${WP_state.regionFilter !== "all" ? `<span>· Port: <b>${WP_state.regionFilter}</b></span>` : ""}
+      ${WP_state.tab === "public" && typeof wpRadiusNm !== "undefined" ? `<span>· Range: <b>${wpRadiusNm} nm</b></span>` : ""}
     </div>
   `;
 }
@@ -970,7 +994,7 @@ function wpRenderPublic(){
   const exportBtn = (premium && WP_state.chartedStatus === "live" && chartedExportN > 0) ? `
     <div class="wp-export-charted">
       <button class="wp-btn primary wp-export-charted-btn" onclick="wpExportChartedGPX()">⬇ Export ${chartedExportN.toLocaleString()} charted waypoints to GPX</button>
-      <div class="wp-export-charted-hint">Exports charted database entries within range of <b>${displayPort}</b>. Adjust port/range in the Import / Export tab.</div>
+      <div class="wp-export-charted-hint">Exports charted database entries within range of <b>${displayPort}</b>. Adjust range with the distance dropdown above.</div>
     </div>
   ` : "";
 
@@ -1108,11 +1132,11 @@ function wpRenderImport(){
 
           <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px">
             <label style="font-size:10px;font-weight:700;color:#6bbfea;letter-spacing:.08em;text-transform:uppercase">Range from Port</label>
-            <span id="mce-range-label" style="font-size:15px;font-weight:800;color:#f0f6ff">50 nm</span>
+            <span id="mce-range-label" style="font-size:15px;font-weight:800;color:#f0f6ff">120 nm</span>
           </div>
-          <input id="mce-range" type="range" min="1" max="100" value="50" oninput="mceOnRangeChange(this.value)" style="width:100%;accent-color:#2979b5;margin-bottom:2px">
+          <input id="mce-range" type="range" min="1" max="120" value="120" oninput="mceOnRangeChange(this.value)" style="width:100%;accent-color:#2979b5;margin-bottom:2px">
           <div style="display:flex;justify-content:space-between;font-size:9px;color:#5d96c4;margin-bottom:14px">
-            <span>1 nm</span><span>Max 100 nm</span>
+            <span>1 nm</span><span>Max 120 nm</span>
           </div>
 
           <div style="background:rgba(15,36,68,.5);border:1px solid rgba(107,191,234,.2);border-radius:10px;padding:12px;margin-bottom:14px">
