@@ -1274,4 +1274,170 @@ const TB_TACKLE = [
    speed:[0,0],sizeIn:8,
    colors:["Natural"],
    bestTemp:[68,84],bestSeason:["spring","summer","fall"],
-   tip:"AJ candy. Hook through the nose, drop to the top of the wreck. Hold on — AJs pull HARD straight down into structure."}];
+   tip:"AJ candy. Hook through the nose, drop to the top of the wreck. Hold on — AJs pull HARD straight down into structure."},
+
+  // ── PORGY / SCUP ─────────────────────────────────────────────────────────
+  {id:"pgy-hilo-clam",name:"Hi-Lo Rig + Clam (Small Hooks)",icon:"🐚",cat:"Bottom Rig",
+   species:["porgy","blackseabass"],technique:["livebait"],
+   priority:{porgy:1},
+   speciesTips:{
+    porgy:"The everyday Northeast scup rig. Two #1 to 1/0 baitholders on a hi-lo with a small piece of clam on each — cut it SMALL, a big chunk just gets stolen off their little mouths. Double-headers are the norm; lift slow and steady so the second fish stays on.",
+    blackseabass:"Same rig upsized one hook size works fine for sea bass sitting on the same rockpile."
+   },
+   waterClarity:["any"],light:["bright","overcast"],
+   speed:[0,0],sizeIn:1,
+   colors:["Natural"],
+   bestTemp:[52,74],bestSeason:["spring","summer","fall"],
+   tip:"The everyday Northeast scup rig. Two small baitholders on a hi-lo with clam. Cut the bait small and wait for the rod to load before lifting."},
+
+  {id:"pgy-squid-strip-sm",name:"Small Squid Strips",icon:"🦑",cat:"Cut Bait",
+   species:["porgy","blackseabass","tautog"],technique:["livebait"],
+   priority:{porgy:2},
+   waterClarity:["any"],light:["bright","overcast"],
+   speed:[0,0],sizeIn:1,
+   colors:["Natural"],
+   bestTemp:[52,74],bestSeason:["spring","summer","fall"],
+   tip:"Cut squid into thin 1 in strips so it flutters. Tough enough to survive a dozen taps, which matters when scup are thick and stripping hooks."},
+
+  {id:"pgy-sandworm",name:"Sandworm / Bloodworm",icon:"🪱",cat:"Live Bait",
+   species:["porgy","croaker"],technique:["livebait"],
+   priority:{porgy:3},
+   waterClarity:["any"],light:["bright","overcast","lowlight"],
+   speed:[0,0],sizeIn:1,
+   colors:["Natural"],
+   bestTemp:[50,72],bestSeason:["spring","summer","fall"],
+   tip:"When the porgies get picky — worm outfishes squid on a hard-bitten rockpile. Expensive and fragile, so save it for when clam and squid stop producing."},
+
+  {id:"pgy-gulp-teaser",name:"Gulp! Teaser Above the Rig",icon:"🪝",cat:"Soft Plastic",
+   species:["porgy","blackseabass","flounder"],technique:["jigging","livebait"],
+   priority:{porgy:3},
+   waterClarity:["any"],light:["bright","overcast"],
+   speed:[0,0],sizeIn:2,
+   colors:["Chartreuse","Pink","New Penny","White"],
+   bestTemp:[52,74],bestSeason:["summer","fall"],
+   tip:"A small Gulp! bit on a teaser a foot above the top hook adds scent and picks off the bigger fall humpbacks riding above the pack."},
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PACIFIC / CALIFORNIA
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── CALIFORNIA YELLOWTAIL ────────────────────────────────────────────────
+  {id:"cayt-live-sardine",name:"Fly-Lined Live Sardine",icon:"🐠",cat:"Live Bait",
+   species:["cayellowtail","calicobass","bonito","yellowfin"],technique:["livebait"],
+   priority:{cayellowtail:1,calicobass:1},
+   speciesTips:{
+    cayellowtail:"The SoCal standard. Fly-line a lively sardine with no weight on a 1/0-4/0 circle and let it swim toward the structure or the paddy. Add a rubber-core sinker only if the current won't let it get down.",
+    calicobass:"Fly-line it straight into the kelp stringers with no weight and let it swim. Thin-wire hook, no sinker — the bait has to look free.",
+    bonito:"Bonito will eat a fly-lined sardine but usually want it moving; cast into the boil and let it run.",
+    yellowfin:"On a kelp paddy or a stopped bank, a fly-lined sardine on a light fluoro leader is the go-to for SoCal yellowfin."
+   },
+   waterClarity:["clear","green"],light:["bright","overcast","lowlight"],
+   speed:[0,0],sizeIn:7,
+   colors:["Natural"],
+   bestTemp:[62,74],bestSeason:["spring","summer","fall"],
+   tip:"The SoCal standard. No weight, thin-wire circle hook, let the bait swim to the structure. Nose-hook for distance, butt-hook to make it swim away from the boat."},
+
+  {id:"cayt-yoyo-iron",name:"Yo-Yo Iron (Salas 6X Jr / Tady 9)",icon:"🥄",cat:"Vertical Jig",
+   species:["cayellowtail","calicobass","lingcod"],technique:["jigging"],
+   priority:{cayellowtail:1},
+   speciesTips:{
+    cayellowtail:"When they won't come up for bait, drop iron to the hard-bottom high spot and crank it back as fast as you physically can. Blue/white and scrambled egg are the two colors that matter. The bite comes on the way up.",
+    calicobass:"A smaller yo-yo jig worked over deeper reef edges will pull bull calicos that won't come up to a fly-lined bait.",
+    lingcod:"Heavy iron dropped to a pinnacle and worked with slow, high lifts — lingcod hammer it on the drop."
+   },
+   waterClarity:["clear","green"],light:["bright","overcast"],
+   speed:[0,0],sizeIn:6,
+   colors:["Blue/White","Scrambled Egg","Mint/White","Chrome"],
+   bestTemp:[58,72],bestSeason:["spring","summer","fall","winter"],
+   tip:"Drop to the structure, then crank as fast as you can all the way up. The strike almost always comes on the retrieve — do not slow down when you feel a bump."},
+
+  {id:"cayt-surface-iron",name:"Surface Iron (Tady 45 / Salas 7X)",icon:"🥄",cat:"Casting Lure",
+   species:["cayellowtail","calicobass","bonito"],technique:["casting"],
+   priority:{cayellowtail:2},
+   waterClarity:["clear","green"],light:["lowlight","overcast"],
+   speed:[0,0],sizeIn:7,
+   colors:["Blue/White","Scrambled Egg","Sardine","Mint"],
+   bestTemp:[62,74],bestSeason:["spring","summer","fall"],
+   tip:"Long jig stick, long cast past the boil, slow steady wind with the rod low. Grey light is prime — the surface iron bite usually dies once the sun gets high."},
+
+  {id:"cayt-live-squid",name:"Live Squid (Spring Run)",icon:"🦑",cat:"Live Bait",
+   species:["cayellowtail","calicobass","lingcod"],technique:["livebait"],
+   priority:{cayellowtail:2,calicobass:2,lingcod:2},
+   speciesTips:{
+    cayellowtail:"When the squid show in spring, nothing else is close. Fish it deep near the hard bottom on a dropper loop or a light sliding sinker.",
+    calicobass:"Live squid on a small hook fished into the kelp out-produces everything else while the spawn is on.",
+    lingcod:"Whole live squid on a dropper loop above a torpedo sinker is a proven big-ling bait on the reef."
+   },
+   waterClarity:["any"],light:["bright","overcast","lowlight","night"],
+   speed:[0,0],sizeIn:6,
+   colors:["Natural"],
+   bestTemp:[56,68],bestSeason:["winter","spring"],
+   tip:"When the squid show up, drop everything else. Fish it near the bottom on hard structure. Availability is the whole game — check the landings before you run."},
+
+  // ── LINGCOD ──────────────────────────────────────────────────────────────
+  {id:"ling-live-sanddab",name:"Live Sanddab on a Dropper Loop",icon:"🐟",cat:"Live Bait",
+   species:["lingcod"],technique:["livebait","dropdrop"],
+   priority:{lingcod:1},
+   waterClarity:["any"],light:["bright","overcast"],
+   speed:[0,0],sizeIn:7,
+   colors:["Natural"],
+   bestTemp:[44,58],bestSeason:["spring","summer","fall"],
+   tip:"The best big-lingcod bait on the coast. Catch dabs on a shrimp-fly rig over sand first, then move to the rock and drop one on a dropper loop above a 8-16 oz torpedo. Big bait, big fish — genuinely."},
+
+  {id:"ling-swimbait-lead",name:'8" Swimbait on a Heavy Leadhead',icon:"🪝",cat:"Soft Plastic",
+   species:["lingcod","calicobass"],technique:["jigging"],
+   priority:{lingcod:1,calicobass:3},
+   speciesTips:{
+    lingcod:"A 6-10 in swimbait on a 4-10 oz leadhead, dropped to the rock and worked with slow lifts. Do not go smaller — an 8 in bait is not too big for a 15 lb ling.",
+    calicobass:"Downsize to 5-7 in and hop it along the shallow reef edges and kelp perimeter for bull calicos."
+   },
+   waterClarity:["any"],light:["bright","overcast"],
+   speed:[0,0],sizeIn:8,
+   colors:["White","Sardine","Root Beer","Smelt","Chartreuse"],
+   bestTemp:[44,60],bestSeason:["spring","summer","fall"],
+   tip:"Drop to the rock, lift slowly, let it fall back. Stay in contact with the bottom — if you aren't occasionally ticking the rock you're too high."},
+
+  {id:"ling-shrimp-fly-rig",name:"Shrimp-Fly / Dropper-Loop Rig",icon:"🦐",cat:"Bottom Rig",
+   species:["lingcod"],technique:["dropdrop","livebait"],
+   priority:{lingcod:2},
+   waterClarity:["any"],light:["bright","overcast"],
+   speed:[0,0],sizeIn:0,
+   colors:["Red/White","Green","Chrome"],
+   bestTemp:[44,58],bestSeason:["spring","summer","fall"],
+   tip:"Two dropper loops above a torpedo sinker, tipped with squid. Doubles as your sanddab-catching rig. Watch your management area's Rockfish Conservation Area depth limit before you drop."},
+
+  {id:"ling-metal-jig",name:"Metal Jig (Point Wilson Dart / Butterfly)",icon:"⚡",cat:"Vertical Jig",
+   species:["lingcod"],technique:["jigging"],
+   priority:{lingcod:2},
+   waterClarity:["any"],light:["bright","overcast"],
+   speed:[0,0],sizeIn:6,
+   colors:["Chrome","Blue/Chrome","Green/Chrome","White"],
+   bestTemp:[42,58],bestSeason:["spring","summer","fall"],
+   tip:"For deep pinnacles and heavy current where a leadhead won't hold bottom. Big slow lifts, then let it flutter down — the grab comes on the fall."},
+
+  // ── CALICO (KELP) BASS ───────────────────────────────────────────────────
+  {id:"calico-swimbait-mc",name:'5" Swimbait on a Light Leadhead',icon:"🪝",cat:"Soft Plastic",
+   species:["calicobass","cayellowtail"],technique:["casting","jigging"],
+   priority:{calicobass:1},
+   waterClarity:["clear","green"],light:["bright","overcast","lowlight"],
+   speed:[0,0],sizeIn:5,
+   colors:["Sardine","Smelt","Root Beer","Chartreuse","Blue/Silver"],
+   bestTemp:[60,74],bestSeason:["spring","summer","fall"],
+   tip:"Cast INTO the kelp, not around it. Let it sink a few feet, then a slow steady wind with occasional pauses. 1/2-1 oz head is enough — you want it swimming, not plummeting."},
+
+  {id:"calico-plastic-grub",name:"Plastic Grub on a Leadhead",icon:"🪝",cat:"Soft Plastic",
+   species:["calicobass"],technique:["casting","jigging"],
+   priority:{calicobass:2},
+   waterClarity:["clear","green","dirty"],light:["bright","overcast"],
+   speed:[0,0],sizeIn:4,
+   colors:["Root Beer/Gold Flake","Motor Oil","Chartreuse","Smelt"],
+   bestTemp:[58,74],bestSeason:["spring","summer","fall","winter"],
+   tip:"The old-school calico bait and still deadly. Hop it along the reef edge and the kelp perimeter, keeping it just off the bottom. Root beer with gold flake is the classic SoCal color."},
+
+  {id:"calico-live-anchovy",name:"Fly-Lined Live Anchovy",icon:"🐠",cat:"Live Bait",
+   species:["calicobass","bonito"],technique:["livebait"],
+   priority:{calicobass:2},
+   waterClarity:["clear","green"],light:["bright","overcast","lowlight"],
+   speed:[0,0],sizeIn:4,
+   colors:["Natural"],
+   bestTemp:[60,74],bestSeason:["spring","summer","fall"],
+   tip:"When they want a smaller profile than a sardine. Thin-wire #4 to #1 hook through the collar, no weight, and let it swim into the stringers. Chum a few loose baits first to fire up the school."}];

@@ -5004,6 +5004,20 @@ function bathyRefDepth(lat, lng){
 // can't represent.
 function seaDepth(lat, lng){
   // Out of envelope → just return abyssal (irrelevant)
+  //
+  // KNOWN GAP — this static model is Atlantic/Gulf only. Everything west of
+  // -98° (i.e. the entire Pacific coast) returns 3000 m, and the land polygons
+  // behind isOnLand()/isFishableWater() carry no West Coast geometry either, so
+  // inland California reads as fishable water here.
+  //
+  // It does not bite in practice because predictDepth() and isPredictWater()
+  // both prefer the fetched bathymetry grid, and the ocean function's CUDEM
+  // bounds (lat 23-52, lng -127 to -65) plus its global ETOPO fallback do cover
+  // California. This path is only reached when that fetch is unavailable — and
+  // when it is, every Pacific nearshore species (cayellowtail, lingcod, calico
+  // bass) reads 3000 m and scores zero on depth. Giving the West Coast a real
+  // static shelf model + coastline is the fix; it needs a Pacific coastline
+  // dataset, so it is deliberately not attempted inline here.
   if(lat < 22 || lat > 45) return 3000;
   if(lng < -98 || lng > -64) return 3000;
 
@@ -5276,6 +5290,7 @@ const SPECIES_HABITAT = {
   croaker:       ["bay", "inshore"],
   sheepshead:    ["bay", "inshore"],
   tautog:        ["inshore", "nearshore"],
+  porgy:         ["inshore", "nearshore"],          // rockpiles, mussel beds, wrecks
   // ── FLORIDA / TROPICAL SPECIES ────────────────────────────────────
   tarpon:        ["bay", "inshore"],            // FL flats, lagoons, passes
   snook:         ["bay", "inshore"],            // FL east coast inlets & lagoons
@@ -5298,8 +5313,10 @@ const SPECIES_HABITAT = {
   vermilion:     ["nearshore", "offshore"],          // Deeper reefs / shelf ledges
   lanesnap:      ["nearshore", "inshore"],          // Gulf reefs
   yellowtail:    ["nearshore", "inshore"],          // FL Keys reefs, classic Keys species
-  // ── PACIFIC / SOUTHERN CALIFORNIA ─────────────────────────────────
+  // ── PACIFIC / CALIFORNIA ──────────────────────────────────────────
   cayellowtail:  ["nearshore", "offshore"],         // SoCal banks, kelp edges, hard bottom, paddies
+  lingcod:       ["nearshore", "offshore"],         // rocky reefs and pinnacles, 33-394 ft
+  calicobass:    ["nearshore", "inshore"],          // kelp line and shallow hard bottom
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -5536,6 +5553,10 @@ const SPECIES_LAT_RANGE = {
   bluefin:       {atlantic: [32.5, 45.0], gulf: [26.0, 30.5]},
   striper:       [33.0, 45.0],   // NC north; some FL strays in winter
   tautog:        [37.5, 43.0],   // NJ to MA
+  // Scup: Cape Cod down to the Chesapeake mouth. They occur to Hatteras but are
+  // not a fishery south of the Bay, and the Gulf has none at all — the explicit
+  // null Gulf band keeps them off the Gulf shelf, which shares these latitudes.
+  porgy:         {atlantic: [36.5, 43.0], gulf: null},
   // ── NEW ENGLAND ONLY ─────────────────────────────────────────────────
   cod:           [40.0, 45.0],   // GOM + Georges Bank
   haddock:       [40.0, 45.0],   // GOM + Georges Bank
@@ -5546,6 +5567,12 @@ const SPECIES_LAT_RANGE = {
   // it in California water. (Without this it would have no entry and default to
   // "allowed everywhere," lighting up the East Coast.)
   cayellowtail:  {atlantic: null, gulf: null},
+  // Lingcod and calico bass are Pacific-only for the same reason. Without an
+  // entry here they would default to "allowed everywhere" and light up the
+  // Atlantic and Gulf; the PACIFIC_SPECIES gate below is what admits them to
+  // California water.
+  lingcod:       {atlantic: null, gulf: null},
+  calicobass:    {atlantic: null, gulf: null},
   // Everything else (yellowfin, blue marlin, mahi, wahoo, sailfish, etc.)
   // has no entry — they range coast-wide.
 };
@@ -5558,16 +5585,27 @@ const SPECIES_LAT_RANGE = {
 // Atlantic/Gulf ranges so that:
 //   • Atlantic/Gulf-only species (redfish, striper, snapper, etc.) never light
 //     up the bite map in Pacific water — anything NOT in this list is excluded.
-//   • Focused on the core West-Coast targets for now (yellowtail + bluefin),
-//     plus the obvious pelagics that share those grounds.
+//   • The list covers the pelagics that share the SoCal offshore grounds plus
+//     the rocky-reef/kelp targets that carry the CA nearshore fishery.
 // A value of [minLat, maxLat] bounds the species; the check runs only for
 // Pacific coordinates, so it can never affect the East Coast.
+//
+// NOTE: the upper bound cannot usefully exceed 42.5°N — that is the ceiling in
+// isPacificContext() and in the Pacific bite-map bounding box.
 const PACIFIC_SPECIES = {
   bluefin:      [28.0, 42.0],   // Pacific bluefin — Baja/SoCal through central CA
   cayellowtail: [28.0, 36.5],   // California yellowtail — SoCal banks/kelp; strays to Monterey
   yellowfin:    [28.0, 35.5],   // warm-water/warm-year SoCal yellowfin
   bonito:       [28.0, 40.0],   // Pacific bonito — abundant off SoCal
   mahi:         [28.0, 34.5],   // dorado — warm months off SoCal/Baja
+  // Lingcod run the whole coast and are strongest from Point Conception north —
+  // the one CA species whose core fishery is the CENTRAL coast (Monterey, Moss
+  // Landing, Morro Bay, Port San Luis) rather than the SoCal bight.
+  lingcod:      [30.0, 42.5],
+  // Calico (kelp) bass follow the kelp: Baja through the Channel Islands, then
+  // thinning fast north of Point Conception (34.45°N). 35.8 reaches Morro Bay
+  // and Port San Luis without claiming a Monterey fishery that isn't there.
+  calicobass:   [28.0, 35.8],
 };
 
 // ── Pacific habitat overrides (West-Coast tuning pass) ──────────────────────
@@ -5589,6 +5627,24 @@ const PACIFIC_SPECIES_PREFS = {
   //     the SSH / surface-current FRONT-FUSION path so the map lights up real
   //     fronts and offshore structure instead of every patch of warm water.
   bluefin: { tempIdeal:[63,70], tempWorking:[60,74], chlorPref:"edge", depthBands:[[50,200],[200,900]], breakPref:"edge" },
+  // SoCal yellowfin are a DIFFERENT fishery from Atlantic canyon yellowfin, so
+  // they get their own habitat rather than sharing the Atlantic numbers:
+  //   • TEMPERATURE — the base band is [70,78] ideal because that is Gulf Stream
+  //     water. The California Current is far cooler: SoCal yellowfin show up as
+  //     the water crosses ~65-66°F and the bite is best in the high 60s to low
+  //     70s. Scored against the Atlantic band, a banner 70°F San Diego day sat
+  //     at the very bottom edge of "ideal" and a very fishable 67°F day was
+  //     already penalized as too cold.
+  //   • DEPTH — the base band starts at 150 m (492 ft) to keep Atlantic
+  //     yellowfin off the shallow Mid-Atlantic shelf. That guard is wrong here:
+  //     the SoCal fishery is fought over BANKS and kelp paddies (Nine Mile, the
+  //     43 Fathom, the 267/277, 14 Mile) that top out well shallower than that,
+  //     and the shelf is so narrow that shallow water is not a proxy for "too
+  //     close to the beach" the way it is off Virginia. Two bands: the bank/
+  //     shelf-edge zone and the deep trough/offshore water.
+  // Everything else carries over — chlorPref/breakPref "edge" is if anything
+  // MORE true here, since the SoCal fleet runs on the temp/color break.
+  yellowfin: { tempIdeal:[66,74], tempWorking:[62,78], chlorPref:"edge", depthBands:[[40,200],[200,1500]], breakPref:"edge" },
 };
 
 // Bahamas / Bahama-Bank water east of the Florida crossings. Several US
@@ -5979,6 +6035,8 @@ const SPECIES_RUN_NM = {
   falsealbacore: 30, bonito: 30, tripletail: 30,
   cobia: 35,
   tautog: 40, spadefish: 40, hogfish: 40,   // incl. winter offshore blackfish wrecks
+  porgy: 45,                                 // NE party-boat rockpiles + fall wrecks
+  calicobass: 65,                            // SoCal kelp line out to Catalina (22) / San Clemente (55)
   muttonsnap: 45, lanesnap: 45, yellowtail: 45,
   kingmack: 55,                              // SKA tournament boats run 40-70
   triggerfish: 60,
@@ -5987,6 +6045,7 @@ const SPECIES_RUN_NM = {
   snapper: 90, gaggrouper: 90, vermilion: 90, // wide west FL shelf runs
   cod: 100, haddock: 100, pollock: 100,      // Gulf of Maine banks: Cashes ~90
   cayellowtail: 100,                         // SoCal islands/banks: San Clemente 55
+  lingcod: 70,                               // CA reefs/pinnacles + island hard bottom
 };
 // Safety net for species added later without an explicit entry.
 const SPECIES_RUN_DEFAULT_NM = { inshore: 25, nearshore: 40 };

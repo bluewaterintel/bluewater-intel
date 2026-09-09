@@ -42,6 +42,7 @@ const SPECIES=[
   {id:"haddock",     name:"Haddock",        color:"#8a7050",cat:"nearshore"},
   {id:"pollock",     name:"Pollock",        color:"#5a6048",cat:"nearshore"},
   {id:"bonito",      name:"Atlantic Bonito",color:"#2a7080",cat:"nearshore"},
+  {id:"porgy",       name:"Porgy (Scup)",   color:"#b07a8a",cat:"nearshore"},
   // ── FLORIDA / TROPICAL SPECIES ──────────────────────────────────────
   {id:"tarpon",      name:"Tarpon",         color:"#a8a8a8",cat:"inshore"},
   {id:"snook",       name:"Snook",          color:"#9a8a4a",cat:"inshore"},
@@ -58,8 +59,10 @@ const SPECIES=[
   {id:"vermilion",   name:"Vermilion Snapper",color:"#c43030",cat:"nearshore"},
   {id:"lanesnap",    name:"Lane Snapper",   color:"#b04848",cat:"nearshore"},
   {id:"yellowtail",  name:"Yellowtail Snapper",color:"#e8b820",cat:"nearshore"},
-  // ── PACIFIC / SOUTHERN CALIFORNIA SPECIES ───────────────────────────
-  {id:"cayellowtail",name:"California Yellowtail",color:"#d9a520",cat:"nearshore"}];
+  // ── PACIFIC / CALIFORNIA SPECIES ────────────────────────────────────
+  {id:"cayellowtail",name:"California Yellowtail",color:"#d9a520",cat:"nearshore"},
+  {id:"lingcod",     name:"Lingcod",        color:"#3f6b52",cat:"nearshore"},
+  {id:"calicobass",  name:"Calico Bass",    color:"#7d8a3a",cat:"nearshore"}];
 
 const PREDICT_SPECIES_PREFS = {
   // Blue marlin band starts at 150 m (≈80 fathoms): a large share of Atlantic
@@ -203,6 +206,26 @@ const PREDICT_SPECIES_PREFS = {
   // 70s°F), roaming (not strictly demersal) so it scores over banks and the
   // shelf edge, not just the bottom.
   cayellowtail: {tempIdeal:[63,71], tempWorking:[58,74], chlorPref:"edge",    depthBands:[[6,90]],     breakPref:"any" },
+  // Lingcod — a cold-water rocky-reef ambush predator, Baja to Alaska, with the
+  // strongest CA fishery from Point Conception north (Monterey/Morro Bay
+  // pinnacles, Big Sur, the Farallones). Demersal: they sit ON high-relief rock,
+  // so structure + current drive the bite, not surface fronts. Depth 10-120 m
+  // (33-394 ft) spans the shallow spring reefs through the deep summer pinnacles.
+  // Temperature band is genuinely COLD — the CA upwelling coast runs 50-58°F at
+  // the surface and colder on the bottom, nothing like an Atlantic reef fish.
+  lingcod:      {tempIdeal:[45,57], tempWorking:[41,62], chlorPref:"high",    depthBands:[[10,120]],   breakPref:"stable", demersal:true },
+  // Calico (kelp) bass — the SoCal kelp-line staple. Structure-glued ambush
+  // feeder in and around the canopy, 10-130 ft. Demersal so it scores on the
+  // nearshoreReef weight profile (structure/tide/pressure) instead of chasing
+  // surface thermal fronts and chlorophyll edges that mean nothing in a kelp bed.
+  calicobass:   {tempIdeal:[62,72], tempWorking:[57,76], chlorPref:"high",    depthBands:[[3,40]],     breakPref:"stable", demersal:true },
+  // Porgy / scup — Northeast and Mid-Atlantic bottom staple. Same cold-pool
+  // reasoning as black sea bass: with bottom temp modeled, the summer wreck and
+  // rockpile grounds off RI/NY/NJ read 50-62°F, which is where the fishery
+  // actually happens, so the ideal band is built around that rather than the
+  // 70s°F surface. Band runs 4-90 m (13-295 ft) to cover inshore summer
+  // rockpiles through the deep fall "humpback" wrecks.
+  porgy:        {tempIdeal:[52,70], tempWorking:[45,76], chlorPref:"high",    depthBands:[[4,90]],     breakPref:"stable", demersal:true },
 };
 
 const MIGRATION_PHASE = {
@@ -856,6 +879,34 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
   ],
 
+  // ── LINGCOD ──────────────────────────────────────────────────────────────
+  // Ophiodon elongatus — a Pacific-only rocky-reef fishery. Two regions because
+  // the CA seasons genuinely differ north and south of Point Conception, and
+  // because CDFW closes groundfish over the winter in most management areas:
+  // the central/northern coast is the strong fishery (big spring fish on the
+  // Monterey/Big Sur/Morro Bay pinnacles, then a strong fall run), while SoCal
+  // lingcod are a real but secondary catch on the island and bank hard bottom.
+  // Every region sits ~2,300 nm from the nearest Atlantic region, so there is no
+  // cross-coast bleed, and the out-of-range guard suppresses East Coast cells.
+  lingcod: [
+    {centerLat: 36.2, centerLng: -121.9, radiusNm: 260, label: "Central California (Monterey → Morro Bay)",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 33.6, centerLng: -118.6, radiusNm: 280, label: "Southern California (islands & banks)",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:1}},
+  ],
+
+  // ── CALICO (KELP) BASS ───────────────────────────────────────────────────
+  // Paralabrax clathratus — a resident, so the curve is year-round with a warm-
+  // season peak rather than a migration. Strongest from the Coronados up through
+  // the Channel Islands; they thin out fast north of Point Conception, which the
+  // smaller/weaker central-coast region reflects.
+  calicobass: [
+    {centerLat: 33.3, centerLng: -118.3, radiusNm: 300, label: "Southern California kelp & islands",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 34.9, centerLng: -120.7, radiusNm: 110, label: "Central coast (Pt. Conception → Morro Bay)",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
+  ],
+
   // ── LONGBILL SPEARFISH ───────────────────────────────────────────────────
   // Rare Atlantic billfish raised in white-marlin spreads. Same broad geography
   // but much lower abundance — peaks scaled down vs white marlin.
@@ -1005,6 +1056,23 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 35.0, centerLng: -75.5, radiusNm: 160, label: "NC / OBX",
      seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+  ],
+
+  // ── PORGY / SCUP ─────────────────────────────────────────────────────────
+  // Stenotomus chrysops — the Northeast party-boat bottom staple. Scup winter
+  // offshore and move inshore when the water warms, so every region is a
+  // spring-arrival / summer-fall peak with a hard winter zero; the northern
+  // regions turn on later and shut off earlier. They thin out fast south of the
+  // Chesapeake, hence the weaker DelMarVa/VA region and nothing below Hatteras.
+  porgy: [
+    {centerLat: 41.5, centerLng: -70.8, radiusNm: 220, label: "Southern New England (RI/MA/CT)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
+    {centerLat: 40.6, centerLng: -73.0, radiusNm: 150, label: "Long Island / Montauk",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:0}},
+    {centerLat: 39.4, centerLng: -74.1, radiusNm: 150, label: "New Jersey",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:0}},
+    {centerLat: 37.6, centerLng: -75.4, radiusNm: 140, label: "DelMarVa / VA",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
   ],
 
   // ── ATLANTIC SPADEFISH ───────────────────────────────────────────────────
