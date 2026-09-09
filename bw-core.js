@@ -19715,7 +19715,11 @@ function syncNavMenuPosition(){
 
 function toggleNav(){
   const m=document.getElementById('nav-menu');
-  const opening = m.style.display==='none';
+  // Read the COMPUTED display, not the inline one. #nav-menu is hidden by the
+  // stylesheet, so on a fresh load m.style.display is "" rather than "none" —
+  // reading the inline value made the first tap after launch decide it was
+  // already open and "close" it, so the menu only appeared on the second tap.
+  const opening = getComputedStyle(m).display === 'none';
   m.style.display = opening ? 'block' : 'none';
   // Toggle a body class so the map's floating UI (zoom buttons, right-side
   // icon column) can fade out via CSS while the menu is open.
