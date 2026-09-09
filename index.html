@@ -425,26 +425,13 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     touch-action:pan-y;
     padding-bottom:env(safe-area-inset-bottom, 0px);
     box-sizing:border-box;
-  }
-  /* Cover subpixel gaps / the header's bottom border so no map bleeds through. */
-  #nav-menu::before{
-    content:"";
-    position:absolute;
-    bottom:100%;
-    left:0;right:0;
-    height:4px;
-    background:#0f2444;
-    pointer-events:none;
-  }
-  /* Same at the bottom edge — rounded corners + subpixel layout can flash map. */
-  #nav-menu::after{
-    content:"";
-    position:absolute;
-    top:100%;
-    left:0;right:0;
-    height:4px;
-    background:#0f2444;
-    pointer-events:none;
+    /* Cover subpixel gaps at the top/bottom seams so no map bleeds through.
+       This MUST be a box-shadow, not ::before/::after — the menu is its own
+       scroll container, so an absolutely-positioned pseudo-element at
+       `top:100%` is placed one element-height down the SCROLLED CONTENT and
+       rides up into the middle of the list as you scroll, painting a stray
+       horizontal bar across the rows at a device-dependent offset. */
+    box-shadow:0 -4px 0 #0f2444, 0 4px 0 #0f2444, 0 16px 48px rgba(0,0,0,.7) !important;
   }
 }
 
