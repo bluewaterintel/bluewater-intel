@@ -1528,7 +1528,7 @@ async function dtFetchWaypoints(p){
     const sbc = window.BW_AUTH && window.BW_AUTH._sb;
     if(!sbc) return [];
     const types = (typeof wpTypeFilter !== "undefined" && wpTypeFilter) ? [...wpTypeFilter] : null;
-    const radius = (typeof wpRadiusNm !== "undefined") ? wpRadiusNm : 40;
+    const radius = (typeof wpRadiusNm !== "undefined") ? wpRadiusNm : WP_DEFAULT_RADIUS_NM;
     const { data, error } = await sbc.rpc("pack_waypoints_within", {
       p_port: activePort, p_lat: p.lat, p_lng: p.lng, p_radius_nm: radius, p_types: types,
     });
@@ -15424,9 +15424,11 @@ let wpLayerGroup = null;                 // single layer group holding waypoint 
 let _wpInRangeCache = null;              // cached in-range list so we don't recompute haversine on every pan
 let _wpRedrawBound = false;              // ensure map move/zoom handlers attach once
 let _wpMoveTimer = null;
-let wpRadiusNm = 40;                     // selected radius band (default 40nm)
+let wpRadiusNm = 120;                    // selected radius band (default 120 nm)
 let wpTypeFilter = null;                 // null = all types, else Set of type codes
 const WP_RADII = [20, 40, 60, 100, 120, 140, 160];
+const WP_DEFAULT_RADIUS_NM = 120;
+window.WP_DEFAULT_RADIUS_NM = WP_DEFAULT_RADIUS_NM;
 
 // How many waypoint markers / list rows to show at once. Scales with the selected
 // radius — wide bands (160 nm) can include thousands of spots near dense coasts.
@@ -16379,12 +16381,14 @@ async function drawRamps(){
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// MEMORY CARD EXPORT (Premium) — pick a port + range (up to 100 nm), export all
-// waypoints in that circle to a GPX file for a chartplotter memory card. This is
-// independent of the live map radius buttons so it never disturbs the map view.
+// MEMORY CARD EXPORT (Premium) — pick a port + range (up to 120 nm on the
+// slider; server cap 160 nm), export all waypoints in that circle to a GPX file
+// for a chartplotter memory card. Shares wpRadiusNm with the map + panel.
 // ════════════════════════════════════════════════════════════════════════════
 const MCE_MAX_NM = 160;        // charted waypoint export cap (matches server)
-let mceRangeNm = 50;           // default slider value
+const MCE_SLIDER_MAX_NM = 120; // Import/Export range slider top end
+window.MCE_SLIDER_MAX_NM = MCE_SLIDER_MAX_NM;
+let mceRangeNm = WP_DEFAULT_RADIUS_NM;
 let mcePort = null;            // selected port for export — no default; user must choose
 
 // Charted waypoints for an explicit port via the server-enforced RPC.
@@ -16426,7 +16430,11 @@ function mceBuildGpx(items, portName, radiusNm){
 }
 
 function mceOnPortChange(v){ mcePort = v; mceUpdate(); }
-function mceOnRangeChange(v){ mceRangeNm = Math.min(MCE_MAX_NM, Math.max(1, parseInt(v,10)||1)); mceUpdate(); }
+function mceOnRangeChange(v){
+  mceRangeNm = Math.min(MCE_SLIDER_MAX_NM, Math.max(1, parseInt(v, 10) || 1));
+  if(typeof setWpRadius === "function") setWpRadius(mceRangeNm);
+  mceUpdate();
+}
 
 // Unified export: a single source selector decides what the one Download button
 // exports — the user's own saved waypoints, or the built-in dataset by port+range.
