@@ -1927,7 +1927,8 @@ export const handler = async (req: Request): Promise<Response> => {
     // cold cache, so we bound the wait — but NOT so aggressively that a common
     // cold-start returns empty fronts. An empty SSH payload makes offshore
     // edge-seeking bite maps (yellowfin, etc.) score ~SST-only; the next warm
-    // request then jumps ~10 pts and relocates hotspots. Client budget is 50s.
+    // request then jumps ~10 pts and relocates hotspots. Client budget is 50s;
+    // 32s leaves room for the rest of Promise.all without starving SST/chlor.
     type AltiSoftResult = { grid: AltimetryGrid; status: "ok" | "timeout" | "empty" };
     const altiNone: AltimetryGrid = { stepDeg: ALTIMETRY_STEP, observedAtMs: null, rows: [] };
     const altiSoft: Promise<AltiSoftResult> = useOceanForecast
@@ -1941,7 +1942,7 @@ export const handler = async (req: Request): Promise<Response> => {
           status: grid.rows.length ? "ok" : "empty",
         })),
         new Promise<AltiSoftResult>((res) =>
-          setTimeout(() => res({ grid: altiNone, status: "timeout" }), 20000)),
+          setTimeout(() => res({ grid: altiNone, status: "timeout" }), 32000)),
       ]);
     // Grids in parallel (each ONE upstream box request). Bathy also tells us which
     // field points are water so we don't fetch buoy/tide over land.

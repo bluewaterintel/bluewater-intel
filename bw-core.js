@@ -3395,6 +3395,7 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
     // have now, then quietly upgrade once fronts arrive so yellowfin/etc don't
     // stick on an SST-only field until the user manually re-runs.
     schedulePredictFrontsUpgrade(latMin, latMax, lngMin, lngMax, fcHour, data);
+    scheduleChlorUpgrade(latMin, latMax, lngMin, lngMax);
     return;
   }
   // Partial payload — still apply any grids we got (especially bathy for depth).
@@ -3406,6 +3407,7 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
     if(data.chlor?.rows?.length) applyChlorData(data.chlor);
     if(data.sst?.rows?.length) applySstData(data.sst);
     if(Array.isArray(data.field) && data.field.length) applyOceanField(data.field, data.fieldStepNm);
+    scheduleChlorUpgrade(latMin, latMax, lngMin, lngMax);
   }
   // Per-point fallback can take minutes. Only attempt it when we have remaining
   // budget and no usable field yet — then race it against what's left.
@@ -4320,26 +4322,27 @@ function scoreCell(lat, lng, speciesId){
   // label is a fixed neutral value rather than reading the removed wxChange object.
   const wxLabel = "steady";
 
+  const droppedKeys = new Set((fr?.droppedFactors || []).map(f => f.key));
   const allFactors = [
-    {name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: (_isBottom || _isDemersal) ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
-    {name:"Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
-    {name:"Bottom structure",   weight:(W.structure||0), score:structureScore,
+    {key:"temp", name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: (_isBottom || _isDemersal) ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
+    {key:"depth", name:"Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
+    {key:"structure", name:"Bottom structure",   weight:(W.structure||0), score:structureScore,
      raw: structureScore > 0.05 ? `${Math.round(structureScore*100)}% · edge/slope` : "flat bottom"},
-    {name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
-    {name:"Chlorophyll",        weight:W.chlorophyll,   score:chlorScore,
+    {key:"pres", name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
+    {key:"chlor", name:"Chlorophyll",        weight:W.chlorophyll,   score:chlorScore,
      raw: chlor != null
           ? `${chlor.toFixed(2)} mg/m³` + (prefs.chlorPref === "edge" && chlorBreak > 0 ? ` · ${chlorBreak.toFixed(2)}/10nm edge` : "")
           : "—"},
     // Reports: only shown when there ARE positive nearby reports. Absence of
     // reports is not a negative signal so we don't display a "—" row that
     // suggests one. Weight shown is an effective bonus weight.
-    ...(reportScore > 0.05 ? [{name:"🎣 Recent catch reports", weight:0.18, score:Math.min(1, reportScore * 2.5), raw:"+bonus"}] : []),
-    {name:"Solunar window",     weight:W.solunar,       score:solunarScoreVal,  raw:solunar > 0.7 ? "MAJOR" : solunar > 0.4 ? "minor" : "off"},
-    {name:BITE_FACTOR_TEMP_BREAK, weight:W.thermalBreak,  score:breakScore,
+    ...(reportScore > 0.05 ? [{key:"reports", name:"🎣 Recent catch reports", weight:0.18, score:Math.min(1, reportScore * 2.5), raw:"+bonus"}] : []),
+    {key:"solunar", name:"Solunar window",     weight:W.solunar,       score:solunarScoreVal,  raw:solunar > 0.7 ? "MAJOR" : solunar > 0.4 ? "minor" : "off"},
+    {key:"break", name:BITE_FACTOR_TEMP_BREAK, weight:W.thermalBreak,  score:breakScore,
      raw: frontSensor === "ssh"
           ? (tBreak > 0 ? `SSH front · ${tBreak.toFixed(1)}°F/10nm` : "SSH front")
           : (tBreak > 0 ? `${tBreak.toFixed(1)}°F/10nm` : (_sshEdge01 > 0 ? "SSH front" : "—"))},
-    {name:BITE_FACTOR_FRONT_CONVERGENCE, weight:(W.convergence||0), score:convergence,
+    {key:"convergence", name:BITE_FACTOR_FRONT_CONVERGENCE, weight:(W.convergence||0), score:convergence,
      raw: convergence > 0
           ? `${Math.round(convergence*100)}% stack` + (
               [_sshEdge01>0?"SSH":null, _curEdge01>0?"current":null, chlorBreak>0?"color":null]
@@ -4348,13 +4351,15 @@ function scoreCell(lat, lng, speciesId){
                 : ""
             )
           : "—"},
-    {name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
-    {name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw:wxLabel},
-    {name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonScore > 0.66 ? "peak" : seasonScore > 0.33 ? "good" : "off"},
-    {name:"Moon phase",         weight:W.moonPhase || 0,score:moonPhaseScoreVal,raw:moonName.toUpperCase()},
-    {name:"Wind direction",     weight:W.wind,          score:windScoreVal,     raw:windObj.dir != null ? `${Math.round(windObj.dir)}°` : "—"}]
-  // Drop factors that aren't applicable to this species category
-  .filter(f => f.weight > 0)
+    {key:"tide", name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
+    {key:"weather", name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw:wxLabel},
+    {key:"season", name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonScore > 0.66 ? "peak" : seasonScore > 0.33 ? "good" : "off"},
+    {key:"moon", name:"Moon phase",         weight:W.moonPhase || 0,score:moonPhaseScoreVal,raw:moonName.toUpperCase()},
+    {key:"wind", name:"Wind direction",     weight:W.wind,          score:windScoreVal,     raw:windObj.dir != null ? `${Math.round(windObj.dir)}°` : "—"}]
+  // Drop factors that aren't applicable to this species category, and env
+  // factors freshness already excluded from the score (stale pressure must not
+  // still appear as a contributing bar with a live-looking 1.9 hPa reading).
+  .filter(f => f.weight > 0 && !droppedKeys.has(f.key))
   // Keep BOTH the factor's own 0–1 quality (how good this signal is here — drives
   // the display bar so "peak"/"MAJOR" reads as a full bar) AND its weighted
   // contribution (quality×weight — drives the sort so the biggest drivers lead).
@@ -6151,6 +6156,34 @@ function pickTopHotspotBadges(hotspots, limit){
   }
   chosen.sort(cmpHotspotStable);
   return chosen;
+}
+
+// Background chlor fill when predictinputs returned SST/wind but an empty
+// chlorophyll grid. The map overlay uses NASA GIBS tiles (always visual);
+// scoring uses NOAA CoastWatch ERDDAP, which can miss on a cold/timeout pass
+// even while GIBS still paints. Retry the chlor-only endpoint and redraw.
+let _chlorUpgradeTimer = null;
+let _chlorUpgradeKey = "";
+function scheduleChlorUpgrade(latMin, latMax, lngMin, lngMax){
+  if(typeof CHLOR_GRID !== "undefined" && CHLOR_GRID && CHLOR_GRID.rows && CHLOR_GRID.rows.length) return;
+  const key = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}`;
+  if(_chlorUpgradeKey === key && _chlorUpgradeTimer) return;
+  _chlorUpgradeKey = key;
+  if(_chlorUpgradeTimer) clearTimeout(_chlorUpgradeTimer);
+  _chlorUpgradeTimer = setTimeout(async () => {
+    _chlorUpgradeTimer = null;
+    try {
+      if(typeof buildChlorGrid !== "function") return;
+      await buildChlorGrid(latMin, latMax, lngMin, lngMax);
+      if(!CHLOR_GRID || !CHLOR_GRID.rows || !CHLOR_GRID.rows.length) return;
+      if(typeof invalidatePredictCache === "function") invalidatePredictCache();
+      if(typeof layerVis !== "undefined" && layerVis.predict &&
+         typeof activeSpId !== "undefined" && activeSpId && activeSpId !== "all" &&
+         typeof drawPrediction === "function"){
+        drawPrediction();
+      }
+    } catch(_e){}
+  }, 1800);
 }
 
 // One-shot background upgrade when predictinputs returned without SSH fronts.
@@ -8232,6 +8265,31 @@ function _sstFcFillGaps(val, nLat, nLng){
 // is the union of exactly the per-polygon tests isOnLand ORs together.
 const SST_BARRIER_LAT_S = 33.80;
 const SST_BARRIER_LAT_N = 36.60;
+// barrierCoastLng() returns Atlantic Outer Banks longitudes (~-75 to -78)
+// at every latitude, including California's. Painting "everything west of
+// that line" as land is correct for Pamlico Sound and catastrophic for the
+// Pacific: it erases all SST north of Long Beach (33.80°N) out to Anacapa
+// and the Santa Barbara Channel. Only run the staircase on an Atlantic canvas.
+function _sstShouldPaintAtlanticBarrier(westLng){
+  return westLng > -98;
+}
+// CUDEM/ETOPO land flag for Pacific SST cells. LAND_POLYGONS have no West
+// Coast geometry, so without this MUR's land temperatures wash over San Diego,
+// Oceanside and the LA basin. Returns false when bathy hasn't loaded yet
+// (don't invent a coast by erasing ocean).
+function _sstBathySaysLand(lat, lng){
+  if(lng > -98) return false;
+  let d = null;
+  if(typeof depthAtFromGrid === "function"){
+    if(typeof BATHY_GRID !== "undefined" && BATHY_GRID)
+      d = depthAtFromGrid(BATHY_GRID, lat, lng);
+    if(d == null && typeof PREDICT_BATHY_GRID !== "undefined" && PREDICT_BATHY_GRID)
+      d = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng);
+  }
+  if(d == null && typeof realDepthAt === "function") d = realDepthAt(lat, lng);
+  if(d == null) return false;
+  return d <= 0;
+}
 
 // MAIN_COAST runs straight across the mouth of the Chesapeake, from the Cape
 // Charles tip to Virginia Beach, so every point behind that line tests as land
@@ -8293,6 +8351,8 @@ function _sstPaintLandShapes(cx, toX, toY, westLng){
   // Everything west of the Atlantic barrier is Pamlico / Core / Bogue Sound.
   // barrierCoastLng steps with latitude, so walk it north as a true staircase
   // (corner, then across) and close the shape off the west edge of the bitmap.
+  // Skip on Pacific canvases — see _sstShouldPaintAtlanticBarrier.
+  if(!_sstShouldPaintAtlanticBarrier(westLng)) return;
   if(typeof barrierCoastLng !== "function") return;
   // Probe finer than the narrowest band in barrierCoastLng (0.10° at Ocracoke)
   // so no step is skipped, then bisect onto the exact breakpoint latitude. A
@@ -8362,8 +8422,10 @@ function _sstLandMaskAtGrid(g){
   const d = cx.getImageData(0, 0, g.nLng, g.nLat).data;
   for(let i = 0; i < g.nLat; i++){
     const y = (g.nLat - 1) - i;
+    const lat = g.minLat + i * g.step;
     for(let j = 0; j < g.nLng; j++){
       if(d[(y * g.nLng + j) * 4 + 3] > 127) mask[i * g.nLng + j] = 1;
+      else if(_sstBathySaysLand(lat, g.minLng + j * g.step)) mask[i * g.nLng + j] = 1;
     }
   }
   return mask;
@@ -8433,6 +8495,19 @@ function _sstFcBuildSmallCanvas(g){
     cx.globalCompositeOperation = "destination-out";
     cx.drawImage(maskC, 0, 0);
     cx.restore();
+  }
+  // Pacific: polygon mask is a no-op (no CA coastline). Punch land out of the
+  // supersampled field from CUDEM/ETOPO so MUR doesn't wash inland.
+  if(g.minLng < -98){
+    const img2 = cx.getImageData(0, 0, w, h);
+    for(let y = 0; y < h; y++){
+      const lat = g.minLat + ((h - 1 - y) / scale) * g.step;
+      for(let x = 0; x < w; x++){
+        const lng = g.minLng + (x / scale) * g.step;
+        if(_sstBathySaysLand(lat, lng)) img2.data[(y * w + x) * 4 + 3] = 0;
+      }
+    }
+    cx.putImageData(img2, 0, 0);
   }
   return c;
 }
@@ -8601,6 +8676,18 @@ const SstForecastLayer = L.Layer.extend({
     // only costs resolution. Retry at the same step with a short backoff, and
     // fall back to tiles only once the retries are spent.
     const stepDeg = _sstStepForBox(bx, z);
+    // Pacific SST has no coastline polygons — CUDEM is the land mask. Load it
+    // in the background (same pattern as currents) and rebuild the canvas when
+    // it arrives so inland SoCal doesn't stay washed in MUR land temperatures.
+    if(bx.w < -98 && typeof buildBathyGrid === "function"
+       && typeof _bathyGridCoversView === "function"
+       && !_bathyGridCoversView(bx.s, bx.n, bx.w, bx.e)){
+      buildBathyGrid(bx.s, bx.n, bx.w, bx.e).then(() => {
+        if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
+        this._smallFor = null;
+        this._draw();
+      }).catch(() => {});
+    }
     const giveUp = () => {
       // MUR failed after retries — fall back to GIBS tiles rather than a blank
       // ocean. The legend switches to the global scale tag so it is honest
@@ -8785,7 +8872,8 @@ function applyAltimetryGrid(data){ ALTIMETRY_GRID = buildAltiGrid(data); }
 // an SLA-equivalent gradient and return the STRONGER of the two estimators, so a
 // real, sharp front scores like the wall it is instead of being averaged away.
 function sshBreakAt(lat, lng, grid){
-  const g = grid || PREDICT_ALTI_GRID;
+  const g = grid || PREDICT_ALTI_GRID
+    || (typeof ALTIMETRY_GRID !== "undefined" ? ALTIMETRY_GRID : null);
   if(!g || !g.nLat || !g.sla) return null;
   const iC = Math.round((lat-g.minLat)/g.step), jC = Math.round((lng-g.minLng)/g.step);
   // Coriolis parameter f at this latitude (1/s) for the geostrophic conversion
