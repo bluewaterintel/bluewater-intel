@@ -9356,6 +9356,7 @@ const AltimetryLayer = L.Layer.extend({
       if(typeof updateOceanLegend==="function") updateOceanLegend();
       this._draw();
     }).catch(()=>{
+      if(seq!==_altiFetchSeq||!layerVis.altimetry) return;
       ALTIMETRY_STATUS="unavailable";
       if(typeof updateOceanLegend==="function") updateOceanLegend();
     });
@@ -14264,7 +14265,7 @@ function updateOceanLegend(){
     const altiTitleRow = loading
       ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
           <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#e879f9;letter-spacing:.08em">FRONT CONVERGENCE (SSH)</div>
-          <span class="alti-spinner" aria-hidden="true"></span>
+          <div style="font-size:${legendMetaPx};font-weight:700;color:#e879f9;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;display:flex;align-items:center;gap:6px"><span class="alti-spinner" aria-hidden="true"></span>Loading…</div>
         </div>`
       : (ALTIMETRY_STATUS==="unavailable"
         ? `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">
