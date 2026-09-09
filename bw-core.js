@@ -18291,7 +18291,8 @@ function buildSpDropdown(){
   const cats=["offshore","nearshore","inshore"];
   let html="";
   cats.forEach(cat=>{
-    const items=SPECIES.filter(s=>s.cat===cat && s.id!=="all");
+    const items=SPECIES.filter(s=>s.cat===cat && s.id!=="all")
+      .slice().sort((a,b)=>a.name.localeCompare(b.name, undefined, {sensitivity:"base"}));
     html+=`<div class="sc-lbl">${cat.toUpperCase()}</div>`;
     items.forEach(sp=>{
       html+=`<button class="sp-opt ${sp.id===activeSpId?"sel":""}" onclick="selectSp('${sp.id}')">
@@ -18790,7 +18791,7 @@ function buildPortDropdown(){
   let html="";
   PORT_GROUPS.forEach(group=>{
     html+=`<div class="sc-lbl">${group.label.toUpperCase()}</div>`;
-    group.ports.forEach(port=>{
+    group.ports.slice().sort((a,b)=>a.localeCompare(b, undefined, {sensitivity:"base"})).forEach(port=>{
       const isSel = port===activePort;
       html+=`<button class="sp-opt ${isSel?"sel":""}" onclick="selectPort('${port.replace(/'/g,"\\'")}')">
         <span style="font-size:13px;width:11px;flex-shrink:0">⚓</span>${port}
