@@ -1795,6 +1795,15 @@ body.bw-controls-collapsed #ocean-opacity-control{display:none !important}
 .wp-radius-btn.sel{
   background:rgba(239,68,68,.30);border-color:rgba(239,68,68,.75);color:#fff;
 }
+/* Waypoint legend selects — Chrome desktop ignores option bg unless color-scheme is dark. */
+#waypoint-legend select{
+  color-scheme:dark;
+  background-color:#0f2444;
+}
+#waypoint-legend select option{
+  background-color:#0f2444;
+  color:#fecaca;
+}
 #scale-bar-track{
   position:relative;
   height:16px;
@@ -3567,7 +3576,7 @@ body.bw-auth-screen-open .leaflet-container{
   <div id="wp-map-source-section" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)">
     <label for="wp-map-source" style="display:block;font-size:9px;color:#f87171;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:4px">Map shows</label>
     <select id="wp-map-source" onchange="setWpMapSource(this.value)" aria-label="Waypoint map source" style="
-      width:100%;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);
+      width:100%;background-color:#0f2444;border:1px solid rgba(239,68,68,.35);
       color:#fecaca;font-weight:700;font-size:12px;border-radius:8px;padding:6px 8px;
       font-family:inherit;cursor:pointer;outline:none;
     ">
@@ -3580,7 +3589,7 @@ body.bw-auth-screen-open .leaflet-container{
   <div id="wp-radius-section" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)">
     <label for="wp-radius-select" style="display:block;font-size:9px;color:#f87171;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:4px">Distance from port</label>
     <select id="wp-radius-select" onchange="setWpRadius(Number(this.value))" aria-label="Waypoint distance from port" style="
-      width:100%;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);
+      width:100%;background-color:#0f2444;border:1px solid rgba(239,68,68,.35);
       color:#fecaca;font-weight:700;font-size:12px;border-radius:8px;padding:6px 8px;
       font-family:inherit;cursor:pointer;outline:none;
     "></select>
