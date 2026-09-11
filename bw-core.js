@@ -10571,7 +10571,11 @@ function toggleLayer(key){
     updateRadarLoopControlVisibility();
   }
   else if(key==="waypoints"){
-    drawWaypoints();
+    if(layerVis.waypoints && typeof setWpRadius === "function"){
+      setWpRadius((typeof WP_MAP_DEFAULT_RADIUS_NM !== "undefined") ? WP_MAP_DEFAULT_RADIUS_NM : 60);
+    } else {
+      drawWaypoints();
+    }
     if(typeof drawUserWaypoints === "function") drawUserWaypoints();
     updateWaypointControlVisibility();
   }
@@ -15424,10 +15428,12 @@ let wpLayerGroup = null;                 // single layer group holding waypoint 
 let _wpInRangeCache = null;              // cached in-range list so we don't recompute haversine on every pan
 let _wpRedrawBound = false;              // ensure map move/zoom handlers attach once
 let _wpMoveTimer = null;
-let wpRadiusNm = 120;                    // selected radius band (default 120 nm)
+let wpRadiusNm = 60;                     // active radius band (map defaults to 60 nm)
 let wpTypeFilter = null;                 // null = all types, else Set of type codes
 const WP_RADII = [20, 40, 60, 100, 120, 140, 160];
-const WP_DEFAULT_RADIUS_NM = 120;
+const WP_MAP_DEFAULT_RADIUS_NM = 60;     // map layer toggle — fewer markers, less pan lag
+const WP_DEFAULT_RADIUS_NM = 120;        // Waypoints & Structure panel browse default
+window.WP_MAP_DEFAULT_RADIUS_NM = WP_MAP_DEFAULT_RADIUS_NM;
 window.WP_DEFAULT_RADIUS_NM = WP_DEFAULT_RADIUS_NM;
 
 // How many waypoint markers / list rows to show at once. Scales with the selected
