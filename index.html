@@ -4200,7 +4200,7 @@ body.bw-auth-screen-open .leaflet-container{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260903a"></script>
+<script src="bw-core.js?v=20260911a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
@@ -5757,6 +5757,21 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
   font-family:inherit;outline:none;cursor:pointer;
 }
 .wp-filter option{background:#0f2444;color:#f0f6ff}
+#wp-overlay .wp-filter,
+#wp-overlay .wp-range-select{
+  color-scheme:dark;
+  background-color:#0f2444;
+}
+.wp-range-bar{
+  padding:12px 16px;
+  background:rgba(0,0,0,.22);
+  border-bottom:1px solid rgba(107,191,234,.1);
+  display:flex;flex-direction:column;gap:6px;
+}
+.wp-range-label{
+  font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9ec5e8;
+}
+.wp-range-select{width:100%}
 
 .wp-btn{
   background:rgba(41,121,181,.18);border:1px solid rgba(41,121,181,.4);
@@ -6008,7 +6023,7 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
 }
 </style>
 
-<script src="bw-waypoints-ui.js?v=20260816b"></script>
+<script src="bw-waypoints-ui.js?v=20260911a"></script>
 
 <style>
 /* ── 6-DAY FORECAST MODAL ─────────────────────────────────────────────────── */
