@@ -16571,8 +16571,10 @@ function gpxEscape(s){
 function setWpRadius(nm){
   const cap = (typeof waypointMaxRangeNm === "function") ? waypointMaxRangeNm() : 160;
   wpRadiusNm = Math.min(cap, Math.max(20, nm));
-  const sel = document.getElementById("wp-radius-select");
-  if(sel && Number(sel.value) !== nm) sel.value = String(nm);
+  for(const id of ["wp-radius-select", "wp-panel-radius-select"]){
+    const sel = document.getElementById(id);
+    if(sel && Number(sel.value) !== wpRadiusNm) sel.value = String(wpRadiusNm);
+  }
   drawWaypoints();
   drawRamps();
   if(typeof wpFetchCharted === "function") wpFetchCharted(true);

@@ -622,11 +622,11 @@ function openWaypoints(){
     setWpRadius((typeof WP_DEFAULT_RADIUS_NM !== "undefined") ? WP_DEFAULT_RADIUS_NM : 120);
   }
   if(premium){
-    if(WP_state.tab === "public" && WP_state.regionFilter === "all" &&
-       typeof activePort !== "undefined" && activePort){
+    // Always land on the charted Waypoints tab so the distance-from-port control
+    // is visible (mobile users were stuck on My Waypoints with no range selector).
+    WP_state.tab = "public";
+    if(typeof activePort !== "undefined" && activePort){
       WP_state.regionFilter = activePort;
-    } else if(WP_state.tab === "mine"){
-      WP_state.regionFilter = "all";
     }
   } else {
     WP_state.tab = "mine";
@@ -797,11 +797,23 @@ function wpFilteredList(list){
   return out;
 }
 
+function wpRangeBar(){
+  if(!wpHasPremium()) return "";
+  const radii = (typeof WP_RADII !== "undefined") ? WP_RADII : [20, 40, 60, 100, 120, 140, 160];
+  const radiusNm = (typeof wpRadiusNm !== "undefined") ? wpRadiusNm : 120;
+  return `
+    <div class="wp-range-bar">
+      <label class="wp-range-label" for="wp-panel-radius-select">Distance from port</label>
+      <select id="wp-panel-radius-select" class="wp-filter wp-range-select" aria-label="Distance from port"
+        onchange="wpOnPanelRadiusChange(Number(this.value))">
+        ${radii.map(nm => `<option value="${nm}" ${radiusNm === nm ? "selected" : ""}>Within ${nm} nm</option>`).join("")}
+      </select>
+    </div>`;
+}
+
 function wpToolbar(includeAdd){
   const ports = (typeof PORTS !== "undefined") ? Object.keys(PORTS).sort() : [];
   const publicTab = WP_state.tab === "public";
-  const radii = (typeof WP_RADII !== "undefined") ? WP_RADII : [20, 40, 60, 100, 120, 140, 160];
-  const radiusNm = (typeof wpRadiusNm !== "undefined") ? wpRadiusNm : 120;
   return `
     <div class="wp-toolbar">
       <input class="wp-search" type="text" placeholder="Search by name, region, or description..."
@@ -816,10 +828,6 @@ function wpToolbar(includeAdd){
         ${publicTab ? "" : `<option value="all">All Ports</option>`}
         ${ports.map(r => `<option value="${r}" ${WP_state.regionFilter===r?"selected":""}>${r}</option>`).join("")}
       </select>
-      ${publicTab ? `
-      <select class="wp-filter" aria-label="Distance from port" onchange="wpOnPanelRadiusChange(Number(this.value))">
-        ${radii.map(nm => `<option value="${nm}" ${radiusNm === nm ? "selected" : ""}>Within ${nm} nm</option>`).join("")}
-      </select>` : ""}
       ${includeAdd ? `<button class="wp-btn primary" onclick="wpNewWaypoint()">+ Add Waypoint</button>` : ""}
     </div>
   `;
@@ -999,6 +1007,7 @@ function wpRenderPublic(){
   ` : "";
 
   return `
+    ${wpRangeBar()}
     ${wpToolbar(false)}
     ${wpStatsBar(list, "waypoints", statsExtra)}
     ${banner}
@@ -1443,7 +1452,7 @@ function wpShowEditor(isNew){
             <span id="wp-edit-type-preview" class="wp-type-preview" style="color:${wpType(p.sourceType||p.type||"wreck").color}">${wpTypeIconHTML(p.sourceType||p.type||"wreck")}</span>
             <select class="wp-select" id="wp-edit-type" style="flex:1" onchange="wpEditTypePreview(this.value)">
               ${Object.entries(WP_TYPES).filter(([k]) => k !== "private").map(([k,v]) =>
-                `<option value="${k}" ${(p.sourceType||p.type)===k?"selected":""}>${v.icon} ${v.name}</option>`
+                `<option value="${k}" ${(p.sourceType||p.type)===k?"selected":""}>${v.name}</option>`
               ).join("")}
             </select>
           </div>
