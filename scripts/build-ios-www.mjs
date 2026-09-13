@@ -14,6 +14,7 @@ const www = join(root, "www");
 const COPY_FILES = [
   "index.html",
   "auth-gate.html",
+  "email-confirmed.html",
   "manifest.json",
   "sw.js",
   "terms.html",

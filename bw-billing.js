@@ -263,6 +263,30 @@
     // Take them to the sign-in screen; they'll sign in after confirming.
     if(typeof window.showAuthGate === "function") window.showAuthGate();
   };
+  // Shown after email confirmation in the native app — no web sign-in trap.
+  window.showEmailConfirmedScreen = function(){
+    const gate = document.getElementById("bw-auth-gate");
+    const page = document.getElementById("email-confirmed-page");
+    const welcome = document.getElementById("bw-auth-welcome");
+    if(welcome) welcome.style.display = "none";
+    if(gate) gate.style.display = "none";
+    const ca = document.getElementById("create-account-page");
+    const verify = document.getElementById("verify-email-page");
+    if(ca) ca.style.display = "none";
+    if(verify) verify.style.display = "none";
+    if(page) page.style.display = "block";
+    if(typeof window.syncAuthScreenBodyClass === "function") window.syncAuthScreenBodyClass();
+  };
+  window.emailConfirmedContinue = function(){
+    const page = document.getElementById("email-confirmed-page");
+    if(page) page.style.display = "none";
+    if(typeof window.showAuthGate === "function") window.showAuthGate();
+    else {
+      const gate = document.getElementById("bw-auth-gate");
+      if(gate) gate.style.display = "flex";
+    }
+    if(typeof window.syncAuthScreenBodyClass === "function") window.syncAuthScreenBodyClass();
+  };
   window.resendVerificationEmail = async function(){
     const page = document.getElementById("verify-email-page");
     const msg = document.getElementById("verify-email-msg");
@@ -485,7 +509,7 @@
     const src = bwBillingSource(p);
     if(src === "apple") return "Manage in App Store";
     if(src === "google") return "Manage in Google Play";
-    if(src === "stripe" && window.BW_NATIVE) return "How to cancel";
+    if(src === "stripe" && window.BW_NATIVE) return "Manage Billing";
     return "Manage Billing";
   };
   window.bwOpenAppStoreSubscriptions = function(){
@@ -524,9 +548,9 @@
       noteText = `You have a live Google Play subscription. Deleting your account does not cancel it — cancel in ${PLAY_PATH} first, or Google will keep billing your Google account.`;
     } else if(src === "stripe" && window.BW_NATIVE){
       helpHtml = `<b style="color:#f0f6ff">Billed on our website</b><br>`
-        + `You subscribed at bluewaterintel.com, so this subscription is not managed by the App Store. `
-        + `Open <b>app.bluewaterintel.com</b> in Safari, sign in, then use <b>Menu \u2192 Account \u2192 Manage Billing</b> to change your card, switch plans, or cancel.`;
-      noteText = `You have a live website subscription. Deleting your account does not cancel it — cancel at app.bluewaterintel.com first, or billing continues.`;
+        + `You subscribed at bluewaterintel.com, so Apple does not manage this subscription. `
+        + `Tap <b>Manage Billing</b> above to open our secure billing portal in Safari — update your card, switch plans, or cancel there.`;
+      noteText = `You have a live website subscription. Deleting your account does not cancel it — use Manage Billing first, or billing continues.`;
     } else if(src === "stripe"){
       helpHtml = `<b style="color:#f0f6ff">Billed by card (Stripe)</b><br>`
         + `Use <b>Manage Billing</b> above to update your card, switch between monthly and annual, or cancel. `
@@ -628,18 +652,30 @@
       else if(typeof showToast === "function") showToast(text, "error");
     }
   };
+  async function openStripeBillingPortal(msgEl){
+    const body = { return_url: billingReturnUrl("portal=return") };
+    const res = await fetch(`${fnBase()}/stripe-portal`, { method:"POST", headers: await authHeaders(), body: JSON.stringify(body) });
+    const j = await res.json().catch(() => ({}));
+    if(!res.ok) throw new Error(j.error || "Could not open billing portal.");
+    if(j.url) openBillingUrl(j.url);
+  }
   window.bwManageBilling = async function(){
-    const msg = document.getElementById("pricing-msg");
+    const msg = document.getElementById("pricing-msg") || document.getElementById("acct-plan-msg");
+    const showErr = (text) => {
+      if(msg){ msg.textContent = text; msg.style.display = "block"; msg.style.color = "#fca5a5"; }
+      else if(typeof showToast === "function") showToast(text, "error");
+    };
     if(window.BW_NATIVE){
       try {
         const s = sb();
         if(s){
-          const { data:p } = await s.from("profiles").select("billing_source, subscription_status, is_owner").maybeSingle();
-          if(bwBillingSource(p) === "stripe"){
-            const note = "This subscription was purchased on our website, so it can't be canceled from the App Store or Google Play. "
-              + "Open app.bluewaterintel.com in Safari, sign in, then use Menu \u2192 Account \u2192 Manage Billing.";
-            if(msg){ msg.textContent = note; msg.style.display = "block"; }
-            else if(typeof showToast === "function") showToast(note, "info");
+          const { data:p } = await s.from("profiles").select("billing_source, subscription_status, is_owner, stripe_customer_id").maybeSingle();
+          if(bwBillingSource(p) === "stripe" || (p && p.stripe_customer_id)){
+            try {
+              await openStripeBillingPortal(msg);
+            } catch(e){
+              showErr(e.message || "Could not open billing portal.");
+            }
             return;
           }
           if(bwBillingSource(p) === "google"){
@@ -654,12 +690,8 @@
       return;
     }
     try {
-      const body = { return_url: billingReturnUrl("portal=return") };
-      const res = await fetch(`${fnBase()}/stripe-portal`, { method:"POST", headers: await authHeaders(), body: JSON.stringify(body) });
-      const j = await res.json();
-      if(!res.ok) throw new Error(j.error || "Could not open billing portal.");
-      if(j.url) openBillingUrl(j.url);
-    } catch(e){ if(msg){ msg.textContent = e.message || "Could not open billing portal."; msg.style.display="block"; } }
+      await openStripeBillingPortal(msg);
+    } catch(e){ showErr(e.message || "Could not open billing portal."); }
   };
   // Renders the plan status + Upgrade/Manage buttons inside the nav account block.
   window.renderNavPlan = async function(){
@@ -692,7 +724,7 @@
     const showManage = !isOwner && (st==="active" || st==="trialing");
     // Kept generic here — the Account page spells out the exact cancel path.
     const src = bwBillingSource(profile);
-    const manageLabel = src === "apple" ? "App Store" : src === "google" ? "Google Play" : "Manage Billing";
+    const manageLabel = window.bwManageBillingLabel ? window.bwManageBillingLabel(profile) : (src === "apple" ? "App Store" : src === "google" ? "Google Play" : "Manage Billing");
     // Entitled accounts lose the Upgrade button, which otherwise makes the plan
     // list unreachable — including for App Review, who sign in already entitled.
     const entitled = isOwner || st==="active" || st==="trialing";

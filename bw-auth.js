@@ -120,15 +120,21 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   }
 
   function authRedirectUrl(query) {
-    // Email links always open in Mail/Safari first. Custom URL schemes
-    // (com.bluewaterintel.app://) render a blank page when iOS does not hand
-    // off to the app — use the HTTPS site so the user sees a confirmation page.
+    const q = String(query || "").replace(/^\?/, "");
     if (typeof window !== "undefined" && window.location && /^https?:\/\/(localhost|127\.0\.0\.1)/.test(window.location.origin)) {
-      return window.location.origin + "/?" + query;
+      return window.location.origin + "/?" + q;
     }
-    return "https://app.bluewaterintel.com/?" + query;
+    return "https://app.bluewaterintel.com/?" + q;
   }
-  const EMAIL_CONFIRM_REDIRECT = authRedirectUrl("confirmed=1");
+  // Native signups: land on a lightweight page that opens the app — not the
+  // full web sign-in gate (which confused users into signing up again on web).
+  function emailConfirmRedirectUrl() {
+    if (typeof window !== "undefined" && window.BW_NATIVE) {
+      return "https://app.bluewaterintel.com/email-confirmed.html?confirmed=1";
+    }
+    return authRedirectUrl("confirmed=1");
+  }
+  const EMAIL_CONFIRM_REDIRECT = emailConfirmRedirectUrl();
   const PASSWORD_RECOVERY_REDIRECT = authRedirectUrl("recovery=1");
 
   async function signUp(email, password, meta) {
@@ -166,7 +172,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     const { error } = await client.auth.resend({
       type: "signup",
       email,
-      options: { emailRedirectTo: EMAIL_CONFIRM_REDIRECT },
+      options: { emailRedirectTo: emailConfirmRedirectUrl() },
     });
     if (error) throw error;
   }
