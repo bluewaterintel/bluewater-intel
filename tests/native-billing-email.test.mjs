@@ -22,8 +22,13 @@ assert.doesNotMatch(
   "removed misleading native Stripe toast-only path",
 );
 
-// Native manage label should read Manage Billing (actionable).
+// Native manage label should read Manage Billing (actionable) on the Account page.
 assert.match(billing, /if\(src === "stripe" && window\.BW_NATIVE\) return "Manage Billing"/);
+
+// Menu plan card must not include a Manage Billing shortcut (Account page only).
+const navPlanFn = billing.slice(billing.indexOf("window.renderNavPlan = async function"));
+assert.match(navPlanFn, /View plans/);
+assert.doesNotMatch(navPlanFn, /onclick="bwManageBilling\(\)"/);
 
 // Native signups redirect to email-confirmed.html (not web sign-in gate).
 assert.match(auth, /email-confirmed\.html\?confirmed=1/);

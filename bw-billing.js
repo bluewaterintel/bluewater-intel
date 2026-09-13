@@ -697,12 +697,11 @@
   window.renderNavPlan = async function(){
     const el = document.getElementById("nav-plan"); if(!el) return;
     let tier = "Free", detail = "Maps, ports, catches & your own waypoints";
-    let st = "none", interval = null, isOwner = false, profile = null;
+    let st = "none", interval = null, isOwner = false;
     try {
       const s = sb();
       if(s){
-        const { data:p } = await s.from("profiles").select("is_owner, subscription_status, subscription_interval, billing_source").maybeSingle();
-        profile = p;
+        const { data:p } = await s.from("profiles").select("is_owner, subscription_status, subscription_interval").maybeSingle();
         st = (p && p.subscription_status) || "none";
         interval = p && p.subscription_interval;
         isOwner = !!(p && p.is_owner);
@@ -721,12 +720,10 @@
     } else if(st==="trialing"){
       actionHtml = `<span style="${badgeStyle}">7 Day Trial</span>`;
     }
-    const showManage = !isOwner && (st==="active" || st==="trialing");
-    // Kept generic here — the Account page spells out the exact cancel path.
-    const src = bwBillingSource(profile);
-    const manageLabel = window.bwManageBillingLabel ? window.bwManageBillingLabel(profile) : (src === "apple" ? "App Store" : src === "google" ? "Google Play" : "Manage Billing");
     // Entitled accounts lose the Upgrade button, which otherwise makes the plan
     // list unreachable — including for App Review, who sign in already entitled.
+    // Billing is managed on the Account page (Stripe vs App Store vs Play),
+    // not from this menu card — a dead-looking shortcut confused website subscribers.
     const entitled = isOwner || st==="active" || st==="trialing";
     const viewPlansHtml = entitled
       ? `<button type="button" onclick="openPricing()" style="font-family:inherit;background:transparent;border:1px solid rgba(107,191,234,.35);color:#6bbfea;font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;cursor:pointer">View plans</button>`
@@ -740,7 +737,6 @@
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
           ${actionHtml}
-          ${showManage?`<button type="button" onclick="bwManageBilling()" style="font-family:inherit;background:transparent;border:1px solid rgba(107,191,234,.35);color:#6bbfea;font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;cursor:pointer">${manageLabel}</button>`:""}
           ${viewPlansHtml}
         </div>
       </div>`;
