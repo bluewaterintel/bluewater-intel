@@ -549,7 +549,7 @@
     } else if(src === "stripe" && window.BW_NATIVE){
       helpHtml = `<b style="color:#f0f6ff">Billed on our website</b><br>`
         + `You subscribed at bluewaterintel.com, so Apple does not manage this subscription. `
-        + `Tap <b>Manage Billing</b> above to open our secure billing portal in Safari — update your card, switch plans, or cancel there.`;
+        + `Tap <b>Manage Billing</b> above to open our secure billing in a web browser — update your card, switch plans, or cancel there.`;
       noteText = `You have a live website subscription. Deleting your account does not cancel it — use Manage Billing first, or billing continues.`;
     } else if(src === "stripe"){
       helpHtml = `<b style="color:#f0f6ff">Billed by card (Stripe)</b><br>`
