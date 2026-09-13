@@ -6953,7 +6953,6 @@
 {"name":"Wreckboy Watson Island SMZ","lat":25.6909,"lng":-80.0823,"t":"wk"}
 {"name":"Accomac Canyon","lat":37.81049,"lng":-74.06088,"t":"cy"}
 {"name":"Baltimore Canyon Tip","lat":38.24633,"lng":-73.84255,"t":"cy"}
-{"name":"Canyon Finger","lat":34.83332,"lng":-75.38839,"t":"cy"}
 {"name":"Canyon Pocket","lat":38.4401,"lng":-73.58183,"t":"cy"}
 {"name":"Canyon Tip","lat":34.8334,"lng":-75.38942,"t":"cy"}
 {"name":"Duffie Canyon","lat":35.39163,"lng":-74.88805,"t":"cy"}
@@ -6968,7 +6967,7 @@
 {"name":"Little Canyon","lat":35.45757,"lng":-74.8335,"t":"cy"}
 {"name":"Norfolk Canyon Tip","lat":37.09276,"lng":-74.77637,"t":"cy"}
 {"name":"North Heyes Canyon","lat":38.24999,"lng":-73.53333,"t":"cy"}
-{"name":"Pamlico Canyon","lat":34.82683,"lng":-75.41833,"t":"cy"}
+{"name":"Pamlico Canyon","lat":34.82184,"lng":-75.37857,"t":"cy"}
 {"name":"Poormans Canyon","lat":37.87007,"lng":-74.087,"t":"cy"}
 {"name":"South Heyes Canyon","lat":38.21666,"lng":-73.56667,"t":"cy"}
 {"name":"South Vries Canyon","lat":38.08333,"lng":-73.66667,"t":"cy"}
@@ -7005,8 +7004,6 @@
 {"name":"HLNE0002","lat":40.55833,"lng":-71.60833,"t":"hl"}
 {"name":"HLNE0001","lat":40.83717,"lng":-71.67583,"t":"hl"}
 {"name":"Holed UP","lat":39.8177,"lng":-72.01117,"t":"hl"}
-{"name":"Honey Hole","lat":34.10653,"lng":-77.74992,"t":"hl"}
-{"name":"Honey Hole","lat":34.42712,"lng":-77.01165,"t":"hl"}
 {"name":"Hunters Hole","lat":33.79583,"lng":-77.425,"t":"hl"}
 {"name":"King Hole","lat":33.81358,"lng":-77.84915,"t":"hl"}
 {"name":"Kmack Hole","lat":34.11875,"lng":-77.71848,"t":"hl"}
@@ -7081,7 +7078,6 @@
 {"name":"Oleys Humps","lat":39.76617,"lng":-73.65793,"t":"hp"}
 {"name":"Plum Hump","lat":41.18255,"lng":-72.24045,"t":"hp"}
 {"name":"Poormans Hump","lat":37.85218,"lng":-74.097,"t":"hp"}
-{"name":"Portsmouth Hump","lat":34.80693,"lng":-75.55006,"t":"hp"}
 {"name":"Red Church Hump","lat":40.2783,"lng":-73.96725,"t":"hp"}
 {"name":"Horseshoe Lumps","lat":36.65368,"lng":-75.40071,"t":"hp"}
 {"name":"Sea Isle Hump","lat":39.12397,"lng":-74.63607,"t":"hp"}
@@ -8962,8 +8958,8 @@
 {"name":"Old Silas Rock","lat":41.19151,"lng":-72.14597,"t":"rk"}
 {"name":"Outer Hurl Rocks","lat":33.60331,"lng":-78.89965,"t":"rk"}
 {"name":"Outer Tappen Rock","lat":42.8827,"lng":-70.8059,"t":"rk"}
-{"name":"Oyster Rocks Long Shoal","lat":35.56345,"lng":-75.8306,"t":"rk"}
-{"name":"Oyster Rocks West Bluff","lat":35.30243,"lng":-76.17127,"t":"rk"}
+{"name":"Oyster Rocks","lat":35.56345,"lng":-75.8306,"t":"rk"}
+{"name":"Oyster Rocks","lat":35.30243,"lng":-76.17127,"t":"rk"}
 {"name":"Petey Brown Rock","lat":34.365,"lng":-77.41267,"t":"rk"}
 {"name":"Picket Rock","lat":40.86075,"lng":-73.677,"t":"rk"}
 {"name":"PIG Rock","lat":42.28195,"lng":-70.94132,"t":"rk"}
@@ -9193,7 +9189,7 @@
 {"name":"Finger Tip","lat":42.7904,"lng":-70.4426,"t":"st"}
 {"name":"Fish Hawks Tank","lat":39.75859,"lng":-74.02854,"t":"st"}
 {"name":"Fish Structure","lat":31.57675,"lng":-80.35507,"t":"st"}
-{"name":"Fishermans Island Wreck 370'X 48'X 19'","lat":37.05715,"lng":-75.89934,"t":"st"}
+{"name":"Anglo African","lat":37.05715,"lng":-75.89934,"t":"wk"}
 {"name":"FM Bank","lat":40.44667,"lng":-71.47917,"t":"st"}
 {"name":"Fripp Island Drydock Wreck","lat":32.2852,"lng":-80.41508,"t":"st"}
 {"name":"Gilbert 3 Tanks","lat":39.76274,"lng":-74.02047,"t":"st"}
@@ -9542,7 +9538,7 @@
 {"name":"J-Reef Barges & Tug","lat":31.60327,"lng":-80.7961,"t":"wk"}
 {"name":"Jekyll Wreck","lat":31.01267,"lng":-81.36767,"t":"wk"}
 {"name":"Jonesport Wreck","lat":44.512,"lng":-67.5812,"t":"wk"}
-{"name":"Kassandra","lat":35.16667,"lng":-75.35833,"t":"wk"}
+{"name":"Kassandra","lat":35.17091,"lng":-75.35811,"t":"wk"}
 {"name":"Kathleen Riggin Wreck","lat":38.30487,"lng":-74.88925,"t":"wk"}
 {"name":"Keshena","lat":34.99917,"lng":-75.76367,"t":"wk"}
 {"name":"Lancing (Slick Wreck)","lat":35.03418,"lng":-75.44466,"t":"wk"}
@@ -9558,7 +9554,6 @@
 {"name":"Malchase","lat":34.60833,"lng":-75.79133,"t":"wk"}
 {"name":"Manasquan Wreck","lat":40.10217,"lng":-74.0185,"t":"wk"}
 {"name":"Manasquan Wreck","lat":40.1089,"lng":-74.02262,"t":"wk"}
-{"name":"Manteo Wreck","lat":35.912,"lng":-75.6512,"t":"wk"}
 {"name":"Manuela","lat":34.67933,"lng":-75.79933,"t":"wk"}
 {"name":"Manuela","lat":34.1311,"lng":-76.7112,"t":"wk"}
 {"name":"Marine Electric - Stern","lat":37.87878,"lng":-74.77007,"t":"wk"}
@@ -9579,7 +9574,7 @@
 {"name":"New Winds","lat":35.95507,"lng":-74.88563,"t":"wk"}
 {"name":"Nikeswreck","lat":36.9497,"lng":-76.02249,"t":"wk"}
 {"name":"Nordal","lat":34.69167,"lng":-75.583,"t":"wk"}
-{"name":"Norlavore","lat":35.088,"lng":-75.33333,"t":"wk"}
+{"name":"Norlavore","lat":35.08351,"lng":-75.332919,"t":"wk"}
 {"name":"North Edisto Nearshore","lat":32.51733,"lng":-80.10002,"t":"rf"}
 {"name":"North Edisto Nearshore - Concrete Structures","lat":32.51773,"lng":-80.1011,"t":"rf"}
 {"name":"Northeast Wreck","lat":39.7675,"lng":-74.02683,"t":"wk"}
@@ -9779,7 +9774,7 @@
 {"name":"WKSE0047","lat":34.13571,"lng":-77.73025,"t":"wk"}
 {"name":"WKSE0046","lat":34.13674,"lng":-77.73133,"t":"wk"}
 {"name":"WKSE0045","lat":34.30163,"lng":-76.72408,"t":"wk"}
-{"name":"WKSE0044","lat":34.31349,"lng":-76.54463,"t":"wk"}
+{"name":"WKSE0044","lat":34.31193,"lng":-76.54497,"t":"wk"}
 {"name":"WKSE0043","lat":34.33006,"lng":-76.5613,"t":"wk"}
 {"name":"WKSE0042","lat":34.35983,"lng":-76.68032,"t":"wk"}
 {"name":"WKSE0041","lat":34.37467,"lng":-76.69117,"t":"wk"}
@@ -11208,7 +11203,7 @@
 {"name":"WKSE0002","lat":35.90111,"lng":-75.39702,"t":"wk"}
 {"name":"WKSE0001","lat":35.90216,"lng":-75.394962,"t":"wk"}
 {"name":"WKSE0003","lat":35.73091,"lng":-75.08683,"t":"wk"}
-{"name":"Tower Wreck","lat":35.13686,"lng":-75.28568,"t":"wk"}
+{"name":"Merak","lat":35.13686,"lng":-75.28568,"t":"wk"}
 {"name":"WKSE0008","lat":35.03033,"lng":-75.47737,"t":"wk"}
 {"name":"WKSE0004","lat":35.28207,"lng":-75.50758,"t":"wk"}
 {"name":"WKSE0005","lat":35.28207,"lng":-75.50725,"t":"wk"}
@@ -11898,3 +11893,5 @@
 {"name":"Grouper Hole","lat":26.934167,"lng":-80.045556,"t":"hl"}
 {"name":"Grouper Hole","lat":26.935556,"lng":-26.935556,"t":"hl"}
 {"name":"Kidd Wreck","lat":25.805667,"lng":-81.856167,"t":"wk"}
+{"name":"Anglo Bow","lat":37.05768,"lng":-75.89916,"t":"wk"}
+{"name":"Obstruction","lat":37.06037,"lng":-75.88656,"t":"st"}
