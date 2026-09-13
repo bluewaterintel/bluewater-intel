@@ -388,7 +388,7 @@ supabase functions deploy stripe-portal
 | “In-app purchases not configured” | Set `REVENUECAT_IOS_API_KEY` in `.env`, run `npm run build:ios` |
 | Email link opens Safari, not app | Check Supabase redirect URLs + `Info.plist` URL scheme |
 | Pro not showing after purchase | Check RevenueCat webhook logs + Supabase function logs |
-| Website subscriber can't manage in app | Expected — app shows message to use website (Apple rules) |
+| Website subscriber wants to manage billing | Menu → Manage Account → Manage Billing opens the Stripe portal |
 
 ---
 
@@ -398,7 +398,7 @@ supabase functions deploy stripe-portal
 capacitor.config.json        Capacitor app ID, webDir, iOS plugins
 bw-capacitor.js                  Deep links, status bar
 bw-iap.js                        Apple IAP (RevenueCat / StoreKit)
-bw-billing.js                    Stripe (web) vs IAP (iOS) routing
+bw-billing.js                    Stripe (web) vs IAP (iOS) routing; billing from Account page
 scripts/build-ios-www.mjs        Stages www/ for Capacitor
 supabase/migrations/0015_*.sql   billing_source + Apple transaction ID
 supabase/functions/revenuecat-webhook/  IAP → profiles sync
