@@ -59,9 +59,11 @@
     if(u) return;
     const ca = document.getElementById("create-account-page");
     const pw = document.getElementById("password-recovery-page");
+    const confirmed = document.getElementById("email-confirmed-page");
     const caOpen = ca && ca.style.display !== "none";
     const pwOpen = pw && pw.style.display !== "none";
-    if(caOpen || pwOpen) return;
+    const confirmedOpen = confirmed && confirmed.style.display !== "none";
+    if(caOpen || pwOpen || confirmedOpen) return;
     showGate();
   }
   function sessionStill(user){
@@ -80,11 +82,14 @@
     const ca = document.getElementById("create-account-page");
     const pw = document.getElementById("password-recovery-page");
     const verify = document.getElementById("verify-email-page");
+    const confirmed = document.getElementById("email-confirmed-page");
     const verifyOpen = verify && verify.style.display !== "none";
+    const confirmedOpen = confirmed && confirmed.style.display !== "none";
     return (gate && gate.style.display !== "none")
       || (ca && ca.style.display !== "none")
       || (pw && pw.style.display !== "none")
-      || verifyOpen;
+      || verifyOpen
+      || confirmedOpen;
   }
   function syncAuthScreenBodyClass(){
     try {
@@ -432,9 +437,13 @@
           }
           return;  // signed in → onSignedIn handles the rest
         }
-        // No auto-session (they must sign in manually) → show the welcome banner
-        // on the sign-in screen so they know their email is confirmed.
-        showWelcomeBanner();
+        // Native app: dedicated confirmation screen (sign in stays in-app).
+        // Web: welcome banner on the sign-in gate.
+        if(window.BW_NATIVE && typeof window.showEmailConfirmedScreen === "function"){
+          window.showEmailConfirmedScreen();
+        } else {
+          showWelcomeBanner();
+        }
       };
       if (window.BW_AUTH) {
         setTimeout(handleConfirmedReturn, 600);

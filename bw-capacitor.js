@@ -133,8 +133,12 @@
       if (u.searchParams.get("recovery") === "1" && typeof window.openPasswordRecoveryModal === "function") {
         window.openPasswordRecoveryModal();
       }
-      if (u.searchParams.get("confirmed") === "1" && typeof showToast === "function") {
-        showToast("Email confirmed — welcome aboard!", "success");
+      if (u.searchParams.get("confirmed") === "1") {
+        if (typeof window.showEmailConfirmedScreen === "function") {
+          window.showEmailConfirmedScreen();
+        } else if (typeof showToast === "function") {
+          showToast("Email confirmed — return to the app and sign in.", "success");
+        }
       }
       if (u.searchParams.get("checkout") === "success" && typeof showToast === "function") {
         showToast("Subscription active — Pro features unlocked.", "success");
