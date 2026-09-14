@@ -537,7 +537,11 @@
         const em = emailEl && emailEl.value ? emailEl.value.trim() : "";
         if(em) window.showVerifyEmailScreen(em);
       }
-      showErr(e.message || "Sign in failed");
+      const raw = (e && e.message) ? String(e.message) : "";
+      const network = /failed to fetch|networkerror|load failed|network request failed/i.test(raw);
+      showErr(network
+        ? "Can't reach the sign-in service. Check your connection, then hard-refresh this page (Ctrl+Shift+R) and try again."
+        : (raw || "Sign in failed"));
     } finally {
       if(btn){ btn.disabled = false; btn.textContent = "Sign In"; }
     }
