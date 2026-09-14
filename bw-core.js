@@ -3615,19 +3615,20 @@ function scoreCell(lat, lng, speciesId){
     tempForScore = Math.max(38, sst - strat * Math.max(0, sst - btFull));
   } else if(_isDemersal && sst != null && depth != null && depth > 0){
     // THERMOCLINE bottom-temp estimate (°F), stratification-aware so ONE formula
-    // works from the Gulf to the Gulf of Maine without region hardcoding.
+    // works from the Gulf to the SAB / south-of-Hatteras shelf.
     //
-    // Step 1 — fully-stratified profile (warm-surface summer, e.g. the Gulf/SE):
-    // a warm near-surface mixed layer to ~30m (100 ft); a sharp thermocline
-    // through ~60-100m (200-330 ft) where temperature plunges ~10-20°F; a slow
-    // decline toward cold deep water that levels near a constant ~40°F below
-    // ~1200m (≈3,900 ft). Anchored so 300 ft under an 84°F surface reads ≈69°F.
+    // Step 1 — fully-stratified summer profile (Gulf and SE Atlantic):
+    // mixed layer only to ~20 m (~65 ft). A 100-130 ft ledge is already into
+    // the thermocline — it must NOT read as surface SST (that is what made a
+    // 128 ft Hatteras vermilion spot report ~82°F "bottom" under 82°F SST).
+    // Anchors: 200 ft under an 82°F surface ≈ 69°F (65-70°F beeliner zone);
+    // 300 ft under an 84°F surface ≈ 69°F.
     const d = depth; // meters
     let btFull;
-    if(d <= 30)       btFull = sst;                                   // mixed layer ≈ surface
-    else if(d <= 60)  btFull = sst - (d - 30) / 30 * 4;               // top of thermocline: 0→4°F
-    else if(d <= 100) btFull = sst - 4 - (d - 60) / 40 * 14;         // sharp drop: 4→18°F (≈300 ft ⇒ sst−15)
-    else if(d <= 200) btFull = sst - 18 - (d - 100) / 100 * 8;       // easing: 18→26°F
+    if(d <= 20)       btFull = sst;                                   // mixed layer ≈ 65 ft
+    else if(d <= 55)  btFull = sst - (d - 20) / 35 * 12;              // 65-180 ft: 0→12°F
+    else if(d <= 100) btFull = sst - 12 - (d - 55) / 45 * 4;          // 180-328 ft: 12→16°F
+    else if(d <= 200) btFull = sst - 16 - (d - 100) / 100 * 10;       // easing: 16→26°F
     else if(d <= 1200){
       // Slow decline from the shelf-break value toward the near-constant ~40°F
       // deep water (~3,900 ft). Rarely reached by shelf demersal species.

@@ -26,6 +26,20 @@ const { check, done } = makeChecker();
 // ── Mirrors of the two branches in scoreCell(), so we can assert on values ──
 function gulfCurve(d, sst) {
   let bt;
+  if (d <= 20)        bt = sst;
+  else if (d <= 55)   bt = sst - (d - 20) / 35 * 12;
+  else if (d <= 100)  bt = sst - 12 - (d - 55) / 45 * 4;
+  else if (d <= 200)  bt = sst - 16 - (d - 100) / 100 * 10;
+  else if (d <= 1200) { const s = sst - 26; bt = s - (d - 200) / 1000 * (s - 40); }
+  else                bt = 40;
+  bt = Math.max(bt, 40);
+  const strat = Math.max(0, Math.min(1, (sst - 50) / (78 - 50)));
+  return Math.max(40, sst - strat * Math.max(0, sst - bt));
+}
+// Pre-2026 mixed-layer-to-100-ft curve — kept to pin why the MAB cold-pool
+// branch exists (it reported ~79°F at 100 ft off VA Beach).
+function gulfCurveLegacy100ftMixed(d, sst) {
+  let bt;
   if (d <= 30)        bt = sst;
   else if (d <= 60)   bt = sst - (d - 30) / 30 * 4;
   else if (d <= 100)  bt = sst - 4 - (d - 60) / 40 * 14;
@@ -149,7 +163,7 @@ console.log("\nthe reported case — offshore fluke, Triangle Wrecks off Virgini
   check("flounder depth band still excludes true deep water", bandMax <= 50);
   const bt = bottomTemp(36.99, -75.39, 30.5, 79);
   check("Triangle Wrecks temperature now scores well", tempScore("flounder", bt) >= 0.8);
-  check("the old curve scored it near zero", tempScore("flounder", gulfCurve(30.5, 79)) < 0.05);
+  check("the old 100-ft mixed-layer curve scored it near zero", tempScore("flounder", gulfCurveLegacy100ftMixed(30.5, 79)) < 0.05);
 }
 
 console.log("\nNE bottom species are no longer penalized by a warm surface:");
@@ -177,6 +191,40 @@ console.log("\nNE bottom species are no longer penalized by a warm surface:");
     check(`${sp} control is unchanged`,
       Math.abs(bottomTemp(lat, lng, d, sst) - gulfCurve(d, sst)) < 1e-9);
   }
+}
+
+console.log("\nvermilion / Hatteras: 100 ft must not read as 82°F surface water:");
+{
+  // Spot ~128 ft (39 m) south of Hatteras uses the Gulf/SAB thermocline, not
+  // the MAB cold pool (lat < 35). Under 82°F SST the old mixed-layer-to-100-ft
+  // curve reported ~82°F "bottom" and vermilion's old [66,82] ideal scored it
+  // Excellent. Prime beeliner water is 64-72°F around 150-250 ft.
+  const sst = 82;
+  const ft128 = 39;   // meters
+  const ft200 = 61;
+  const ft300 = 91;
+  const southHat = bottomTemp(34.90, -75.55, ft128, sst);
+  check("south of Hatteras 128 ft is not cold-pool", !isColdPoolShelf(34.90, -75.55, ft128));
+  check("128 ft under 82°F SST is several degrees cooler than the surface", sst - southHat >= 5);
+  check("128 ft is not still ~82°F", southHat <= 77);
+  const at200 = bottomTemp(34.90, -75.55, ft200, sst);
+  check("200 ft under 82°F SST lands in the 65-72°F beeliner zone", at200 >= 65 && at200 <= 72);
+  const at300 = bottomTemp(29.80, -87.20, ft300, 84);
+  check("Gulf 300 ft under 84°F SST is still ~66-72°F", at300 >= 66 && at300 <= 72);
+  check("vermilion ideal is 64-72°F, not 80s",
+    PREDICT_SPECIES_PREFS.vermilion.tempIdeal[0] === 64 &&
+    PREDICT_SPECIES_PREFS.vermilion.tempIdeal[1] === 72);
+  check("vermilion working top is 78°F (they leave hotter water)",
+    PREDICT_SPECIES_PREFS.vermilion.tempWorking[0] === 58 &&
+    PREDICT_SPECIES_PREFS.vermilion.tempWorking[1] === 78);
+  const [dLo, dHi] = PREDICT_SPECIES_PREFS.vermilion.depthBands[0];
+  check("vermilion depth band is ~100-300 ft", dLo >= 29 && dLo <= 32 && dHi >= 88 && dHi <= 95);
+  check("82°F bottom scores poorly for vermilion", tempScore("vermilion", 82) < 0.15);
+  check("69°F bottom is ideal for vermilion", tempScore("vermilion", 69) === 1);
+  check("128 ft Hatteras cell is no longer an excellent temp match",
+    tempScore("vermilion", southHat) < 0.7);
+  check("200 ft Hatteras cell is an excellent temp match",
+    tempScore("vermilion", at200) >= 0.9);
 }
 
 done();

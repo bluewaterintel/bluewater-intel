@@ -1295,7 +1295,7 @@ const ENC_SPECIES = [
     snippet:"Beeliner. Smaller but plentiful Gulf snapper that fills coolers when bigger reds and gags shut off. Open year-round.",
     facts:{ size:"1-4 lbs", record:"7 lbs 3 oz (FL)", legal:"Gulf: 10\" total, 10/day; year-round", season:"Regional — Gulf year-round; South Atlantic ledges spring–fall. Absent north of VA." },
     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3},
-    where:"Gulf hard-bottom and natural ledges 100–300 ft (year-round beeliner schools), plus SC/GA/FL Atlantic ledges in warm months. Schools sit just above the structure.",
+    where:"Gulf and South Atlantic hard-bottom / live-bottom ledges 100–300 ft. Year-round beeliner schools in the Gulf; SC/GA/FL/NC Atlantic ledges in warm months. Schools sit just above the structure — in late summer the 65–70°F water is often under the thermocline around 150–250 ft, not in the 80°F+ surface layer.",
     tackle:[
       "7-foot medium-heavy conventional with 30-50 lb braid",
       "30-40 lb fluorocarbon leader",
@@ -1312,6 +1312,8 @@ const ENC_SPECIES = [
       "Drop, count to set depth above the structure (5-10 feet up)",
       "Bites are quick — set fast on circle hook with gentle pressure",
       "Stack multi-fish on the rig before reeling up for efficiency",
+      "If the bottom is above ~78°F they have moved deeper — look for cooler ledges in 150-300 ft",
+      "Below ~58°F they go lethargic and the bite dies; the 64-72°F band is the comfort zone",
       "Bag limits are GENEROUS — easy to fill the box once located"],
   },
   {
