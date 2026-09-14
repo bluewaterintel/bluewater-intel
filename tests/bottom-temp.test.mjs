@@ -12,11 +12,13 @@ const {
   coldPoolCoreF, isColdPoolShelf, speciesRunRangeNm, speciesAllowedInWater,
   shelfTanhBottomF, coldPoolBottomF, demersalBottomTempF,
   vermilionLatitudeGate, evaluateVermilionHabitat, COLD_POOL_SOUTH_LAT,
+  speciesAllowedAtLat, VERMILION_NORTH_LAT,
 } = loadBw([
   "PREDICT_SPECIES_PREFS", "SPECIES_HABITAT", "SPECIES_RUN_NM", "PORTS",
   "coldPoolCoreF", "isColdPoolShelf", "speciesRunRangeNm", "speciesAllowedInWater",
   "shelfTanhBottomF", "coldPoolBottomF", "demersalBottomTempF",
   "vermilionLatitudeGate", "evaluateVermilionHabitat", "COLD_POOL_SOUTH_LAT",
+  "speciesAllowedAtLat", "VERMILION_NORTH_LAT",
 ]);
 
 const { check, done } = makeChecker();
@@ -209,12 +211,23 @@ console.log("\nvermilion Case A / Case B and the reported 98 ft Hatteras cell:")
   check("reported 98 ft cell cannot score Excellent",
     shot.suitability_score <= 0.15);
 
-  const north = vermilionLatitudeGate(36.0, 30.5, 60);
-  check("north of 35.5°N in 100 ft is NORTH_OF_HATTERAS",
-    north.status === "NORTH_OF_HATTERAS" && north.penalty === 0.1);
-  const ring = vermilionLatitudeGate(36.0, 67, 68);
-  check("north of 35.5°N with warm bottom is WARM_CORE_OVERRIDE",
-    ring.status === "WARM_CORE_OVERRIDE" && ring.penalty === 0.8);
+  check("hard cutoff is 35.4°N", VERMILION_NORTH_LAT === 35.4);
+  const north = vermilionLatitudeGate(35.41, 67, 68);
+  check("just north of 35.4°N is a hard NORTH_OF_HATTERAS veto",
+    north.status === "NORTH_OF_HATTERAS" && north.penalty === 0);
+  const northShallow = evaluateVermilionHabitat(36.0, -75.4, 100, 85);
+  check("Virginia 100 ft cell has zero suitability", northShallow.suitability_score === 0);
+  const northDeep = evaluateVermilionHabitat(36.0, -75.4, 220, 85);
+  check("Virginia 220 ft cell still has zero suitability (no warm-core paint)",
+    northDeep.suitability_score === 0 && northDeep.latitude_gate_status === "NORTH_OF_HATTERAS");
+  check("heat map excludes vermilion at Virginia Beach",
+    speciesAllowedAtLat("vermilion", 36.85, -75.98) === false);
+  check("heat map excludes vermilion at Oregon Inlet",
+    speciesAllowedAtLat("vermilion", 35.80, -75.54) === false);
+  check("heat map still allows vermilion at Hatteras (35.22°N)",
+    speciesAllowedAtLat("vermilion", 35.22, -75.69) === true);
+  check("heat map still allows vermilion on the Gulf",
+    speciesAllowedAtLat("vermilion", 29.8, -87.2) === true);
 }
 
 done();

@@ -1030,9 +1030,10 @@ const REGIONAL_SEASONS = {
 
   // ── VERMILION SNAPPER (BEELINER) ─────────────────────────────────────────
   // Abundant year-round on Gulf hard bottom; South Atlantic ledges peak spring
-  // through fall. The old flat year-round curve scored beeliners off New England.
+  // through fall. Hard Atlantic cutoff is 35.4°N (Cape Hatteras) — they are
+  // not a Virginia / northern OBX fishery.
   vermilion: [
-    {centerLat: 36.5, centerLng: -75.5, radiusNm: 120, label: "VA / NC ledges",
+    {centerLat: 34.6, centerLng: -76.0, radiusNm: 85, label: "NC ledges (Hatteras south)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
     {centerLat: 32.5, centerLng: -79.5, radiusNm: 180, label: "SC / GA ledges",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},

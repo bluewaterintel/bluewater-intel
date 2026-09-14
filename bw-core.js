@@ -4354,8 +4354,8 @@ function scoreCell(lat, lng, speciesId){
     // actually belongs in this area/time; seasonStrength is the 0–1 seasonal fit.
     topFactor,
     topFactors,
-    inSeason: !_seasonOutOfRange,
-    outOfRange: _seasonOutOfRange,
+    inSeason: !_seasonOutOfRange && !(vermilionGate && vermilionGate.status === "NORTH_OF_HATTERAS"),
+    outOfRange: _seasonOutOfRange || !!(vermilionGate && vermilionGate.status === "NORTH_OF_HATTERAS"),
     seasonStrength: Math.round(seasonScore * 100) / 100,
     vermilionGate,
     tempForScore,
@@ -5194,9 +5194,8 @@ function classifyWaterType(lat, lng){
 
 const COLD_POOL_SOUTH_LAT = 35.4;   // Cape Hatteras / Oregon Inlet
 const COLD_POOL_NORTH_LAT = 44.5;
-const VERMILION_NORTH_LAT = 35.5;   // rare north of the Cape in shallow water
+const VERMILION_NORTH_LAT = 35.4;   // hard Atlantic cutoff — not present north of here
 const VERMILION_SHALLOW_FT = 120;
-const VERMILION_WARM_CORE_C = 18.0; // 64.4°F — Gulf Stream ring override
 
 // SAB / Gulf summer thermocline (tanh). T(z) in °F, z in meters:
 //   T(z) = T_deep + (T_sst - T_deep)/2 * (1 - tanh((z - z_m) / d))
@@ -5256,16 +5255,14 @@ function demersalBottomTempF(lat, lng, depthM, sstF){
 
 function vermilionLatitudeGate(lat, depthM, bottomTempF){
   const depthFt = (depthM != null && depthM > 0) ? depthM * 3.28084 : 0;
-  const bottomC = bottomTempF != null ? fToC(bottomTempF) : null;
-  const warmCore = bottomC != null && bottomC >= VERMILION_WARM_CORE_C;
+  // Hard geographic veto: do not paint vermilion north of 35.4°N, including
+  // warm-core / Gulf Stream rings. Captains should not see this species on
+  // the VA / northern OBX shelf.
   if(lat > VERMILION_NORTH_LAT){
-    if(warmCore){
-      return { active: true, status: "WARM_CORE_OVERRIDE", penalty: 0.8 };
-    }
-    return { active: true, status: "NORTH_OF_HATTERAS", penalty: 0.1 };
+    return { active: true, status: "NORTH_OF_HATTERAS", penalty: 0 };
   }
-  // Inner shelf from Hatteras north through the Cape: 100 ft of summer surface
-  // water is not beeliner habitat even when a thermocline model invents 66°F.
+  // Inner shelf on the Cape itself: 100 ft of summer surface water is not
+  // beeliner habitat even when a thermocline model invents 66°F.
   if(lat >= 35.0 && depthFt > 0 && depthFt < VERMILION_SHALLOW_FT){
     return { active: true, status: "SHALLOW_NORTHERN_SHELF", penalty: 0.1 };
   }
@@ -5315,9 +5312,7 @@ function evaluateVermilionHabitat(lat, lon, depthFeet, sstF){
   if(gate.status === "SHALLOW_NORTHERN_SHELF"){
     recommendation = "Too shallow on the northern edge — look for 150–250 ft ledges.";
   } else if(gate.status === "NORTH_OF_HATTERAS"){
-    recommendation = "North of Cape Hatteras — vermilion are rare here in shallow water.";
-  } else if(gate.status === "WARM_CORE_OVERRIDE"){
-    recommendation = "North of the Cape, but a warm bottom may still hold fish.";
+    recommendation = "North of 35.4°N — vermilion are not a fishery here.";
   } else if(suitability >= 0.7){
     recommendation = "Prime beeliner depth under the thermocline.";
   } else if(tempSc < 0.4){
@@ -5631,6 +5626,9 @@ const SPECIES_LAT_RANGE = {
   // the Mid-Atlantic shelf. Combined with breakPref:"edge" (so even within range
   // it scores the Stream, not the inner shelf), this keeps blackfin realistic.
   blackfin:      [24.0, 35.9],
+  // Vermilion (beeliner): Gulf year-round; South Atlantic ledges only as far
+  // north as Cape Hatteras (35.4°N). They are not a Mid-Atlantic / VA fishery.
+  vermilion:     {atlantic: [24.0, 35.4], gulf: [24.5, 30.5]},
   // ── MID-ATLANTIC + NEW ENGLAND ───────────────────────────────────────
   // Blueline tilefish: TWO populations, and the flat [33.0, 40.5] band this
   // replaces silently excluded one of them. That band hard-excluded everything
@@ -10227,9 +10225,7 @@ function renderExplainerMain(){
   } else if(cell.vermilionGate && cell.vermilionGate.active && cell.vermilionGate.status === "SHALLOW_NORTHERN_SHELF"){
     gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.30);border-radius:8px;font-size:12px;color:#fde68a;line-height:1.5"><b>Shallow northern shelf</b> — vermilion hold 150–250 ft ledges here, not the inner 100 ft under the summer surface layer.</div>`;
   } else if(cell.vermilionGate && cell.vermilionGate.active && cell.vermilionGate.status === "NORTH_OF_HATTERAS"){
-    gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);border-radius:8px;font-size:12px;color:#fecaca;line-height:1.5"><b>North of Cape Hatteras</b> — vermilion are rare this far north in shallow water.</div>`;
-  } else if(cell.vermilionGate && cell.vermilionGate.active && cell.vermilionGate.status === "WARM_CORE_OVERRIDE"){
-    gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.30);border-radius:8px;font-size:12px;color:#fde68a;line-height:1.5"><b>Warm-core water</b> — north of the Cape, but the bottom is warm enough that a few fish may still hold.</div>`;
+    gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);border-radius:8px;font-size:12px;color:#fecaca;line-height:1.5"><b>North of Cape Hatteras</b> — vermilion are not a fishery north of 35.4°N.</div>`;
   }
 
   const scorePct = Math.round(cell.score * 100);

@@ -1293,7 +1293,7 @@ const ENC_SPECIES = [
   {
     id:"vermilion", name:"Vermilion Snapper", color:"#c43030", cat:"nearshore",
     snippet:"Beeliner. Smaller but plentiful Gulf snapper that fills coolers when bigger reds and gags shut off. Open year-round.",
-    facts:{ size:"1-4 lbs", record:"7 lbs 3 oz (FL)", legal:"Gulf: 10\" total, 10/day; year-round", season:"Regional — Gulf year-round; South Atlantic ledges spring–fall. Absent north of VA." },
+    facts:{ size:"1-4 lbs", record:"7 lbs 3 oz (FL)", legal:"Gulf: 10\" total, 10/day; year-round", season:"Regional — Gulf year-round; South Atlantic ledges spring–fall. Absent north of Cape Hatteras (35.4°N)." },
     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3},
     where:"Gulf and South Atlantic hard-bottom / live-bottom ledges 100–300 ft. Year-round beeliner schools in the Gulf; SC/GA/FL/NC Atlantic ledges in warm months. Schools sit just above the structure — in late summer the 65–70°F water is often under the thermocline around 150–250 ft, not in the 80°F+ surface layer.",
     tackle:[
