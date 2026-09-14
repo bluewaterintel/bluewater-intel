@@ -195,9 +195,10 @@ const PREDICT_SPECIES_PREFS = {
   // ~58°F, and they leave the ledge when the bottom pushes past ~78°F (they
   // drop to deeper, cooler structure rather than bite 80°F+ water). The old
   // [66,82] ideal treated 82°F as perfect, so a 100 ft Hatteras cell whose
-  // estimated bottom still tracked 82°F SST scored Excellent. Depth cap is
-  // 300 ft to match the encyclopedia / Gulf beeliner grounds (the old 120 m /
-  // 394 ft ceiling wandered into tilefish water).
+  // estimated bottom still tracked 82°F SST scored Excellent. Inner-shelf
+  // cells north of 35.0°N in <120 ft are also habitat-gated — beeliners hold
+  // 150-250 ft ledges there, not 98 ft under the summer surface layer. Depth
+  // cap is 300 ft to match the encyclopedia / Gulf beeliner grounds.
   vermilion:    {tempIdeal:[64,72], tempWorking:[58,78], chlorPref:"any",     depthBands:[[30,91]],    breakPref:"any", demersal:true },
   lanesnap:     {tempIdeal:[70,82], tempWorking:[66,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
   yellowtail:   {tempIdeal:[74,84], tempWorking:[68,86], chlorPref:"low",     depthBands:[[10,40]],    breakPref:"any", demersal:true },

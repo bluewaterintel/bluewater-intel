@@ -3594,60 +3594,10 @@ function scoreCell(lat, lng, speciesId){
     else if(depth <= 600) bt = 50 - (depth - 350) / 250 * 3;   // 50→47
     else                  bt = 47;
     tempForScore = bt;
-  } else if(_isDemersal && sst != null && depth != null && depth > 0 &&
-            isColdPoolShelf(lat, lng, depth)){
-    // MID-ATLANTIC / NE SHELF: cold pool. A shallow (~50 ft) summer mixed layer
-    // over a sharp thermocline, then near-constant cold winter water below. This
-    // is what makes offshore fluke, sea bass and tog work here in summer — the
-    // bottom is 15-25°F cooler than the surface, not ~equal to it.
-    const coreF = coldPoolCoreF(lat);
-    let btFull;
-    if(depth <= 15)      btFull = sst;                                        // mixed layer
-    else if(depth <= 35) btFull = sst - (depth - 15) / 20 * (sst - coreF);    // sharp thermocline
-    else                 btFull = coreF;                                      // cold pool core
-    btFull = Math.max(btFull, 38);
-    // Stratification from the surface-to-core CONTRAST rather than an absolute
-    // SST ramp. A warm surface over cold winter water stratifies; a cold winter
-    // surface means a well-mixed column where the bottom tracks the surface. The
-    // absolute ramp under-stratified the Gulf of Maine, where deep water is cold
-    // year-round even under a 60°F surface.
-    const strat = Math.max(0, Math.min(1, (sst - coreF) / 12));
-    tempForScore = Math.max(38, sst - strat * Math.max(0, sst - btFull));
   } else if(_isDemersal && sst != null && depth != null && depth > 0){
-    // THERMOCLINE bottom-temp estimate (°F), stratification-aware so ONE formula
-    // works from the Gulf to the SAB / south-of-Hatteras shelf.
-    //
-    // Step 1 — fully-stratified summer profile (Gulf and SE Atlantic):
-    // mixed layer only to ~20 m (~65 ft). A 100-130 ft ledge is already into
-    // the thermocline — it must NOT read as surface SST (that is what made a
-    // 128 ft Hatteras vermilion spot report ~82°F "bottom" under 82°F SST).
-    // Anchors: 200 ft under an 82°F surface ≈ 69°F (65-70°F beeliner zone);
-    // 300 ft under an 84°F surface ≈ 69°F.
-    const d = depth; // meters
-    let btFull;
-    if(d <= 20)       btFull = sst;                                   // mixed layer ≈ 65 ft
-    else if(d <= 55)  btFull = sst - (d - 20) / 35 * 12;              // 65-180 ft: 0→12°F
-    else if(d <= 100) btFull = sst - 12 - (d - 55) / 45 * 4;          // 180-328 ft: 12→16°F
-    else if(d <= 200) btFull = sst - 16 - (d - 100) / 100 * 10;       // easing: 16→26°F
-    else if(d <= 1200){
-      // Slow decline from the shelf-break value toward the near-constant ~40°F
-      // deep water (~3,900 ft). Rarely reached by shelf demersal species.
-      const shelf = sst - 26;
-      btFull = shelf - (d - 200) / 1000 * (shelf - 40);
-    } else            btFull = 40;                                    // near-constant abyssal water
-    btFull = Math.max(btFull, 40);
-    // Step 2 — scale the deficit by stratification strength. A warm surface over
-    // cold deep water stratifies (full thermocline); a cold surface (NE winter,
-    // high latitude) means a well-mixed column where the bottom ≈ the surface.
-    // So a 42°F Gulf-of-Maine surface in January produces ~no deficit (mixed),
-    // while an 84°F Gulf surface in July produces the full drop. This fixes NE
-    // groundfish being wrongly penalized by warm summer surface AND wrongly
-    // refrigerated by a season-agnostic deficit in winter.
-    // (Heuristic — replace with a real subsurface/bottom-temp feed, e.g.
-    //  HYCOM/GLORYS reanalysis, for the true Mid-Atlantic cold pool.)
-    const strat = Math.max(0, Math.min(1, (sst - 50) / (78 - 50)));
-    const deficit = Math.max(0, sst - btFull);
-    tempForScore = Math.max(40, sst - strat * deficit);
+    // Shelf bottom temp from SST + depth. MAB/NE uses the cold-pool profile
+    // (north of 35.4°N); Gulf and SAB use a tanh thermocline. Same SST feed.
+    tempForScore = demersalBottomTempF(lat, lng, depth, sst);
   }
   let tempScore = 0;
   if(tempForScore != null && tempForScore >= prefs.tempIdeal[0] && tempForScore <= prefs.tempIdeal[1]){
@@ -4209,6 +4159,18 @@ function scoreCell(lat, lng, speciesId){
   // structure-proximity bonus above can push slightly past 1.0).
   finalScore = Math.min(1.0, finalScore);
 
+  // Vermilion (beeliner): rare north of Cape Hatteras in shallow water. Structure
+  // weight can still paint 100 ft inner-shelf cells Excellent even when the
+  // temperature story is wrong — apply a habitat multiplier after the other
+  // gates so those cells cannot outrank real 150-250 ft ledges.
+  let vermilionGate = null;
+  if(speciesId === "vermilion" && depth != null && depth > 0){
+    vermilionGate = vermilionLatitudeGate(lat, depth, tempForScore);
+    if(vermilionGate.penalty < 1){
+      finalScore *= vermilionGate.penalty;
+    }
+  }
+
   // ── SCORE NORMALIZATION ──
   // The raw weighted average compresses into ~0.25-0.70 because most secondary
   // factors (solunar, season, tide, pressure, moon) rarely hit 1.0 even under
@@ -4395,6 +4357,8 @@ function scoreCell(lat, lng, speciesId){
     inSeason: !_seasonOutOfRange,
     outOfRange: _seasonOutOfRange,
     seasonStrength: Math.round(seasonScore * 100) / 100,
+    vermilionGate,
+    tempForScore,
   };
 }
 
@@ -5215,19 +5179,35 @@ function classifyWaterType(lat, lng){
 
 // ── MID-ATLANTIC BIGHT / NE SHELF COLD POOL ─────────────────────────────────
 // From spring through fall a mass of cold winter water stays trapped on the
-// shelf beneath the seasonal thermocline, from Nantucket Shoals down to Cape
-// Hatteras. It is the single biggest reason a bottom fish's water differs from
-// the surface here: in August the surface off Virginia Beach reads ~79°F while
-// the bottom in 100 ft is ~55-62°F.
+// shelf beneath the seasonal thermocline, from Nantucket Shoals down to just
+// north of Cape Hatteras. It is the single biggest reason a bottom fish's water
+// differs from the surface here: in August the surface off Virginia Beach reads
+// ~79°F while the bottom in 100 ft is ~55-62°F.
 //
-// The general thermocline curve in scoreCell() was anchored for the GULF (deep
-// mixed layer, no cold pool), so it reported the bottom at 100 ft as ~79°F —
-// wrong by 15-25°F here, which is what made offshore fluke on the Triangle
-// Wrecks score as too-warm. These two helpers gate a cold-pool profile to the
-// region it actually applies to and leave every other coast alone.
+// South of 35.4°N the shelf is Gulf Stream / SAB water, not the cold pool.
+// Applying the MAB profile at Oregon Inlet / Diamond Shoals invented a ~66°F
+// "bottom" in 98 ft of 85°F water and then scored that as perfect vermilion
+// habitat. The SAB/Gulf demersal curve (tanh) is used south of that line.
 //
 // (Heuristic tuned to published MAB bottom-temp ranges — replace with a real
 //  subsurface feed, e.g. HYCOM/GLORYS, when one is wired.)
+
+const COLD_POOL_SOUTH_LAT = 35.4;   // Cape Hatteras / Oregon Inlet
+const COLD_POOL_NORTH_LAT = 44.5;
+const VERMILION_NORTH_LAT = 35.5;   // rare north of the Cape in shallow water
+const VERMILION_SHALLOW_FT = 120;
+const VERMILION_WARM_CORE_C = 18.0; // 64.4°F — Gulf Stream ring override
+
+// SAB / Gulf summer thermocline (tanh). T(z) in °F, z in meters:
+//   T(z) = T_deep + (T_sst - T_deep)/2 * (1 - tanh((z - z_m) / d))
+// T_deep ≈ 19°C (66°F) so 220 ft lands in the 64-72°F beeliner zone, not the
+// 12°C abyssal remnant. z_m ≈ 130 ft so 100 ft is still mostly surface-warm.
+const SHELF_THERMOCLINE_DEEP_F = 19 * 9 / 5 + 32; // 66.2°F
+const SHELF_THERMOCLINE_ZM_M = 40;                 // ~131 ft
+const SHELF_THERMOCLINE_D_M = 12;
+
+function fToC(f){ return (f - 32) * 5 / 9; }
+function cToF(c){ return c * 9 / 5 + 32; }
 
 // Cold-pool core temperature (°F): coldest to the north, warmest at the
 // Hatteras end where the pool thins and erodes first.
@@ -5236,14 +5216,126 @@ function coldPoolCoreF(lat){
   return 60 - t * 14;   // ~60°F off Hatteras → ~46°F in the Gulf of Maine
 }
 
-// True only on the Atlantic shelf between Hatteras and the Gulf of Maine. Past
+// True only on the Atlantic shelf between 35.4°N and the Gulf of Maine. Past
 // the shelf break (>200 m) it is slope/Gulf Stream water, not cold pool.
 function isColdPoolShelf(lat, lng, depthM){
-  if(lat < 35.0 || lat > 44.5) return false;
+  if(lat < COLD_POOL_SOUTH_LAT || lat > COLD_POOL_NORTH_LAT) return false;
   if(depthM == null || !(depthM > 0) || depthM > 200) return false;
   if(typeof isGulfContext === "function" && isGulfContext(lat, lng)) return false;
   if(typeof isPacificContext === "function" && isPacificContext(lat, lng)) return false;
   return true;
+}
+
+function coldPoolBottomF(lat, depthM, sstF){
+  const coreF = coldPoolCoreF(lat);
+  let btFull;
+  if(depthM <= 15)      btFull = sstF;                                           // mixed layer
+  else if(depthM <= 35) btFull = sstF - (depthM - 15) / 20 * (sstF - coreF);     // sharp thermocline
+  else                  btFull = coreF;                                           // cold pool core
+  btFull = Math.max(btFull, 38);
+  const strat = Math.max(0, Math.min(1, (sstF - coreF) / 12));
+  return Math.max(38, sstF - strat * Math.max(0, sstF - btFull));
+}
+
+function shelfTanhBottomF(depthM, sstF){
+  if(sstF == null || !(depthM > 0)) return sstF;
+  const tDeep = SHELF_THERMOCLINE_DEEP_F;
+  const btFull = tDeep + ((sstF - tDeep) / 2) * (1 - Math.tanh((depthM - SHELF_THERMOCLINE_ZM_M) / SHELF_THERMOCLINE_D_M));
+  const btClamped = Math.min(sstF, Math.max(40, btFull));
+  // Warm summer SST → full thermocline; cold winter SST → mixed column ≈ SST.
+  const strat = Math.max(0, Math.min(1, (sstF - 50) / (78 - 50)));
+  const deficit = Math.max(0, sstF - btClamped);
+  return Math.max(40, sstF - strat * deficit);
+}
+
+function demersalBottomTempF(lat, lng, depthM, sstF){
+  if(sstF == null || !(depthM > 0)) return sstF;
+  if(isColdPoolShelf(lat, lng, depthM)) return coldPoolBottomF(lat, depthM, sstF);
+  return shelfTanhBottomF(depthM, sstF);
+}
+
+function vermilionLatitudeGate(lat, depthM, bottomTempF){
+  const depthFt = (depthM != null && depthM > 0) ? depthM * 3.28084 : 0;
+  const bottomC = bottomTempF != null ? fToC(bottomTempF) : null;
+  const warmCore = bottomC != null && bottomC >= VERMILION_WARM_CORE_C;
+  if(lat > VERMILION_NORTH_LAT){
+    if(warmCore){
+      return { active: true, status: "WARM_CORE_OVERRIDE", penalty: 0.8 };
+    }
+    return { active: true, status: "NORTH_OF_HATTERAS", penalty: 0.1 };
+  }
+  // Inner shelf from Hatteras north through the Cape: 100 ft of summer surface
+  // water is not beeliner habitat even when a thermocline model invents 66°F.
+  if(lat >= 35.0 && depthFt > 0 && depthFt < VERMILION_SHALLOW_FT){
+    return { active: true, status: "SHALLOW_NORTHERN_SHELF", penalty: 0.1 };
+  }
+  return { active: false, status: "OK", penalty: 1 };
+}
+
+function vermilionTempScoreF(tempF){
+  const p = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS.vermilion : null;
+  if(!p || tempF == null) return 0;
+  if(tempF >= p.tempIdeal[0] && tempF <= p.tempIdeal[1]) return 1;
+  if(tempF < p.tempIdeal[0]){
+    const buf = Math.max(0.5, p.tempIdeal[0] - p.tempWorking[0]);
+    const s = buf / 2.355, dl = p.tempIdeal[0] - tempF;
+    return Math.exp(-(dl * dl) / (2 * s * s));
+  }
+  const buf = Math.max(0.5, p.tempWorking[1] - p.tempIdeal[1]);
+  const s = buf / 2.355, dl = tempF - p.tempIdeal[1];
+  return Math.exp(-(dl * dl) / (2 * s * s));
+}
+
+function vermilionDepthScoreM(depthM){
+  const p = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS.vermilion : null;
+  const bands = (p && p.depthBands) ? p.depthBands : [[30, 91]];
+  let best = 0;
+  for(const [bMin, bMax] of bands){
+    let bandScore;
+    if(depthM >= bMin && depthM <= bMax) bandScore = 1;
+    else if(depthM < bMin) bandScore = Math.max(0, 1 - (bMin - depthM) / 12);
+    else bandScore = Math.max(0, 1 - (depthM - bMax) / 120);
+    if(bandScore > best) best = bandScore;
+  }
+  return best;
+}
+
+// Structured habitat check for vermilion (tests + scoreCell gate). Uses the
+// same SST already on the map — does not fetch a second feed.
+function evaluateVermilionHabitat(lat, lon, depthFeet, sstF){
+  const depthM = depthFeet / 3.28084;
+  const sstC = sstF != null ? fToC(sstF) : null;
+  const bottomF = demersalBottomTempF(lat, lon, depthM, sstF);
+  const bottomC = bottomF != null ? fToC(bottomF) : null;
+  const gate = vermilionLatitudeGate(lat, depthM, bottomF);
+  const tempSc = vermilionTempScoreF(bottomF);
+  const depthSc = vermilionDepthScoreM(depthM);
+  const suitability = Math.max(0, Math.min(1, tempSc * depthSc * gate.penalty));
+  let recommendation;
+  if(gate.status === "SHALLOW_NORTHERN_SHELF"){
+    recommendation = "Too shallow on the northern edge — look for 150–250 ft ledges.";
+  } else if(gate.status === "NORTH_OF_HATTERAS"){
+    recommendation = "North of Cape Hatteras — vermilion are rare here in shallow water.";
+  } else if(gate.status === "WARM_CORE_OVERRIDE"){
+    recommendation = "North of the Cape, but a warm bottom may still hold fish.";
+  } else if(suitability >= 0.7){
+    recommendation = "Prime beeliner depth under the thermocline.";
+  } else if(tempSc < 0.4){
+    recommendation = "Bottom is outside the 64–72°F beeliner zone.";
+  } else {
+    recommendation = "Marginal vermilion habitat.";
+  }
+  return {
+    coordinates: { lat, lon },
+    depth_feet: depthFeet,
+    sst_celsius: sstC,
+    estimated_bottom_temp_celsius: bottomC,
+    estimated_bottom_temp_fahrenheit: bottomF,
+    latitude_gate_active: gate.active,
+    latitude_gate_status: gate.status,
+    suitability_score: suitability,
+    recommendation,
+  };
 }
 
 // Species → valid habitat types
@@ -10132,6 +10224,12 @@ function renderExplainerMain(){
   } else if(cell.inSeason === false || (cell.seasonStrength != null && cell.seasonStrength < 0.33)){
     gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.30);border-radius:8px;font-size:12px;color:#fde68a;line-height:1.5"><b>Marginal season</b> — fish are mostly elsewhere on the coast this month.</div>`;
     verdictText = "Marginal season — better runs are likely up or down the coast.";
+  } else if(cell.vermilionGate && cell.vermilionGate.active && cell.vermilionGate.status === "SHALLOW_NORTHERN_SHELF"){
+    gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.30);border-radius:8px;font-size:12px;color:#fde68a;line-height:1.5"><b>Shallow northern shelf</b> — vermilion hold 150–250 ft ledges here, not the inner 100 ft under the summer surface layer.</div>`;
+  } else if(cell.vermilionGate && cell.vermilionGate.active && cell.vermilionGate.status === "NORTH_OF_HATTERAS"){
+    gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);border-radius:8px;font-size:12px;color:#fecaca;line-height:1.5"><b>North of Cape Hatteras</b> — vermilion are rare this far north in shallow water.</div>`;
+  } else if(cell.vermilionGate && cell.vermilionGate.active && cell.vermilionGate.status === "WARM_CORE_OVERRIDE"){
+    gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.30);border-radius:8px;font-size:12px;color:#fde68a;line-height:1.5"><b>Warm-core water</b> — north of the Cape, but the bottom is warm enough that a few fish may still hold.</div>`;
   }
 
   const scorePct = Math.round(cell.score * 100);
