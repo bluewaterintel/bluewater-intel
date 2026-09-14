@@ -189,14 +189,16 @@ const PREDICT_SPECIES_PREFS = {
   amberjack:    {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
   tripletail:   {tempIdeal:[72,88], tempWorking:[68,92], chlorPref:"any",     depthBands:[[2,40]],     breakPref:"any", warmAdapted:true },
   pompano:      {tempIdeal:[68,84], tempWorking:[62,88], chlorPref:"any",     depthBands:[[2,15]],     breakPref:"stable", warmAdapted:true },
-  // Vermilion (beeliner): a warm-temperate hard-bottom snapper caught on ledges
-  // in ~100-350 ft (30-107m) — NOT the old 50-200m band, whose 50m (164 ft) floor
-  // zeroed the depth score across the shallow shelf where most vermilion are
-  // caught (the ÷12 shallow-decay nukes anything >12m under the band). Temp range
-  // widened to reflect that they hold on warm summer shelf bottoms (upper 70s-low
-  // 80s°F) as readily as cooler deep water, so the bottom-temp model no longer
-  // penalizes their prime Gulf grounds. This is what kept Gulf vermilion dark.
-  vermilion:    {tempIdeal:[66,82], tempWorking:[60,85], chlorPref:"any",     depthBands:[[30,120]],   breakPref:"any", demersal:true },
+  // Vermilion (beeliner): hard-bottom / live-bottom schools in ~100-300 ft
+  // (30-91 m) on the Gulf shelf and South Atlantic ledges. They sit in the
+  // cooler water under the summer thermocline — prime 64-72°F, lethargic below
+  // ~58°F, and they leave the ledge when the bottom pushes past ~78°F (they
+  // drop to deeper, cooler structure rather than bite 80°F+ water). The old
+  // [66,82] ideal treated 82°F as perfect, so a 100 ft Hatteras cell whose
+  // estimated bottom still tracked 82°F SST scored Excellent. Depth cap is
+  // 300 ft to match the encyclopedia / Gulf beeliner grounds (the old 120 m /
+  // 394 ft ceiling wandered into tilefish water).
+  vermilion:    {tempIdeal:[64,72], tempWorking:[58,78], chlorPref:"any",     depthBands:[[30,91]],    breakPref:"any", demersal:true },
   lanesnap:     {tempIdeal:[70,82], tempWorking:[66,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
   yellowtail:   {tempIdeal:[74,84], tempWorking:[68,86], chlorPref:"low",     depthBands:[[10,40]],    breakPref:"any", demersal:true },
   // ── PACIFIC / SOUTHERN CALIFORNIA ───────────────────────────────────
