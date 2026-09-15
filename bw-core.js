@@ -2867,6 +2867,15 @@ function bluewaterGateFor(speciesId, depthM, lat, lng){
     if(depthM >= 15)  return 0.45 + 0.55 * ((depthM - 15) / (80 - 15));
     return 0.12 + 0.33 * (depthM / 15);
   }
+  // Gulf yellowfin/wahoo: Midnight Lump tops sit in ~180-400 ft, not 180 m
+  // canyon water. Full credit from the Gulf yellowfin floor (~180 ft).
+  // Atlantic yellowfin keeps the 180 m ramp.
+  if((speciesId === "yellowfin" || speciesId === "wahoo") &&
+     typeof isGulfContext === "function" && isGulfContext(lat, lng)){
+    if(depthM >= 55) return 1;
+    if(depthM >= 18)  return 0.45 + 0.55 * ((depthM - 18) / (55 - 18));
+    return 0.12 + 0.33 * (depthM / 18);
+  }
   if(depthM >= 180) return 1;
   if(depthM >= 50)  return 0.35 + 0.65 * ((depthM - 50) / (180 - 50));
   return 0.10 + 0.25 * (depthM / 50);
@@ -2891,6 +2900,12 @@ function usesSeFlSpeciesPrefs(speciesId, lat, lng){
   if(typeof isSeFloridaAtlantic === "function" && isSeFloridaAtlantic(lat, lng)) return true;
   if(speciesId === "mahi" && isFloridaKeys(lat, lng)) return true;
   return false;
+}
+
+// Gulf Loop Current / LA lumps / TX breaks. Keys stay on SEFL mahi prefs.
+function usesGulfSpeciesPrefs(speciesId, lat, lng){
+  if(typeof GULF_SPECIES_PREFS === "undefined" || !GULF_SPECIES_PREFS[speciesId]) return false;
+  return typeof isGulfContext === "function" && isGulfContext(lat, lng);
 }
 
 // Stellwagen / Jeffrey's / GOM bluefin grounds. Used so summer giants score
@@ -3638,6 +3653,9 @@ function scoreCell(lat, lng, speciesId){
      typeof NE_SPECIES_PREFS !== "undefined" && NE_SPECIES_PREFS[speciesId]){
     prefs = NE_SPECIES_PREFS[speciesId];
   }
+  if(typeof usesGulfSpeciesPrefs === "function" && usesGulfSpeciesPrefs(speciesId, lat, lng)){
+    prefs = GULF_SPECIES_PREFS[speciesId];
+  }
 
   // ── Get the right weight table for this species category ──
   const W = predictWeightsFor(speciesId, lat, lng);
@@ -4276,7 +4294,7 @@ function scoreCell(lat, lng, speciesId){
   // open Nantucket Sound). We give a smooth bonus that decays with distance to
   // the nearest mapped structure of interest, capped so it shapes — not
   // dominates — the field.
-  if(prefs.breakPref === "stable" && typeof nearestStructureNm === "function"){
+  if((prefs.breakPref === "stable" || prefs.structureProx) && typeof nearestStructureNm === "function"){
     const dNm = nearestStructureNm(lat, lng, speciesId);
     if(dNm != null){
       // Full bonus within ~2nm of structure, fading to none by ~12nm.

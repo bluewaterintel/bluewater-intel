@@ -88,12 +88,10 @@ const PREDICT_SPECIES_PREFS = {
   // drops go deeper. Lower bound 250 m (was 300) so the classic canyon-edge bite
   // isn't scored as out-of-band.
   swordfish:    {tempIdeal:[64,72], tempWorking:[58,76], chlorPref:"any",     depthBands:[[250,2000]], breakPref:"any"  },
-  // Yellowfin — deep-water. Lower bound 150 m is the key guard: the old [40,300]
-  // band let shallow shelf cells near VA Beach (108 ft / 33m) score "ideal,"
-  // which was wrong (real yellowfin are 80+ fathom fish, ≥150 m). Upper bound
-  // extended 800→2000 m: canyon yellowfin routinely hold over 1,000 m+ water on
-  // the break, and the bottom-structure factor now separates a real canyon
-  // feature from flat abyssal plain — so the cap no longer has to.
+  // Atlantic canyon yellowfin. 150 m floor keeps the Mid-Atlantic shelf
+  // (VA Beach 108 ft) from lighting up; 82°F working cap is Stream water.
+  // Gulf Loop Current / LA lumps swap in GULF_SPECIES_PREFS so 86°F blue
+  // water and 200 ft salt-dome tops are fishable.
   yellowfin:    {tempIdeal:[70,78], tempWorking:[66,82], chlorPref:"edge",    depthBands:[[150,2000]], breakPref:"edge"  },
   // Bluefin — multimodal. NC fall blitz happens in 18-35m (60-115 ft)
   // close to the beach; Mid-Atlantic schoolies hunt the 60-180m shelf
@@ -348,8 +346,13 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 26.5, centerLng: -79.5, radiusNm: 170, label: "SE FL / Keys",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
-    {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Gulf of Mexico",
-     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Eastern Gulf (LA/MS/AL)",
+     // Trophy timing is inverted from the Atlantic. Midnight Lump winter
+     // (Dec-Feb) and the fall Loop-eddy giant run (Sep-Nov) are the peaks.
+     // Summer still produces schoolies on the rigs — good, not peak.
+     seasons:{Jan:3,Feb:3,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 27.5, centerLng: -93.5, radiusNm: 280, label: "Western Gulf (TX)",
+     seasons:{Jan:3,Feb:3,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:3}},
     // ── PACIFIC — Southern California ──────────────────────────────────
     // SoCal yellowfin (San Diego banks up through the bight): a warm-season
     // fishery building in summer, best mid-summer through fall, gone in winter.
@@ -1317,7 +1320,8 @@ const REGIONAL_SEASONS = {
 
 // SE Florida Atlantic habitat overrides (Stream against the beach). Applied
 // in scoreCell when isSeFloridaAtlantic(). Mahi also applies on the Keys
-// (west of that strip). NC/Gulf wahoo stay on the base table.
+// (west of that strip). NC wahoo stays on the base table; Gulf swaps
+// to GULF_SPECIES_PREFS.
 const SEFL_SPECIES_PREFS = {
   wahoo: { tempIdeal:[72,82], tempWorking:[68,88], chlorPref:"any", depthBands:[[40,1500]], breakPref:"edge" },
   // Tropical mahi: 86-88°F Keys/Stuart water is normal, not lethal. NC keeps
@@ -1330,6 +1334,24 @@ const SEFL_SPECIES_PREFS = {
 // giants keep the three-band Atlantic table (18-40 m inshore troll).
 const NE_SPECIES_PREFS = {
   bluefin: { tempIdeal:[58,68], tempWorking:[52,72], chlorPref:"edge", depthBands:[[24,180]], breakPref:"stable" },
+};
+
+// Gulf of Mexico pelagics (Loop Current, LA lumps/floaters, TX breaks).
+// Applied in scoreCell when isGulfContext(). Atlantic canyon tables stay
+// on PREDICT_SPECIES_PREFS — 86°F Loop water is normal here, lethal there.
+const GULF_SPECIES_PREFS = {
+  // LA/TX yellowfin: salt-dome lumps (~180-400 ft), 100-fathom curve, and
+  // deepwater floaters. Keep breakPref "edge" so Loop-Current / SSH eddies
+  // still drive front fusion; structureProx pins Midnight Lump / rigs over
+  // open Loop water. 55 m (~180 ft) covers lump tops without reopening the
+  // Mid-Atlantic 108 ft shelf (that cell stays on the 150 m Atlantic table).
+  yellowfin: { tempIdeal:[74,84], tempWorking:[68,88], chlorPref:"edge", depthBands:[[55,2000]], breakPref:"edge", structureProx:true },
+  // Same tropical SST band as Keys/SE FL mahi. Depth ceiling 2000 m so
+  // DeSoto / floaters in 3000-7000 ft are not treated as too deep.
+  mahi: { tempIdeal:[74,82], tempWorking:[70,88], chlorPref:"weed", depthBands:[[25,2000]], breakPref:"any" },
+  // Rigs and the 100-fathom curve, not a 180 m canyon-slope fish. chlorPref
+  // "any" so the Mississippi color-change is not punished as too green.
+  wahoo: { tempIdeal:[72,82], tempWorking:[68,88], chlorPref:"any", depthBands:[[40,1500]], breakPref:"edge", structureProx:true },
 };
 
 const PREDICT_WEIGHTS = {

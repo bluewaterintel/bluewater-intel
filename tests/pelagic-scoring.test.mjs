@@ -9,6 +9,7 @@ const {
   seasonAlignmentLabel, getRegionalSeasons, isSeFloridaAtlantic, windScore,
   nmBetween, effectiveSpeciesHabitat, isFloridaKeys, usesSeFlSpeciesPrefs,
   isNewEnglandBluefinGrounds, NE_SPECIES_PREFS, nearestStructureNm, CANYONS,
+  GULF_SPECIES_PREFS, usesGulfSpeciesPrefs, isGulfContext,
 } = loadBw([
     "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
     "PACIFIC_SPECIES_PREFS", "SEFL_SPECIES_PREFS", "REGIONAL_SEASONS",
@@ -17,6 +18,7 @@ const {
     "seasonAlignmentLabel", "getRegionalSeasons", "isSeFloridaAtlantic", "windScore",
     "nmBetween", "effectiveSpeciesHabitat", "isFloridaKeys", "usesSeFlSpeciesPrefs",
     "isNewEnglandBluefinGrounds", "NE_SPECIES_PREFS", "nearestStructureNm", "CANYONS",
+    "GULF_SPECIES_PREFS", "usesGulfSpeciesPrefs", "isGulfContext",
   ]);
 
 const { check, done } = makeChecker();
@@ -385,6 +387,69 @@ console.log("\nChesapeake redfish cools in mid-September; cobia exit is already 
   check("redfish habitat does not include nearshore ocean", !hab.includes("nearshore") && !hab.includes("offshore"));
   check("redfish ceiling stays inside the 30 ft inshore bucket",
     PREDICT_SPECIES_PREFS.redfish.depthBands[0][1] * 3.28084 < 30);
+}
+
+console.log("\nGulf yellowfin / mahi / wahoo treat Loop water and LA lumps as habitat:");
+{
+  const venice = PORTS["Venice, LA"];
+  const hat = PORTS["Hatteras, NC"];
+  check("Venice is Gulf", isGulfContext(venice.lat, venice.lng));
+  check("Hatteras is not Gulf", !isGulfContext(hat.lat, hat.lng));
+  check("Venice yellowfin uses Gulf prefs", usesGulfSpeciesPrefs("yellowfin", venice.lat, venice.lng));
+  check("Hatteras yellowfin stays on the Atlantic table",
+    !usesGulfSpeciesPrefs("yellowfin", hat.lat, hat.lng));
+  const gY = GULF_SPECIES_PREFS.yellowfin;
+  const aY = PREDICT_SPECIES_PREFS.yellowfin;
+  check("Gulf yellowfin working top is 88°F", gY.tempWorking[1] === 88);
+  check("Atlantic yellowfin working top stays 82°F", aY.tempWorking[1] === 82);
+  check("86°F Loop water is fishable for Gulf yellowfin", pelagicTempScore(86, gY) >= 0.9);
+  check("86°F is lethal on the Atlantic yellowfin cap", pelagicTempScore(86, aY) < 0.1);
+  check("200 ft Midnight Lump is in-band in the Gulf",
+    depthBandScore(200 / 3.28084, gY.depthBands) >= 0.9);
+  check("108 ft Mid-Atlantic shelf stays out on the Atlantic table",
+    depthBandScore(108 / 3.28084, aY.depthBands) < 0.2);
+  check("Gulf yellowfin keeps edge fronts (Loop eddies)", gY.breakPref === "edge");
+  check("Gulf yellowfin pins mapped lumps/rigs", gY.structureProx === true);
+  const lump = CANYONS.find(c => c.name === "Midnight Lump");
+  check("Midnight Lump lists yellowfin", lump && lump.fish.includes("yellowfin"));
+  check("a Midnight Lump cell is on yellowfin structure",
+    nearestStructureNm(lump.lat, lump.lng, "yellowfin") < 1);
+  const ySeason = getRegionalSeasons("yellowfin", venice.lat, venice.lng);
+  check("Venice September yellowfin is peak (fall giants)",
+    seasonAlignmentLabel(ySeason.Sep / 3) === "peak");
+  check("Venice October yellowfin stays peak",
+    seasonAlignmentLabel(ySeason.Oct / 3) === "peak");
+  check("Venice January yellowfin is peak (Midnight Lump winter)",
+    seasonAlignmentLabel(ySeason.Jan / 3) === "peak");
+  check("Gulf yellowfin 200 ft is full blue-water credit",
+    bluewaterGateFor("yellowfin", 200 / 3.28084, venice.lat, venice.lng) >= 0.95);
+  check("Atlantic yellowfin 80 ft stays suppressed",
+    bluewaterGateFor("yellowfin", 80 / 3.28084, hat.lat, hat.lng) < 0.3);
+
+  const gM = GULF_SPECIES_PREFS.mahi;
+  const aM = PREDICT_SPECIES_PREFS.mahi;
+  check("Gulf mahi working top is 88°F", gM.tempWorking[1] === 88);
+  check("Atlantic mahi working top stays 84°F", aM.tempWorking[1] === 84);
+  check("88°F Gulf mahi water is fishable", pelagicTempScore(88, gM) >= 0.9);
+  check("weed chlorPref stays on Gulf mahi", gM.chlorPref === "weed");
+  const floaters = CANYONS.find(c => c.name === "The Floaters (LA)");
+  check("Floaters list mahi", floaters && floaters.fish.includes("mahi"));
+  const mSeason = getRegionalSeasons("mahi", venice.lat, venice.lng);
+  check("Venice September mahi stays good (not off)",
+    seasonAlignmentLabel(mSeason.Sep / 3) === "good");
+
+  const gW = GULF_SPECIES_PREFS.wahoo;
+  const aW = PREDICT_SPECIES_PREFS.wahoo;
+  check("Gulf wahoo working top is 88°F", gW.tempWorking[1] === 88);
+  check("Atlantic wahoo working top stays 84°F", aW.tempWorking[1] === 84);
+  check("86°F Gulf wahoo water is fishable", pelagicTempScore(86, gW) >= 0.9);
+  check("Gulf wahoo chlorPref is any (Mississippi color change)", gW.chlorPref === "any");
+  check("Gulf wahoo pins rigs/lumps", gW.structureProx === true);
+  const wSeason = getRegionalSeasons("wahoo", venice.lat, venice.lng);
+  check("Venice September wahoo is peak",
+    seasonAlignmentLabel(wSeason.Sep / 3) === "peak");
+  check("Gulf wahoo 200 ft is full blue-water credit",
+    bluewaterGateFor("wahoo", 200 / 3.28084, venice.lat, venice.lng) >= 0.95);
 }
 
 done();
