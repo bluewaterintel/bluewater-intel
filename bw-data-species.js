@@ -644,9 +644,13 @@ const REGIONAL_SEASONS = {
     {centerLat: 30.0, centerLng: -80.0, radiusNm: 200, label: "GA / NE Florida",
      seasons:{Jan:0,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
     {centerLat: 26.5, centerLng: -79.6, radiusNm: 180, label: "SE FL (spring peak)",
+     // Stuart / Palm Beach / Miami: spring migration peak, then summer/fall
+     // weeds still fishable. Distinct from the Keys table — do not merge.
      seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:1}},
     {centerLat: 24.6, centerLng: -81.2, radiusNm: 160, label: "Florida Keys",
-     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:2,Aug:1,Sep:1,Oct:2,Nov:2,Dec:1}},
+     // Spring is the big run. Aug/Sep used to be 1 (off), which gated debris
+     // water as absent. Tail of the season is still good on grass and floaters.
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:1}},
     {centerLat: 26.0, centerLng: -78.0, radiusNm: 180, label: "Bahamas",
      seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:1,Oct:2,Nov:1,Dec:1}},
     {centerLat: 28.0, centerLng: -86.5, radiusNm: 260, label: "Eastern Gulf",
@@ -1308,9 +1312,13 @@ const REGIONAL_SEASONS = {
 };
 
 // SE Florida Atlantic habitat overrides (Stream against the beach). Applied
-// in scoreCell when isSeFloridaAtlantic(). NC/Gulf wahoo stay on the base table.
+// in scoreCell when isSeFloridaAtlantic(). Mahi also applies on the Keys
+// (west of that strip). NC/Gulf wahoo stay on the base table.
 const SEFL_SPECIES_PREFS = {
   wahoo: { tempIdeal:[72,82], tempWorking:[68,88], chlorPref:"any", depthBands:[[40,1500]], breakPref:"edge" },
+  // Tropical mahi: 86-88°F Keys/Stuart water is normal, not lethal. NC keeps
+  // the 84°F working cap. Weed/debris proxy stays chlorPref "weed".
+  mahi:  { tempIdeal:[74,82], tempWorking:[70,88], chlorPref:"weed", depthBands:[[25,1000]], breakPref:"any" },
 };
 
 const PREDICT_WEIGHTS = {

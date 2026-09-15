@@ -7,14 +7,14 @@ const {
   speciesAllowedAtLat, predictWeightsFor, weatherChangeFromObs, bluewaterGateFor,
   chlorScoreForPref, canyonDepthBoost, applyExplainerMovedStyles,
   seasonAlignmentLabel, getRegionalSeasons, isSeFloridaAtlantic, windScore,
-  nmBetween, effectiveSpeciesHabitat,
+  nmBetween, effectiveSpeciesHabitat, isFloridaKeys, usesSeFlSpeciesPrefs,
 } = loadBw([
     "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
     "PACIFIC_SPECIES_PREFS", "SEFL_SPECIES_PREFS", "REGIONAL_SEASONS",
     "speciesAllowedAtLat", "predictWeightsFor", "weatherChangeFromObs", "bluewaterGateFor",
     "chlorScoreForPref", "canyonDepthBoost", "applyExplainerMovedStyles",
     "seasonAlignmentLabel", "getRegionalSeasons", "isSeFloridaAtlantic", "windScore",
-    "nmBetween", "effectiveSpeciesHabitat",
+    "nmBetween", "effectiveSpeciesHabitat", "isFloridaKeys", "usesSeFlSpeciesPrefs",
   ]);
 
 const { check, done } = makeChecker();
@@ -300,6 +300,35 @@ console.log("\nsnook stays on inlets and beaches, not mid-shelf wrecks:");
   const vero = PORTS["Vero Beach, FL"];
   const blended = getRegionalSeasons("snook", vero.lat, vero.lng);
   check("Vero September snook stays in season", blended.Sep >= 2.5);
+}
+
+console.log("\nKeys/SE FL mahi stay findable on weeds in late summer; NC stays cooler:");
+{
+  const kw = PORTS["Key West, FL"];
+  const stuart = PORTS["Stuart, FL"];
+  const hat = PORTS["Hatteras, NC"];
+  const se = SEFL_SPECIES_PREFS.mahi;
+  const atl = PREDICT_SPECIES_PREFS.mahi;
+  check("Key West is Florida Keys, not the SE FL Atlantic strip", isFloridaKeys(kw.lat, kw.lng) && !isSeFloridaAtlantic(kw.lat, kw.lng));
+  check("Stuart is SE FL Atlantic, not Keys", isSeFloridaAtlantic(stuart.lat, stuart.lng) && !isFloridaKeys(stuart.lat, stuart.lng));
+  check("Hatteras is neither", !isFloridaKeys(hat.lat, hat.lng) && !isSeFloridaAtlantic(hat.lat, hat.lng));
+  check("Keys mahi uses tropical prefs", usesSeFlSpeciesPrefs("mahi", kw.lat, kw.lng));
+  check("Stuart mahi uses tropical prefs", usesSeFlSpeciesPrefs("mahi", stuart.lat, stuart.lng));
+  check("Hatteras mahi stays on the Atlantic table", !usesSeFlSpeciesPrefs("mahi", hat.lat, hat.lng));
+  check("tropical mahi working top is 88°F", se.tempWorking[1] === 88);
+  check("Atlantic mahi working top stays 84°F for NC", atl.tempWorking[1] === 84);
+  check("88°F Keys water is fishable", pelagicTempScore(88, se) >= 0.9);
+  check("88°F is lethal on the NC working cap", pelagicTempScore(88, atl) < 0.1);
+  check("weed chlorPref stays on both tables", se.chlorPref === "weed" && atl.chlorPref === "weed");
+  const kwSeason = getRegionalSeasons("mahi", kw.lat, kw.lng);
+  const stSeason = getRegionalSeasons("mahi", stuart.lat, stuart.lng);
+  check("Key West September mahi labels good (not off)", seasonAlignmentLabel(kwSeason.Sep / 3) === "good");
+  check("Stuart September mahi labels good", seasonAlignmentLabel(stSeason.Sep / 3) === "good");
+  check("Key West May mahi stays peak", seasonAlignmentLabel(kwSeason.May / 3) === "peak");
+  check("Stuart May mahi stays peak", seasonAlignmentLabel(stSeason.May / 3) === "peak");
+  const keysTbl = REGIONAL_SEASONS.mahi.find(r => r.label.includes("Florida Keys"));
+  const seflTbl = REGIONAL_SEASONS.mahi.find(r => r.label.includes("SE FL"));
+  check("Keys and SE FL keep separate calendars", keysTbl && seflTbl && keysTbl !== seflTbl);
 }
 
 done();

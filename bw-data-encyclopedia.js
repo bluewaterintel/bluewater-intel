@@ -308,9 +308,9 @@ const ENC_SPECIES = [
   {
     id:"mahi", name:"Mahi Mahi (Dolphinfish)", color:"#0f7a50", cat:"offshore",
     snippet:"The clown of the offshore — bright colors, aerial leaps, schools of dozens. Found on weedlines, floating debris, and color changes.",
-    facts:{ size:"5-50 lbs (cows up to 80)", record:"87 lbs (Costa Rica)", legal:"20\" fork length (most states); 10 fish per person bag limit", season:"Regional — NC/Mid-Atlantic late spring-summer (peak May-Jul); South FL/Keys/Bahamas spring peak (Mar-May) & near year-round; Gulf spring-fall" },
+    facts:{ size:"5-50 lbs (cows up to 80)", record:"87 lbs (Costa Rica)", legal:"20\" fork length (most states); 10 fish per person bag limit", season:"Regional — NC/Mid-Atlantic late spring-summer (peak May-Jul); South FL/Keys spring peak (Mar-May), still on weeds/debris through late summer; Gulf spring-fall" },
     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0},
-    where:"Anywhere offshore with weed lines, color changes, or floating debris. NC and the Mid-Atlantic in late spring-summer; South FL, the Keys, and the Bahamas in spring and near year-round; the Gulf spring-fall.",
+    where:"Anywhere offshore with weed lines, color changes, or floating debris. NC and the Mid-Atlantic in late spring-summer; South FL and the Keys peak in spring and stay findable under grass and floaters into late summer; the Gulf spring-fall.",
     tackle:[
       "20-30 lb spinning or light conventional",
       "6000-class offshore spinning reels with 30-50 lb braid",
