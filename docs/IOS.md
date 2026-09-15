@@ -376,6 +376,8 @@ supabase functions deploy stripe-portal
 | Sync to Xcode | `npx cap sync ios` |
 | Open Xcode | `npm run cap:open:ios` |
 | All-in-one | `npm run ios:sync` |
+| Bump native version/build | `npm run version:native -- 1.5 68` |
+| Stage web app for iOS + Android | `npm run bundle:native` |
 | Deploy Apple webhook | `supabase functions deploy revenuecat-webhook --no-verify-jwt` |
 
 ---
