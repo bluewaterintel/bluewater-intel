@@ -129,7 +129,7 @@ const ENC_SPECIES = [
     },
     facts:{ size:"40-90 lbs", record:"142 lbs (Atlantic)", legal:"63\" lower jaw fork length", season:"July - October" },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0},
-    where:"SE FL/Keys (Stuart, Palm Beach, Miami) and the Bahamas are the classic WINTER run (Dec-Mar), often stacking on north cold fronts. Off NC (Oregon Inlet/Hatteras) and the Mid-Atlantic it's a summer-fall Gulf Stream fishery — the 100-fathom line and the Charleston Bump.",
+    where:"SE FL/Keys (Stuart, Palm Beach, Miami) and the Bahamas are the classic WINTER run (Dec-Mar), often stacking on north cold fronts. Off NC (Oregon Inlet/Hatteras) and the Mid-Atlantic it's a summer-fall Gulf Stream fishery — the 100-fathom line and the Charleston Bump. Eastern Gulf (Panama City/Destin): late summer/fall they hunt bait within a few miles of the beach as well as on The Edge.",
     tackle:[
       "20-30 lb class spinning or trolling outfits",
       "16-30 class lever-drag reels with 20-30 lb mono",
@@ -262,7 +262,7 @@ const ENC_SPECIES = [
     },
     facts:{ size:"15-40 lbs", record:"49 lbs (Bermuda)", legal:"No federal size limit", season:"April - November" },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"Hatteras shelf, Cape Lookout, Charleston Bump, Myrtle Beach offshore wrecks. Often on bottom structure in 80-300 ft.",
+    where:"Hatteras shelf, Cape Lookout, Charleston Bump, Myrtle Beach offshore wrecks. Often on bottom structure in 80-300 ft. Gulf Panhandle (Panama City/Destin): late summer/fall they slide in with sardines and threadfin a few miles off the beach; The Edge is still the more consistent blue-water bite.",
     tackle:[
       "20-30 lb class spinning or conventional",
       "Sealed offshore spinning reels in the 8000-14000 size class",
@@ -332,9 +332,9 @@ const ENC_SPECIES = [
   {
     id:"cobia", name:"Cobia", color:"#8b5e1a", cat:"nearshore",
     snippet:"The brown bomber. Shallow-water bruisers cruising buoys, rays, and structure. Sight-casting is the most thrilling way to catch them.",
-    facts:{ size:"20-80 lbs", record:"135 lbs 9 oz (Australia)", legal:"36\" fork length (federal); state limits vary 1-2/day", season:"Regional — Mid-Atlantic/NC spring-summer (peak May-Jul as fish move north); SE & Gulf spring; South FL/Keys and Texas 'ling' run in spring" },
+    facts:{ size:"20-80 lbs", record:"135 lbs 9 oz (Australia)", legal:"36\" fork length (federal); state limits vary 1-2/day", season:"Regional — Mid-Atlantic/NC spring-summer (peak May-Jul as fish move north); SE & Gulf spring; Gulf wrecks/buoys stay fishable in 84-90°F water through early fall. South FL/Keys and Texas 'ling' run in spring" },
     seasons:{Jan:0,Feb:0,Mar:1,Apr:3,May:3,Jun:3,Jul:3,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0},
-    where:"Chesapeake Bay Bridge Tunnel, OBX inshore wrecks, Cape Lookout, Hatteras Inlet (spring-summer). South FL/Keys and the Texas 'ling' run in spring; Gulf beaches and buoys. Cruising rays and turtles in 10-50 ft.",
+    where:"Chesapeake Bay Bridge Tunnel, OBX inshore wrecks, Cape Lookout, Hatteras Inlet (spring-summer). South FL/Keys and the Texas 'ling' run in spring; Gulf beaches, buoys, and nearshore wrecks (Tampa/Panhandle stay on structure into early fall — they do not shut off with the Chesapeake fade). Cruising rays and turtles in 10-50 ft.",
     tackle:[
       "30-50 lb spinning gear with 50-80 lb braid",
       "Heavy 8000-14000 class sealed spinning reels",
@@ -484,11 +484,11 @@ const ENC_SPECIES = [
       "Charleston/Hilton Head fleet absolutely loads up during the open season"],
   },
   {
-    id:"grouper", name:"Grouper (Gag/Black/Scamp)", color:"#4a4038", cat:"nearshore",
-    snippet:"Hard-pulling reef fish on bottom structure 80-300 ft. Several species; strict size and seasonal limits.",
+    id:"grouper", name:"Grouper (Black/Scamp)", color:"#4a4038", cat:"nearshore",
+    snippet:"Hard-pulling reef fish on bottom structure 80-300 ft. Mixed black, scamp, and red grouper; strict size and seasonal limits.",
     facts:{ size:"5-50 lbs", record:"110 lbs (gag, FL)", legal:"24\" gag, 22\" black; varies by state and species", season:"Regional — NC/SC ledges and Gulf reefs; summer–fall peak (May–Oct). Not a New England or Pacific fishery." },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0},
-    where:"Live bottom and ledges off NC, SC, and GA — Charleston Bump, Cape Lookout, Frying Pan Tower, Georgetown Hole — plus Gulf and FL Atlantic reefs. Use gaggrouper for Gulf gag-specific timing.",
+    where:"Live bottom and ledges off NC, SC, and GA — Charleston Bump, Cape Lookout, Frying Pan Tower, Georgetown Hole — plus deeper Gulf and FL Atlantic reefs (scamp, black, red). For Gulf gag on 40-120 ft hard bottom, use Gag Grouper — that entry has the shallower band and fall timing.",
     tackle:[
       "50-80 lb conventional, stout rod",
       "Stout 25-class lever-drag conventionals with 65-80 lb braid",
@@ -947,7 +947,7 @@ const ENC_SPECIES = [
     },
     facts:{ size:"5-25 lbs (smokers 40+)", record:"93 lbs (PR)", legal:"24 inch fork length federal", season:"Regional — NC/Mid-Atlantic summer-fall (Jun-Oct); they WINTER in South FL/Keys (Nov-Mar); Gulf runs spring & fall" },
     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"NC summer-fall: Frying Pan Tower, Cape Lookout shoals, Big Rock, AR-410 and the NC artificial reefs, Va Beach 4A buoy, 5-30 nm off. South FL/Keys in winter; Gulf reefs/wrecks spring & fall.",
+    where:"NC summer-fall: Frying Pan Tower, Cape Lookout shoals, Big Rock, AR-410 and the NC artificial reefs, Va Beach 4A buoy, 5-30 nm off. South FL/Keys in winter. Gulf fall/spring: beaches, shipping channels (Egmont Channel off Tampa), and 20-80 ft wrecks — not the 80-100 nm Middle Grounds run.",
     tackle:[
       "Medium-heavy 7 ft conventional or stout spinning rods",
       "Conventional 15-25 size or 6000-8000 spinning with 30-50 lb braid",
