@@ -2851,6 +2851,37 @@ function bluewaterGateFor(speciesId, depthM){
   return 0.10 + 0.25 * (depthM / 50);
 }
 
+// Chlorophyll factor. "weed" is the mahi/paddy proxy: moderate color plus a
+// color edge (sargassum and kelp sit on green-to-blue rips). No dedicated
+// sargassum feed — this uses the VIIRS chlorophyll we already have.
+function chlorScoreForPref(pref, chlor, chlorBreak){
+  if(chlor == null || !isFinite(chlor)) return 0;
+  if(pref === "low")  return chlor < 0.2 ? 1.0 : chlor < 0.5 ? 0.6 : 0.2;
+  if(pref === "high") return chlor > 1.0 ? 1.0 : chlor > 0.5 ? 0.6 : 0.2;
+  const gradScore = (typeof BW_BREAKS !== "undefined" && BW_BREAKS.chlorEdgeStrength)
+    ? BW_BREAKS.chlorEdgeStrength(chlorBreak) : 0;
+  if(pref === "weed"){
+    const inBand = (chlor >= 0.08 && chlor <= 0.45);
+    const bandScore = inBand ? 1.0 : (chlor < 0.08 ? 0.45 : 0.25);
+    return Math.min(1, 0.40 * bandScore + 0.60 * gradScore);
+  }
+  if(pref === "edge"){
+    const inBand = (chlor >= 0.1 && chlor <= 0.45);
+    const bandScore = inBand ? 1.0 : (chlor < 0.1 ? 0.5 : 0.35);
+    return Math.min(1, 0.35 * bandScore + 0.65 * gradScore);
+  }
+  if(pref === "any") return 0.7;
+  return 0.5;
+}
+
+// Canyon-depth bonus is for tuna/billfish holding on the drop. Mahi ride
+// floating cover over any fishable blue water — do not treat 400 m as better.
+function canyonDepthBoost(speciesId, bands, depth){
+  if(speciesId === "mahi") return 0;
+  const wantsCanyon = Array.isArray(bands) && bands.some(([, mx]) => mx >= 150);
+  return (wantsCanyon && depth > 100 && depth < 500) ? 0.10 : 0;
+}
+
 // ── Recent weather change (24-48h shift) ───────────────────────────────────
 // Fish RESET their patterns after a significant weather shift (cold front,
 // storm, big temperature swing). Right after the change = scattered, slow bite.
@@ -3720,23 +3751,7 @@ function scoreCell(lat, lng, speciesId){
   // ── Factor 2: Chlorophyll preference ──
   let chlorScore = 0;
   if(chlor != null){
-    chlorScore = 0.5;
-    if(prefs.chlorPref === "low")  chlorScore = chlor < 0.2 ? 1.0 : chlor < 0.5 ? 0.6 : 0.2;
-    if(prefs.chlorPref === "high") chlorScore = chlor > 1.0 ? 1.0 : chlor > 0.5 ? 0.6 : 0.2;
-    if(prefs.chlorPref === "edge"){
-      // "Edge" species want the COLOR CHANGE, not flat green water. A concentration
-      // in the productive band is necessary but NOT sufficient: a uniform field
-      // (no break) scores only moderate, and the score climbs toward 1.0 only when
-      // a real chlorophyll gradient is present at this cell. chlorBreak (mg/m³ per
-      // 10nm) is the gradient computed above; chlorEdgeStrength normalizes it 0..1.
-      // This stops the map from rewarding areas that are simply green.
-      const gradScore = (typeof BW_BREAKS !== "undefined" && BW_BREAKS.chlorEdgeStrength)
-        ? BW_BREAKS.chlorEdgeStrength(chlorBreak) : 0;
-      const inBand = (chlor >= 0.1 && chlor <= 0.45);      // clean-to-productive edge water
-      const bandScore = inBand ? 1.0 : (chlor < 0.1 ? 0.5 : 0.35); // sterile blue mid / pea-green low
-      chlorScore = Math.min(1, 0.35 * bandScore + 0.65 * gradScore);
-    }
-    if(prefs.chlorPref === "any")  chlorScore = 0.7;
+    chlorScore = chlorScoreForPref(prefs.chlorPref, chlor, chlorBreak);
   }
 
   // ── Factor 3: Depth/structure match ──
@@ -3781,9 +3796,7 @@ function scoreCell(lat, lng, speciesId){
   // Canyon-edge bonus only applies if at least one band actually wants
   // canyon-depth water (otherwise we'd be giving a free boost to flounder
   // happening to drift over a canyon).
-  const wantsCanyon = bands.some(([mn, mx]) => mx >= 150);
-  const canyonBoost = (wantsCanyon && depth > 100 && depth < 500) ? 0.10 : 0;
-  depthScore = Math.min(1, depthScore + canyonBoost);
+  depthScore = Math.min(1, depthScore + canyonDepthBoost(speciesId, bands, depth));
 
   // ── Factor 4: Thermal break (temperature gradient / color line) ──
   // Pelagic predators hunt the EDGE between cold and warm water. The
@@ -4336,13 +4349,13 @@ function scoreCell(lat, lng, speciesId){
   const droppedKeys = new Set((fr?.droppedFactors || []).map(f => f.key));
   const allFactors = [
     {key:"temp", name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: (_isBottom || _isDemersal) ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
-    {key:"depth", name:"Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
+    {key:"depth", name: speciesId === "mahi" ? "Water depth" : "Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
     {key:"structure", name:"Bottom structure",   weight:(W.structure||0), score:structureScore,
      raw: structureScore > 0.05 ? `${Math.round(structureScore*100)}% · edge/slope` : "flat bottom"},
     {key:"pres", name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
     {key:"chlor", name:"Chlorophyll",        weight:W.chlorophyll,   score:chlorScore,
      raw: chlor != null
-          ? `${chlor.toFixed(2)} mg/m³` + (prefs.chlorPref === "edge" && chlorBreak > 0 ? ` · ${chlorBreak.toFixed(2)}/10nm edge` : "")
+          ? `${chlor.toFixed(2)} mg/m³` + ((prefs.chlorPref === "edge" || prefs.chlorPref === "weed") && chlorBreak > 0 ? ` · ${chlorBreak.toFixed(2)}/10nm edge` : "")
           : "—"},
     // Reports: only shown when there ARE positive nearby reports. Absence of
     // reports is not a negative signal so we don't display a "—" row that
@@ -5791,7 +5804,7 @@ const PACIFIC_SPECIES_PREFS = {
   // SoCal dorado ride kelp paddies in California Current water (high 60s-low
   // 70s), not Gulf Stream 74-82°F. Without this override a 70°F San Diego day
   // was treated as too cold.
-  mahi: { tempIdeal:[68,76], tempWorking:[64,80], chlorPref:"any", depthBands:[[30,400]], breakPref:"any" },
+  mahi: { tempIdeal:[68,76], tempWorking:[64,80], chlorPref:"weed", depthBands:[[30,400]], breakPref:"any" },
 };
 
 // Bahamas / Bahama-Bank water east of the Florida crossings. Several US
@@ -10156,25 +10169,35 @@ function showPredictionExplainer(cell, species){
 
 // Desktop: drag the bite explainer by its header so captains can park it aside
 // and see the heat map / hotspots behind it. Phone keeps the fixed sheet.
-let _explainerDragPos = null; // {left, top} when user has moved it this session
+// Freeze the pixel width/height captured at pointer-down so converting from
+// left+right centering to left-only does not stretch the card across the map.
+let _explainerDragPos = null; // {left, top, width, height} when user has moved it
+function applyExplainerMovedStyles(el, { left, top, width, height }){
+  if(!el || !el.style) return;
+  el.style.left = left + "px";
+  el.style.top = top + "px";
+  el.style.right = "auto";
+  el.style.bottom = "auto";
+  el.style.width = width + "px";
+  el.style.height = height + "px";
+  el.style.maxWidth = width + "px";
+  el.style.maxHeight = height + "px";
+}
 function bindExplainerDesktopDrag(div){
   if(!div || div._bwiDragBound) return;
   div._bwiDragBound = true;
   let dragging = false, startX = 0, startY = 0, origL = 0, origT = 0;
   const onMove = (e) => {
     if(!dragging) return;
+    const w = (_explainerDragPos && _explainerDragPos.width) || div.offsetWidth || 420;
+    const h = (_explainerDragPos && _explainerDragPos.height) || div.offsetHeight || 320;
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
-    const w = div.offsetWidth || 420;
-    const h = div.offsetHeight || 320;
     const left = Math.max(8, Math.min(window.innerWidth - w - 8, origL + dx));
     const top = Math.max(8, Math.min(window.innerHeight - 80, origT + dy));
-    div.style.left = left + "px";
-    div.style.top = top + "px";
-    div.style.right = "auto";
-    div.style.bottom = "auto";
-    div.style.maxHeight = `calc(100dvh - ${top + 14}px)`;
-    _explainerDragPos = { left, top };
+    const box = { left, top, width: w, height: h };
+    applyExplainerMovedStyles(div, box);
+    _explainerDragPos = box;
   };
   const onUp = () => {
     if(!dragging) return;
@@ -10193,10 +10216,14 @@ function bindExplainerDesktopDrag(div){
     const rect = div.getBoundingClientRect();
     startX = e.clientX; startY = e.clientY;
     origL = rect.left; origT = rect.top;
-    div.style.left = origL + "px";
-    div.style.top = origT + "px";
-    div.style.right = "auto";
-    div.style.bottom = "auto";
+    const box = {
+      left: origL,
+      top: origT,
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    };
+    applyExplainerMovedStyles(div, box);
+    _explainerDragPos = box;
     e.preventDefault();
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -19334,16 +19361,15 @@ function syncExplainerPosition(){
     expl.style.right = "";
     expl.style.top = "";
     expl.style.bottom = "auto";
+    expl.style.width = "";
+    expl.style.height = "";
+    expl.style.maxWidth = "";
     expl.style.maxHeight = "";
     return;
   }
   if(_explainerDragPos){
     expl.classList.add("explainer-moved");
-    expl.style.left = _explainerDragPos.left + "px";
-    expl.style.top = _explainerDragPos.top + "px";
-    expl.style.right = "auto";
-    expl.style.bottom = "auto";
-    expl.style.maxHeight = `calc(100dvh - ${_explainerDragPos.top + 14}px)`;
+    applyExplainerMovedStyles(expl, _explainerDragPos);
     return;
   }
   expl.classList.remove("explainer-moved");
@@ -19354,6 +19380,9 @@ function syncExplainerPosition(){
   expl.style.bottom = `${bottomPad}px`;
   expl.style.left = "";
   expl.style.right = "";
+  expl.style.width = "";
+  expl.style.height = "";
+  expl.style.maxWidth = "";
   expl.style.maxHeight = `calc(100dvh - ${top + bottomPad}px)`;
 }
 

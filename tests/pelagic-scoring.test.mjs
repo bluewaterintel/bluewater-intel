@@ -5,13 +5,15 @@ const {
   PREDICT_SPECIES_PREFS, PREDICT_WEIGHTS, PORTS, SPECIES_LAT_RANGE,
   PACIFIC_SPECIES_PREFS, REGIONAL_SEASONS,
   speciesAllowedAtLat, predictWeightsFor, weatherChangeFromObs, bluewaterGateFor,
+  chlorScoreForPref, canyonDepthBoost, applyExplainerMovedStyles,
   nmBetween,
 } = loadBw([
-  "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
-  "PACIFIC_SPECIES_PREFS", "REGIONAL_SEASONS",
-  "speciesAllowedAtLat", "predictWeightsFor", "weatherChangeFromObs", "bluewaterGateFor",
-  "nmBetween",
-]);
+    "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
+    "PACIFIC_SPECIES_PREFS", "REGIONAL_SEASONS",
+    "speciesAllowedAtLat", "predictWeightsFor", "weatherChangeFromObs", "bluewaterGateFor",
+    "chlorScoreForPref", "canyonDepthBoost", "applyExplainerMovedStyles",
+    "nmBetween",
+  ]);
 
 const { check, done } = makeChecker();
 
@@ -72,24 +74,45 @@ console.log("\nblackfin habitat no longer treats Hatteras Stream as too hot or t
   check("yellowfin 80 ft stays suppressed", bwYft < 0.3);
 }
 
-console.log("\nmahi East Coast weights favor warm water and weed, not fused fronts:");
+console.log("\nmahi East Coast weights favor floating cover, not canyon slope:");
 {
   const W = PREDICT_WEIGHTS.mahi;
   const off = PREDICT_WEIGHTS.offshore;
   check("mahi uses its own weight table", predictWeightsFor("mahi") === W);
   check("yellowfin still uses generic offshore weights", predictWeightsFor("yellowfin") === off);
   check("mahi temperature weight is higher than offshore", W.temperature > off.temperature);
-  check("mahi convergence is much lower than offshore", W.convergence < 0.10 && W.convergence < off.convergence);
-  check("mahi chlorPref is any", PREDICT_SPECIES_PREFS.mahi.chlorPref === "any");
+  check("mahi does not score bottom structure", W.structure === 0);
+  check("mahi depth is a light gate", W.depthStruct === 0.04);
+  check("mahi chlorophyll is the biggest habitat proxy after temp", W.chlorophyll > W.thermalBreak && W.chlorophyll > W.convergence);
+  check("mahi chlorPref is weed", PREDICT_SPECIES_PREFS.mahi.chlorPref === "weed");
   const bands = PREDICT_SPECIES_PREFS.mahi.depthBands;
   check("100-fathom mahi water is in-band (no 150-200 m hole)",
     depthBandScore(175, bands) === 1);
   check("200 ft weed line is in-band", depthBandScore(200 / 3.281, bands) === 1);
+  check("1418 ft canyon cell is still in-band (depth is not a veto)",
+    depthBandScore(1418 / 3.28084, bands) === 1);
+  check("mahi gets no canyon-depth bonus at 1400 ft",
+    canyonDepthBoost("mahi", bands, 1418 / 3.28084) === 0);
+  check("yellowfin still gets a canyon-depth bonus on the drop",
+    canyonDepthBoost("yellowfin", [[150, 2000]], 250) === 0.10);
   const sum = W.temperature + W.depthStruct + W.structure + W.chlorophyll + W.thermalBreak
     + W.convergence + W.season + W.pressure + W.solunar + W.tide + W.wind
     + W.weatherChange + (W.moonPhase || 0) + (W.reports || 0);
   check("mahi weights sum to 1", Math.abs(sum - 1) < 1e-9);
   check("mahi 150 ft blue-water gate is usable", bluewaterGateFor("mahi", 150 / 3.28084) >= 0.45);
+}
+
+console.log("\nmahi chlorophyll scores weed-line color, not a flat 0.7:");
+{
+  const weedLine = chlorScoreForPref("weed", 0.26, 0.15);
+  const peaGreen = chlorScoreForPref("weed", 1.2, 0);
+  const sterile = chlorScoreForPref("weed", 0.02, 0);
+  const anyFlat = chlorScoreForPref("any", 0.26, 0.15);
+  check("0.26 mg/m³ with a color edge scores well", weedLine >= 0.55);
+  check("pea-green coastal water scores poorly", peaGreen < 0.35);
+  check("sterile blue with no edge is modest", sterile < 0.35 && sterile > 0);
+  check("weed with an edge outranks pea-green", weedLine > peaGreen);
+  check("generic any-pref is still a flat 0.7", anyFlat === 0.7);
 }
 
 console.log("\nPacific mahi uses California Current temps, not Gulf Stream:");
@@ -99,6 +122,7 @@ console.log("\nPacific mahi uses California Current temps, not Gulf Stream:");
   check("Pacific ideal is cooler than Atlantic", pac.tempIdeal[1] < PREDICT_SPECIES_PREFS.mahi.tempIdeal[1]);
   check("70°F San Diego paddy day is inside Pacific ideal",
     70 >= pac.tempIdeal[0] && 70 <= pac.tempIdeal[1]);
+  check("Pacific mahi also uses weed chlorPref", pac.chlorPref === "weed");
   check("Atlantic mahi prefs are unchanged at 74-82",
     PREDICT_SPECIES_PREFS.mahi.tempIdeal[0] === 74 && PREDICT_SPECIES_PREFS.mahi.tempIdeal[1] === 82);
 }
@@ -117,6 +141,20 @@ console.log("\nweather change reads live wind/seas/pressure instead of always 's
   check("rising pressure after a front scores high", after.label === "post-front" && after.score >= 0.75);
   const arriving = weatherChangeFromObs({ windKt: 12, waveFt: 4, pressureTrend: -3.5 });
   check("falling pressure is front arriving", arriving.label === "front arriving" && arriving.score < 0.4);
+}
+
+console.log("\nbite explainer drag freezes pixel width and height:");
+{
+  const el = { style: {} };
+  applyExplainerMovedStyles(el, { left: 24, top: 80, width: 460, height: 640 });
+  check("locks left", el.style.left === "24px");
+  check("locks top", el.style.top === "80px");
+  check("clears right so the card cannot stretch", el.style.right === "auto");
+  check("clears bottom so the card cannot stretch", el.style.bottom === "auto");
+  check("freezes width", el.style.width === "460px");
+  check("freezes height", el.style.height === "640px");
+  check("caps maxWidth to the frozen width", el.style.maxWidth === "460px");
+  check("caps maxHeight to the frozen height, not leftover viewport", el.style.maxHeight === "640px");
 }
 
 done();
