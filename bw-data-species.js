@@ -106,7 +106,9 @@ const PREDICT_SPECIES_PREFS = {
   // The old 72-80 / 197 ft floor treated 85°F Stream and 150 ft wrecks as poor.
   blackfin:     {tempIdeal:[74,84], tempWorking:[70,88], chlorPref:"any",     depthBands:[[25,400]],   breakPref:"any"  },
   falsealbacore:{tempIdeal:[69,74], tempWorking:[66,78], chlorPref:"edge",    depthBands:[[10,120]],   breakPref:"any"  },
-  skipjack:     {tempIdeal:[76,82], tempWorking:[72,86], chlorPref:"edge",    depthBands:[[50,600]],   breakPref:"edge" },
+  // Skipjack — wreck and Stream tuna like blackfin. The old 50 m floor + edge
+  // lock + 180 m gate treated 80-200 ft SE FL wrecks as empty.
+  skipjack:     {tempIdeal:[76,82], tempWorking:[72,88], chlorPref:"any",     depthBands:[[25,600]],   breakPref:"any"  },
   // Wahoo — Palm Beach / Stuart wall is 150-250 ft (~45-76 m). The old 60 m
   // floor treated 150 ft Stream water as too shallow. 40 m (~131 ft) still
   // keeps them off the beach; NC canyon wahoo remain in-band up to 1500 m.
@@ -1291,6 +1293,12 @@ const REGIONAL_SEASONS = {
   ],
 };
 
+// SE Florida Atlantic habitat overrides (Stream against the beach). Applied
+// in scoreCell when isSeFloridaAtlantic(). NC/Gulf wahoo stay on the base table.
+const SEFL_SPECIES_PREFS = {
+  wahoo: { tempIdeal:[72,82], tempWorking:[68,88], chlorPref:"any", depthBands:[[40,1500]], breakPref:"edge" },
+};
+
 const PREDICT_WEIGHTS = {
   offshore: {
     temperature:   0.22,   // Trimmed — warm water alone was over-credited. Pelagics hold at the
@@ -1352,6 +1360,42 @@ const PREDICT_WEIGHTS = {
     wind:          0.00,
     weatherChange: 0.04,
     moonPhase:     0.00,
+  },
+  // SE Florida wahoo: color/temp/current wall, not a 2 nm canyon-slope score.
+  // Full/new moon pushes bait on the reef. Keep breakPref "edge". NC canyon
+  // wahoo still uses the generic offshore table (structure + 180 m gate).
+  wahooSeFl: {
+    temperature:   0.22,
+    depthStruct:   0.06,
+    structure:     0.00,
+    chlorophyll:   0.12,
+    thermalBreak:  0.16,
+    convergence:   0.15,
+    reports:       0.00,
+    season:        0.05,
+    pressure:      0.06,
+    solunar:       0.03,
+    tide:          0.00,
+    wind:          0.04,
+    weatherChange: 0.04,
+    moonPhase:     0.07,   // New/full moon bait push on the reef.
+  },
+  // Skipjack: wreck and Stream tuna like blackfin — not a canyon-slope fish.
+  skipjack: {
+    temperature:   0.24,
+    depthStruct:   0.08,
+    structure:     0.00,
+    chlorophyll:   0.16,
+    thermalBreak:  0.14,
+    convergence:   0.12,
+    reports:       0.00,
+    season:        0.05,
+    pressure:      0.07,
+    solunar:       0.04,
+    tide:          0.00,
+    wind:          0.00,
+    weatherChange: 0.04,
+    moonPhase:     0.06,
   },
   nearshore: {
     temperature:   0.17,
