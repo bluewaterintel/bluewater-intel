@@ -50,7 +50,9 @@
     "android:icon": "node scripts/copy-android-app-icon.mjs",
     "legal:pages": "node scripts/generate-legal-pages.mjs",
     "ios:sync": "npm run cap:sync && npm run cap:open:ios",
-    "android:sync": "npm run cap:sync:android && npm run cap:open:android"
+    "android:sync": "npm run cap:sync:android && npm run cap:open:android",
+    "version:native": "node scripts/bump-native-version.mjs",
+    "bundle:native": "npm run build:ios && npx cap sync"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",
