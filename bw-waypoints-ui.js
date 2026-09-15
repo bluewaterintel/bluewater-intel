@@ -82,8 +82,8 @@ const WP_PUBLIC = [
    region:"Virginia Beach, VA", desc:"4 islands and 17-mile structure. Massive striper, cobia, tautog, sheepshead grounds."},
   {id:"p-chestertower",name:"Chesapeake Light Tower",   type:"tower",  lat:36.9050, lng:-75.7130, depth:"40-50ft",
    region:"Virginia Beach, VA", desc:"Famous offshore tower 14nm E of Va Beach. Spadefish, AJs, cobia in summer."},
-  {id:"p-trianglewrk", name:"Triangle Wrecks",         type:"wreck",  lat:36.9100, lng:-75.6500, depth:"60-90ft",
-   region:"Virginia Beach, VA", desc:"Cluster of three wrecks 15nm E of Va Beach. Spadefish, BSB, flounder."},
+  {id:"p-trianglewrk", name:"Triangle Wrecks",         type:"wreck",  lat:36.99042, lng:-75.38827, depth:"90-110ft",
+   region:"Virginia Beach, VA", desc:"Cluster of wrecks ~30nm ENE of Va Beach. Spadefish, BSB, flounder."},
 
   // ── CHESAPEAKE BAY — INSIDE THE BAY ───────────────────────────────────
   {id:"p-cbbt-island1",name:"CBBT 1st Island",          type:"reef",   lat:36.9920, lng:-76.0890, depth:"15-40ft",

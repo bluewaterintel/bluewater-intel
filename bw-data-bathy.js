@@ -83,7 +83,7 @@ const BATHY_REFS = [
   // Chesapeake Light Tower grounds (~40–50 ft) — keeps seaDepth fallback from
   // treating the tower as bay-flat shoals when the CUDEM grid is missing.
   {lat:36.905, lng:-75.713, depth:14, name:"Chesapeake Light Tower"},
-  {lat:36.91, lng:-75.65, depth:22,   name:"Triangle Wrecks (Va Beach)"},
+  {lat:36.99042, lng:-75.38827, depth:30,   name:"Triangle Wrecks (Va Beach)"},
   // ── HATTERAS / OUTER BANKS ───────────────────────────────────────────
   {lat:35.80, lng:-74.80, depth:200,  name:"Diamond Shoals offshore"},
   {lat:34.96587, lng:-75.21584, depth:1737, name:"Hatteras Canyon tip"},
