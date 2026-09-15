@@ -2879,6 +2879,20 @@ function isSeFloridaAtlantic(lat, lng){
     && lat < 29.5 && lat >= 24.2 && lng > -81.3 && lng < -79.4;
 }
 
+// Key West / Marathon / Islamorada. West of the SE FL Atlantic strip, so
+// isSeFloridaAtlantic() is false here — mahi still needs the tropical SST band.
+function isFloridaKeys(lat, lng){
+  return lat != null && lng != null && isFinite(lat) && isFinite(lng)
+    && lat < 25.5 && lat >= 24.0 && lng > -83.0 && lng < -80.0;
+}
+
+function usesSeFlSpeciesPrefs(speciesId, lat, lng){
+  if(typeof SEFL_SPECIES_PREFS === "undefined" || !SEFL_SPECIES_PREFS[speciesId]) return false;
+  if(typeof isSeFloridaAtlantic === "function" && isSeFloridaAtlantic(lat, lng)) return true;
+  if(speciesId === "mahi" && isFloridaKeys(lat, lng)) return true;
+  return false;
+}
+
 // Table 3 (1.00) is peak. Table 2 (0.67) used to display as peak because the
 // cutoff was 0.66. Only a 3 should read peak; a 2 is good.
 function seasonAlignmentLabel(seasonScore){
@@ -3610,8 +3624,7 @@ function scoreCell(lat, lng, speciesId){
      typeof PACIFIC_SPECIES_PREFS !== "undefined" && PACIFIC_SPECIES_PREFS[speciesId]){
     prefs = PACIFIC_SPECIES_PREFS[speciesId];
   }
-  if(typeof isSeFloridaAtlantic === "function" && isSeFloridaAtlantic(lat, lng) &&
-     typeof SEFL_SPECIES_PREFS !== "undefined" && SEFL_SPECIES_PREFS[speciesId]){
+  if(typeof usesSeFlSpeciesPrefs === "function" && usesSeFlSpeciesPrefs(speciesId, lat, lng)){
     prefs = SEFL_SPECIES_PREFS[speciesId];
   }
 
