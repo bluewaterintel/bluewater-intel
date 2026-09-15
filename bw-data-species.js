@@ -181,8 +181,15 @@ const PREDICT_SPECIES_PREFS = {
   // Heat-tolerant FL/Gulf inshore: peak season IS hot water. Keep idealHi high
   // enough that normal summer SST (~86–88°F) is not a drag, and mark warmAdapted
   // so warm-side credit extends through the working edge.
-  tarpon:       {tempIdeal:[75,90], tempWorking:[68,95], chlorPref:"high",    salinityPref:"moderate", depthBands:[[3,40]],     breakPref:"stable", warmAdapted:true },
-  snook:        {tempIdeal:[72,89], tempWorking:[60,93], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,30]],     breakPref:"stable", warmAdapted:true },
+  // Tarpon: beaches, passes, lagoons. The old 40 m / 131 ft ceiling derived an
+  // "offshore" habitat bucket and painted Stream water they do not hunt. 22 m
+  // (~72 ft) still covers Boca Grande Pass and inlet throats.
+  tarpon:       {tempIdeal:[75,90], tempWorking:[68,95], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,22]],     breakPref:"stable", warmAdapted:true },
+  // Snook: inlets, beaches, mangroves, bridges. The old 30 m / 98 ft ceiling
+  // derived a nearshore bucket, so 47 ft / 6 nm cells (Bethel Shoal) lit up.
+  // 9 m (~30 ft) stays in the inshore/bay mask — surf troughs and inlet holes,
+  // not mid-shelf wrecks.
+  snook:        {tempIdeal:[72,89], tempWorking:[60,93], chlorPref:"high",    salinityPref:"moderate", depthBands:[[1,9]],      breakPref:"stable", warmAdapted:true },
   bonefish:     {tempIdeal:[74,88], tempWorking:[70,92], chlorPref:"high",    depthBands:[[1,6]],      breakPref:"stable", warmAdapted:true },
   permit:       {tempIdeal:[74,88], tempWorking:[70,92], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable", warmAdapted:true },
   ceromack:     {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"edge",    depthBands:[[10,80]],    breakPref:"any", warmAdapted:true },
@@ -509,8 +516,15 @@ const REGIONAL_SEASONS = {
 
   // ── TARPON ───────────────────────────────────────────────────────────
   // Boca Grande spring/early-summer peak; Gulf coast slightly later;
-  // GA/SC summer push (stragglers).
+  // GA/SC summer push (stragglers). SE Florida Atlantic is its own fishery:
+  // spring beach migration AND the fall mullet run. Without this region,
+  // Stuart/Vero inherited the Keys/Boca Grande tables (Sep=1) and painted
+  // the mullet-run month as "off".
   tarpon: [
+    {centerLat: 27.4, centerLng: -80.15, radiusNm: 100, label: "SE FL Atlantic (Canaveral–Palm Beach)",
+     // Treasure Coast / Jupiter beaches: spring push Mar-Jun, then the
+     // Aug-Oct mullet run. September on this shore is peak, not dead.
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 25.5, centerLng: -80.5, radiusNm: 150, label: "South FL/Keys",
      // Migration through Florida Bay, Keys — peak Mar-Jun
      seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:1,Sep:1,Oct:1,Nov:1,Dec:1}},

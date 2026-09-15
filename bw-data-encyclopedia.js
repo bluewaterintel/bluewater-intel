@@ -1026,9 +1026,9 @@ const ENC_SPECIES = [
   {
     id:"tarpon", name:"Tarpon", color:"#a8a8a8", cat:"inshore",
     snippet:"The Silver King. World-class gamefish that prowls Florida flats, passes, and beaches. Their gill-rattling, twisting jumps are legendary.",
-    facts:{ size:"40-150 lbs", record:"286 lbs (Africa)", legal:"Catch-and-release; tag required to harvest", season:"April - July (peak), year-round in south FL" },
-    seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:2,Sep:2,Oct:1,Nov:1,Dec:1},
-    where:"Florida Keys flats, Boca Grande Pass, Tampa Bay, Stuart/Jupiter beaches in spring, Homosassa flats in May-June. Backcountry of the Everglades year-round.",
+    facts:{ size:"40-150 lbs", record:"286 lbs (Africa)", legal:"Catch-and-release; tag required to harvest", season:"Spring beaches/passes (Mar–Jun) and the SE FL fall mullet run (Aug–Oct); year-round in south FL" },
+    seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
+    where:"Florida Keys flats, Boca Grande Pass, Tampa Bay, Stuart/Vero/Jupiter beaches in spring and again on the fall mullet run, Homosassa flats in May-June. Backcountry of the Everglades year-round.",
     tackle:[
       "8-12 weight fly rods with floating or intermediate line for sight-fishing",
       "Conventional: 7-foot heavy spinning rod, 30-50 lb braid",

@@ -5487,8 +5487,8 @@ const SPECIES_HABITAT = {
   tautog:        ["inshore", "nearshore"],
   porgy:         ["inshore", "nearshore"],          // rockpiles, mussel beds, wrecks
   // ── FLORIDA / TROPICAL SPECIES ────────────────────────────────────
-  tarpon:        ["bay", "inshore"],            // FL flats, lagoons, passes
-  snook:         ["bay", "inshore"],            // FL east coast inlets & lagoons
+  tarpon:        ["bay", "inshore"],            // FL flats, lagoons, passes — not Stream water
+  snook:         ["bay", "inshore"],            // inlets, beaches, mangroves — not 6 nm wrecks
   bonefish:      ["bay", "inshore"],            // FL Keys flats
   permit:        ["bay", "inshore", "nearshore"],   // Flats + nearshore wrecks
   ceromack:      ["nearshore", "inshore"],          // Like Spanish mackerel but warmer water

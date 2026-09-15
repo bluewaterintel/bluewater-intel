@@ -121,6 +121,24 @@ for(const id of Object.keys(SPECIES_HABITAT)){
 }
 if(!narrowed) console.log("  ✓ no species lost a curated water type");
 
+console.log("\nSE Florida inshore fish do not inherit nearshore/offshore from a deep ceiling:");
+{
+  const snookHab = effectiveSpeciesHabitat("snook");
+  if(!snookHab.includes("nearshore") && !snookHab.includes("offshore")){
+    console.log("  ✓ snook stays bay/inshore (inlets and beaches, not mid-shelf)");
+  } else {
+    failures++;
+    console.log(`  ✗ snook effective habitat leaked to [${snookHab.join(", ")}]`);
+  }
+  const tarponHab = effectiveSpeciesHabitat("tarpon");
+  if(!tarponHab.includes("offshore")){
+    console.log("  ✓ tarpon does not paint 100 ft+ Stream water");
+  } else {
+    failures++;
+    console.log(`  ✗ tarpon effective habitat leaked to [${tarponHab.join(", ")}]`);
+  }
+}
+
 if(failures){
   console.log(`\n✗ ${failures} failure(s)`);
   process.exit(1);

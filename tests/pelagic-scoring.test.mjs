@@ -7,14 +7,14 @@ const {
   speciesAllowedAtLat, predictWeightsFor, weatherChangeFromObs, bluewaterGateFor,
   chlorScoreForPref, canyonDepthBoost, applyExplainerMovedStyles,
   seasonAlignmentLabel, getRegionalSeasons, isSeFloridaAtlantic, windScore,
-  nmBetween,
+  nmBetween, effectiveSpeciesHabitat,
 } = loadBw([
     "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
     "PACIFIC_SPECIES_PREFS", "SEFL_SPECIES_PREFS", "REGIONAL_SEASONS",
     "speciesAllowedAtLat", "predictWeightsFor", "weatherChangeFromObs", "bluewaterGateFor",
     "chlorScoreForPref", "canyonDepthBoost", "applyExplainerMovedStyles",
     "seasonAlignmentLabel", "getRegionalSeasons", "isSeFloridaAtlantic", "windScore",
-    "nmBetween",
+    "nmBetween", "effectiveSpeciesHabitat",
   ]);
 
 const { check, done } = makeChecker();
@@ -269,6 +269,37 @@ console.log("\nskipjack is a wreck/Stream tuna, not a canyon marlin:");
     + W.convergence + W.season + W.pressure + W.solunar + W.tide + W.wind
     + W.weatherChange + (W.moonPhase || 0) + (W.reports || 0);
   check("skipjack weights sum to 1", Math.abs(sum - 1) < 1e-9);
+}
+
+console.log("\nSE Florida tarpon September is the mullet-run peak, not Keys off-season:");
+{
+  const stuart = PORTS["Stuart, FL"];
+  const vero = PORTS["Vero Beach, FL"];
+  const blendedS = getRegionalSeasons("tarpon", stuart.lat, stuart.lng);
+  const blendedV = getRegionalSeasons("tarpon", vero.lat, vero.lng);
+  check("Stuart September tarpon labels peak", seasonAlignmentLabel(blendedS.Sep / 3) === "peak");
+  check("Vero September tarpon labels peak", seasonAlignmentLabel(blendedV.Sep / 3) === "peak");
+  check("Stuart May tarpon stays peak (spring beach run)", seasonAlignmentLabel(blendedS.May / 3) === "peak");
+  check("Stuart August tarpon is peak (mullet run)", seasonAlignmentLabel(blendedS.Aug / 3) === "peak");
+  const p = PREDICT_SPECIES_PREFS.tarpon;
+  check("21 ft lagoon/beach is in-band", depthBandScore(21 / 3.28084, p.depthBands) >= 0.9);
+  check("tarpon ceiling stays inside pass/nearshore water", p.depthBands[0][1] <= 22);
+  const hab = effectiveSpeciesHabitat("tarpon");
+  check("tarpon habitat does not include offshore", !hab.includes("offshore"));
+}
+
+console.log("\nsnook stays on inlets and beaches, not mid-shelf wrecks:");
+{
+  const p = PREDICT_SPECIES_PREFS.snook;
+  const hab = effectiveSpeciesHabitat("snook");
+  check("snook habitat is bay/inshore only", hab.includes("bay") && hab.includes("inshore") && !hab.includes("nearshore") && !hab.includes("offshore"));
+  check("8 ft beach trough is in-band", depthBandScore(8 / 3.28084, p.depthBands) >= 0.9);
+  check("20 ft inlet hole is in-band", depthBandScore(20 / 3.28084, p.depthBands) >= 0.9);
+  check("snook ceiling stays inside the 30 ft inshore bucket", p.depthBands[0][1] * 3.28084 < 30);
+  check("47 ft Bethel Shoal is deeper than snook habitat", 47 / 3.28084 > p.depthBands[0][1]);
+  const vero = PORTS["Vero Beach, FL"];
+  const blended = getRegionalSeasons("snook", vero.lat, vero.lng);
+  check("Vero September snook stays in season", blended.Sep >= 2.5);
 }
 
 done();
