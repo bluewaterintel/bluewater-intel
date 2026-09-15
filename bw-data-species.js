@@ -97,7 +97,10 @@ const PREDICT_SPECIES_PREFS = {
   // Three bands so the species shows reasonable scores in all three
   // contexts depending on where you're fishing.
   bluefin:      {tempIdeal:[58,68], tempWorking:[52,72], chlorPref:"edge",    depthBands:[[18,40],[60,180],[200,600]], breakPref:"any"},
-  blackfin:     {tempIdeal:[72,80], tempWorking:[68,82], chlorPref:"edge",    depthBands:[[60,400]],   breakPref:"edge" },
+  // Blackfin — tropical Stream tuna. They are caught in 82-86°F blue water off
+  // Hatteras/Lookout and on wrecks in 80-300 ft, not only on a sharp color wall.
+  // The old 72-80 / 197 ft floor treated 85°F Stream and 150 ft wrecks as poor.
+  blackfin:     {tempIdeal:[74,84], tempWorking:[70,88], chlorPref:"any",     depthBands:[[25,400]],   breakPref:"any"  },
   falsealbacore:{tempIdeal:[69,74], tempWorking:[66,78], chlorPref:"edge",    depthBands:[[10,120]],   breakPref:"any"  },
   skipjack:     {tempIdeal:[76,82], tempWorking:[72,86], chlorPref:"edge",    depthBands:[[50,600]],   breakPref:"edge" },
   // Wahoo — shelf edge (60 m) and deep drop-offs. Upper bound extended
@@ -108,7 +111,9 @@ const PREDICT_SPECIES_PREFS = {
   // Mahi — happy chasing weed lines from canyon water inshore to the
   // shelf edge. Two bands: ride-along on Gulf Stream (deep) + shelf
   // weed-line patches (shallower).
-  mahi:         {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"edge",    depthBands:[[30,150],[200,1000]], breakPref:"any"},
+  // Mahi — weed lines, sargassum, debris, and warm water. A fused SSH front
+  // helps but is not required; the old 150-200 m gap sat on the 100-fathom line.
+  mahi:         {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"any",     depthBands:[[25,1000]], breakPref:"any"},
   // Cobia: classic Mid-Atlantic/Gulf boat fishery in ~11–130 ft (encyclopedia
   // "cruising rays and turtles in 10-50 ft"). Floor raised from 2 m (~6.5 ft)
   // so skinny bay/shoal cells can't outrank Light Tower / CBBT structure.
@@ -351,9 +356,9 @@ const REGIONAL_SEASONS = {
   // nearshore zone, so the season gate suppresses the inshore red bloom seen
   // there. (A blackfin off VA Beach in July is not a real fishery.)
   blackfin: [
-    {centerLat: 35.0, centerLng: -75.0, radiusNm: 70, label: "Outer Banks (Hatteras) edge",
-     // Reliable along the OBX Gulf-Stream edge, warm months best; tight radius
-     // keeps influence on the Hatteras Stream and OFF the VA inner shelf.
+    {centerLat: 35.0, centerLng: -75.0, radiusNm: 45, label: "Outer Banks (Hatteras) edge",
+     // Reliable along the Hatteras/Lookout Stream edge. Radius stops short of
+     // Oregon Inlet so the northern stray does not outrank the real grounds.
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 33.5, centerLng: -77.0, radiusNm: 160, label: "Carolinas Gulf Stream",
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
@@ -1303,6 +1308,25 @@ const PREDICT_WEIGHTS = {
     wind:          0.00,   // Removed — captured indirectly via weather change
     weatherChange: 0.02,
     moonPhase:     0.00,   // Not significant for pelagics (not light-sensitive at depth)
+  },
+  // Mahi (dorado): warm water, weed, and floating structure — not a canyon-front
+  // specialist. The generic offshore table spent 34% on thermalBreak+convergence,
+  // which capped VA Beach / weed-line fish at ~60% when they were being caught.
+  mahi: {
+    temperature:   0.28,
+    depthStruct:   0.10,
+    structure:     0.12,
+    chlorophyll:   0.16,   // Color / sargassum-associated water, not a sharp edge.
+    thermalBreak:  0.08,
+    convergence:   0.06,   // A front helps; it is not required.
+    reports:       0.00,
+    season:        0.05,
+    pressure:      0.07,
+    solunar:       0.04,
+    tide:          0.00,
+    wind:          0.00,
+    weatherChange: 0.04,
+    moonPhase:     0.00,
   },
   nearshore: {
     temperature:   0.17,
