@@ -137,6 +137,13 @@ console.log("\nSE Florida inshore fish do not inherit nearshore/offshore from a 
     failures++;
     console.log(`  ✗ tarpon effective habitat leaked to [${tarponHab.join(", ")}]`);
   }
+  const redHab = effectiveSpeciesHabitat("redfish");
+  if(!redHab.includes("nearshore") && !redHab.includes("offshore")){
+    console.log("  ✓ redfish stays bay/inshore (not the VA Beach ocean shelf)");
+  } else {
+    failures++;
+    console.log(`  ✗ redfish effective habitat leaked to [${redHab.join(", ")}]`);
+  }
 }
 
 if(failures){

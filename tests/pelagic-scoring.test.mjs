@@ -8,6 +8,7 @@ const {
   chlorScoreForPref, canyonDepthBoost, applyExplainerMovedStyles,
   seasonAlignmentLabel, getRegionalSeasons, isSeFloridaAtlantic, windScore,
   nmBetween, effectiveSpeciesHabitat, isFloridaKeys, usesSeFlSpeciesPrefs,
+  isNewEnglandBluefinGrounds, NE_SPECIES_PREFS, nearestStructureNm, CANYONS,
 } = loadBw([
     "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
     "PACIFIC_SPECIES_PREFS", "SEFL_SPECIES_PREFS", "REGIONAL_SEASONS",
@@ -15,6 +16,7 @@ const {
     "chlorScoreForPref", "canyonDepthBoost", "applyExplainerMovedStyles",
     "seasonAlignmentLabel", "getRegionalSeasons", "isSeFloridaAtlantic", "windScore",
     "nmBetween", "effectiveSpeciesHabitat", "isFloridaKeys", "usesSeFlSpeciesPrefs",
+    "isNewEnglandBluefinGrounds", "NE_SPECIES_PREFS", "nearestStructureNm", "CANYONS",
   ]);
 
 const { check, done } = makeChecker();
@@ -329,6 +331,60 @@ console.log("\nKeys/SE FL mahi stay findable on weeds in late summer; NC stays c
   const keysTbl = REGIONAL_SEASONS.mahi.find(r => r.label.includes("Florida Keys"));
   const seflTbl = REGIONAL_SEASONS.mahi.find(r => r.label.includes("SE FL"));
   check("Keys and SE FL keep separate calendars", keysTbl && seflTbl && keysTbl !== seflTbl);
+}
+
+console.log("\nNew England bluefin scores Stellwagen / Jeffrey's, not the beach:");
+{
+  const glo = PORTS["Gloucester, MA"];
+  const hat = PORTS["Hatteras, NC"];
+  check("Gloucester is New England bluefin grounds", isNewEnglandBluefinGrounds(glo.lat, glo.lng));
+  check("Hatteras is not", !isNewEnglandBluefinGrounds(hat.lat, hat.lng));
+  const ne = NE_SPECIES_PREFS.bluefin;
+  const atl = PREDICT_SPECIES_PREFS.bluefin;
+  check("NE bluefin keys on mapped banks", ne.breakPref === "stable");
+  check("NE bluefin floor is bank depth (~80 ft)", ne.depthBands[0][0] >= 24);
+  check("150 ft Stellwagen is in-band", depthBandScore(150 / 3.28084, ne.depthBands) >= 0.9);
+  check("50 ft Mass Bay is out of NE band", depthBandScore(50 / 3.28084, ne.depthBands) < 0.5);
+  check("Hatteras 80 ft winter troll stays in-band on the Atlantic table",
+    depthBandScore(80 / 3.28084, atl.depthBands) >= 0.9);
+  const stell = CANYONS.find(c => c.name.includes("Stellwagen"));
+  const jeff = CANYONS.find(c => c.name.includes("Jeffrey"));
+  check("Stellwagen lists bluefin", stell && stell.fish.includes("bluefin"));
+  check("Jeffrey's Ledge lists bluefin", jeff && jeff.fish.includes("bluefin"));
+  const dBank = nearestStructureNm(stell.lat, stell.lng, "bluefin");
+  const dBeach = nearestStructureNm(glo.lat, glo.lng - 0.05, "bluefin");
+  check("a Stellwagen cell is on bluefin structure", dBank != null && dBank < 2);
+  check("a Gloucester-harbor cell is farther from the banks", dBeach != null && dBeach > 8);
+}
+
+console.log("\nVA Beach sea bass / fluke weight the Triangle Wrecks, not open sand:");
+{
+  const tri = CANYONS.find(c => c.name === "Triangle Wrecks");
+  check("Triangle Wrecks is a mapped structure", !!tri);
+  check("Triangle Wrecks lists black sea bass", tri.fish.includes("blackseabass"));
+  check("Triangle Wrecks lists flounder", tri.fish.includes("flounder"));
+  const dTri = nearestStructureNm(tri.lat, tri.lng, "blackseabass");
+  check("a Triangle cell is on sea-bass structure", dTri != null && dTri < 1);
+  const p = PREDICT_SPECIES_PREFS.blackseabass;
+  check("80 ft Triangle wreck is in-band", depthBandScore(80 / 3.28084, p.depthBands) >= 0.9);
+  check("45 ft Light Tower is shallower than the sea-bass floor",
+    depthBandScore(45 / 3.28084, p.depthBands) < 0.85);
+}
+
+console.log("\nChesapeake redfish cools in mid-September; cobia exit is already good:");
+{
+  const vb = PORTS["Virginia Beach, VA"];
+  const red = getRegionalSeasons("redfish", vb.lat, vb.lng);
+  const cob = getRegionalSeasons("cobia", vb.lat, vb.lng);
+  check("VA Beach September redfish labels good (not peak)", seasonAlignmentLabel(red.Sep / 3) === "good");
+  check("VA Beach October redfish is the bull-drum peak", seasonAlignmentLabel(red.Oct / 3) === "peak");
+  check("VA Beach September cobia is good (cooling, still in the lower bay)",
+    seasonAlignmentLabel(cob.Sep / 3) === "good");
+  check("VA Beach November cobia is off (gone south)", seasonAlignmentLabel(cob.Nov / 3) === "off");
+  const hab = effectiveSpeciesHabitat("redfish");
+  check("redfish habitat does not include nearshore ocean", !hab.includes("nearshore") && !hab.includes("offshore"));
+  check("redfish ceiling stays inside the 30 ft inshore bucket",
+    PREDICT_SPECIES_PREFS.redfish.depthBands[0][1] * 3.28084 < 30);
 }
 
 done();

@@ -2893,6 +2893,13 @@ function usesSeFlSpeciesPrefs(speciesId, lat, lng){
   return false;
 }
 
+// Stellwagen / Jeffrey's / GOM bluefin grounds. Used so summer giants score
+// the banks, not Mass Bay beach water. Hatteras winter stays on the base table.
+function isNewEnglandBluefinGrounds(lat, lng){
+  return lat != null && lng != null && isFinite(lat) && isFinite(lng)
+    && lat >= 41.0 && lat <= 45.0 && lng > -72.5 && lng < -66.0;
+}
+
 // Table 3 (1.00) is peak. Table 2 (0.67) used to display as peak because the
 // cutoff was 0.66. Only a 3 should read peak; a 2 is good.
 function seasonAlignmentLabel(seasonScore){
@@ -3626,6 +3633,10 @@ function scoreCell(lat, lng, speciesId){
   }
   if(typeof usesSeFlSpeciesPrefs === "function" && usesSeFlSpeciesPrefs(speciesId, lat, lng)){
     prefs = SEFL_SPECIES_PREFS[speciesId];
+  }
+  if(typeof isNewEnglandBluefinGrounds === "function" && isNewEnglandBluefinGrounds(lat, lng) &&
+     typeof NE_SPECIES_PREFS !== "undefined" && NE_SPECIES_PREFS[speciesId]){
+    prefs = NE_SPECIES_PREFS[speciesId];
   }
 
   // ── Get the right weight table for this species category ──

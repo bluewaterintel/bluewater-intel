@@ -356,7 +356,7 @@ const ENC_SPECIES = [
   {
     id:"redfish", name:"Redfish (Red Drum)", color:"#b91414", cat:"inshore",
     snippet:"The Carolina/Georgia inshore icon. From slot fish in marshes to giant 50+ pounders on the surf and inlets in fall.",
-    facts:{ size:"3-50+ lbs", record:"94 lbs (NC)", legal:"18-27\" slot (NC); 1 fish/day; max 1 over slot per year", season:"Regional — Atlantic & Gulf inshore; peak fall bull-drum run (Sep–Nov). NC/SC/GA sounds and Gulf TX–FL year-round." },
+    facts:{ size:"3-50+ lbs", record:"94 lbs (NC)", legal:"18-27\" slot (NC); 1 fish/day; max 1 over slot per year", season:"Regional — Atlantic & Gulf inshore; Chesapeake/VA fall bulls Oct–Nov (mid-Sep is the cooldown). NC/SC/GA sounds and Gulf TX–FL year-round." },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2},
     where:"Pamlico Sound, Cape Lookout, Charleston Harbor flats, Georgetown SC, and Gulf bays from FL through Texas. Marsh edges, oyster bars, inlets, and surf — not a New England or California fishery.",
     tackle:[

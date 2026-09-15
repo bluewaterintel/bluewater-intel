@@ -207,6 +207,9 @@ const CANYONS=[
   {name:"Chesapeake Light Tower", type:"reef", color:"#16a34a", lat:36.91, lng:-75.71,
    desc:"~13nm off Virginia Beach. Tower structure & nearby wrecks — cobia, red drum, flounder, sea bass, and spring/fall scup.",
    fish:["cobia","flounder","blackseabass","porgy","redfish"]},
+  {name:"Triangle Wrecks", type:"wreck", color:"#16a34a", lat:36.91, lng:-75.65,
+   desc:"Cluster of three wrecks ~15-18nm E of Virginia Beach in 60-90 ft. The local sea-bass and fluke congregation — spadefish in summer. Reference only — not for navigation.",
+   fish:["blackseabass","flounder","spadefish","porgy","cobia"]},
   // ── CHESAPEAKE BAY STRUCTURE ─────────────────────────────────────────
   {name:"CBBT", type:"structure", color:"#16a34a", lat:36.97, lng:-76.08,
    desc:"Chesapeake Bay Bridge-Tunnel — the bay mouth's premier structure. Cobia sight-casting in summer, plus trophy striped bass, flounder, sheepshead and sea bass on the pilings and islands.",
