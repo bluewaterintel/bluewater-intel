@@ -108,12 +108,10 @@ const PREDICT_SPECIES_PREFS = {
   // near banks/canyons (e.g. Bahamas walls, canyon lips), so 500 m was clipping
   // legitimate deep grounds. Structure factor handles concentration.
   wahoo:        {tempIdeal:[72,82], tempWorking:[68,84], chlorPref:"low",     depthBands:[[60,1500]],  breakPref:"edge"  },
-  // Mahi — happy chasing weed lines from canyon water inshore to the
-  // shelf edge. Two bands: ride-along on Gulf Stream (deep) + shelf
-  // weed-line patches (shallower).
-  // Mahi — weed lines, sargassum, debris, and warm water. A fused SSH front
-  // helps but is not required; the old 150-200 m gap sat on the 100-fathom line.
-  mahi:         {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"any",     depthBands:[[25,1000]], breakPref:"any"},
+  // Mahi — weed lines, sargassum, debris, and warm water. Depth is only a
+  // "not skinny" gate; they do not sit on ledges. chlorPref "weed" scores
+  // moderate color + a color edge (the floating-cover proxy we can see).
+  mahi:         {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"weed",    depthBands:[[25,1000]], breakPref:"any"},
   // Cobia: classic Mid-Atlantic/Gulf boat fishery in ~11–130 ft (encyclopedia
   // "cruising rays and turtles in 10-50 ft"). Floor raised from 2 m (~6.5 ft)
   // so skinny bay/shoal cells can't outrank Light Tower / CBBT structure.
@@ -1309,16 +1307,17 @@ const PREDICT_WEIGHTS = {
     weatherChange: 0.02,
     moonPhase:     0.00,   // Not significant for pelagics (not light-sensitive at depth)
   },
-  // Mahi (dorado): warm water, weed, and floating structure — not a canyon-front
-  // specialist. The generic offshore table spent 34% on thermalBreak+convergence,
-  // which capped VA Beach / weed-line fish at ~60% when they were being caught.
+  // Mahi (dorado): warm water and floating cover (weed / paddies / debris).
+  // They do not key on bottom slope, so structure is zero. Depth is a light
+  // "off the beach" gate. Freed weight goes to chlorophyll, the temp wall,
+  // and current/color rips where sargassum stacks.
   mahi: {
     temperature:   0.28,
-    depthStruct:   0.10,
-    structure:     0.12,
-    chlorophyll:   0.16,   // Color / sargassum-associated water, not a sharp edge.
-    thermalBreak:  0.08,
-    convergence:   0.06,   // A front helps; it is not required.
+    depthStruct:   0.04,   // Fishable water, not a canyon trophy.
+    structure:     0.00,   // Bottom slope is not mahi habitat.
+    chlorophyll:   0.24,   // Weed-line / sargassum color proxy.
+    thermalBreak:  0.10,   // Weed often sits on the temp wall.
+    convergence:   0.14,   // Rips and color+temp stack concentrate floating cover.
     reports:       0.00,
     season:        0.05,
     pressure:      0.07,
