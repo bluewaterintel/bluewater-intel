@@ -2793,11 +2793,62 @@ function predictWeightsFor(speciesId){
   // (mackerel, albies, cobia) chase temp/bait/color edges, while reef/bottom
   // demersals (snapper, grouper, tog, AJ, sea bass, etc.) key on structure +
   // current. Route the demersal/bottom-flagged nearshore fish to the reef table.
+  if(speciesId === "mahi" && PREDICT_WEIGHTS.mahi) return PREDICT_WEIGHTS.mahi;
   if(cat === "nearshore"){
     const prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
     if(prefs && (prefs.demersal || prefs.bottom)) return PREDICT_WEIGHTS.nearshoreReef;
   }
   return PREDICT_WEIGHTS[cat] || PREDICT_WEIGHTS.offshore;
+}
+
+// Recent weather change from live buoy/forecast obs (wind, seas, 24h pressure
+// trend). During a blow the bite scatters; 24-72h after a front (rising
+// pressure, seas settling) fish re-orient and feed; many days of settled
+// weather is neutral. Missing inputs stay at 0.5 / "steady" — never synthesized.
+function weatherChangeFromObs({ windKt, waveFt, pressureTrend } = {}){
+  const parts = [];
+  if(waveFt != null && isFinite(waveFt)) parts.push(`${Math.round(waveFt * 10) / 10} ft seas`);
+  if(windKt != null && isFinite(windKt)) parts.push(`${Math.round(windKt)} kt`);
+  if(pressureTrend != null && isFinite(pressureTrend)){
+    const sign = pressureTrend > 0 ? "+" : "";
+    parts.push(`${sign}${pressureTrend.toFixed(1)} hPa`);
+  }
+  const raw = parts.length ? parts.join(" · ") : "—";
+  const hasWind = windKt != null && isFinite(windKt);
+  const hasWave = waveFt != null && isFinite(waveFt);
+  const hasPres = pressureTrend != null && isFinite(pressureTrend);
+  if(!hasWind && !hasWave && !hasPres) return { score: 0.5, label: "steady", raw: "—" };
+
+  const seas = hasWave ? waveFt : null;
+  const wind = hasWind ? windKt : null;
+  const pres = hasPres ? pressureTrend : null;
+  const blow = Math.max(
+    seas != null ? Math.max(0, Math.min(1, (seas - 4) / 6)) : 0,
+    wind != null ? Math.max(0, Math.min(1, (wind - 12) / 16)) : 0,
+  );
+
+  if(blow >= 0.5){
+    const score = Math.max(0.18, 0.40 - 0.28 * blow);
+    return { score, label: "fresh blow", raw };
+  }
+  if(pres != null && pres <= -2) return { score: 0.32, label: "front arriving", raw };
+  if(pres != null && pres >= 2 && blow < 0.35) return { score: 0.82, label: "post-front", raw };
+  if(blow >= 0.25) return { score: 0.40, label: "unsettled", raw };
+  return { score: 0.5, label: "steady", raw };
+}
+
+function bluewaterGateFor(speciesId, depthM){
+  if(!(depthM > 0)) return 1;
+  // Blackfin wrecks and mahi weed lines start ~80 ft, not 50 m. Full credit
+  // by ~400 ft so Hatteras/Lookout structure is not treated as "too inshore."
+  if(speciesId === "blackfin" || speciesId === "mahi"){
+    if(depthM >= 120) return 1;
+    if(depthM >= 25)  return 0.45 + 0.55 * ((depthM - 25) / (120 - 25));
+    return 0.12 + 0.33 * (depthM / 25);
+  }
+  if(depthM >= 180) return 1;
+  if(depthM >= 50)  return 0.35 + 0.65 * ((depthM - 50) / (180 - 50));
+  return 0.10 + 0.25 * (depthM / 50);
 }
 
 // ── Recent weather change (24-48h shift) ───────────────────────────────────
@@ -3526,6 +3577,9 @@ function scoreCell(lat, lng, speciesId){
   }
   chlorObj = chlorObj ?? { value: null, observedAtMs: null };
   const windObj  = ocean?.wind  ?? { value: null, dir: null, observedAtMs: null };
+  let waveObj = ocean?.waves;
+  if(!waveObj || waveObj.value == null) waveObj = nearestFieldSample(lat, lng, "waves");
+  waveObj = waveObj ?? { value: null, observedAtMs: null };
   const presObj  = ocean?.pressure ?? { value: null, observedAtMs: null };
   const tideObj  = ocean?.tide  ?? { value: null, observedAtMs: null };
 
@@ -3933,8 +3987,13 @@ function scoreCell(lat, lng, speciesId){
   // ── Factor 11: Wind direction relative to structure (real buoy wind) ──
   const windScoreVal = windScore(lat, lng, prefs, windObj.dir);
 
-  // ── Factor 12: Recent weather change ──
-  const wxChangeScoreVal = 0.5;
+  const wxChange = weatherChangeFromObs({
+    windKt: windObj && windObj.value,
+    waveFt: waveObj && waveObj.value,
+    pressureTrend: presObj && presObj.value,
+  });
+  const wxChangeScoreVal = wxChange.score;
+  const wxLabel = wxChange.label;
 
   // ── Factor 13: Moon phase (multi-day lunar energy, independent of solunar) ──
   // Captures the full/new vs quarter moon influence on feeding aggression
@@ -4055,14 +4114,7 @@ function scoreCell(lat, lng, speciesId){
   // their depth band requirement already places them correctly. Depth is meters.
   const _bluewaterExempt = (speciesId === "bluefin") || !!prefs.bottom;
   if(speciesCat === "offshore" && !_bluewaterExempt && depth != null && depth > 0){
-    // Ramp: <50m (inner shelf) heavily suppressed, ~50-180m (shelf edge)
-    // climbing, >180m (true blue water) full credit. Smooth so the heat map
-    // transitions cleanly from green inshore to red at the edge.
-    let bluewaterGate;
-    if(depth >= 180)      bluewaterGate = 1.0;
-    else if(depth >= 50)  bluewaterGate = 0.35 + 0.65 * ((depth - 50) / (180 - 50));
-    else                  bluewaterGate = 0.10 + 0.25 * (depth / 50);   // 0.10–0.35
-    finalScore = finalScore * bluewaterGate;
+    finalScore = finalScore * bluewaterGateFor(speciesId, depth);
   }
 
   // ── SEASON GATE ──
@@ -4267,7 +4319,7 @@ function scoreCell(lat, lng, speciesId){
   //    Tuna/billfish hold at the shelf edge and beyond; inner-shelf water is the
   //    wrong habitat regardless of temperature, so this is a high-confidence "no".
   //    Excludes bluefin (shelf-feeders in season) and bottom-dwellers (tilefish).
-  if(speciesCat === "offshore" && !(speciesId === "bluefin") && !_isBottom && depth != null && depth > 0 && depth < 50){
+  if(speciesCat === "offshore" && !(speciesId === "bluefin" || speciesId === "blackfin" || speciesId === "mahi") && !_isBottom && depth != null && depth > 0 && depth < 50){
     confidence = Math.max(confidence, 82);
     freshnessAnnotations.push({ variable: "depth",
       message: "Too far inshore for an offshore species — the bite is at the shelf edge." });
@@ -4280,10 +4332,6 @@ function scoreCell(lat, lng, speciesId){
   const moonName = moon < 0.08 || moon > 0.92 ? "new" :
                    Math.abs(moon - 0.5) < 0.08 ? "full" :
                    moon < 0.5 ? "waxing" : "waning";
-  // Weather-change factor is held neutral in the production path (synthetic
-  // weather data was removed and no real weather-shift feed is wired yet), so the
-  // label is a fixed neutral value rather than reading the removed wxChange object.
-  const wxLabel = "steady";
 
   const droppedKeys = new Set((fr?.droppedFactors || []).map(f => f.key));
   const allFactors = [
@@ -4315,7 +4363,7 @@ function scoreCell(lat, lng, speciesId){
             )
           : "—"},
     {key:"tide", name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
-    {key:"weather", name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw:wxLabel},
+    {key:"weather", name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw: (wxChange.raw && wxChange.raw !== "—") ? `${wxLabel} · ${wxChange.raw}` : wxLabel},
     {key:"season", name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonScore > 0.66 ? "peak" : seasonScore > 0.33 ? "good" : "off"},
     {key:"moon", name:"Moon phase",         weight:W.moonPhase || 0,score:moonPhaseScoreVal,raw:moonName.toUpperCase()},
     {key:"wind", name:"Wind direction",     weight:W.wind,          score:windScoreVal,     raw:windObj.dir != null ? `${Math.round(windObj.dir)}°` : "—"}]
@@ -5621,11 +5669,10 @@ const SPECIES_LAT_RANGE = {
   cobia:         [25.0, 40.5],   // FL through Chesapeake/DelMarVa up to NJ (summer)
   spanishmack:   [27.0, 41.0],   // FL through NJ
   // Blackfin: a warm-water / subtropical tuna. Common FL, Gulf, and the SE
-  // Atlantic; the OBX/Hatteras is the northern stronghold. Northern bound 35.9°N
-  // covers Oregon Inlet (~35.8°N) and the outer OBX Stream edge without opening
-  // the Mid-Atlantic shelf. Combined with breakPref:"edge" (so even within range
-  // it scores the Stream, not the inner shelf), this keeps blackfin realistic.
-  blackfin:      [24.0, 35.9],
+  // Atlantic; Hatteras/Lookout is the northern stronghold. 35.6°N keeps the
+  // Hatteras Stream in range and drops Oregon Inlet / VA so the stray northern
+  // edge cannot outrank the real grounds.
+  blackfin:      [24.0, 35.6],
   // Vermilion (beeliner): Gulf year-round; South Atlantic ledges only as far
   // north as Cape Hatteras (35.4°N). They are not a Mid-Atlantic / VA fishery.
   vermilion:     {atlantic: [24.0, 35.4], gulf: [24.5, 30.5]},
@@ -5741,6 +5788,10 @@ const PACIFIC_SPECIES_PREFS = {
   // Everything else carries over — chlorPref/breakPref "edge" is if anything
   // MORE true here, since the SoCal fleet runs on the temp/color break.
   yellowfin: { tempIdeal:[66,74], tempWorking:[62,78], chlorPref:"edge", depthBands:[[40,200],[200,1500]], breakPref:"edge" },
+  // SoCal dorado ride kelp paddies in California Current water (high 60s-low
+  // 70s), not Gulf Stream 74-82°F. Without this override a 70°F San Diego day
+  // was treated as too cold.
+  mahi: { tempIdeal:[68,76], tempWorking:[64,80], chlorPref:"any", depthBands:[[30,400]], breakPref:"any" },
 };
 
 // Bahamas / Bahama-Bank water east of the Florida crossings. Several US
