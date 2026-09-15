@@ -136,21 +136,21 @@ const CANYONS=[
    fish:["wahoo","yellowfin","blackfin","mahi"]},
   {name:"Petronius Rig",    color:"#7c2d8e", lat:29.10, lng:-87.95,
    desc:"Towering platform in 1700ft. Holds yellowfin, blackfin, blue marlin year-round. Night-fishing legend.",
-   fish:["yellowfin","blackfin","bluemarlin","swordfish"]},
+   fish:["yellowfin","blackfin","bluemarlin","swordfish","wahoo","mahi"]},
 
   // ── LOUISIANA — THE FLOATERS AND LUMPS ───────────────────────────────
   {name:"Midnight Lump",    color:"#1a4fa8", lat:28.7, lng:-89.55,
    desc:"Salt dome ~17nm SW of South Pass. THE wintertime yellowfin spot. Tens of miles of boats during peak Jan-Feb season.",
-   fish:["yellowfin","blackfin","wahoo"]},
+   fish:["yellowfin","blackfin","wahoo","mahi"]},
     {name:"The Lumps (LA)",   color:"#1e63c0", lat:28.50, lng:-89.20,
    desc:"Cluster of seamounts SE of Mississippi Delta. Year-round bait magnets — every pelagic in the Gulf passes through.",
    fish:["yellowfin","blackfin","wahoo","mahi","bluemarlin"]},
   {name:"Mississippi Canyon",color:"#1a4fa8", lat:28.79, lng:-89.18,
    desc:"Deep canyon system SE of the Delta. Blue marlin, swordfish, yellowfin. Drilling-rig floaters scattered throughout.",
-   fish:["bluemarlin","swordfish","yellowfin","tilefish","blackfin"]},
+   fish:["bluemarlin","swordfish","yellowfin","tilefish","blackfin","wahoo","mahi"]},
   {name:"The Floaters (LA)",color:"#7c2d8e", lat:28.40, lng:-89.45,
    desc:"Floating production platforms in 3000-7000ft of water (Marlin, Petronius, Atlantis, Holstein). Concentrate bait + pelagics. Night swords.",
-   fish:["yellowfin","blackfin","bluemarlin","swordfish","wahoo"]},
+   fish:["yellowfin","blackfin","bluemarlin","swordfish","wahoo","mahi"]},
 
   // ── TEXAS GULF ───────────────────────────────────────────────────────
   {name:"East Breaks",      color:"#1a4fa8", lat:27.45, lng:-95.50,
@@ -293,7 +293,7 @@ const CANYONS=[
   // ── GULF — LOUISIANA ──
     {name:"The Lump / Blocks (Venice)", type:"reef", color:"#16a34a", lat:28.85, lng:-89.30,
    desc:"Oil platform clusters & rigs off Venice LA. The rigs hold everything — tuna, cobia, mangrove snapper, AJ.",
-   fish:["yellowfin","cobia","snapper","amberjack"]},
+   fish:["yellowfin","cobia","snapper","amberjack","wahoo","mahi","blackfin"]},
   // ── LONG ISLAND SOUTH SHORE (Long Beach / Freeport, NY) ───────────────
   {name:"The Mud Hole",      type:"ledge", color:"#16a34a", lat:40.22, lng:-73.70,
    desc:"Glacial trough ~20-25nm SE of Jones/East Rockaway Inlet. Summer/fall fluke, sea bass, and bluefish staging; migratory striped bass on the edges. Reference only — not for navigation.",
