@@ -2949,8 +2949,12 @@ function chlorScoreForPref(pref, chlor, chlorBreak){
 
 // Canyon-depth bonus is for tuna/billfish holding on the drop. Mahi ride
 // floating cover over any fishable blue water — do not treat 400 m as better.
-function canyonDepthBoost(speciesId, bands, depth){
+// Gulf yellowfin hold on deepwater floaters/rigs, not a 100-500 m canyon wall,
+// so a Lump cell must not outrank the Floaters just for sitting in 200-400 m.
+function canyonDepthBoost(speciesId, bands, depth, lat, lng){
   if(speciesId === "mahi" || speciesId === "sailfish" || speciesId === "skipjack") return 0;
+  if(speciesId === "yellowfin" && lat != null &&
+     typeof isGulfContext === "function" && isGulfContext(lat, lng)) return 0;
   const wantsCanyon = Array.isArray(bands) && bands.some(([, mx]) => mx >= 150);
   return (wantsCanyon && depth > 100 && depth < 500) ? 0.10 : 0;
 }
@@ -3879,7 +3883,7 @@ function scoreCell(lat, lng, speciesId){
   // Canyon-edge bonus only applies if at least one band actually wants
   // canyon-depth water (otherwise we'd be giving a free boost to flounder
   // happening to drift over a canyon).
-  depthScore = Math.min(1, depthScore + canyonDepthBoost(speciesId, bands, depth));
+  depthScore = Math.min(1, depthScore + canyonDepthBoost(speciesId, bands, depth, lat, lng));
 
   // ── Factor 4: Thermal break (temperature gradient / color line) ──
   // Pelagic predators hunt the EDGE between cold and warm water. The
@@ -4294,12 +4298,17 @@ function scoreCell(lat, lng, speciesId){
   // open Nantucket Sound). We give a smooth bonus that decays with distance to
   // the nearest mapped structure of interest, capped so it shapes — not
   // dominates — the field.
-  if((prefs.breakPref === "stable" || prefs.structureProx) && typeof nearestStructureNm === "function"){
-    const dNm = nearestStructureNm(lat, lng, speciesId);
-    if(dNm != null){
+  if((prefs.breakPref === "stable" || prefs.structureProx) && typeof nearestMappedStructure === "function"){
+    const hit = nearestMappedStructure(lat, lng, speciesId);
+    if(hit && hit.nm != null){
       // Full bonus within ~2nm of structure, fading to none by ~12nm.
-      const prox = Math.max(0, Math.min(1, (12 - dNm) / (12 - 2)));
-      finalScore = finalScore * (1 + 0.35 * prox);   // up to +35% on structure
+      const prox = Math.max(0, Math.min(1, (12 - hit.nm) / (12 - 2)));
+      let lift = 0.35;
+      if(prefs.structureProx && speciesId === "yellowfin" &&
+         typeof gulfYellowfinStructureLift === "function"){
+        lift = gulfYellowfinStructureLift(hit.canyon);
+      }
+      finalScore = finalScore * (1 + lift * prox);
     }
   }
 
@@ -5708,20 +5717,48 @@ function estuarySalinity(lat, lng){
 // considering only structures relevant to the species when fish info is given.
 // Used to lift structure-oriented species' scores near real structure so the
 // ledges/rips read hotter than open flat bottom. Returns null if none in range.
-function nearestStructureNm(lat, lng, speciesId){
+function nearestMappedStructure(lat, lng, speciesId){
   if(typeof CANYONS === "undefined" || !Array.isArray(CANYONS)) return null;
-  let best = null;
+  let best = null, bestC = null;
   for(const c of CANYONS){
     if(c.lat == null || c.lng == null) continue;
-    // If the structure lists target species, prefer ones that include this
-    // species; otherwise any mapped structure counts.
     if(speciesId && Array.isArray(c.fish) && c.fish.length && !c.fish.includes(speciesId)) continue;
     const d = (typeof nmBetween === "function")
       ? nmBetween(lat, lng, c.lat, c.lng)
       : Math.hypot((lat - c.lat) * 60, (lng - c.lng) * 48);
-    if(best == null || d < best) best = d;
+    if(best == null || d < best){ best = d; bestC = c; }
   }
-  return best;
+  return best == null ? null : { canyon: bestC, nm: best };
+}
+
+// Nearest mapped structure (reef/wreck/lump/shoal/ledge) to a point, in nm,
+// considering only structures relevant to the species when fish info is given.
+// Used to lift structure-oriented species' scores near real structure so the
+// ledges/rips read hotter than open flat bottom. Returns null if none in range.
+function nearestStructureNm(lat, lng, speciesId){
+  const hit = nearestMappedStructure(lat, lng, speciesId);
+  return hit ? hit.nm : null;
+}
+
+// Gulf yellowfin giants: fall (Sep-Nov) on the deepwater floaters/rigs,
+// winter (Dec-Feb) on Midnight Lump. Same proximity curve, bigger lift on
+// the in-season structure so the numbered pin can land on the Floaters in fall.
+function gulfYellowfinStructureKind(canyon){
+  if(!canyon) return "other";
+  const type = String(canyon.type || "").toLowerCase();
+  const name = String(canyon.name || "").toLowerCase();
+  if(type === "rig" || type === "platform" || /floater|petronius/.test(name)) return "rig";
+  if(type === "lump" || /\blump/.test(name)) return "lump";
+  return "other";
+}
+function gulfYellowfinStructureLift(canyon, monthIndex){
+  const kind = gulfYellowfinStructureKind(canyon);
+  const mo = (monthIndex != null && isFinite(monthIndex)) ? monthIndex : new Date().getMonth();
+  const fallGiants = mo === 8 || mo === 9 || mo === 10;   // Sep-Nov
+  const winterLump = mo === 11 || mo === 0 || mo === 1;   // Dec-Feb
+  if(fallGiants && kind === "rig") return 0.50;
+  if(winterLump && kind === "lump") return 0.50;
+  return 0.35;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -6732,7 +6769,18 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
         }, myGen);
         requestAnimationFrame(step_frame);
       } else {
-        // Grid finished → begin the chunked hotspot refinement phase.
+        // Grid finished. Score named fishing grounds at their exact coordinates
+        // so badges can pin Midnight Lump / the Floaters / Triangle Wrecks
+        // instead of only the 0.1° lattice peak.
+        if(typeof CANYONS !== "undefined" && Array.isArray(CANYONS)){
+          for(const c of CANYONS){
+            if(c.lat == null || c.lng == null) continue;
+            if(speciesId && Array.isArray(c.fish) && c.fish.length && !c.fish.includes(speciesId)) continue;
+            const s = scoreWithPenalty(c.lat, c.lng);
+            if(!s || !s.result || s.result.score < PREDICT_HOTSPOT_SCORE_MIN) continue;
+            hotspotGrid.push({ lat: c.lat, lng: c.lng, distNm: s.distNm, ...s.result });
+          }
+        }
         refineList = hotspotGrid.slice().sort(cmpHotspotStable);
         refineIdx = 0;
         phase = "refine";

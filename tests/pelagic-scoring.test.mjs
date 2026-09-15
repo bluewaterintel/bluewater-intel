@@ -10,6 +10,7 @@ const {
   nmBetween, effectiveSpeciesHabitat, isFloridaKeys, usesSeFlSpeciesPrefs,
   isNewEnglandBluefinGrounds, NE_SPECIES_PREFS, nearestStructureNm, CANYONS,
   GULF_SPECIES_PREFS, usesGulfSpeciesPrefs, isGulfContext,
+  gulfYellowfinStructureLift, gulfYellowfinStructureKind, pickTopHotspotBadges,
 } = loadBw([
     "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
     "PACIFIC_SPECIES_PREFS", "SEFL_SPECIES_PREFS", "REGIONAL_SEASONS",
@@ -19,6 +20,7 @@ const {
     "nmBetween", "effectiveSpeciesHabitat", "isFloridaKeys", "usesSeFlSpeciesPrefs",
     "isNewEnglandBluefinGrounds", "NE_SPECIES_PREFS", "nearestStructureNm", "CANYONS",
     "GULF_SPECIES_PREFS", "usesGulfSpeciesPrefs", "isGulfContext",
+    "gulfYellowfinStructureLift", "gulfYellowfinStructureKind", "pickTopHotspotBadges",
   ]);
 
 const { check, done } = makeChecker();
@@ -371,6 +373,14 @@ console.log("\nVA Beach sea bass / fluke weight the Triangle Wrecks, not open sa
   check("80 ft Triangle wreck is in-band", depthBandScore(80 / 3.28084, p.depthBands) >= 0.9);
   check("45 ft Light Tower is shallower than the sea-bass floor",
     depthBandScore(45 / 3.28084, p.depthBands) < 0.85);
+  const vb = PORTS["Virginia Beach, VA"];
+  const tower = CANYONS.find(c => c.name === "Chesapeake Light Tower");
+  check("Triangle Wrecks sit on the ~30 nm wreck cluster, not the Light Tower",
+    Math.abs(tri.lat - 36.99042) < 0.001 && Math.abs(tri.lng - (-75.38827)) < 0.001);
+  check("Triangle is ~16 nm from Light Tower so both can pin",
+    nmBetween(tri.lat, tri.lng, tower.lat, tower.lng) >= 10);
+  check("Triangle is a 29-32 nm run from VA Beach",
+    (() => { const d = nmBetween(vb.lat, vb.lng, tri.lat, tri.lng); return d >= 28 && d <= 33; })());
 }
 
 console.log("\nChesapeake redfish cools in mid-September; cobia exit is already good:");
@@ -450,6 +460,30 @@ console.log("\nGulf yellowfin / mahi / wahoo treat Loop water and LA lumps as ha
     seasonAlignmentLabel(wSeason.Sep / 3) === "peak");
   check("Gulf wahoo 200 ft is full blue-water credit",
     bluewaterGateFor("wahoo", 200 / 3.28084, venice.lat, venice.lng) >= 0.95);
+
+  const lumpNm = CANYONS.find(c => c.name === "Midnight Lump");
+  check("Floaters are a rig", gulfYellowfinStructureKind(floaters) === "rig");
+  check("Midnight Lump is a lump", gulfYellowfinStructureKind(lumpNm) === "lump");
+  check("September lift prefers the Floaters over the Lump",
+    gulfYellowfinStructureLift(floaters, 8) > gulfYellowfinStructureLift(lumpNm, 8));
+  check("January lift prefers the Lump over the Floaters",
+    gulfYellowfinStructureLift(lumpNm, 0) > gulfYellowfinStructureLift(floaters, 0));
+  check("Gulf yellowfin gets no canyon-depth bonus (deep floaters are not a wall)",
+    canyonDepthBoost("yellowfin", [[55, 2000]], 300, venice.lat, venice.lng) === 0);
+  check("Atlantic yellowfin still gets a canyon-depth bonus",
+    canyonDepthBoost("yellowfin", [[150, 2000]], 250, hat.lat, hat.lng) === 0.10);
+  const dFloater = nmBetween(venice.lat, venice.lng, floaters.lat, floaters.lng);
+  const dLump = nmBetween(venice.lat, venice.lng, lump.lat, lump.lng);
+  check("Floaters are far enough from Midnight Lump to get their own pin",
+    nmBetween(floaters.lat, floaters.lng, lump.lat, lump.lng) >= 10);
+  const badges = pickTopHotspotBadges([
+    { lat: floaters.lat, lng: floaters.lng, score: 0.82, distNm: Math.round(dFloater) },
+    { lat: lump.lat, lng: lump.lng, score: 0.78, distNm: Math.round(dLump) },
+    { lat: 28.79, lng: -89.18, score: 0.77, distNm: 30 },
+    { lat: 29.40, lng: -88.00, score: 0.76, distNm: 72 },
+  ], 3);
+  check("fall-ranked Floaters take a top-3 badge",
+    badges.some(b => Math.abs(b.lat - floaters.lat) < 1e-6 && Math.abs(b.lng - floaters.lng) < 1e-6));
 }
 
 done();
