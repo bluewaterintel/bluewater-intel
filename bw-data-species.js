@@ -99,7 +99,9 @@ const PREDICT_SPECIES_PREFS = {
   // close to the beach; Mid-Atlantic schoolies hunt the 60-180m shelf
   // break in summer; canyon giants come up over 200-600m water.
   // Three bands so the species shows reasonable scores in all three
-  // contexts depending on where you're fishing.
+  // contexts depending on where you're fishing. New England summer/fall
+  // swaps to a bank-depth band in NE_SPECIES_PREFS so Mass Bay skinny
+  // water cannot outrank Stellwagen / Jeffrey's Ledge.
   bluefin:      {tempIdeal:[58,68], tempWorking:[52,72], chlorPref:"edge",    depthBands:[[18,40],[60,180],[200,600]], breakPref:"any"},
   // Blackfin — tropical Stream tuna. They are caught in 82-86°F blue water off
   // Hatteras/Lookout and on wrecks in 80-300 ft, not only on a sharp color wall.
@@ -126,7 +128,7 @@ const PREDICT_SPECIES_PREFS = {
   // hard penalty and fought the "peak season" factor every day of summer. Ideal
   // band now covers published 70–90°F comfort; warmAdapted keeps warm-side credit
   // through the working edge.
-  redfish:      {tempIdeal:[70,88], tempWorking:[58,92], chlorPref:"high",    depthBands:[[1,15]],     breakPref:"stable", warmAdapted:true },
+  redfish:      {tempIdeal:[70,88], tempWorking:[58,92], chlorPref:"high",    depthBands:[[1,9]],      breakPref:"stable", warmAdapted:true },
   // Flounder band capped at 45 m (~148 ft). The old 80 m (262 ft) reached the
   // whole west Florida shelf, so shelf cells 100 nm offshore scored as valid
   // flounder ground. Mid-Atlantic offshore fluke on wrecks is the deepest real
@@ -142,10 +144,9 @@ const PREDICT_SPECIES_PREFS = {
   // depth limit for the species and still covers the whole real fishery: summer
   // inshore wrecks/reefs at 50-120 ft, the 100-115 ft Virginia Beach wrecks that
   // hold the biggest fish, and the NJ/NY winter deep-wreck run out to ~400 ft.
-  // 200 m was also tripping the canyon-edge bonus in scoreCell(), which is
-  // gated on a band reaching 150 m — a wreck fish should not collect a canyon
-  // bonus. Cells past 130 m still score via the gentle too-deep decay.
-  blackseabass: {tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high",    depthBands:[[15,130]],   breakPref:"stable", demersal:true },
+  // Floor 18 m (~59 ft) so a 40-50 ft tower does not score as well as the
+  // 60-90 ft Triangle Wrecks. 200 m was also tripping the canyon-edge bonus.
+  blackseabass: {tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high",    depthBands:[[18,130]],   breakPref:"stable", demersal:true },
   tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable", demersal:true },
   // Golden tilefish — two fisheries, not canyon-gated. Mid-Atlantic canyon mud
   // (MAFMC 250-450 ft ≈ 75-140 m) and a deeper shelf-edge / Gulf band (~575-1,380 ft
@@ -847,7 +848,10 @@ const REGIONAL_SEASONS = {
     {centerLat: 35.0, centerLng: -76.2, radiusNm: 160, label: "Pamlico / OBX sounds",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 36.8, centerLng: -76.0, radiusNm: 120, label: "VA Beach / Chesapeake mouth",
-     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:1}},
+     // Fall bulls are October–November. Mid-September is the cooldown after
+     // summer, not peak — Sep=3 painted the ocean/bay Excellent while the
+     // bite was already sliding.
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:3,Dec:1}},
     {centerLat: 32.7, centerLng: -79.9, radiusNm: 180, label: "SC / GA (Charleston)",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 30.0, centerLng: -81.2, radiusNm: 160, label: "NE FL Atlantic",
@@ -1319,6 +1323,13 @@ const SEFL_SPECIES_PREFS = {
   // Tropical mahi: 86-88°F Keys/Stuart water is normal, not lethal. NC keeps
   // the 84°F working cap. Weed/debris proxy stays chlorPref "weed".
   mahi:  { tempIdeal:[74,82], tempWorking:[70,88], chlorPref:"weed", depthBands:[[25,1000]], breakPref:"any" },
+};
+
+// New England summer/fall bluefin: Stellwagen / Jeffrey's, not the beach.
+// Applied in scoreCell when isNewEnglandBluefinGrounds(). Hatteras winter
+// giants keep the three-band Atlantic table (18-40 m inshore troll).
+const NE_SPECIES_PREFS = {
+  bluefin: { tempIdeal:[58,68], tempWorking:[52,72], chlorPref:"edge", depthBands:[[24,180]], breakPref:"stable" },
 };
 
 const PREDICT_WEIGHTS = {
