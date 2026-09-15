@@ -79,7 +79,11 @@ const PREDICT_SPECIES_PREFS = {
   // fish but are routinely raised in Mid-Atlantic white-marlin spreads right on
   // the 100-fathom line — starting at 300 m scored those grounds ~0%.
   spearfish:    {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"low",     depthBands:[[150,2000]], breakPref:"edge"  },
-  sailfish:     {tempIdeal:[74,82], tempWorking:[70,84], chlorPref:"low",     depthBands:[[50,500]],   breakPref:"edge"  },
+  // Sailfish — SE FL kite/reef fish (50-250 ft) AND NC 100-fathom Stream fish.
+  // The old 50 m floor + edge-lock treated Stuart 80 ft reefs as empty and
+  // 86°F September water as too hot. Working top 88°F keeps the late-summer
+  // bonus run fishable; winter 74-82°F still sits in the ideal band.
+  sailfish:     {tempIdeal:[74,82], tempWorking:[70,88], chlorPref:"any",     depthBands:[[15,250]],   breakPref:"any"  },
   // Swordfish night fishery works the canyon lip at ~1,000 ft (≈300 m); daytime
   // drops go deeper. Lower bound 250 m (was 300) so the classic canyon-edge bite
   // isn't scored as out-of-band.
@@ -103,11 +107,10 @@ const PREDICT_SPECIES_PREFS = {
   blackfin:     {tempIdeal:[74,84], tempWorking:[70,88], chlorPref:"any",     depthBands:[[25,400]],   breakPref:"any"  },
   falsealbacore:{tempIdeal:[69,74], tempWorking:[66,78], chlorPref:"edge",    depthBands:[[10,120]],   breakPref:"any"  },
   skipjack:     {tempIdeal:[76,82], tempWorking:[72,86], chlorPref:"edge",    depthBands:[[50,600]],   breakPref:"edge" },
-  // Wahoo — shelf edge (60 m) and deep drop-offs. Upper bound extended
-  // 500→1500 m: wahoo are high-speed trolled along the break AND over deep water
-  // near banks/canyons (e.g. Bahamas walls, canyon lips), so 500 m was clipping
-  // legitimate deep grounds. Structure factor handles concentration.
-  wahoo:        {tempIdeal:[72,82], tempWorking:[68,84], chlorPref:"low",     depthBands:[[60,1500]],  breakPref:"edge"  },
+  // Wahoo — Palm Beach / Stuart wall is 150-250 ft (~45-76 m). The old 60 m
+  // floor treated 150 ft Stream water as too shallow. 40 m (~131 ft) still
+  // keeps them off the beach; NC canyon wahoo remain in-band up to 1500 m.
+  wahoo:        {tempIdeal:[72,82], tempWorking:[68,84], chlorPref:"low",     depthBands:[[40,1500]],  breakPref:"edge"  },
   // Mahi — weed lines, sargassum, debris, and warm water. Depth is only a
   // "not skinny" gate; they do not sit on ledges. chlorPref "weed" scores
   // moderate color + a color edge (the floating-cover proxy we can see).
@@ -538,12 +541,16 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
     {centerLat: 32.8, centerLng: -77.8, radiusNm: 200, label: "Carolinas Gulf Stream",
      seasons:{Jan:0,Feb:0,Mar:1,Apr:1,May:2,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
-    {centerLat: 30.5, centerLng: -80.0, radiusNm: 180, label: "GA / NE Florida",
+    {centerLat: 30.5, centerLng: -80.0, radiusNm: 100, label: "GA / NE Florida",
+     // Fall pulse as fish slide south. Radius stops short of Canaveral/Stuart
+     // so this curve cannot paint Palm Beach as peak in September.
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
-    {centerLat: 28.2, centerLng: -80.2, radiusNm: 130, label: "Central FL Atlantic (Canaveral)",
-     seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 28.2, centerLng: -80.2, radiusNm: 90, label: "Central FL Atlantic (Canaveral)",
+     // Fall arrival, milder winter than Stuart/Palm Beach, slow summer.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:1,May:1,Jun:1,Jul:1,Aug:1,Sep:2,Oct:3,Nov:3,Dec:2}},
     {centerLat: 26.3, centerLng: -79.9, radiusNm: 170, label: "SE FL (Stuart/Palm Beach/Miami)",
-     // The classic winter sailfish run — peak Dec–Mar on north cold fronts.
+     // Winter run is THE peak (first cold fronts through Feb, March still on).
+     // Sep-Oct is the late-summer bonus / fall turn-on (good, not peak).
      seasons:{Jan:3,Feb:3,Mar:3,Apr:2,May:1,Jun:1,Jul:1,Aug:1,Sep:2,Oct:2,Nov:3,Dec:3}},
     {centerLat: 24.6, centerLng: -81.4, radiusNm: 150, label: "Florida Keys",
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:1,Jul:1,Aug:1,Sep:1,Oct:2,Nov:2,Dec:3}},
@@ -1306,6 +1313,25 @@ const PREDICT_WEIGHTS = {
     wind:          0.00,   // Removed — captured indirectly via weather change
     weatherChange: 0.02,
     moonPhase:     0.00,   // Not significant for pelagics (not light-sensitive at depth)
+  },
+  // Sailfish: SE FL kite/reef + Stream wall, not a canyon-slope specialist.
+  // Winter run is weather/wind against the Stream; late-summer bonus is warm
+  // water and bait on the reef. Bottom slope is not the habitat.
+  sailfish: {
+    temperature:   0.26,
+    depthStruct:   0.05,   // Fishable reef/Stream depth, not a canyon trophy.
+    structure:     0.00,   // Bathymetric slope is not sailfish habitat.
+    chlorophyll:   0.14,
+    thermalBreak:  0.14,   // Stream wall helps; it is not required.
+    convergence:   0.12,
+    reports:       0.00,
+    season:        0.08,   // Winter vs summer is decisive on this coast.
+    pressure:      0.06,
+    solunar:       0.03,
+    tide:          0.00,
+    wind:          0.06,   // N/NE against the Stream for the winter push.
+    weatherChange: 0.06,   // Post-front winter explosion.
+    moonPhase:     0.00,
   },
   // Mahi (dorado): warm water and floating cover (weed / paddies / debris).
   // They do not key on bottom slope, so structure is zero. Depth is a light

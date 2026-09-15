@@ -2735,15 +2735,24 @@ async function buildWindFieldForMap(){
   updateOceanLegend();
   return WIND_FIELD;
 }
-function windScore(lat, lng, speciesPrefs, windDir){
+function windScore(lat, lng, speciesPrefs, windDir, speciesId){
   // windDir is the REAL wind direction (degrees FROM) from the nearest NDBC buoy,
   // passed in from the ocean field. No real observation → neutral (we never
   // synthesize a direction).
   if(windDir == null || !isFinite(windDir)) return 0.5;
+  const from = ((windDir % 360) + 360) % 360;
   // Onshore wind on the East Coast = wind FROM the east (~45° to 135°).
   // Offshore wind = FROM the west (~225° to 315°).
-  const isOnshore = (windDir >= 45 && windDir <= 135);
-  const isOffshore = (windDir >= 225 && windDir <= 315);
+  const isOnshore = (from >= 45 && from <= 135);
+  const isOffshore = (from >= 225 && from <= 315);
+  // Sailfish winter run: north / northeast against the northbound Stream
+  // stacks bait on the SE FL reef. West wind blows it off.
+  if(speciesId === "sailfish"){
+    if(from <= 90 || from >= 330) return 0.95;
+    if(isOnshore) return 0.80;
+    if(isOffshore) return 0.45;
+    return 0.65;
+  }
   // Offshore species generally prefer some onshore wind (stacks bait against structure)
   // but not too strong; light onshore is ideal.
   // Inshore species like calm or light offshore wind (clearer water).
@@ -2794,6 +2803,7 @@ function predictWeightsFor(speciesId){
   // demersals (snapper, grouper, tog, AJ, sea bass, etc.) key on structure +
   // current. Route the demersal/bottom-flagged nearshore fish to the reef table.
   if(speciesId === "mahi" && PREDICT_WEIGHTS.mahi) return PREDICT_WEIGHTS.mahi;
+  if(speciesId === "sailfish" && PREDICT_WEIGHTS.sailfish) return PREDICT_WEIGHTS.sailfish;
   if(cat === "nearshore"){
     const prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
     if(prefs && (prefs.demersal || prefs.bottom)) return PREDICT_WEIGHTS.nearshoreReef;
@@ -2837,7 +2847,7 @@ function weatherChangeFromObs({ windKt, waveFt, pressureTrend } = {}){
   return { score: 0.5, label: "steady", raw };
 }
 
-function bluewaterGateFor(speciesId, depthM){
+function bluewaterGateFor(speciesId, depthM, lat, lng){
   if(!(depthM > 0)) return 1;
   // Blackfin wrecks and mahi weed lines start ~80 ft, not 50 m. Full credit
   // by ~400 ft so Hatteras/Lookout structure is not treated as "too inshore."
@@ -2846,9 +2856,32 @@ function bluewaterGateFor(speciesId, depthM){
     if(depthM >= 25)  return 0.45 + 0.55 * ((depthM - 25) / (120 - 25));
     return 0.12 + 0.33 * (depthM / 25);
   }
+  // Sailfish (and SE FL wahoo) kite/troll the reef and Stream wall in 50-250 ft.
+  // The generic 180 m full-credit ramp treated Sailfish Alley as "too inshore."
+  if(speciesId === "sailfish" || (speciesId === "wahoo" && isSeFloridaAtlantic(lat, lng))){
+    if(depthM >= 80) return 1;
+    if(depthM >= 15)  return 0.45 + 0.55 * ((depthM - 15) / (80 - 15));
+    return 0.12 + 0.33 * (depthM / 15);
+  }
   if(depthM >= 180) return 1;
   if(depthM >= 50)  return 0.35 + 0.65 * ((depthM - 50) / (180 - 50));
   return 0.10 + 0.25 * (depthM / 50);
+}
+
+// Stuart / Palm Beach / Miami Atlantic — Stream hugs the beach. Used so wahoo
+// on the 150-250 ft wall is not gated like a Mid-Atlantic canyon fish.
+function isSeFloridaAtlantic(lat, lng){
+  return lat != null && lng != null && isFinite(lat) && isFinite(lng)
+    && lat < 29.5 && lat >= 24.2 && lng > -81.3 && lng < -79.4;
+}
+
+// Table 3 (1.00) is peak. Table 2 (0.67) used to display as peak because the
+// cutoff was 0.66. Only a 3 should read peak; a 2 is good.
+function seasonAlignmentLabel(seasonScore){
+  if(!(seasonScore > 0)) return "off";
+  if(seasonScore >= 0.83) return "peak";
+  if(seasonScore >= 0.50) return "good";
+  return "off";
 }
 
 // Chlorophyll factor. "weed" is the mahi/paddy proxy: moderate color plus a
@@ -2877,7 +2910,7 @@ function chlorScoreForPref(pref, chlor, chlorBreak){
 // Canyon-depth bonus is for tuna/billfish holding on the drop. Mahi ride
 // floating cover over any fishable blue water — do not treat 400 m as better.
 function canyonDepthBoost(speciesId, bands, depth){
-  if(speciesId === "mahi") return 0;
+  if(speciesId === "mahi" || speciesId === "sailfish") return 0;
   const wantsCanyon = Array.isArray(bands) && bands.some(([, mx]) => mx >= 150);
   return (wantsCanyon && depth > 100 && depth < 500) ? 0.10 : 0;
 }
@@ -3998,7 +4031,7 @@ function scoreCell(lat, lng, speciesId){
       : (0.55 + 0.45 * tide);   // moderate
 
   // ── Factor 11: Wind direction relative to structure (real buoy wind) ──
-  const windScoreVal = windScore(lat, lng, prefs, windObj.dir);
+  const windScoreVal = windScore(lat, lng, prefs, windObj.dir, speciesId);
 
   const wxChange = weatherChangeFromObs({
     windKt: windObj && windObj.value,
@@ -4127,7 +4160,7 @@ function scoreCell(lat, lng, speciesId){
   // their depth band requirement already places them correctly. Depth is meters.
   const _bluewaterExempt = (speciesId === "bluefin") || !!prefs.bottom;
   if(speciesCat === "offshore" && !_bluewaterExempt && depth != null && depth > 0){
-    finalScore = finalScore * bluewaterGateFor(speciesId, depth);
+    finalScore = finalScore * bluewaterGateFor(speciesId, depth, lat, lng);
   }
 
   // ── SEASON GATE ──
@@ -4332,7 +4365,7 @@ function scoreCell(lat, lng, speciesId){
   //    Tuna/billfish hold at the shelf edge and beyond; inner-shelf water is the
   //    wrong habitat regardless of temperature, so this is a high-confidence "no".
   //    Excludes bluefin (shelf-feeders in season) and bottom-dwellers (tilefish).
-  if(speciesCat === "offshore" && !(speciesId === "bluefin" || speciesId === "blackfin" || speciesId === "mahi") && !_isBottom && depth != null && depth > 0 && depth < 50){
+  if(speciesCat === "offshore" && !(speciesId === "bluefin" || speciesId === "blackfin" || speciesId === "mahi" || speciesId === "sailfish" || (speciesId === "wahoo" && isSeFloridaAtlantic(lat, lng))) && !_isBottom && depth != null && depth > 0 && depth < 50){
     confidence = Math.max(confidence, 82);
     freshnessAnnotations.push({ variable: "depth",
       message: "Too far inshore for an offshore species — the bite is at the shelf edge." });
@@ -4349,7 +4382,7 @@ function scoreCell(lat, lng, speciesId){
   const droppedKeys = new Set((fr?.droppedFactors || []).map(f => f.key));
   const allFactors = [
     {key:"temp", name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: (_isBottom || _isDemersal) ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
-    {key:"depth", name: speciesId === "mahi" ? "Water depth" : "Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
+    {key:"depth", name: (speciesId === "mahi" || speciesId === "sailfish") ? "Water depth" : "Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
     {key:"structure", name:"Bottom structure",   weight:(W.structure||0), score:structureScore,
      raw: structureScore > 0.05 ? `${Math.round(structureScore*100)}% · edge/slope` : "flat bottom"},
     {key:"pres", name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
@@ -4377,7 +4410,7 @@ function scoreCell(lat, lng, speciesId){
           : "—"},
     {key:"tide", name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
     {key:"weather", name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw: (wxChange.raw && wxChange.raw !== "—") ? `${wxLabel} · ${wxChange.raw}` : wxLabel},
-    {key:"season", name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonScore > 0.66 ? "peak" : seasonScore > 0.33 ? "good" : "off"},
+    {key:"season", name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonAlignmentLabel(seasonScore)},
     {key:"moon", name:"Moon phase",         weight:W.moonPhase || 0,score:moonPhaseScoreVal,raw:moonName.toUpperCase()},
     {key:"wind", name:"Wind direction",     weight:W.wind,          score:windScoreVal,     raw:windObj.dir != null ? `${Math.round(windObj.dir)}°` : "—"}]
   // Drop factors that aren't applicable to this species category, and env

@@ -6,12 +6,14 @@ const {
   PACIFIC_SPECIES_PREFS, REGIONAL_SEASONS,
   speciesAllowedAtLat, predictWeightsFor, weatherChangeFromObs, bluewaterGateFor,
   chlorScoreForPref, canyonDepthBoost, applyExplainerMovedStyles,
+  seasonAlignmentLabel, getRegionalSeasons, isSeFloridaAtlantic, windScore,
   nmBetween,
 } = loadBw([
     "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
     "PACIFIC_SPECIES_PREFS", "REGIONAL_SEASONS",
     "speciesAllowedAtLat", "predictWeightsFor", "weatherChangeFromObs", "bluewaterGateFor",
     "chlorScoreForPref", "canyonDepthBoost", "applyExplainerMovedStyles",
+    "seasonAlignmentLabel", "getRegionalSeasons", "isSeFloridaAtlantic", "windScore",
     "nmBetween",
   ]);
 
@@ -155,6 +157,80 @@ console.log("\nbite explainer drag freezes pixel width and height:");
   check("freezes height", el.style.height === "640px");
   check("caps maxWidth to the frozen width", el.style.maxWidth === "460px");
   check("caps maxHeight to the frozen height, not leftover viewport", el.style.maxHeight === "640px");
+}
+
+console.log("\nsailfish SE Florida is a reef/Stream kite fishery, not a canyon marlin:");
+{
+  const p = PREDICT_SPECIES_PREFS.sailfish;
+  const W = PREDICT_WEIGHTS.sailfish;
+  check("sailfish uses its own weight table", predictWeightsFor("sailfish") === W);
+  check("yellowfin still uses generic offshore weights", predictWeightsFor("yellowfin") === PREDICT_WEIGHTS.offshore);
+  check("sailfish does not score bottom structure", W.structure === 0);
+  check("sailfish depth is a light gate", W.depthStruct === 0.05);
+  check("sailfish weights include wind and weather-change", W.wind === 0.06 && W.weatherChange === 0.06);
+  const sum = W.temperature + W.depthStruct + W.structure + W.chlorophyll + W.thermalBreak
+    + W.convergence + W.season + W.pressure + W.solunar + W.tide + W.wind
+    + W.weatherChange + (W.moonPhase || 0) + (W.reports || 0);
+  check("sailfish weights sum to 1", Math.abs(sum - 1) < 1e-9);
+  check("chlorPref is any", p.chlorPref === "any");
+  check("breakPref is any", p.breakPref === "any");
+  check("working top is 88°F", p.tempWorking[1] === 88);
+  check("86°F September water is still fishable", pelagicTempScore(86.3, p) >= 0.9);
+  check("Stuart 80 ft reef is in-band", depthBandScore(80 / 3.28084, p.depthBands) >= 0.9);
+  check("Palm Beach 200 ft wall is in-band", depthBandScore(200 / 3.28084, p.depthBands) === 1);
+  check("100-fathom NC water is still in-band", depthBandScore(183, p.depthBands) === 1);
+  check("sailfish gets no canyon-depth bonus", canyonDepthBoost("sailfish", p.depthBands, 188) === 0);
+  const stuart = PORTS["Stuart, FL"];
+  const bw80 = bluewaterGateFor("sailfish", 80 / 3.28084, stuart.lat, stuart.lng);
+  const bwYft = bluewaterGateFor("yellowfin", 80 / 3.28084, stuart.lat, stuart.lng);
+  check("sailfish 80 ft is not nearly vetoed", bw80 >= 0.4);
+  check("yellowfin 80 ft stays suppressed", bwYft < 0.3);
+  check("N/NE wind scores high for sailfish", windScore(stuart.lat, stuart.lng, p, 20, "sailfish") >= 0.9);
+  check("west wind scores lower for sailfish", windScore(stuart.lat, stuart.lng, p, 270, "sailfish") < 0.55);
+}
+
+console.log("\nsailfish season: winter peak, September/October good, not peak:");
+{
+  check("table 2 labels good (not peak)", seasonAlignmentLabel(2 / 3) === "good");
+  check("table 3 labels peak", seasonAlignmentLabel(1) === "peak");
+  check("table 1 labels off/slow", seasonAlignmentLabel(1 / 3) === "off");
+  const sefl = REGIONAL_SEASONS.sailfish.find(r => /SE FL/.test(r.label));
+  check("SE FL September is 2", sefl.seasons.Sep === 2);
+  check("SE FL October is 2", sefl.seasons.Oct === 2);
+  check("SE FL Nov-Feb are peak", sefl.seasons.Nov === 3 && sefl.seasons.Dec === 3
+    && sefl.seasons.Jan === 3 && sefl.seasons.Feb === 3);
+  check("SE FL March stays peak", sefl.seasons.Mar === 3);
+  const stuart = PORTS["Stuart, FL"];
+  const pb = PORTS["Palm Beach, FL"];
+  const ga = REGIONAL_SEASONS.sailfish.find(r => /GA/.test(r.label));
+  check("GA fall-peak region does not reach Stuart",
+    nmBetween(stuart.lat, stuart.lng, ga.centerLat, ga.centerLng) > ga.radiusNm);
+  check("GA fall-peak region does not reach Palm Beach",
+    nmBetween(pb.lat, pb.lng, ga.centerLat, ga.centerLng) > ga.radiusNm);
+  const blended = getRegionalSeasons("sailfish", stuart.lat, stuart.lng);
+  check("Stuart September blend labels good", seasonAlignmentLabel(blended.Sep / 3) === "good");
+  check("Stuart October blend labels good", seasonAlignmentLabel(blended.Oct / 3) === "good");
+  check("Stuart January blend labels peak", seasonAlignmentLabel(blended.Jan / 3) === "peak");
+  const can = PORTS["Port Canaveral, FL"];
+  const canBlend = getRegionalSeasons("sailfish", can.lat, can.lng);
+  check("Canaveral October is the fall arrival (peak or good-high)", canBlend.Oct >= 2.5);
+}
+
+console.log("\nSE Florida wahoo uses the shallow Stream-wall gate; NC wahoo does not:");
+{
+  const p = PREDICT_SPECIES_PREFS.wahoo;
+  check("wahoo depth floor is ~131 ft", p.depthBands[0][0] <= 40);
+  check("Palm Beach 150 ft wall is in-band", depthBandScore(150 / 3.28084, p.depthBands) >= 0.9);
+  check("NC 100-fathom wahoo is still in-band", depthBandScore(183, p.depthBands) === 1);
+  const pb = PORTS["Palm Beach, FL"];
+  const hat = PORTS["Hatteras, NC"];
+  check("Palm Beach is SE Florida Atlantic", isSeFloridaAtlantic(pb.lat, pb.lng));
+  check("Hatteras is not SE Florida Atlantic", !isSeFloridaAtlantic(hat.lat, hat.lng));
+  const wahooPb = bluewaterGateFor("wahoo", 150 / 3.28084, pb.lat, pb.lng);
+  const wahooHat = bluewaterGateFor("wahoo", 150 / 3.28084, hat.lat, hat.lng);
+  check("SE FL wahoo 150 ft is usable", wahooPb >= 0.7);
+  check("NC wahoo 150 ft stays on the generic ramp", wahooHat < 0.55);
+  check("wahoo still uses generic offshore weights", predictWeightsFor("wahoo") === PREDICT_WEIGHTS.offshore);
 }
 
 done();
