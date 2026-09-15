@@ -2856,6 +2856,15 @@ function bluewaterGateFor(speciesId, depthM, lat, lng){
   // Blackfin wrecks and mahi weed lines start ~80 ft, not 50 m. Full credit
   // by ~400 ft so Hatteras/Lookout structure is not treated as "too inshore."
   if(speciesId === "blackfin" || speciesId === "mahi" || speciesId === "skipjack"){
+    // Gulf blackfin: Panhandle beach bait-chase is 30-80 ft. Full credit by
+    // ~165 ft so The Edge / Destin wrecks still outrank a 3-mile slick, but
+    // 40 ft water is "good" instead of vetoed. Atlantic keeps the 80 ft floor
+    // that stops a VA Beach inner-shelf bloom.
+    if(speciesId === "blackfin" && typeof isGulfContext === "function" && isGulfContext(lat, lng)){
+      if(depthM >= 50) return 1;
+      if(depthM >= 10)  return 0.50 + 0.50 * ((depthM - 10) / (50 - 10));
+      return 0.20 + 0.30 * (depthM / 10);
+    }
     if(depthM >= 120) return 1;
     if(depthM >= 25)  return 0.45 + 0.55 * ((depthM - 25) / (120 - 25));
     return 0.12 + 0.33 * (depthM / 25);
@@ -2863,6 +2872,13 @@ function bluewaterGateFor(speciesId, depthM, lat, lng){
   // Sailfish (and SE FL wahoo) kite/troll the reef and Stream wall in 50-250 ft.
   // The generic 180 m full-credit ramp treated Sailfish Alley as "too inshore."
   if(speciesId === "sailfish" || (speciesId === "wahoo" && isSeFloridaAtlantic(lat, lng))){
+    // Gulf sails: Sep-Oct they slide in with bait a few miles off PCB/Destin.
+    // Full credit by ~130 ft (The Edge still wins); 40-60 ft is fishable.
+    if(speciesId === "sailfish" && typeof isGulfContext === "function" && isGulfContext(lat, lng)){
+      if(depthM >= 40) return 1;
+      if(depthM >= 8)  return 0.50 + 0.50 * ((depthM - 8) / (40 - 8));
+      return 0.20 + 0.30 * (depthM / 8);
+    }
     if(depthM >= 80) return 1;
     if(depthM >= 15)  return 0.45 + 0.55 * ((depthM - 15) / (80 - 15));
     return 0.12 + 0.33 * (depthM / 15);
@@ -15494,7 +15510,7 @@ function drawCanyons(){
     const type = c.type || "canyon";
     const typeLabel = {canyon:"Canyon", wreck:"Wreck", reef:"Reef / Live Bottom",
                        lump:"Lump / Seamount", shoal:"Shoal", ledge:"Ledge / Drop",
-                       rock:"Rock Pile"}[type] || "Structure";
+                       rock:"Rock Pile", channel:"Shipping Channel"}[type] || "Structure";
     // Rocks render in gray so they read instantly as rock; others use their
     // data color (canyons blue, reefs green, lumps teal, etc.).
     const badgeColor = type === "rock" ? "#8a8f98" : c.color;

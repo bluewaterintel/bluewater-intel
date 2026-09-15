@@ -486,4 +486,100 @@ console.log("\nGulf yellowfin / mahi / wahoo treat Loop water and LA lumps as ha
     badges.some(b => Math.abs(b.lat - floaters.lat) < 1e-6 && Math.abs(b.lng - floaters.lng) < 1e-6));
 }
 
+function nearshoreWarmTemp(sst, p) {
+  let tempScore;
+  if (sst >= p.tempIdeal[0] && sst <= p.tempIdeal[1]) tempScore = 1;
+  else if (sst < p.tempIdeal[0]) {
+    const buf = Math.max(0.5, p.tempIdeal[0] - p.tempWorking[0]);
+    const s = buf / 2.355, dl = p.tempIdeal[0] - sst;
+    tempScore = Math.exp(-(dl * dl) / (2 * s * s));
+  } else {
+    const buf = Math.max(0.5, p.tempWorking[1] - p.tempIdeal[1]);
+    const s = buf / 2.355, dl = sst - p.tempIdeal[1];
+    tempScore = Math.exp(-(dl * dl) / (2 * s * s));
+  }
+  const warmEdge = p.tempWorking[1];
+  if (p.warmAdapted && sst >= p.tempIdeal[1]) {
+    tempScore = Math.max(tempScore, sst <= warmEdge ? 1 : Math.max(0, 1 - (sst - warmEdge) / 5));
+  }
+  return tempScore;
+}
+
+console.log("\nTampa king mackerel fall run is beaches and Egmont Channel, not 80 ft mid-shelf:");
+{
+  const tampa = PORTS["Tampa Bay, FL"];
+  const hat = PORTS["Hatteras, NC"];
+  check("Tampa kings use Gulf prefs", usesGulfSpeciesPrefs("kingmack", tampa.lat, tampa.lng));
+  check("Hatteras kings stay on the Atlantic table",
+    !usesGulfSpeciesPrefs("kingmack", hat.lat, hat.lng));
+  const g = GULF_SPECIES_PREFS.kingmack;
+  const a = PREDICT_SPECIES_PREFS.kingmack;
+  check("Gulf king floor is ~20 ft (shipping channel / beach)", g.depthBands[0][0] <= 6);
+  check("Gulf king ceiling stays inside day-boat wrecks (~130 ft)", g.depthBands[0][1] <= 40);
+  check("Atlantic king floor stays ~50 ft", a.depthBands[0][0] >= 15);
+  check("Egmont Channel 40 ft is full credit", depthBandScore(40 / 3.281, g.depthBands) === 1);
+  check("Pinellas beach 25 ft is fishable", depthBandScore(25 / 3.281, g.depthBands) >= 0.8);
+  check("89°F Tampa surface is full credit for Gulf kings", nearshoreWarmTemp(89, g) >= 0.99);
+  check("89°F is still a penalty on the Atlantic king table", nearshoreWarmTemp(89, a) < 0.4);
+  const west = REGIONAL_SEASONS.kingmack.find(r => /Gulf FL west/.test(r.label));
+  check("west Florida September kings are peak (fall run is on)",
+    seasonAlignmentLabel(west.seasons.Sep / 3) === "peak");
+  const egmont = CANYONS.find(c => c.name === "Egmont Channel");
+  check("Egmont Channel is mapped", !!egmont);
+  check("Egmont Channel lists king mackerel", egmont.fish.includes("kingmack"));
+  check("Egmont Channel is outside the Tampa Bay box (west of -82.75)",
+    egmont.lng < -82.75);
+  check("Egmont Channel is a short run from Tampa Bay",
+    nmBetween(tampa.lat, tampa.lng, egmont.lat, egmont.lng) <= 20);
+}
+
+console.log("\nGulf cobia keep fishing 89°F wreck water; Chesapeake fade is unchanged:");
+{
+  const tampa = PORTS["Tampa Bay, FL"];
+  const vb = PORTS["Virginia Beach, VA"];
+  check("Tampa cobia use Gulf prefs", usesGulfSpeciesPrefs("cobia", tampa.lat, tampa.lng));
+  check("VA Beach cobia stay on the Atlantic table",
+    !usesGulfSpeciesPrefs("cobia", vb.lat, vb.lng));
+  const g = GULF_SPECIES_PREFS.cobia;
+  const a = PREDICT_SPECIES_PREFS.cobia;
+  check("89°F is fishable Gulf cobia water", nearshoreWarmTemp(89, g) >= 0.99);
+  check("89°F still zeros Atlantic cobia (Chesapeake working cap)",
+    nearshoreWarmTemp(89, a) < 0.15);
+  const west = REGIONAL_SEASONS.cobia.find(r => /Gulf FL west/.test(r.label));
+  check("west Florida September cobia is good (not off)",
+    seasonAlignmentLabel(west.seasons.Sep / 3) === "good");
+  check("west Florida October cobia is still good",
+    seasonAlignmentLabel(west.seasons.Oct / 3) === "good");
+}
+
+console.log("\nPanama City blackfin/sailfish nearshore bait-chase is real, not a veto:");
+{
+  const pcb = PORTS["Panama City, FL"];
+  const hat = PORTS["Hatteras, NC"];
+  check("PCB blackfin uses Gulf prefs", usesGulfSpeciesPrefs("blackfin", pcb.lat, pcb.lng));
+  check("PCB sailfish uses Gulf prefs", usesGulfSpeciesPrefs("sailfish", pcb.lat, pcb.lng));
+  const gBf = GULF_SPECIES_PREFS.blackfin;
+  const aBf = PREDICT_SPECIES_PREFS.blackfin;
+  check("Gulf blackfin floor is ~33 ft (beach bait line)", gBf.depthBands[0][0] <= 10);
+  check("Atlantic blackfin floor stays ~80 ft", aBf.depthBands[0][0] >= 25);
+  check("40 ft PCB water is in-band for Gulf blackfin",
+    depthBandScore(40 / 3.281, gBf.depthBands) >= 0.9);
+  check("40 ft Hatteras water is still too skinny on the Atlantic table",
+    depthBandScore(40 / 3.281, aBf.depthBands) < 0.5);
+  const pcb40 = bluewaterGateFor("blackfin", 40 / 3.28084, pcb.lat, pcb.lng);
+  const hat40 = bluewaterGateFor("blackfin", 40 / 3.28084, hat.lat, hat.lng);
+  const pcbEdge = bluewaterGateFor("blackfin", 180 / 3.28084, pcb.lat, pcb.lng);
+  check("40 ft off PCB is fishable for blackfin (not vetoed)", pcb40 >= 0.5);
+  check("40 ft off Hatteras is still nearly vetoed", hat40 < 0.35);
+  check("The Edge depth still outranks the beach for blackfin", pcbEdge > pcb40);
+  const pcbSail = bluewaterGateFor("sailfish", 50 / 3.28084, pcb.lat, pcb.lng);
+  const hatSail = bluewaterGateFor("sailfish", 50 / 3.28084, hat.lat, hat.lng);
+  check("50 ft off PCB is fishable for sailfish", pcbSail >= 0.55);
+  check("50 ft sailfish gate is gentler in the Gulf than the Atlantic",
+    pcbSail > hatSail);
+  const edge = CANYONS.find(c => c.name === "The Edge (Destin)");
+  check("The Edge lists blackfin", edge && edge.fish.includes("blackfin"));
+  check("The Edge lists sailfish", edge && edge.fish.includes("sailfish"));
+}
+
 done();

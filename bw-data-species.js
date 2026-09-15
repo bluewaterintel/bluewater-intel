@@ -33,7 +33,7 @@ const SPECIES=[
   {id:"kingmack",    name:"King Mackerel",   color:"#1a5878",cat:"nearshore"},
   {id:"triggerfish", name:"Triggerfish",     color:"#6a4a7a",cat:"nearshore"},
   {id:"tautog",      name:"Tautog",         color:"#0a5c8a",cat:"nearshore"},
-  {id:"grouper",     name:"Grouper",        color:"#4a4038",cat:"nearshore"},
+  {id:"grouper",     name:"Grouper (Black/Scamp)", color:"#4a4038",cat:"nearshore"},
   {id:"snapper",     name:"Red Snapper",    color:"#991010",cat:"nearshore"},
   // ── NEW ENGLAND / NORTHEAST SPECIES ─────────────────────────────────
   {id:"striper",     name:"Striped Bass",   color:"#4a7a3a",cat:"inshore"},
@@ -508,11 +508,12 @@ const REGIONAL_SEASONS = {
      // Wintering/migrating fish — cooler-season presence, spring push north.
      seasons:{Jan:2,Feb:3,Mar:3,Apr:3,May:2,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:2}},
     {centerLat: 27.5, centerLng: -83.0, radiusNm: 180, label: "Gulf FL west coast",
-     // FL Gulf coast run — spring peak, present into fall.
-     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:1,Nov:1,Dec:1}},
+     // Spring wreck/buoy run is the peak. Fish stay on nearshore wrecks and
+     // rays through early fall — October is still fishable, not gone.
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:1}},
     {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf (Panhandle/LA)",
-     // Gulf cobia: spring/summer peak
-     seasons:{Jan:0,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:2,Sep:2,Oct:1,Nov:1,Dec:0}},
+     // Gulf cobia: spring/summer peak, wrecks still produce into October.
+     seasons:{Jan:0,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
      // Texas "ling" run — spring peak Mar-May, tapering through summer.
      seasons:{Jan:0,Feb:1,Mar:3,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:1,Nov:0,Dec:0}},
@@ -731,7 +732,9 @@ const REGIONAL_SEASONS = {
     {centerLat: 25.7, centerLng: -80.1, radiusNm: 190, label: "SE FL / Keys",
      seasons:{Jan:3,Feb:3,Mar:3,Apr:2,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:2,Nov:3,Dec:3}},
     {centerLat: 27.4, centerLng: -83.1, radiusNm: 190, label: "Gulf FL west coast",
-     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:3,Dec:2}},
+     // Fall run is on by mid-September: bait stacks on the beaches and
+     // Egmont / shipping-channel edges. October-November stays the smoker peak.
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 29.5, centerLng: -88.0, radiusNm: 230, label: "N. Gulf (Panhandle/LA)",
      seasons:{Jan:0,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 27.6, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
@@ -1352,6 +1355,23 @@ const GULF_SPECIES_PREFS = {
   // Rigs and the 100-fathom curve, not a 180 m canyon-slope fish. chlorPref
   // "any" so the Mississippi color-change is not punished as too green.
   wahoo: { tempIdeal:[72,82], tempWorking:[68,88], chlorPref:"any", depthBands:[[40,1500]], breakPref:"edge", structureProx:true },
+  // Fall/spring kings hunt beaches, Egmont Channel, and 20-80 ft wrecks in
+  // 86-90°F water. The Atlantic 15 m floor + 85°F cap parked Tampa pins on
+  // 80-90 ft mid-shelf cells and painted the shipping channel as too hot
+  // and too skinny. chlorPref "any" so dirty pass water is not an edge miss.
+  kingmack: { tempIdeal:[72,86], tempWorking:[66,92], chlorPref:"any", depthBands:[[6,40]], breakPref:"any", warmAdapted:true, structureProx:true },
+  // Gulf cobia live in 84-90°F wreck/buoy water all summer. Atlantic
+  // working-max 82°F zeroed 89°F Tampa cells (the Chesapeake fade). Keep
+  // the 11-130 ft band and structureProx so wrecks/buoys beat open sand.
+  cobia: { tempIdeal:[72,86], tempWorking:[66,92], chlorPref:"high", salinityPref:"high", depthBands:[[3.4,40]], breakPref:"stable", warmAdapted:true, structureProx:true },
+  // Panhandle blackfin push onto the 30-80 ft bait line in late summer/fall
+  // (PCB/Destin beaches). Atlantic 25 m floor + 120 m blue-water ramp is
+  // the VA-Beach inner-shelf guard and stays on the base table.
+  blackfin: { tempIdeal:[74,86], tempWorking:[70,90], chlorPref:"any", depthBands:[[10,400]], breakPref:"any" },
+  // Same Panhandle bait-chase: sails ride sardines/threadfin a few miles
+  // off the beach in Sep-Oct. The Edge still gets the deeper full-credit
+  // ramp; this only stops 40-80 ft water from looking empty.
+  sailfish: { tempIdeal:[74,86], tempWorking:[70,90], chlorPref:"any", depthBands:[[8,250]], breakPref:"any" },
 };
 
 const PREDICT_WEIGHTS = {

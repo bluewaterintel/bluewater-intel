@@ -278,8 +278,8 @@ const CANYONS=[
 
   // ── GULF — PANHANDLE / AL / MS ──
   {name:"The Edge (Destin)", type:"ledge", color:"#1e63c0", lat:29.80, lng:-86.50,
-   desc:"The 100-fathom ledge off Destin — the closest blue water in the Gulf. Tuna, wahoo, dolphin, marlin in the spring/summer.",
-   fish:["yellowfin","wahoo","mahi","bluemarlin"]},
+   desc:"The 100-fathom ledge off Destin — the closest blue water in the Gulf. Tuna, wahoo, dolphin, marlin in the spring/summer; blackfin and sailfish mix in on bait through fall.",
+   fish:["yellowfin","wahoo","mahi","bluemarlin","blackfin","sailfish"]},
   {name:"Trysler Grounds", type:"reef", color:"#16a34a", lat:29.10, lng:-87.45,
    desc:"Live-bottom grounds off Pensacola/Orange Beach. Snapper, grouper, triggerfish, amberjack.",
    fish:["snapper","gaggrouper","amberjack","kingmack"]},
@@ -349,6 +349,9 @@ const CANYONS=[
   {name:"Clearwater Nearshore Hardbottom", type:"reef", color:"#16a34a", lat:27.95, lng:-83.05,
    desc:"Nearshore ledges and hard bottom ~12-25nm off Clearwater. Gag and red grouper, mangrove and lane snapper, hogfish, and Spanish mackerel. Reference only — not for navigation.",
    fish:["gaggrouper","snapper","hogfish","spanishmack"]},
+  {name:"Egmont Channel", type:"channel", color:"#1a5878", lat:27.60, lng:-82.86,
+   desc:"Tampa Bay shipping channel west of Egmont Key, ~5-12nm from the Skyway. Fall/spring kingfish highway on the channel edges and The Hill; cobia on buoys and rays, Spanish on bait. Reference only — not for navigation.",
+   fish:["kingmack","cobia","spanishmack"]},
   {name:"Middle Grounds", type:"ledge", color:"#16a34a", lat:28.45, lng:-84.30,
    desc:"Prominent ledge on the SE edge of the Florida Middle Grounds, ~80-100nm off Clearwater. Gag and red grouper, amberjack, and red snapper on the deep rock. Long run — reference only, not for navigation.",
    fish:["gaggrouper","snapper","amberjack","vermilion"]},
