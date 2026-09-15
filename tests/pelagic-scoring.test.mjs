@@ -3,14 +3,14 @@ import { loadBw, makeChecker } from "./load-bw.mjs";
 
 const {
   PREDICT_SPECIES_PREFS, PREDICT_WEIGHTS, PORTS, SPECIES_LAT_RANGE,
-  PACIFIC_SPECIES_PREFS, REGIONAL_SEASONS,
+  PACIFIC_SPECIES_PREFS, SEFL_SPECIES_PREFS, REGIONAL_SEASONS,
   speciesAllowedAtLat, predictWeightsFor, weatherChangeFromObs, bluewaterGateFor,
   chlorScoreForPref, canyonDepthBoost, applyExplainerMovedStyles,
   seasonAlignmentLabel, getRegionalSeasons, isSeFloridaAtlantic, windScore,
   nmBetween,
 } = loadBw([
     "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
-    "PACIFIC_SPECIES_PREFS", "REGIONAL_SEASONS",
+    "PACIFIC_SPECIES_PREFS", "SEFL_SPECIES_PREFS", "REGIONAL_SEASONS",
     "speciesAllowedAtLat", "predictWeightsFor", "weatherChangeFromObs", "bluewaterGateFor",
     "chlorScoreForPref", "canyonDepthBoost", "applyExplainerMovedStyles",
     "seasonAlignmentLabel", "getRegionalSeasons", "isSeFloridaAtlantic", "windScore",
@@ -216,9 +216,11 @@ console.log("\nsailfish season: winter peak, September/October good, not peak:")
   check("Canaveral October is the fall arrival (peak or good-high)", canBlend.Oct >= 2.5);
 }
 
-console.log("\nSE Florida wahoo uses the shallow Stream-wall gate; NC wahoo does not:");
+console.log("\nSE Florida wahoo uses the Stream wall, moon, and no canyon slope:");
 {
   const p = PREDICT_SPECIES_PREFS.wahoo;
+  const se = SEFL_SPECIES_PREFS.wahoo;
+  const Wse = PREDICT_WEIGHTS.wahooSeFl;
   check("wahoo depth floor is ~131 ft", p.depthBands[0][0] <= 40);
   check("Palm Beach 150 ft wall is in-band", depthBandScore(150 / 3.28084, p.depthBands) >= 0.9);
   check("NC 100-fathom wahoo is still in-band", depthBandScore(183, p.depthBands) === 1);
@@ -230,7 +232,43 @@ console.log("\nSE Florida wahoo uses the shallow Stream-wall gate; NC wahoo does
   const wahooHat = bluewaterGateFor("wahoo", 150 / 3.28084, hat.lat, hat.lng);
   check("SE FL wahoo 150 ft is usable", wahooPb >= 0.7);
   check("NC wahoo 150 ft stays on the generic ramp", wahooHat < 0.55);
-  check("wahoo still uses generic offshore weights", predictWeightsFor("wahoo") === PREDICT_WEIGHTS.offshore);
+  check("NC wahoo still uses generic offshore weights", predictWeightsFor("wahoo", hat.lat, hat.lng) === PREDICT_WEIGHTS.offshore);
+  check("SE FL wahoo uses the wall table, not canyon slope", predictWeightsFor("wahoo", pb.lat, pb.lng) === Wse);
+  check("SE FL wahoo does not score bottom structure", Wse.structure === 0);
+  check("SE FL wahoo moon phase has real weight", Wse.moonPhase >= 0.06);
+  check("SE FL wahoo keeps edge-seeking breaks", se.breakPref === "edge");
+  check("SE FL wahoo chlorPref is any", se.chlorPref === "any");
+  check("SE FL working top is 88°F", se.tempWorking[1] === 88);
+  check("85°F September wall water is fishable", pelagicTempScore(85.2, se) >= 0.9);
+  check("Atlantic wahoo prefs stay chlorPref low for NC", p.chlorPref === "low" && p.tempWorking[1] === 84);
+  const sum = Wse.temperature + Wse.depthStruct + Wse.structure + Wse.chlorophyll + Wse.thermalBreak
+    + Wse.convergence + Wse.season + Wse.pressure + Wse.solunar + Wse.tide + Wse.wind
+    + Wse.weatherChange + (Wse.moonPhase || 0) + (Wse.reports || 0);
+  check("SE FL wahoo weights sum to 1", Math.abs(sum - 1) < 1e-9);
+  check("N/NE wind scores high for SE FL wahoo", windScore(pb.lat, pb.lng, se, 20, "wahoo") >= 0.9);
+}
+
+console.log("\nskipjack is a wreck/Stream tuna, not a canyon marlin:");
+{
+  const p = PREDICT_SPECIES_PREFS.skipjack;
+  const W = PREDICT_WEIGHTS.skipjack;
+  const stuart = PORTS["Stuart, FL"];
+  check("skipjack uses its own weight table", predictWeightsFor("skipjack") === W);
+  check("skipjack does not score bottom structure", W.structure === 0);
+  check("skipjack moon phase has weight", W.moonPhase >= 0.05);
+  check("skipjack depth floor is ~80 ft", p.depthBands[0][0] <= 25);
+  check("80 ft wreck is in-band", depthBandScore(80 / 3.28084, p.depthBands) >= 0.9);
+  check("chlorPref is any", p.chlorPref === "any");
+  check("breakPref is any", p.breakPref === "any");
+  const bw80 = bluewaterGateFor("skipjack", 80 / 3.28084, stuart.lat, stuart.lng);
+  const bwYft = bluewaterGateFor("yellowfin", 80 / 3.28084, stuart.lat, stuart.lng);
+  check("skipjack 80 ft is not nearly vetoed", bw80 >= 0.4);
+  check("yellowfin 80 ft stays suppressed", bwYft < 0.3);
+  check("skipjack gets no canyon-depth bonus", canyonDepthBoost("skipjack", p.depthBands, 200) === 0);
+  const sum = W.temperature + W.depthStruct + W.structure + W.chlorophyll + W.thermalBreak
+    + W.convergence + W.season + W.pressure + W.solunar + W.tide + W.wind
+    + W.weatherChange + (W.moonPhase || 0) + (W.reports || 0);
+  check("skipjack weights sum to 1", Math.abs(sum - 1) < 1e-9);
 }
 
 done();

@@ -2747,7 +2747,7 @@ function windScore(lat, lng, speciesPrefs, windDir, speciesId){
   const isOffshore = (from >= 225 && from <= 315);
   // Sailfish winter run: north / northeast against the northbound Stream
   // stacks bait on the SE FL reef. West wind blows it off.
-  if(speciesId === "sailfish"){
+  if(speciesId === "sailfish" || (speciesId === "wahoo" && isSeFloridaAtlantic(lat, lng))){
     if(from <= 90 || from >= 330) return 0.95;
     if(isOnshore) return 0.80;
     if(isOffshore) return 0.45;
@@ -2795,7 +2795,7 @@ function windScore(lat, lng, speciesPrefs, windDir, speciesId){
 // PREDICT_WEIGHTS moved to bw-data-species.js (Approach A modularization)
 
 // Helper — return the appropriate weight table for a species
-function predictWeightsFor(speciesId){
+function predictWeightsFor(speciesId, lat, lng){
   const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
   const cat = sp ? sp.cat : "offshore";
   // Nearshore splits into two archetypes with opposite drivers: roving pelagics
@@ -2804,6 +2804,10 @@ function predictWeightsFor(speciesId){
   // current. Route the demersal/bottom-flagged nearshore fish to the reef table.
   if(speciesId === "mahi" && PREDICT_WEIGHTS.mahi) return PREDICT_WEIGHTS.mahi;
   if(speciesId === "sailfish" && PREDICT_WEIGHTS.sailfish) return PREDICT_WEIGHTS.sailfish;
+  if(speciesId === "skipjack" && PREDICT_WEIGHTS.skipjack) return PREDICT_WEIGHTS.skipjack;
+  if(speciesId === "wahoo" && PREDICT_WEIGHTS.wahooSeFl && isSeFloridaAtlantic(lat, lng)){
+    return PREDICT_WEIGHTS.wahooSeFl;
+  }
   if(cat === "nearshore"){
     const prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
     if(prefs && (prefs.demersal || prefs.bottom)) return PREDICT_WEIGHTS.nearshoreReef;
@@ -2851,7 +2855,7 @@ function bluewaterGateFor(speciesId, depthM, lat, lng){
   if(!(depthM > 0)) return 1;
   // Blackfin wrecks and mahi weed lines start ~80 ft, not 50 m. Full credit
   // by ~400 ft so Hatteras/Lookout structure is not treated as "too inshore."
-  if(speciesId === "blackfin" || speciesId === "mahi"){
+  if(speciesId === "blackfin" || speciesId === "mahi" || speciesId === "skipjack"){
     if(depthM >= 120) return 1;
     if(depthM >= 25)  return 0.45 + 0.55 * ((depthM - 25) / (120 - 25));
     return 0.12 + 0.33 * (depthM / 25);
@@ -2910,7 +2914,7 @@ function chlorScoreForPref(pref, chlor, chlorBreak){
 // Canyon-depth bonus is for tuna/billfish holding on the drop. Mahi ride
 // floating cover over any fishable blue water — do not treat 400 m as better.
 function canyonDepthBoost(speciesId, bands, depth){
-  if(speciesId === "mahi" || speciesId === "sailfish") return 0;
+  if(speciesId === "mahi" || speciesId === "sailfish" || speciesId === "skipjack") return 0;
   const wantsCanyon = Array.isArray(bands) && bands.some(([, mx]) => mx >= 150);
   return (wantsCanyon && depth > 100 && depth < 500) ? 0.10 : 0;
 }
@@ -3606,9 +3610,13 @@ function scoreCell(lat, lng, speciesId){
      typeof PACIFIC_SPECIES_PREFS !== "undefined" && PACIFIC_SPECIES_PREFS[speciesId]){
     prefs = PACIFIC_SPECIES_PREFS[speciesId];
   }
+  if(typeof isSeFloridaAtlantic === "function" && isSeFloridaAtlantic(lat, lng) &&
+     typeof SEFL_SPECIES_PREFS !== "undefined" && SEFL_SPECIES_PREFS[speciesId]){
+    prefs = SEFL_SPECIES_PREFS[speciesId];
+  }
 
   // ── Get the right weight table for this species category ──
-  const W = predictWeightsFor(speciesId);
+  const W = predictWeightsFor(speciesId, lat, lng);
   const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
   const speciesCat = sp ? sp.cat : "offshore";
 
@@ -4365,7 +4373,7 @@ function scoreCell(lat, lng, speciesId){
   //    Tuna/billfish hold at the shelf edge and beyond; inner-shelf water is the
   //    wrong habitat regardless of temperature, so this is a high-confidence "no".
   //    Excludes bluefin (shelf-feeders in season) and bottom-dwellers (tilefish).
-  if(speciesCat === "offshore" && !(speciesId === "bluefin" || speciesId === "blackfin" || speciesId === "mahi" || speciesId === "sailfish" || (speciesId === "wahoo" && isSeFloridaAtlantic(lat, lng))) && !_isBottom && depth != null && depth > 0 && depth < 50){
+  if(speciesCat === "offshore" && !(speciesId === "bluefin" || speciesId === "blackfin" || speciesId === "mahi" || speciesId === "sailfish" || speciesId === "skipjack" || (speciesId === "wahoo" && isSeFloridaAtlantic(lat, lng))) && !_isBottom && depth != null && depth > 0 && depth < 50){
     confidence = Math.max(confidence, 82);
     freshnessAnnotations.push({ variable: "depth",
       message: "Too far inshore for an offshore species — the bite is at the shelf edge." });
@@ -4382,7 +4390,7 @@ function scoreCell(lat, lng, speciesId){
   const droppedKeys = new Set((fr?.droppedFactors || []).map(f => f.key));
   const allFactors = [
     {key:"temp", name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: (_isBottom || _isDemersal) ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
-    {key:"depth", name: (speciesId === "mahi" || speciesId === "sailfish") ? "Water depth" : "Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
+    {key:"depth", name: ((W.structure || 0) === 0 && (speciesId === "mahi" || speciesId === "sailfish" || speciesId === "skipjack" || speciesId === "wahoo")) ? "Water depth" : "Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
     {key:"structure", name:"Bottom structure",   weight:(W.structure||0), score:structureScore,
      raw: structureScore > 0.05 ? `${Math.round(structureScore*100)}% · edge/slope` : "flat bottom"},
     {key:"pres", name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
