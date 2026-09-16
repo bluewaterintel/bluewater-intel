@@ -150,10 +150,10 @@ const ENC_SPECIES = [
   },
   {
     id:"swordfish", name:"Swordfish", color:"#7c2d8e", cat:"offshore",
-    snippet:"The gladiators of the deep. Daytime deep-drop or nighttime drift fishery in 1,000-2,000 ft. Hatteras Hole is the East Coast hot spot.",
-    facts:{ size:"100-500 lbs", record:"1,182 lbs (Chile)", legal:"47\" lower jaw fork length", season:"Regional — SE FL/Keys/Bahamas peak in WINTER (Dec-Mar); NC & Mid-Atlantic canyons are a summer-fall Gulf Stream fishery (Jul-Oct); Gulf late spring-summer" },
+    snippet:"The gladiators of the deep. Canyon daytime drops in 1,500-2,000 ft; Gulf of Maine is a shallower basin fishery around 600-1,000 ft. Hatteras Hole is the East Coast canyon hot spot.",
+    facts:{ size:"100-500 lbs", record:"1,182 lbs (Chile)", legal:"47\" lower jaw fork length", season:"Regional — SE FL/Keys/Bahamas peak in WINTER (Dec-Mar); NC & Mid-Atlantic canyons are a summer-fall Gulf Stream fishery (Jul-Oct); Gulf of Maine basins Jul-Sep; Gulf of Mexico late spring-summer" },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"Hatteras Hole, Norfolk Canyon, Hudson Canyon. Daytime swordfishing in 1,500-2,000 ft. Night fishing in 1,000-1,500 ft over the canyon edges.",
+    where:"Hatteras Hole, Norfolk Canyon, Hudson Canyon: daytime 1,500-2,000 ft, night 1,000-1,500 ft on the walls. Gulf of Maine: Wilkinson and Jordan basins at 100-150 fathoms (600-900 ft), including the historic summer harpoon bite — not those canyon walls, and not Jeffrey's/Stellwagen skinny water.",
     tackle:[
       "80-130 lb class swordfish rods (electric or manual)",
       "Heavy-duty deep-drop electric reel or 80-class manual 2-speed",
@@ -171,6 +171,7 @@ const ENC_SPECIES = [
       "Night: drift over the canyon edge with baits at 100, 200, 300, 400 ft",
       "Stop the drift if you mark fish — don't troll past them",
       "Hatteras Hole: SE of Hatteras Inlet, 35.08°N 75.42°W",
+      "Gulf of Maine: night-drop or harpoon over Wilkinson/Jordan (~600-1,000 ft). The 1,500-2,000 ft electric-reel drop is Hudson/Hatteras/Miami",
       "Bites are subtle — sometimes just a flutter on the rod tip",
       "Always fish strobes — sword visibility is very low at depth"],
   },

@@ -86,7 +86,8 @@ const PREDICT_SPECIES_PREFS = {
   sailfish:     {tempIdeal:[74,82], tempWorking:[70,88], chlorPref:"any",     depthBands:[[15,250]],   breakPref:"any"  },
   // Swordfish night fishery works the canyon lip at ~1,000 ft (≈300 m); daytime
   // drops go deeper. Lower bound 250 m (was 300) so the classic canyon-edge bite
-  // isn't scored as out-of-band.
+  // isn't scored as out-of-band. Gulf of Maine is a basin/ledge fishery, not
+  // these walls — NE_SPECIES_PREFS.swordfish covers Wilkinson/Jordan depths.
   swordfish:    {tempIdeal:[64,72], tempWorking:[58,76], chlorPref:"any",     depthBands:[[250,2000]], breakPref:"any"  },
   // Atlantic canyon yellowfin. 150 m floor keeps the Mid-Atlantic shelf
   // (VA Beach 108 ft) from lighting up; 82°F working cap is Stream water.
@@ -973,6 +974,8 @@ const REGIONAL_SEASONS = {
   // and NC canyon summer–fall (Jul–Oct); Hatteras Hole also fishes winter daytime
   // drops; Gulf late spring–summer.
   swordfish: [
+    {centerLat: 42.7, centerLng: -69.5, radiusNm: 130, label: "Gulf of Maine basins",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 40.5, centerLng: -70.0, radiusNm: 240, label: "New England canyons",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 38.3, centerLng: -73.3, radiusNm: 210, label: "Mid-Atlantic canyons",
@@ -1341,6 +1344,14 @@ const NE_SPECIES_PREFS = {
   // not the 400 ft basin. The national [[18,130]] m table is the NJ/NY winter
   // deep-wreck run and must not light 400 ft water off Portland as excellent.
   blackseabass: { tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high", depthBands:[[10,46]], breakPref:"stable", demersal:true },
+  // GOM swordfish: Wilkinson / Jordan / Georges basins at ~100-150 fathoms
+  // (600-900 ft), including the historic summer harpoon bite. The national
+  // [[250,2000]] m table is Hudson / Hatteras / Miami canyon walls (1,000-
+  // 2,000 ft). A 250 m floor + 12 m shallow decay zeros anything under
+  // ~780 ft, which is most of the GOM. 180 m (~590 ft / 100 fm) is the GOM
+  // contour; 450 m still covers Georges Basin without asking for a 2,000 ft
+  // wall that does not exist here. Jeffrey's / Stellwagen tops stay out.
+  swordfish: { tempIdeal:[60,70], tempWorking:[56,74], chlorPref:"any", depthBands:[[180,450]], breakPref:"any" },
 };
 
 // Gulf of Mexico pelagics (Loop Current, LA lumps/floaters, TX breaks).
