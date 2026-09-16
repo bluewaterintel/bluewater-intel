@@ -3912,8 +3912,13 @@ function scoreCell(lat, lng, speciesId){
       bandScore = Math.max(0, 1 - below / 12);
     } else {
       // TOO DEEP: gentler decay (a species can stray a bit deeper than ideal).
+      // New England sea bass: 120 m of slack from a 46 m ceiling still scored
+      // 415 ft GOM water as a depth match. Drop them over ~32 m instead.
       const above = depth - bMax;
-      bandScore = Math.max(0, 1 - above / 120);
+      const deepDecayM = (speciesId === "blackseabass"
+        && typeof isNewEnglandBluefinGrounds === "function"
+        && isNewEnglandBluefinGrounds(lat, lng)) ? 32 : 120;
+      bandScore = Math.max(0, 1 - above / deepDecayM);
     }
     if(bandScore > depthScore) depthScore = bandScore;
   }
@@ -6530,7 +6535,14 @@ function speciesRunRangeNm(speciesId, portObj){
   const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
   const cat = sp ? sp.cat : null;
   if(!cat || cat === "offshore" || cat === "all") return portMax;
-  const cap = SPECIES_RUN_NM[speciesId] ?? SPECIES_RUN_DEFAULT_NM[cat];
+  let cap = SPECIES_RUN_NM[speciesId] ?? SPECIES_RUN_DEFAULT_NM[cat];
+  // Gulf of Maine / Cape sea bass are a nearshore wreck fishery, not a 70 nm
+  // winter-wreck run. Keep the Mid-Atlantic 70 nm cap south of the NE box.
+  if(speciesId === "blackseabass" && portObj
+     && typeof isNewEnglandBluefinGrounds === "function"
+     && isNewEnglandBluefinGrounds(portObj.lat, portObj.lng)){
+    cap = 45;
+  }
   return cap == null ? portMax : Math.min(cap, portMax);
 }
 

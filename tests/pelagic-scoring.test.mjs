@@ -11,6 +11,7 @@ const {
   isNewEnglandBluefinGrounds, NE_SPECIES_PREFS, nearestStructureNm, CANYONS,
   GULF_SPECIES_PREFS, usesGulfSpeciesPrefs, isGulfContext,
   gulfYellowfinStructureLift, gulfYellowfinStructureKind, pickTopHotspotBadges,
+  speciesRunRangeNm,
 } = loadBw([
     "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
     "PACIFIC_SPECIES_PREFS", "SEFL_SPECIES_PREFS", "REGIONAL_SEASONS",
@@ -21,6 +22,7 @@ const {
     "isNewEnglandBluefinGrounds", "NE_SPECIES_PREFS", "nearestStructureNm", "CANYONS",
     "GULF_SPECIES_PREFS", "usesGulfSpeciesPrefs", "isGulfContext",
     "gulfYellowfinStructureLift", "gulfYellowfinStructureKind", "pickTopHotspotBadges",
+    "speciesRunRangeNm",
   ]);
 
 const { check, done } = makeChecker();
@@ -44,13 +46,13 @@ function pelagicTempScore(sst, p) {
   return Math.min(1, tempScore * (0.7 + 0.4 * warmBias));
 }
 
-function depthBandScore(depthM, bands) {
+function depthBandScore(depthM, bands, deepDecayM = 120) {
   let best = 0;
   for (const [bMin, bMax] of bands) {
     let s;
     if (depthM >= bMin && depthM <= bMax) s = 1;
     else if (depthM < bMin) s = Math.max(0, 1 - (bMin - depthM) / 12);
-    else s = Math.max(0, 1 - (depthM - bMax) / 120);
+    else s = Math.max(0, 1 - (depthM - bMax) / deepDecayM);
     if (s > best) best = s;
   }
   return best;
@@ -359,6 +361,37 @@ console.log("\nNew England bluefin scores Stellwagen / Jeffrey's, not the beach:
   const dBeach = nearestStructureNm(glo.lat, glo.lng - 0.05, "bluefin");
   check("a Stellwagen cell is on bluefin structure", dBank != null && dBank < 2);
   check("a Gloucester-harbor cell is farther from the banks", dBeach != null && dBeach > 8);
+}
+
+console.log("\nGulf of Maine black sea bass stay on nearshore wrecks, not 400 ft basin:");
+{
+  const portland = PORTS["Portland, ME"];
+  const vb = PORTS["Virginia Beach, VA"];
+  const ne = NE_SPECIES_PREFS.blackseabass;
+  const atl = PREDICT_SPECIES_PREFS.blackseabass;
+  check("Portland is in the New England habitat box",
+    isNewEnglandBluefinGrounds(portland.lat, portland.lng));
+  check("Virginia Beach stays on the national BSB table",
+    !isNewEnglandBluefinGrounds(vb.lat, vb.lng));
+  check("NE BSB ceiling is ~150 ft, not 427 ft", ne.depthBands[0][1] * 3.28084 <= 155);
+  check("80 ft Portland wreck is full credit",
+    depthBandScore(80 / 3.28084, ne.depthBands) === 1);
+  check("120 ft ledge edge is still fishable",
+    depthBandScore(120 / 3.28084, ne.depthBands) >= 0.9);
+  check("415 ft GOM water is not a depth match",
+    depthBandScore(415 / 3.28084, ne.depthBands, 32) < 0.15);
+  check("VA 115 ft wreck stays full credit on the national table",
+    depthBandScore(115 / 3.28084, atl.depthBands) === 1);
+  check("NJ winter 400 ft wreck stays in-band south of New England",
+    depthBandScore(400 / 3.28084, atl.depthBands) >= 0.9);
+  check("Portland BSB run is a nearshore wreck day, not 70 nm",
+    speciesRunRangeNm("blackseabass", portland) <= 45);
+  check("VA BSB keeps the 70 nm winter-wreck run",
+    speciesRunRangeNm("blackseabass", vb) >= 70);
+  const jeffs = CANYONS.filter(c => /jeffrey/i.test(c.name));
+  check("Jeffrey's Ledge is listed once", jeffs.length === 1);
+  check("the duplicate Plattes Bank pin is gone",
+    !CANYONS.some(c => /platt/i.test(c.name)));
 }
 
 console.log("\nVA Beach sea bass / fluke weight the Triangle Wrecks, not open sand:");
