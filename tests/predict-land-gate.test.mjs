@@ -34,7 +34,7 @@ function runWithFakeBathy(grid) {
   let bundle = "";
   for (const f of FILES) bundle += readFileSync(join(ROOT, f), "utf8") + "\n;\n";
   bundle += `PREDICT_BATHY_GRID = ${JSON.stringify(grid)};\n`;
-  bundle += `globalThis.__exported = { isOnLand, isPredictWater, predictDepth, pickTopHotspotBadges };\n`;
+  bundle += `globalThis.__exported = { isOnLand, isPredictWater, predictDepth, pickTopHotspotBadges, predictHeatCellVisible };\n`;
   vm.runInContext(bundle, vm.createContext(sandbox), { filename: "bw-land-gate.js" });
   return sandbox.__exported;
 }
@@ -79,6 +79,23 @@ console.log("\nCape Cod Bay in-bay water still scores:");
   };
   const { isPredictWater } = runWithFakeBathy(fakeGrid);
   check("Cape Cod Bay box stays predict water with positive bathy", isPredictWater(lat, lng));
+}
+
+console.log("\nHeat visibility gate matches scoring (Gulf of Maine nearshore):");
+{
+  const fakeGrid = {
+    step: 0.02,
+    minLat: 42.5,
+    minLng: -71.2,
+    nLat: 40,
+    nLng: 40,
+    depth: new Array(1600).fill(18),
+  };
+  const { predictHeatCellVisible } = runWithFakeBathy(fakeGrid);
+  check("Nearshore Gulf of Maine water is visible for black sea bass",
+    predictHeatCellVisible(43.05, -70.55, "blackseabass"));
+  check("Beach coords fail on land polygon",
+    !predictHeatCellVisible(43.32, -70.58, "blackseabass"));
 }
 
 done();

@@ -3437,6 +3437,19 @@ function isPredictWater(lat, lng){
   return (typeof isFishableWater === "function") ? isFishableWater(lat, lng) : false;
 }
 
+// Same land/habitat gates the async grid uses — shared with the heat canvas bake
+// so numbered badges never land where the painted field is masked off.
+function predictHeatCellVisible(lat, lng, speciesId){
+  if(typeof isPredictWater === "function" && !isPredictWater(lat, lng)) return false;
+  if(speciesId && typeof classifyWaterType === "function" && typeof speciesAllowedInWater === "function"){
+    if(!speciesAllowedInWater(speciesId, classifyWaterType(lat, lng))) return false;
+  }
+  if(speciesId && typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(speciesId, lat, lng)){
+    return false;
+  }
+  return true;
+}
+
 function decimateOceanPts(pts, max){
   if(pts.length <= max) return pts;
   const out = [];
@@ -4334,6 +4347,14 @@ function scoreCell(lat, lng, speciesId){
         lift = gulfYellowfinStructureLift(hit.canyon);
       }
       finalScore = finalScore * (1 + lift * prox);
+      // Demersal reef/wreck fish: open flat bottom away from mapped structure
+      // should not read as "excellent" just because temp/season align.
+      if(prefs.demersal && prefs.breakPref === "stable" && hit.nm > 12){
+        const far = Math.min(1, (hit.nm - 12) / 35);
+        finalScore *= (1 - 0.28 * far);
+      }
+    } else if(prefs.demersal && prefs.breakPref === "stable"){
+      finalScore *= 0.78;
     }
   }
 
@@ -6447,9 +6468,11 @@ function cmpHotspotStable(a, b){
 // genuinely different areas. Shared by renderPrediction and topBriefHotspots so
 // the banner run plan and map badges always agree. Badge numbers (#1, #2, #3)
 // always follow raw bite score — highest % is #1.
-function pickTopHotspotBadges(hotspots, limit){
+function pickTopHotspotBadges(hotspots, limit, speciesId){
   limit = limit || 3;
   if(!Array.isArray(hotspots) || !hotspots.length) return [];
+  const sid = speciesId ||
+    (typeof activeSpId !== "undefined" ? activeSpId : null);
   const chosen = [];
   const sepFor = (cell) => {
     const d = (typeof cell.distNm === "number") ? cell.distNm : 20;
@@ -6458,7 +6481,9 @@ function pickTopHotspotBadges(hotspots, limit){
   const ranked = hotspots.slice().sort(cmpHotspotStable);
   for(const cell of ranked){
     if(chosen.length >= limit) break;
-    if(typeof isPredictWater === "function" && !isPredictWater(cell.lat, cell.lng)) continue;
+    if(typeof predictHeatCellVisible === "function"){
+      if(!predictHeatCellVisible(cell.lat, cell.lng, sid)) continue;
+    } else if(typeof isPredictWater === "function" && !isPredictWater(cell.lat, cell.lng)) continue;
     const minSep = sepFor(cell);
     const farEnough = chosen.every(c => nmBetween(c.lat, c.lng, cell.lat, cell.lng) >= minSep);
     if(farEnough) chosen.push(cell);
@@ -6812,7 +6837,14 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
             if(speciesId && Array.isArray(c.fish) && c.fish.length && !c.fish.includes(speciesId)) continue;
             const s = scoreWithPenalty(c.lat, c.lng);
             if(!s || !s.result || s.result.score < PREDICT_HOTSPOT_SCORE_MIN) continue;
-            hotspotGrid.push({ lat: c.lat, lng: c.lng, distNm: s.distNm, ...s.result });
+            const pin = { lat: c.lat, lng: c.lng, distNm: s.distNm, ...s.result };
+            hotspotGrid.push(pin);
+            // Named grounds are not on the 0.1° lattice — inject into the heat
+            // field so badges and the painted map stay aligned.
+            if(s.result.score >= PREDICT_HEAT_SCORE_MIN){
+              const dup = heatGrid.some(h => Math.abs(h.lat - c.lat) < 1e-5 && Math.abs(h.lng - c.lng) < 1e-5);
+              if(!dup) heatGrid.push(pin);
+            }
           }
         }
         refineList = hotspotGrid.slice().sort(cmpHotspotStable);
@@ -7448,50 +7480,17 @@ const HeatCanvasLayer = L.Layer.extend({
         const score = sLo + (sHi - sLo) * fLat;  // interp along lat
         if(score < PREDICT_HEAT_SCORE_MIN) continue;
 
-        // ── REAL bathymetry land mask (authoritative when loaded) ──
-        // CUDEM/ETOPO store land as depth 0 and water as depth > 0. When the bathy
-        // grid is loaded for this area (it is during a prediction render), this
-        // is a precise, basemap-independent land cut for coastlines, bays,
-        // sounds and rivers everywhere from Maine to Southern California — so the heat never
-        // paints over land even when the satellite basemap pixel is ambiguous
-        // (turbid bay water, shadows, vegetation reading as "water").
-        // Prefer the stable port-scoped predict bathy grid (same as scoring).
-        // Viewport BATHY_GRID can briefly lag during pan; BlueTopo hillshade
-        // then mislabels shelf water as land and the heat field goes blank.
-        let bathyWater = false;
-        let _rd = null;
-        if(typeof depthAtFromGrid === "function" && typeof PREDICT_BATHY_GRID !== "undefined" && PREDICT_BATHY_GRID){
-          _rd = depthAtFromGrid(PREDICT_BATHY_GRID, plat, plng);
-        }
-        if((_rd == null || !isFinite(_rd)) && typeof realDepthAt === "function"){
-          _rd = realDepthAt(plat, plng);
-        }
-        if(_rd != null && isFinite(_rd) && _rd <= 0) continue;
-        if(_rd != null && isFinite(_rd) && _rd > 0) bathyWater = true;
-
-        // ── Water/land mask — basemap pixel first, polygon fallback ──
-        // When bathy confirms water, skip basemap misreads (BlueTopo hillshade
-        // often classifies shelf pixels as land).
-        let isWater = null;
-        if(!bathyWater && useBasemap){
-          // Bake pixels are container pixels shifted by the padding. Anything
-          // in the padded skirt falls outside the snapshot, where isWater
-          // returns null and the polygon check below takes over.
-          isWater = BasemapSampler.isWater(x - padX, y - padY);
-        }
-        if(isWater === false) continue;              // definitive land
-        if(isWater === null && haveLandCheck){
-          // Sampler couldn't decide → fall back to polygon
-          if(!isFishableWater(plat, plng)) continue;
-        }
-        if(haveSpeciesMask){
-          if(!speciesHabitat.includes(classifyWaterType(plat, plng))) continue;
-        }
-        // Geographic range check — pixels outside the species lat band are
-        // transparent. Uses the central helper so per-region (Atlantic/Gulf)
-        // species like bluefin tuna are filtered correctly.
-        if(haveLatRange){
-          if(!speciesAllowedAtLat(sid, plat, plng)) continue;
+        // ── Land/habitat mask — MUST match computePredictionGridAsync ──
+        // Basemap pixels often call nearshore Gulf of Maine water "land" while
+        // the grid still scores those cells — which put #1/#2/#3 badges on the
+        // coast with no heat underneath. isPredictWater() + species gates are
+        // the same rules scoreCell() uses.
+        if(typeof predictHeatCellVisible === "function"){
+          if(!predictHeatCellVisible(plat, plng, sid)) continue;
+        } else {
+          if(haveLandCheck && !isFishableWater(plat, plng)) continue;
+          if(haveSpeciesMask && !speciesHabitat.includes(classifyWaterType(plat, plng))) continue;
+          if(haveLatRange && !speciesAllowedAtLat(sid, plat, plng)) continue;
         }
 
         // Feathered score floor: instead of a hard on/off at the cutoff (which
@@ -10157,7 +10156,7 @@ function drawPrediction(){
         return;
       }
       flushPredictLoadError();
-      const badges = pickTopHotspotBadges(hotspots, 3);
+      const badges = pickTopHotspotBadges(hotspots, 3, activeSpId);
       _predictResultCache = {
         key: predictResultCacheKey(),
         heatGrid, hotspots, badges,
@@ -10208,7 +10207,7 @@ function renderPrediction(grid, species, final, heatGridOverride, gridStep, grid
   // ── Top 3 hotspot badges (final paint only) ──
   // Use the precomputed badge list when provided (cached grid) so zoom/pan
   // never re-ranks the pins. Otherwise pick once from the scored hotspots.
-  const chosen = Array.isArray(badgesOverride) ? badgesOverride : pickTopHotspotBadges(hotspots, 3);
+  const chosen = Array.isArray(badgesOverride) ? badgesOverride : pickTopHotspotBadges(hotspots, 3, species && species.id);
   chosen.forEach((cell, i) => {
     const badge = L.marker([cell.lat, cell.lng], {
       icon: L.divIcon({
