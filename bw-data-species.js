@@ -1341,6 +1341,9 @@ const NE_SPECIES_PREFS = {
   // not the 400 ft basin. The national [[18,130]] m table is the NJ/NY winter
   // deep-wreck run and must not light 400 ft water off Portland as excellent.
   blackseabass: { tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high", depthBands:[[10,46]], breakPref:"stable", demersal:true },
+  // GOM pollock: Jeffreys / Cashes / Platts ledges, not the whole basin as
+  // "excellent" and not the beach. National [[80,300]] m painted 1000 ft water.
+  pollock: { tempIdeal:[44,54], tempWorking:[40,60], chlorPref:"high", depthBands:[[50,160]], breakPref:"stable", demersal:true },
 };
 
 // Gulf of Mexico pelagics (Loop Current, LA lumps/floaters, TX breaks).

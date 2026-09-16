@@ -4876,6 +4876,7 @@ function barrierCoastLng(lat){
 // longitude) from the barrier coastline to the shelf break (where depth
 // rapidly drops from ~200m to >1000m). Captures real shelf width variation.
 function atlanticShelfWidthDeg(lat){
+  if(lat > 43.2) return 0.50;   // Gulf of Maine — 200 m inside ~30 nm, not Georges
   if(lat > 42.5) return 1.6;    // Georges Bank — very wide
   if(lat > 41.5) return 1.4;
   if(lat > 40.5) return 1.2;
@@ -4932,8 +4933,12 @@ function gulfShelfWidthDeg(lng){
 
 const MAIN_COAST = [
   // ── MAINE/NH/MA northern coast (Eastport south to Cape Ann) ──
-  [44.90, -66.95], [44.50, -67.40], [44.10, -68.20], [43.85, -68.95],
-  [43.65, -69.65], [43.30, -70.20], [42.95, -70.75], [42.65, -70.62],
+  // Follow the MAINLAND, not a chord across Casco/Saco. The old
+  // [43.65,-69.65]→[43.30,-70.20] cut sat EAST of Portland and classified
+  // Casco Bay as land — Bite Map could only paint a thin strip seaward of it.
+  [44.90, -66.95], [44.70, -67.35], [44.40, -68.10], [44.15, -68.70],
+  [43.90, -69.40], [43.75, -69.75], [43.66, -70.25], [43.55, -70.24],
+  [43.40, -70.43], [43.08, -70.72], [42.88, -70.80], [42.65, -70.62],
   // ── MA outer coast: Cape Ann → MA Bay (note: MA_MAINLAND_FILL covers
   // Boston/South Shore mainland separately so we can keep MAIN_COAST as a
   // clean arc here without trying to trace the harbor in detail) ──
@@ -5148,6 +5153,7 @@ const FISHABLE_BAY_SOUND_BOXES = [
   {b:[34.55, 34.85, -76.55, -76.30], depth: 4},   // Core Sound / Back Sound
   {b:[40.95, 41.20, -73.70, -71.95], depth: 25},  // Long Island Sound
   {b:[41.78, 42.03, -70.55, -70.15], depth: 35},  // Cape Cod Bay (tightened from coastal overlap)
+  {b:[43.55, 43.78, -70.18, -69.92], depth: 18},  // Casco Bay water (east of Portland peninsula)
   {b:[41.45, 41.75, -71.45, -71.20], depth: 18},  // Narragansett
   {b:[41.45, 41.70, -71.05, -70.70], depth: 20},  // Buzzards
   {b:[25.40, 25.75, -80.25, -80.15], depth: 4},   // Biscayne
@@ -6488,6 +6494,16 @@ function maxRangeForPort(portObj){
   return portFishingRangeNm(portObj);
 }
 
+// Ocean/bathy fetch radius. Scoring still uses speciesRunRangeNm; this only
+// sizes CUDEM + SST. A 140 nm box after the 45°N envelope covers too many
+// tiles from Portland and times out (Cape Cod still fits). Cap the Northeast.
+function predictInputsRangeNm(portObj){
+  const portMax = portFishingRangeNm(portObj);
+  if(!portObj || !Number.isFinite(portObj.lat)) return portMax;
+  if(portObj.lat >= 41.0) return Math.min(portMax, 75);
+  return portMax;
+}
+
 // ── Species run range (nm) ──────────────────────────────────────────────────
 // portFishingRangeNm() answers "how far will a boat leave this port," which is
 // an OFFSHORE number. Applied to inshore/nearshore species it put flounder
@@ -6854,6 +6870,9 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   // cap). The DATA bbox below deliberately stays on the full port range so the
   // bathymetry/ocean grid remains port-scoped and stable across species switches.
   const portRange = maxRangeForPort(port);
+  const dataRange = (typeof predictInputsRangeNm === "function")
+    ? predictInputsRangeNm(port)
+    : portRange;
   const maxRange = speciesRunRangeNm(speciesId, port);
   // Full-coast extent clamp. The Atlantic/Gulf box (default) is unchanged, so
   // East Coast behavior is identical. Pacific ports get their own West-Coast
@@ -6875,8 +6894,8 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   let step, latMin, latMax, lngMin, lngMax, ROWS_PER_FRAME;
   let bboxLatMin = LAT_MIN, bboxLatMax = LAT_MAX, bboxLngMin = LNG_MIN, bboxLngMax = LNG_MAX;
   if(port){
-    const degLat = (portRange / 60) + 0.15;
-    const degLng = (portRange / (60 * Math.cos(port.lat * Math.PI / 180))) + 0.15;
+    const degLat = (dataRange / 60) + 0.15;
+    const degLng = (dataRange / (60 * Math.cos(port.lat * Math.PI / 180))) + 0.15;
     bboxLatMin = Math.max(LAT_MIN, port.lat - degLat);
     bboxLatMax = Math.min(LAT_MAX, port.lat + degLat);
     bboxLngMin = Math.max(LNG_MIN, port.lng - degLng);
@@ -18344,7 +18363,9 @@ async function ensureBriefOceanData(pinLL, portObj){
     const LAT_MIN = env.latMin, LAT_MAX = env.latMax, LNG_MIN = env.lngMin, LNG_MAX = env.lngMax;
     let latMin, latMax, lngMin, lngMax;
     if(portObj){
-      const maxRange = (typeof maxRangeForPort === "function") ? maxRangeForPort(portObj) : 100;
+      const maxRange = (typeof predictInputsRangeNm === "function")
+        ? predictInputsRangeNm(portObj)
+        : ((typeof maxRangeForPort === "function") ? maxRangeForPort(portObj) : 100);
       const degLat = (maxRange / 60) + 0.15;
       const degLng = (maxRange / (60 * Math.cos(portObj.lat * Math.PI / 180))) + 0.15;
       latMin = portObj.lat - degLat; latMax = portObj.lat + degLat;
@@ -19624,7 +19645,9 @@ function selectPort(name, opts){
 // from init, selectPort, and tab-focus recovery — idempotent and best-effort.
 function portOceanBbox(p){
   if(!p) return null;
-  const maxRange = (typeof maxRangeForPort === "function") ? maxRangeForPort(p) : 100;
+  const maxRange = (typeof predictInputsRangeNm === "function")
+    ? predictInputsRangeNm(p)
+    : ((typeof maxRangeForPort === "function") ? maxRangeForPort(p) : 100);
   const degLat = (maxRange / 60) + 0.15;
   const degLng = (maxRange / (60 * Math.cos(p.lat * Math.PI / 180))) + 0.15;
   const env = predictCoastLimits(p.lat, p.lng);

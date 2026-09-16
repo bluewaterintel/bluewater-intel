@@ -11,7 +11,8 @@ const {
   isNewEnglandBluefinGrounds, NE_SPECIES_PREFS, nearestStructureNm, CANYONS,
   GULF_SPECIES_PREFS, usesGulfSpeciesPrefs, isGulfContext,
   gulfYellowfinStructureLift, gulfYellowfinStructureKind, pickTopHotspotBadges,
-  speciesRunRangeNm, predictCoastLimits, portOceanBbox,
+  speciesRunRangeNm, predictCoastLimits, portOceanBbox, isOnLand, isPredictWater,
+  predictInputsRangeNm,
 } = loadBw([
     "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
     "PACIFIC_SPECIES_PREFS", "SEFL_SPECIES_PREFS", "REGIONAL_SEASONS",
@@ -22,7 +23,8 @@ const {
     "isNewEnglandBluefinGrounds", "NE_SPECIES_PREFS", "nearestStructureNm", "CANYONS",
     "GULF_SPECIES_PREFS", "usesGulfSpeciesPrefs", "isGulfContext",
     "gulfYellowfinStructureLift", "gulfYellowfinStructureKind", "pickTopHotspotBadges",
-    "speciesRunRangeNm", "predictCoastLimits", "portOceanBbox",
+    "speciesRunRangeNm", "predictCoastLimits", "portOceanBbox", "isOnLand", "isPredictWater",
+    "predictInputsRangeNm",
   ]);
 
 const { check, done } = makeChecker();
@@ -394,6 +396,18 @@ console.log("\nGulf of Maine black sea bass stay on nearshore wrecks, not 400 ft
   const bb = portOceanBbox(portland);
   check("Portland ocean bbox is not clipped at 43.5°N", bb.latMax > 43.5);
   check("Portland bbox includes water north of the harbor", bb.latMax >= portland.lat);
+  check("Casco Bay water is not classified as land",
+    !isOnLand(43.67, -70.12));
+  check("Casco Bay is predict-water for scoring",
+    isPredictWater(43.67, -70.12));
+  check("Portland peninsula stays land", isOnLand(43.66, -70.28));
+  check("Northeast ocean fetch is capped so Maine does not time out",
+    predictInputsRangeNm(portland) <= 75);
+  const nePol = NE_SPECIES_PREFS.pollock;
+  check("NE pollock is a ledge fish, not 1000 ft basin",
+    nePol && nePol.depthBands[0][1] <= 160);
+  check("NE pollock floor stays off the beach",
+    nePol.depthBands[0][0] >= 40);
   const jeffs = CANYONS.filter(c => /jeffrey/i.test(c.name));
   check("Jeffrey's Ledge is listed once", jeffs.length === 1);
   check("the duplicate Plattes Bank pin is gone",
