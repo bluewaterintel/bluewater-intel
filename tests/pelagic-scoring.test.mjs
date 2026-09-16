@@ -400,6 +400,49 @@ console.log("\nGulf of Maine black sea bass stay on nearshore wrecks, not 400 ft
     !CANYONS.some(c => /platt/i.test(c.name)));
 }
 
+console.log("\nGulf of Maine swordfish is a basin fishery, not a 2,000 ft canyon wall:");
+{
+  const portland = PORTS["Portland, ME"];
+  const hat = PORTS["Hatteras, NC"];
+  const ne = NE_SPECIES_PREFS.swordfish;
+  const atl = PREDICT_SPECIES_PREFS.swordfish;
+  check("Portland uses the New England swordfish table",
+    isNewEnglandBluefinGrounds(portland.lat, portland.lng) && !!ne);
+  check("Hatteras stays on the canyon table",
+    !isNewEnglandBluefinGrounds(hat.lat, hat.lng));
+  check("NE swordfish floor is ~100 fathoms, not 250 m canyon lip",
+    ne.depthBands[0][0] <= 180 && ne.depthBands[0][0] >= 160);
+  check("NE swordfish does not require 2,000 ft walls",
+    ne.depthBands[0][1] <= 500);
+  check("830 ft Wilkinson Basin is full credit in the GOM",
+    depthBandScore(830 / 3.28084, ne.depthBands) === 1);
+  check("650 ft GOM night-drop is in-band",
+    depthBandScore(650 / 3.28084, ne.depthBands) === 1);
+  check("200 ft Jeffrey's Ledge top is not sword water",
+    depthBandScore(200 / 3.28084, ne.depthBands) === 0);
+  check("120 ft Stellwagen is not sword water",
+    depthBandScore(120 / 3.28084, ne.depthBands) === 0);
+  check("Hudson 1,800 ft daytime drop stays in-band on the canyon table",
+    depthBandScore(1800 / 3.28084, atl.depthBands) === 1);
+  check("650 ft is too shallow on the canyon table",
+    depthBandScore(650 / 3.28084, atl.depthBands) < 0.2);
+  const wilk = CANYONS.find(c => c.name === "Wilkinson Basin");
+  const jordan = CANYONS.find(c => c.name === "Jordan Basin");
+  const jeff = CANYONS.find(c => /jeffrey/i.test(c.name));
+  const stell = CANYONS.find(c => c.name.includes("Stellwagen"));
+  check("Wilkinson Basin is mapped swordfish water",
+    wilk && wilk.fish.includes("swordfish"));
+  check("Jordan Basin is mapped swordfish water",
+    jordan && jordan.fish.includes("swordfish"));
+  check("Jeffrey's Ledge is not tagged swordfish",
+    jeff && !jeff.fish.includes("swordfish"));
+  check("Stellwagen is not tagged swordfish",
+    stell && !stell.fish.includes("swordfish"));
+  const gomSeason = getRegionalSeasons("swordfish", 42.73, -69.60);
+  check("Wilkinson Basin September swordfish is peak",
+    seasonAlignmentLabel(gomSeason.Sep / 3) === "peak");
+}
+
 console.log("\nVA Beach sea bass / fluke weight the Triangle Wrecks, not open sand:");
 {
   const tri = CANYONS.find(c => c.name === "Triangle Wrecks");
