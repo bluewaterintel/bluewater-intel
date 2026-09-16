@@ -1337,6 +1337,10 @@ const SEFL_SPECIES_PREFS = {
 // giants keep the three-band Atlantic table (18-40 m inshore troll).
 const NE_SPECIES_PREFS = {
   bluefin: { tempIdeal:[58,68], tempWorking:[52,72], chlorPref:"edge", depthBands:[[24,180]], breakPref:"stable" },
+  // GOM / Cape Cod sea bass: summer-fall wrecks and rocky bottom ~40-150 ft,
+  // not the 400 ft basin. The national [[18,130]] m table is the NJ/NY winter
+  // deep-wreck run and must not light 400 ft water off Portland as excellent.
+  blackseabass: { tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high", depthBands:[[10,46]], breakPref:"stable", demersal:true },
 };
 
 // Gulf of Mexico pelagics (Loop Current, LA lumps/floaters, TX breaks).
