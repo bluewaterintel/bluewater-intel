@@ -4928,7 +4928,7 @@ function gulfShelfWidthDeg(lng){
 // as "land".
 //
 // Additional polygons handle separate landmasses: Long Island, Cape Cod arm,
-// FL Keys chain.
+// FL Keys chain, Gulf of Maine islands (Mount Desert, Deer Isle, etc.).
 // ════════════════════════════════════════════════════════════════════════════
 
 const MAIN_COAST = [
@@ -5084,6 +5084,80 @@ const NANTUCKET = [
   [41.30, -70.20],   // back to start
 ];
 
+// Mount Desert Island, ME. MAIN_COAST chord Schoodic→Stonington cuts the
+// northern half as "mainland" but leaves the southern lobe (Southwest Harbor,
+// Northeast Harbor, Seawall, Bass Harbor Head) as ocean — CUDEM then paints
+// a BSB hotspot on town land. Trace the whole island, including that lobe.
+const MOUNT_DESERT_ISLAND = [
+  [44.430, -68.280], // Hulls Cove
+  [44.392, -68.183], // Bar Harbor
+  [44.352, -68.172], // Schooner Head
+  [44.312, -68.174], // Otter Point
+  [44.268, -68.248], // east of Seawall
+  [44.238, -68.292], // Seawall
+  [44.221, -68.337], // Bass Harbor Head
+  [44.238, -68.375], // Bernard / Bass Harbor west
+  [44.280, -68.360], // west of Southwest Harbor
+  [44.318, -68.415], // Seal Cove
+  [44.365, -68.418], // Pretty Marsh
+  [44.405, -68.360], // Indian Point
+  [44.430, -68.305], // Town Hill
+  [44.430, -68.280],
+];
+
+// Deer Isle, ME (Stonington sits on the south shore). The port itself was
+// classified as water, so Bite Map could pin the town.
+const DEER_ISLE = [
+  [44.298, -68.685], // Little Deer Isle north
+  [44.270, -68.605], // Eggemoggin Reach NE
+  [44.175, -68.575], // east shore
+  [44.148, -68.655], // Stonington south shore
+  [44.155, -68.720], // southwest
+  [44.230, -68.745], // west shore
+  [44.285, -68.720], // northwest
+  [44.298, -68.685],
+];
+
+// Swans Island, south of MDI.
+const SWANS_ISLAND = [
+  [44.195, -68.430],
+  [44.185, -68.380],
+  [44.145, -68.390],
+  [44.140, -68.455],
+  [44.170, -68.475],
+  [44.195, -68.430],
+];
+
+// Isle au Haut, south of Stonington.
+const ISLE_AU_HAUT = [
+  [44.100, -68.625],
+  [44.080, -68.600],
+  [44.040, -68.615],
+  [44.045, -68.655],
+  [44.090, -68.655],
+  [44.100, -68.625],
+];
+
+// Vinalhaven, Penobscot Bay.
+const VINALHAVEN = [
+  [44.100, -68.800],
+  [44.085, -68.775],
+  [44.020, -68.825],
+  [44.040, -68.905],
+  [44.095, -68.885],
+  [44.100, -68.800],
+];
+
+// Great + Little Cranberry, immediately south of Northeast Harbor.
+const CRANBERRY_ISLES = [
+  [44.262, -68.268],
+  [44.258, -68.248],
+  [44.250, -68.235],
+  [44.242, -68.248],
+  [44.248, -68.268],
+  [44.262, -68.268],
+];
+
 // Florida Keys arc (Key Largo → Key West)
 const FL_KEYS = [
   [25.20, -80.30], [25.10, -80.40], [24.95, -80.55], [24.80, -80.75],
@@ -5113,7 +5187,7 @@ const MA_MAINLAND_FILL = [
   [42.45, -71.10],   // back to start
 ];
 
-const LAND_POLYGONS = [MAIN_COAST, LONG_ISLAND, CAPE_COD, FL_KEYS, MA_MAINLAND_FILL, MARTHAS_VINEYARD, NANTUCKET];
+const LAND_POLYGONS = [MAIN_COAST, LONG_ISLAND, CAPE_COD, FL_KEYS, MA_MAINLAND_FILL, MARTHAS_VINEYARD, NANTUCKET, MOUNT_DESERT_ISLAND, DEER_ISLE, SWANS_ISLAND, ISLE_AU_HAUT, VINALHAVEN, CRANBERRY_ISLES];
 
 // ── Point-in-polygon test (ray casting algorithm) ──
 // Returns true if (lat, lng) lies inside the polygon. Uses the horizontal
@@ -14625,33 +14699,8 @@ function toggleLegendDetail(key){
       btn.setAttribute("aria-label", (expanded ? "Hide" : "Show") + " " + key + " details");
     }
   }
-  if(key === "bite"){
-    const biteDetail = document.querySelector('#bite-banner .legend-detail[data-detail-key="bite"]');
-    const biteBtn = document.querySelector("#bite-banner .ocean-legend-detail-toggle");
-    if(biteDetail) biteDetail.style.display = expanded ? "block" : "none";
-    if(biteBtn){
-      biteBtn.textContent = expanded ? "Hide details ▴" : "How the bite map works ▾";
-      biteBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
-      biteBtn.setAttribute("aria-label", (expanded ? "Hide" : "Show") + " bite map details");
-    }
-  }
   restackTopLegends();
   if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
-}
-
-// User-facing methodology — data sources, structure tuning, and what is NOT drawn.
-function biteMapMethodologyHtml(){
-  // Bite Map is a Pro feature — anyone reading this banner already has access.
-  return `<div style="font-size:12px;color:#cfe5ff;line-height:1.55">
-    <p style="margin:0 0 8px"><b style="color:#fb923c">Bite Score</b> is a modeled fishing-quality index for your target species — not a guarantee. It blends season, depth, temperature, tide, wind, chlorophyll, and other factors with weights tuned per species.</p>
-    <ul style="margin:0 0 8px;padding-left:18px">
-      <li><b style="color:#e2eaf2">Bottom structure</b> — scored against our charted wreck, reef, and ledge database (same data as the Waypoints layer) plus hand-picked major grounds. Those spots <b>shape the heat</b> near real hard bottom; they are <b>not</b> all plotted on the map unless you turn Waypoints on.</li>
-      <li><b style="color:#e2eaf2">Heat vs pins</b> — the colored field is scored water in range of your home port. Numbered <b>#1–#3</b> badges mark the strongest areas (often on named grounds), not every wreck in the database.</li>
-      <li><b style="color:#e2eaf2">Land &amp; habitat</b> — coastlines and species depth rules mask land and water this fish does not use. Depth comes from NOAA bathymetry where available.</li>
-      <li><b style="color:#e2eaf2">Forecast pills</b> — Now / +12h / +24h shift weather and ocean inputs; scores can change with the forecast hour.</li>
-    </ul>
-    <p style="margin:0;font-size:11px;color:#9ec5e8">Reference only — verify spots on your chartplotter before running offshore.</p>
-  </div>`;
 }
 
 function toggleOceanLegendDetail(){
@@ -14976,27 +15025,7 @@ function updateBiteBanner(){
       ? "Now"
       : (typeof biteForecastTimeLabel === "function" ? biteForecastTimeLabel() : `+${FORECAST_HOUR_OFFSET}h`);
   }
-  _oceanLegendDetailByKey.bite = biteMapMethodologyHtml();
-  const biteAbout = document.getElementById("bite-banner-methodology");
-  if(biteAbout && layerVis.predict){
-    const phone = (typeof isPhoneView === "function") && isPhoneView();
-    const expanded = !!LEGEND_DETAIL_EXPANDED.bite;
-    const btnAction = phone ? "openOceanLegendSheet('bite')" : "toggleLegendDetail('bite')";
-    const btnLabel = phone ? "How the bite map works ▾" : (expanded ? "Hide details ▴" : "How the bite map works ▾");
-    biteAbout.innerHTML = `<button type="button" class="ocean-legend-toggle ocean-legend-detail-toggle" onclick="${btnAction}" style="
-        width:100%;margin-top:6px;padding:7px 10px;border-radius:6px;cursor:pointer;pointer-events:auto;
-        background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
-        color:#bfe3f5;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;
-        text-transform:uppercase" aria-expanded="${expanded ? "true" : "false"}"
-        aria-label="${phone ? "How the bite map works" : (expanded ? "Hide bite map details" : "How the bite map works")}">${btnLabel}</button>
-      <div class="legend-detail" data-detail-key="bite" style="display:${phone ? "none" : (expanded ? "block" : "none")};margin-top:6px">${_oceanLegendDetailByKey.bite}</div>`;
-    if(typeof shieldMapOverlayFromLeaflet === "function" && !biteAbout.dataset.bwShielded){
-      shieldMapOverlayFromLeaflet(biteAbout);
-      biteAbout.dataset.bwShielded = "1";
-    }
-  } else if(biteAbout){
-    biteAbout.innerHTML = "";
-  }
+  delete _oceanLegendDetailByKey.bite;
   const fc = document.getElementById("bite-banner-forecast");
   if(fc){
     if(layerVis.predict){

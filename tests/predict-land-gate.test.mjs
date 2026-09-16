@@ -98,4 +98,33 @@ console.log("\nHeat visibility gate matches scoring (Gulf of Maine nearshore):")
     !predictHeatCellVisible(43.32, -70.58, "blackseabass"));
 }
 
+console.log("\nDowneast islands stay land even with false-positive CUDEM:");
+{
+  const fakeGrid = {
+    step: 0.02,
+    minLat: 44.10,
+    minLng: -68.80,
+    nLat: 25,
+    nLng: 40,
+    depth: new Array(1000).fill(18),
+  };
+  const { isOnLand, isPredictWater, pickTopHotspotBadges } = runWithFakeBathy(fakeGrid);
+  check("Northeast Harbor is inside the MDI land polygon", isOnLand(44.294, -68.289));
+  check("Seawall is inside the MDI land polygon", isOnLand(44.241, -68.301));
+  check("Stonington town is inside Deer Isle", isOnLand(44.156, -68.667));
+  check("Positive CUDEM on Northeast Harbor still fails isPredictWater",
+    !isPredictWater(44.294, -68.289));
+  check("Positive CUDEM on Stonington town still fails isPredictWater",
+    !isPredictWater(44.156, -68.667));
+  const badges = pickTopHotspotBadges([
+    { lat: 44.241, lng: -68.301, score: 0.96, distNm: 8 },
+    { lat: 44.156, lng: -68.667, score: 0.94, distNm: 2 },
+    { lat: 44.10, lng: -68.50, score: 0.88, distNm: 12 },
+  ], 3, "blackseabass");
+  check("Seawall is never chosen as a BSB badge",
+    !badges.some(b => Math.abs(b.lat - 44.241) < 1e-6));
+  check("Stonington town is never chosen as a BSB badge",
+    !badges.some(b => Math.abs(b.lat - 44.156) < 1e-6));
+}
+
 done();
