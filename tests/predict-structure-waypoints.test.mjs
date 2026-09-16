@@ -68,7 +68,7 @@ console.log("\nCharted structure for scoring (not map display):");
     open && nearWreck && open.nm > nearWreck.nm);
 }
 
-console.log("\nFree tier keeps curated CANYONS only (no charted blob):");
+console.log("\nCharted structure gate without Pro (CANYONS-only fallback in code):");
 {
   const setup = `
     BW_PREMIUM = false;

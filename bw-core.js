@@ -5775,6 +5775,8 @@ const PREDICT_PELAGIC_STRUCTURE_TYPES = new Set(["cy", "pf", "rg", "tw"]);
 let _predictStructureNear = null;   // Map "lat,lng" (grid-snapped) → { nm, canyon }
 let _predictStructureSpatial = null; // { binDeg, originLat, originLng, bins: Map }
 
+// Charted wreck/reef positions for bite-map scoring (not map display). Gated the
+// same way as the Waypoints layer — Bite Map itself is already Pro-only.
 function predictChartedStructureAllowed(){
   if(typeof BW_PREMIUM !== "undefined" && BW_PREMIUM) return true;
   try {
@@ -14593,14 +14595,11 @@ function toggleLegendDetail(key){
 
 // User-facing methodology — data sources, structure tuning, and what is NOT drawn.
 function biteMapMethodologyHtml(){
-  const charted = (typeof predictChartedStructureAllowed === "function") && predictChartedStructureAllowed();
-  const structureBlock = charted
-    ? `<li><b style="color:#e2eaf2">Bottom structure</b> — scored against our charted wreck, reef, and ledge database (same data as the Waypoints layer) plus hand-picked major grounds. Those spots <b>shape the heat</b> near real hard bottom; they are <b>not</b> all plotted on the map unless you turn Waypoints on.</li>`
-    : `<li><b style="color:#e2eaf2">Bottom structure</b> — scored against curated major reefs, wrecks, and ledges near your port. Upgrade to Pro to also use the full charted structure database in scoring (still without cluttering the map).</li>`;
+  // Bite Map is a Pro feature — anyone reading this banner already has access.
   return `<div style="font-size:12px;color:#cfe5ff;line-height:1.55">
     <p style="margin:0 0 8px"><b style="color:#fb923c">Bite Score</b> is a modeled fishing-quality index for your target species — not a guarantee. It blends season, depth, temperature, tide, wind, chlorophyll, and other factors with weights tuned per species.</p>
     <ul style="margin:0 0 8px;padding-left:18px">
-      ${structureBlock}
+      <li><b style="color:#e2eaf2">Bottom structure</b> — scored against our charted wreck, reef, and ledge database (same data as the Waypoints layer) plus hand-picked major grounds. Those spots <b>shape the heat</b> near real hard bottom; they are <b>not</b> all plotted on the map unless you turn Waypoints on.</li>
       <li><b style="color:#e2eaf2">Heat vs pins</b> — the colored field is scored water in range of your home port. Numbered <b>#1–#3</b> badges mark the strongest areas (often on named grounds), not every wreck in the database.</li>
       <li><b style="color:#e2eaf2">Land &amp; habitat</b> — coastlines and species depth rules mask land and water this fish does not use. Depth comes from NOAA bathymetry where available.</li>
       <li><b style="color:#e2eaf2">Forecast pills</b> — Now / +12h / +24h shift weather and ocean inputs; scores can change with the forecast hour.</li>
