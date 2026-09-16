@@ -15,9 +15,11 @@ import { createClient, type User } from "jsr:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@16";
 import { purgeUserAccount } from "../_shared/delete-user.ts";
 import { syncStripeEntitlementForUser } from "../_shared/stripe-entitlements.ts";
+import { syncRevenueCatEntitlementForUser } from "../_shared/revenuecat.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: "2024-06-20" }) : null;
+const rcSecret = Deno.env.get("REVENUECAT_SECRET_API_KEY") ?? "";
 
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 const ADMIN_EMAILS = new Set(
@@ -298,6 +300,21 @@ Deno.serve(async (req) => {
       const { data: { user }, error } = await admin.auth.admin.getUserById(userId);
       if (error || !user) return json({ error: "User not found" }, 404);
       const result = await syncStripeEntitlementForUser(admin, stripe, userId, user.email);
+      const profile = await profileForUser(admin, userId);
+      const { data: usage } = await admin.from("user_brief_usage").select("count")
+        .eq("user_id", userId).eq("day", todayUtc()).maybeSingle();
+      return json({ ok: true, sync: result, user: mergeUser(user, profile, usage?.count ?? 0) });
+    }
+
+    if (action === "sync_revenuecat") {
+      const userId = String(body.userId ?? "");
+      if (!userId) return json({ error: "userId required" }, 400);
+      if (!rcSecret || rcSecret.includes("YOUR_")) {
+        return json({ error: "RevenueCat secret key not configured." }, 503);
+      }
+      const { data: { user }, error } = await admin.auth.admin.getUserById(userId);
+      if (error || !user) return json({ error: "User not found" }, 404);
+      const result = await syncRevenueCatEntitlementForUser(admin, userId, rcSecret);
       const profile = await profileForUser(admin, userId);
       const { data: usage } = await admin.from("user_brief_usage").select("count")
         .eq("user_id", userId).eq("day", todayUtc()).maybeSingle();

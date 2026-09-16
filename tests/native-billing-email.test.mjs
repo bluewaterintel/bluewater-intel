@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const billing = readFileSync(join(root, "bw-billing.js"), "utf8");
+const authgate = readFileSync(join(root, "bw-authgate.js"), "utf8");
 const auth = readFileSync(join(root, "bw-auth.js"), "utf8");
 const confirmedHtml = readFileSync(join(root, "email-confirmed.html"), "utf8");
 const buildScript = readFileSync(join(root, "scripts/build-ios-www.mjs"), "utf8");
@@ -29,6 +30,9 @@ assert.match(billing, /if\(src === "stripe" && window\.BW_NATIVE\) return "Manag
 const navPlanFn = billing.slice(billing.indexOf("window.renderNavPlan = async function"));
 assert.match(navPlanFn, /View plans/);
 assert.doesNotMatch(navPlanFn, /onclick="bwManageBilling\(\)"/);
+
+// Native sign-in pulls RevenueCat → profiles when not already premium (mirrors web Stripe sync).
+assert.match(authgate, /BW_NATIVE && window\.BW_IAP && window\.BW_IAP\.syncIapEntitlement/);
 
 // Native signups redirect to email-confirmed.html (not web sign-in gate).
 assert.match(auth, /email-confirmed\.html\?confirmed=1/);

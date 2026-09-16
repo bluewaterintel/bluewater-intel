@@ -10,6 +10,7 @@
   };
 
   let configured = false;
+  let configuredUserId = null;
   let Purchases = null;
 
   function nativePlatform() {
@@ -90,12 +91,23 @@
           : "StoreKit plugin not loaded. Run: npm install && npx cap sync ios",
       );
     }
+    if (configured && configuredUserId && configuredUserId !== user.id && plugin.logIn) {
+      await withTimeout(
+        plugin.logIn({ appUserID: user.id }),
+        20000,
+        "Store account switch timed out. Check your connection and try again.",
+      );
+      configuredUserId = user.id;
+      return;
+    }
+    if (configured && configuredUserId === user.id) return;
     await withTimeout(
       plugin.configure({ apiKey, appUserID: user.id }),
       20000,
       "Store setup timed out. Check your connection and try again.",
     );
     configured = true;
+    configuredUserId = user.id;
   }
 
   async function prewarm() {

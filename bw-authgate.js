@@ -322,9 +322,13 @@
     // We still refresh entitlement so the correct gating is applied, but we no
     // longer trap unentitled users on the plan picker.
     try {
-      if(!window.BW_NATIVE && fullHydrate && typeof window.bwSyncStripeEntitlement === "function"){
-        const paid = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
-        if(!paid) await window.bwSyncStripeEntitlement();
+      const paidBeforeSync = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
+      if(fullHydrate && !paidBeforeSync){
+        if(!window.BW_NATIVE && typeof window.bwSyncStripeEntitlement === "function"){
+          await window.bwSyncStripeEntitlement();
+        } else if(window.BW_NATIVE && window.BW_IAP && window.BW_IAP.syncIapEntitlement){
+          await window.BW_IAP.syncIapEntitlement();
+        }
       }
       if(typeof refreshEntitlement === "function") await refreshEntitlement();
     } catch(e){}

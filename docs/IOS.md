@@ -389,7 +389,7 @@ supabase functions deploy stripe-portal
 | “StoreKit plugin not loaded” | `npm install && npx cap sync ios`, rebuild in Xcode |
 | “In-app purchases not configured” | Set `REVENUECAT_IOS_API_KEY` in `.env`, run `npm run build:ios` |
 | Email link opens Safari, not app | Check Supabase redirect URLs + `Info.plist` URL scheme |
-| Pro not showing after purchase | Check RevenueCat webhook logs + Supabase function logs |
+| Pro not showing after purchase | User Admin → **Sync from RevenueCat**, or `npm run sync:revenuecat-user -- email@example.com`; check webhook + `iap-sync` logs |
 | Website subscriber wants to manage billing | Menu → Manage Account → Manage Billing opens the Stripe portal |
 
 ---
