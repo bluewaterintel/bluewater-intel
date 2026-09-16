@@ -3383,6 +3383,10 @@ function knownStructureDepthM(lat, lng, maxNm = 1.5){
 function predictDepth(lat, lng){
   const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
   if(real != null && real <= 0) return real;
+  // CUDEM can report positive depth on narrow beaches/peninsulas; coastline wins.
+  if(typeof isOnLand === "function" && isOnLand(lat, lng) && !isFishableBaySound(lat, lng)){
+    return seaDepth(lat, lng);
+  }
   const known = knownStructureDepthM(lat, lng);
   if(known != null){
     // Use curated depth when the grid is missing, or clearly shoaled relative to
@@ -3420,6 +3424,11 @@ function isPredictWater(lat, lng){
   // Inland freshwater (Lake Okeechobee, etc.) is never a saltwater fishing
   // spot, regardless of what the bathymetry grid says — exclude it first.
   if(isInlandFreshwater(lat, lng)) return false;
+  // Coastline polygons trump bathy grids on beaches and barrier islands — otherwise
+  // a shoal pixel on the Outer Cape (North Truro) becomes a scored hotspot.
+  if(typeof isOnLand === "function" && isOnLand(lat, lng) && !isFishableBaySound(lat, lng)){
+    return false;
+  }
   // Prefer the port-scoped bite-map bathy grid (stable for the whole fishing
   // range). BATHY_GRID is often viewport-sized (currents layer), so using it
   // here made the scored cells change as the user zoomed/panned.
@@ -5095,6 +5104,44 @@ function isOnLand(lat, lng){
   return false;
 }
 
+// Bay/sound rectangles where the coarse coastline polygon reads "land" but
+// the water is fishable (Chesapeake, Cape Cod Bay, etc.). Shared by seaDepth()
+// and isPredictWater() so CUDEM/ETOPO can't paint hotspots on outer beaches
+// (e.g. North Truro on the Cape) while still allowing in-bay scoring.
+const FISHABLE_BAY_SOUND_BOXES = [
+  {b:[36.95, 39.55, -77.30, -75.95], depth: 12},  // Chesapeake
+  {b:[38.85, 39.35, -75.45, -75.05], depth: 15},  // Delaware
+  {b:[35.20, 36.10, -76.30, -75.50], depth: 8},   // Pamlico Sound + Oregon Inlet
+  {b:[35.85, 36.20, -76.70, -75.85], depth: 6},   // Albemarle
+  {b:[34.65, 34.78, -76.70, -76.55], depth: 5},   // Bogue Sound water (between mainland & barrier)
+  {b:[34.55, 34.85, -76.55, -76.30], depth: 4},   // Core Sound / Back Sound
+  {b:[40.95, 41.20, -73.70, -71.95], depth: 25},  // Long Island Sound
+  {b:[41.78, 42.03, -70.55, -70.15], depth: 35},  // Cape Cod Bay (tightened from coastal overlap)
+  {b:[41.45, 41.75, -71.45, -71.20], depth: 18},  // Narragansett
+  {b:[41.45, 41.70, -71.05, -70.70], depth: 20},  // Buzzards
+  {b:[25.40, 25.75, -80.25, -80.15], depth: 4},   // Biscayne
+  {b:[24.95, 25.25, -81.10, -80.50], depth: 3},   // Florida Bay
+  {b:[27.20, 29.00, -80.78, -80.62], depth: 3},   // Indian River
+  {b:[26.40, 26.75, -82.20, -81.85], depth: 4},   // Charlotte Harbor
+  {b:[27.55, 28.05, -82.75, -82.45], depth: 8},   // Tampa Bay
+  {b:[29.65, 29.85, -85.10, -84.70], depth: 5},   // Apalachicola
+  {b:[30.20, 30.65, -88.20, -87.50], depth: 10},  // Mobile Bay
+  {b:[29.10, 29.55, -90.50, -89.50], depth: 5},   // Barataria
+  {b:[29.20, 29.55, -94.95, -94.60], depth: 7},   // Galveston
+  {b:[28.10, 28.55, -96.70, -96.20], depth: 4},   // San Antonio
+  {b:[27.55, 27.95, -97.40, -97.05], depth: 4},   // Corpus Christi
+];
+function fishableBaySoundDepthM(lat, lng){
+  for(const bay of FISHABLE_BAY_SOUND_BOXES){
+    const [latMin, latMax, lngMin, lngMax] = bay.b;
+    if(lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax) return bay.depth;
+  }
+  return null;
+}
+function isFishableBaySound(lat, lng){
+  return fishableBaySoundDepthM(lat, lng) != null;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // BATHYMETRY REFERENCE POINTS
 //
@@ -5161,38 +5208,8 @@ function seaDepth(lat, lng){
   if(lng < -98 || lng > -64) return 3000;
 
   // ── STEP 1: Bay/sound polygons (act as "holes" in the land polygon) ──
-  // The main coastline polygon traces the outer coast and treats Chesapeake
-  // Bay, Delaware Bay, etc. as "inside" (land). These rectangles override
-  // that by explicitly marking known fishable bay water FIRST.
-  const bayDepths = [
-    {b:[36.95, 39.55, -77.30, -75.95], depth: 12},  // Chesapeake
-    {b:[38.85, 39.35, -75.45, -75.05], depth: 15},  // Delaware
-    {b:[35.20, 36.10, -76.30, -75.50], depth: 8},   // Pamlico Sound + Oregon Inlet
-    {b:[35.85, 36.20, -76.70, -75.85], depth: 6},   // Albemarle
-    {b:[34.65, 34.78, -76.70, -76.55], depth: 5},   // Bogue Sound water (between mainland & barrier)
-    {b:[34.55, 34.85, -76.55, -76.30], depth: 4},   // Core Sound / Back Sound
-    {b:[40.95, 41.20, -73.70, -71.95], depth: 25},  // Long Island Sound
-    {b:[41.78, 42.03, -70.55, -70.15], depth: 35},  // Cape Cod Bay (tightened from coastal overlap)
-    {b:[41.45, 41.75, -71.45, -71.20], depth: 18},  // Narragansett
-    {b:[41.45, 41.70, -71.05, -70.70], depth: 20},  // Buzzards
-    {b:[25.40, 25.75, -80.25, -80.15], depth: 4},   // Biscayne
-    {b:[24.95, 25.25, -81.10, -80.50], depth: 3},   // Florida Bay
-    {b:[27.20, 29.00, -80.78, -80.62], depth: 3},   // Indian River
-    {b:[26.40, 26.75, -82.20, -81.85], depth: 4},   // Charlotte Harbor
-    {b:[27.55, 28.05, -82.75, -82.45], depth: 8},   // Tampa Bay
-    {b:[29.65, 29.85, -85.10, -84.70], depth: 5},   // Apalachicola
-    {b:[30.20, 30.65, -88.20, -87.50], depth: 10},  // Mobile Bay
-    {b:[29.10, 29.55, -90.50, -89.50], depth: 5},   // Barataria
-    {b:[29.20, 29.55, -94.95, -94.60], depth: 7},   // Galveston
-    {b:[28.10, 28.55, -96.70, -96.20], depth: 4},   // San Antonio
-    {b:[27.55, 27.95, -97.40, -97.05], depth: 4},   // Corpus Christi
-  ];
-  for(const bay of bayDepths){
-    const [latMin, latMax, lngMin, lngMax] = bay.b;
-    if(lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax){
-      return bay.depth;
-    }
-  }
+  const bayDepth = fishableBaySoundDepthM(lat, lng);
+  if(bayDepth != null) return bayDepth;
 
   // ── STEP 2: Coastline polygon — anything inside is solid land ──
   // The land polygons are the source of truth for the outer land/water
@@ -6441,6 +6458,7 @@ function pickTopHotspotBadges(hotspots, limit){
   const ranked = hotspots.slice().sort(cmpHotspotStable);
   for(const cell of ranked){
     if(chosen.length >= limit) break;
+    if(typeof isPredictWater === "function" && !isPredictWater(cell.lat, cell.lng)) continue;
     const minSep = sepFor(cell);
     const farEnough = chosen.every(c => nmBetween(c.lat, c.lng, cell.lat, cell.lng) >= minSep);
     if(farEnough) chosen.push(cell);
