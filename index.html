@@ -1571,6 +1571,7 @@ html.bw-native .bw-stripe-only{ display:none !important; }
 .oc-legend-sec.collapsed > :first-child{margin-bottom:0 !important}
 #bite-banner.legend-collapsed .bite-banner-gradient,
 #bite-banner.legend-collapsed .bite-banner-labels,
+#bite-banner.legend-collapsed #bite-banner-methodology,
 #bite-banner.legend-collapsed .bite-fc-toggle,
 #bite-banner.legend-collapsed #bite-banner-forecast{display:none !important}
 #bite-banner.legend-collapsed .bite-banner-hdr{margin-bottom:0 !important}
@@ -1606,8 +1607,9 @@ html.bw-native .bw-stripe-only{ display:none !important; }
 }
 #bite-banner .bite-banner-gradient{grid-column:1 / -1;grid-row:2}
 #bite-banner .bite-banner-labels{grid-column:1 / -1;grid-row:3}
-#bite-banner .bite-fc-toggle{grid-column:1 / -1;grid-row:4}
-#bite-banner #bite-banner-forecast{grid-column:1 / -1;grid-row:5}
+#bite-banner #bite-banner-methodology{grid-column:1 / -1;grid-row:4;pointer-events:auto}
+#bite-banner .bite-fc-toggle{grid-column:1 / -1;grid-row:5}
+#bite-banner #bite-banner-forecast{grid-column:1 / -1;grid-row:6}
 
 /* Ocean legend detail sheet — mobile panel below header */
 #ocean-legend-sheet{
@@ -3413,6 +3415,7 @@ body.bw-auth-screen-open .leaflet-container{
     <div class="bite-banner-labels" style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#dde8f5;margin-top:3px;pointer-events:none">
       <span>POOR</span><span>FAIR</span><span>GOOD</span><span>EXCELLENT</span>
     </div>
+    <div id="bite-banner-methodology"></div>
     <button type="button" class="bite-fc-toggle" id="bite-fc-toggle" onclick="toggleBiteBannerForecast()" aria-expanded="false" aria-controls="bite-banner-forecast">Forecast · <span id="bite-fc-toggle-label">Now</span></button>
     <div id="bite-banner-forecast"></div>
   </div>
@@ -4218,7 +4221,7 @@ body.bw-auth-screen-open .leaflet-container{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260916c"></script>
+<script src="bw-core.js?v=20260916d"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

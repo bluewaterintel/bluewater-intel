@@ -14577,8 +14577,36 @@ function toggleLegendDetail(key){
       btn.setAttribute("aria-label", (expanded ? "Hide" : "Show") + " " + key + " details");
     }
   }
+  if(key === "bite"){
+    const biteDetail = document.querySelector('#bite-banner .legend-detail[data-detail-key="bite"]');
+    const biteBtn = document.querySelector("#bite-banner .ocean-legend-detail-toggle");
+    if(biteDetail) biteDetail.style.display = expanded ? "block" : "none";
+    if(biteBtn){
+      biteBtn.textContent = expanded ? "Hide details ▴" : "How the bite map works ▾";
+      biteBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+      biteBtn.setAttribute("aria-label", (expanded ? "Hide" : "Show") + " bite map details");
+    }
+  }
   restackTopLegends();
   if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
+}
+
+// User-facing methodology — data sources, structure tuning, and what is NOT drawn.
+function biteMapMethodologyHtml(){
+  const charted = (typeof predictChartedStructureAllowed === "function") && predictChartedStructureAllowed();
+  const structureBlock = charted
+    ? `<li><b style="color:#e2eaf2">Bottom structure</b> — scored against our charted wreck, reef, and ledge database (same data as the Waypoints layer) plus hand-picked major grounds. Those spots <b>shape the heat</b> near real hard bottom; they are <b>not</b> all plotted on the map unless you turn Waypoints on.</li>`
+    : `<li><b style="color:#e2eaf2">Bottom structure</b> — scored against curated major reefs, wrecks, and ledges near your port. Upgrade to Pro to also use the full charted structure database in scoring (still without cluttering the map).</li>`;
+  return `<div style="font-size:12px;color:#cfe5ff;line-height:1.55">
+    <p style="margin:0 0 8px"><b style="color:#fb923c">Bite Score</b> is a modeled fishing-quality index for your target species — not a guarantee. It blends season, depth, temperature, tide, wind, chlorophyll, and other factors with weights tuned per species.</p>
+    <ul style="margin:0 0 8px;padding-left:18px">
+      ${structureBlock}
+      <li><b style="color:#e2eaf2">Heat vs pins</b> — the colored field is scored water in range of your home port. Numbered <b>#1–#3</b> badges mark the strongest areas (often on named grounds), not every wreck in the database.</li>
+      <li><b style="color:#e2eaf2">Land &amp; habitat</b> — coastlines and species depth rules mask land and water this fish does not use. Depth comes from NOAA bathymetry where available.</li>
+      <li><b style="color:#e2eaf2">Forecast pills</b> — Now / +12h / +24h shift weather and ocean inputs; scores can change with the forecast hour.</li>
+    </ul>
+    <p style="margin:0;font-size:11px;color:#9ec5e8">Reference only — verify spots on your chartplotter before running offshore.</p>
+  </div>`;
 }
 
 function toggleOceanLegendDetail(){
@@ -14902,6 +14930,27 @@ function updateBiteBanner(){
     fcToggleLbl.textContent = FORECAST_HOUR_OFFSET === 0
       ? "Now"
       : (typeof biteForecastTimeLabel === "function" ? biteForecastTimeLabel() : `+${FORECAST_HOUR_OFFSET}h`);
+  }
+  _oceanLegendDetailByKey.bite = biteMapMethodologyHtml();
+  const biteAbout = document.getElementById("bite-banner-methodology");
+  if(biteAbout && layerVis.predict){
+    const phone = (typeof isPhoneView === "function") && isPhoneView();
+    const expanded = !!LEGEND_DETAIL_EXPANDED.bite;
+    const btnAction = phone ? "openOceanLegendSheet('bite')" : "toggleLegendDetail('bite')";
+    const btnLabel = phone ? "How the bite map works ▾" : (expanded ? "Hide details ▴" : "How the bite map works ▾");
+    biteAbout.innerHTML = `<button type="button" class="ocean-legend-toggle ocean-legend-detail-toggle" onclick="${btnAction}" style="
+        width:100%;margin-top:6px;padding:7px 10px;border-radius:6px;cursor:pointer;pointer-events:auto;
+        background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+        color:#bfe3f5;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;
+        text-transform:uppercase" aria-expanded="${expanded ? "true" : "false"}"
+        aria-label="${phone ? "How the bite map works" : (expanded ? "Hide bite map details" : "How the bite map works")}">${btnLabel}</button>
+      <div class="legend-detail" data-detail-key="bite" style="display:${phone ? "none" : (expanded ? "block" : "none")};margin-top:6px">${_oceanLegendDetailByKey.bite}</div>`;
+    if(typeof shieldMapOverlayFromLeaflet === "function" && !biteAbout.dataset.bwShielded){
+      shieldMapOverlayFromLeaflet(biteAbout);
+      biteAbout.dataset.bwShielded = "1";
+    }
+  } else if(biteAbout){
+    biteAbout.innerHTML = "";
   }
   const fc = document.getElementById("bite-banner-forecast");
   if(fc){
