@@ -414,6 +414,18 @@ console.log("\nGulf of Maine black sea bass stay on nearshore wrecks, not 400 ft
     !CANYONS.some(c => /platt/i.test(c.name)));
 }
 
+console.log("\nDowneast Maine islands are land, not BSB water:");
+{
+  const stonington = PORTS["Stonington, ME"];
+  check("Stonington port is listed", !!stonington);
+  check("Stonington town is land", isOnLand(stonington.lat, stonington.lng));
+  check("Northeast Harbor (MDI) is land", isOnLand(44.294, -68.289));
+  check("Seawall (MDI) is land", isOnLand(44.241, -68.301));
+  check("Bass Harbor Head is land", isOnLand(44.222, -68.337));
+  check("Casco Bay water is still open after island polygons",
+    !isOnLand(43.67, -70.12));
+}
+
 console.log("\nGulf of Maine swordfish is a basin fishery, not a 2,000 ft canyon wall:");
 {
   const portland = PORTS["Portland, ME"];

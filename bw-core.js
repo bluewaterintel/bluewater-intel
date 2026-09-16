@@ -4928,7 +4928,7 @@ function gulfShelfWidthDeg(lng){
 // as "land".
 //
 // Additional polygons handle separate landmasses: Long Island, Cape Cod arm,
-// FL Keys chain.
+// FL Keys chain, Gulf of Maine islands (Mount Desert, Deer Isle, etc.).
 // ════════════════════════════════════════════════════════════════════════════
 
 const MAIN_COAST = [
@@ -5084,6 +5084,80 @@ const NANTUCKET = [
   [41.30, -70.20],   // back to start
 ];
 
+// Mount Desert Island, ME. MAIN_COAST chord Schoodic→Stonington cuts the
+// northern half as "mainland" but leaves the southern lobe (Southwest Harbor,
+// Northeast Harbor, Seawall, Bass Harbor Head) as ocean — CUDEM then paints
+// a BSB hotspot on town land. Trace the whole island, including that lobe.
+const MOUNT_DESERT_ISLAND = [
+  [44.430, -68.280], // Hulls Cove
+  [44.392, -68.183], // Bar Harbor
+  [44.352, -68.172], // Schooner Head
+  [44.312, -68.174], // Otter Point
+  [44.268, -68.248], // east of Seawall
+  [44.238, -68.292], // Seawall
+  [44.221, -68.337], // Bass Harbor Head
+  [44.238, -68.375], // Bernard / Bass Harbor west
+  [44.280, -68.360], // west of Southwest Harbor
+  [44.318, -68.415], // Seal Cove
+  [44.365, -68.418], // Pretty Marsh
+  [44.405, -68.360], // Indian Point
+  [44.430, -68.305], // Town Hill
+  [44.430, -68.280],
+];
+
+// Deer Isle, ME (Stonington sits on the south shore). The port itself was
+// classified as water, so Bite Map could pin the town.
+const DEER_ISLE = [
+  [44.298, -68.685], // Little Deer Isle north
+  [44.270, -68.605], // Eggemoggin Reach NE
+  [44.175, -68.575], // east shore
+  [44.148, -68.655], // Stonington south shore
+  [44.155, -68.720], // southwest
+  [44.230, -68.745], // west shore
+  [44.285, -68.720], // northwest
+  [44.298, -68.685],
+];
+
+// Swans Island, south of MDI.
+const SWANS_ISLAND = [
+  [44.195, -68.430],
+  [44.185, -68.380],
+  [44.145, -68.390],
+  [44.140, -68.455],
+  [44.170, -68.475],
+  [44.195, -68.430],
+];
+
+// Isle au Haut, south of Stonington.
+const ISLE_AU_HAUT = [
+  [44.100, -68.625],
+  [44.080, -68.600],
+  [44.040, -68.615],
+  [44.045, -68.655],
+  [44.090, -68.655],
+  [44.100, -68.625],
+];
+
+// Vinalhaven, Penobscot Bay.
+const VINALHAVEN = [
+  [44.100, -68.800],
+  [44.085, -68.775],
+  [44.020, -68.825],
+  [44.040, -68.905],
+  [44.095, -68.885],
+  [44.100, -68.800],
+];
+
+// Great + Little Cranberry, immediately south of Northeast Harbor.
+const CRANBERRY_ISLES = [
+  [44.262, -68.268],
+  [44.258, -68.248],
+  [44.250, -68.235],
+  [44.242, -68.248],
+  [44.248, -68.268],
+  [44.262, -68.268],
+];
+
 // Florida Keys arc (Key Largo → Key West)
 const FL_KEYS = [
   [25.20, -80.30], [25.10, -80.40], [24.95, -80.55], [24.80, -80.75],
@@ -5113,7 +5187,7 @@ const MA_MAINLAND_FILL = [
   [42.45, -71.10],   // back to start
 ];
 
-const LAND_POLYGONS = [MAIN_COAST, LONG_ISLAND, CAPE_COD, FL_KEYS, MA_MAINLAND_FILL, MARTHAS_VINEYARD, NANTUCKET];
+const LAND_POLYGONS = [MAIN_COAST, LONG_ISLAND, CAPE_COD, FL_KEYS, MA_MAINLAND_FILL, MARTHAS_VINEYARD, NANTUCKET, MOUNT_DESERT_ISLAND, DEER_ISLE, SWANS_ISLAND, ISLE_AU_HAUT, VINALHAVEN, CRANBERRY_ISLES];
 
 // ── Point-in-polygon test (ray casting algorithm) ──
 // Returns true if (lat, lng) lies inside the polygon. Uses the horizontal
