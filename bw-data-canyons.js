@@ -211,7 +211,7 @@ const CANYONS=[
    desc:"Cluster of wrecks ~30nm ENE of Virginia Beach (Lillian Luckenbach, Cuyahoga, Haviland, Morgan, Webster) in 90-110 ft. The local sea-bass and fluke congregation — spadefish in summer. Reference only — not for navigation.",
    fish:["blackseabass","flounder","spadefish","porgy","cobia"]},
   // ── CHESAPEAKE BAY STRUCTURE ─────────────────────────────────────────
-  {name:"CBBT", type:"structure", color:"#16a34a", lat:36.97, lng:-76.08,
+  {name:"CBBT", type:"structure", color:"#16a34a", lat:37.041, lng:-76.069,
    desc:"Chesapeake Bay Bridge-Tunnel — the bay mouth's premier structure. Cobia sight-casting in summer, plus trophy striped bass, flounder, sheepshead and sea bass on the pilings and islands.",
    fish:["cobia","striper","flounder","sheepshead","blackseabass","redfish"]},
   {name:"Latimer Shoal", type:"lump", color:"#16a34a", lat:37.13181, lng:-75.99854,
