@@ -195,6 +195,14 @@ const CANYONS=[
    desc:"Charted shoal and old light foundation off Point Gammon, south of Hyannis. The Nantucket Sound scup and sea bass standby, with stripers and blues working the rip on a moving tide. Reference only — not for navigation.",
    fish:["porgy","blackseabass","striper","bluefish","flounder"]},
 
+  // ── GULF OF MAINE (Portland / Portsmouth / Cape Ann) ──
+  {name:"Jeffreys Ledge", type:"ledge", color:"#16a34a", lat:42.83, lng:-70.42,
+   desc:"Major Gulf of Maine hard-bottom ledge running east of Cape Ann toward Jeffreys Bank. Party boats from Portland and Portsmouth work it for black sea bass, cod, and pollock on the high-relief edges; tuna and bait often stack above in season. Reference only — not for navigation.",
+   fish:["blackseabass","cod","pollock","bluefin","flounder"]},
+  {name:"Plattes Bank", type:"shoal", color:"#16a34a", lat:42.72, lng:-70.58,
+   desc:"Shoal complex east of Cape Elizabeth / Boon Island — a common Portland-area sea bass and cod run when Jeffreys is crowded or weather-shortened. Reference only — not for navigation.",
+   fish:["blackseabass","cod","pollock","flounder"]},
+
   // ── NORTHEAST ──
   {name:"Shrewsbury Rocks", type:"rock", color:"#16a34a", lat:40.32, lng:-73.95,
    desc:"Nearshore rock structure off NJ. Striped bass & bluefish in season, tog on the rocks, and scup over the rockpiles in summer.",

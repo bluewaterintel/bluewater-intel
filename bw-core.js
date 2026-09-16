@@ -3383,6 +3383,10 @@ function knownStructureDepthM(lat, lng, maxNm = 1.5){
 function predictDepth(lat, lng){
   const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
   if(real != null && real <= 0) return real;
+  // CUDEM can report positive depth on narrow beaches/peninsulas; coastline wins.
+  if(typeof isOnLand === "function" && isOnLand(lat, lng) && !isFishableBaySound(lat, lng)){
+    return seaDepth(lat, lng);
+  }
   const known = knownStructureDepthM(lat, lng);
   if(known != null){
     // Use curated depth when the grid is missing, or clearly shoaled relative to
@@ -3420,12 +3424,30 @@ function isPredictWater(lat, lng){
   // Inland freshwater (Lake Okeechobee, etc.) is never a saltwater fishing
   // spot, regardless of what the bathymetry grid says — exclude it first.
   if(isInlandFreshwater(lat, lng)) return false;
+  // Coastline polygons trump bathy grids on beaches and barrier islands — otherwise
+  // a shoal pixel on the Outer Cape (North Truro) becomes a scored hotspot.
+  if(typeof isOnLand === "function" && isOnLand(lat, lng) && !isFishableBaySound(lat, lng)){
+    return false;
+  }
   // Prefer the port-scoped bite-map bathy grid (stable for the whole fishing
   // range). BATHY_GRID is often viewport-sized (currents layer), so using it
   // here made the scored cells change as the user zoomed/panned.
   const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
   if(real != null) return real > 0;
   return (typeof isFishableWater === "function") ? isFishableWater(lat, lng) : false;
+}
+
+// Same land/habitat gates the async grid uses — shared with the heat canvas bake
+// so numbered badges never land where the painted field is masked off.
+function predictHeatCellVisible(lat, lng, speciesId){
+  if(typeof isPredictWater === "function" && !isPredictWater(lat, lng)) return false;
+  if(speciesId && typeof classifyWaterType === "function" && typeof speciesAllowedInWater === "function"){
+    if(!speciesAllowedInWater(speciesId, classifyWaterType(lat, lng))) return false;
+  }
+  if(speciesId && typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(speciesId, lat, lng)){
+    return false;
+  }
+  return true;
 }
 
 function decimateOceanPts(pts, max){
@@ -4325,6 +4347,14 @@ function scoreCell(lat, lng, speciesId){
         lift = gulfYellowfinStructureLift(hit.canyon);
       }
       finalScore = finalScore * (1 + lift * prox);
+      // Demersal reef/wreck fish: open flat bottom away from mapped structure
+      // should not read as "excellent" just because temp/season align.
+      if(prefs.demersal && prefs.breakPref === "stable" && hit.nm > 12){
+        const far = Math.min(1, (hit.nm - 12) / 35);
+        finalScore *= (1 - 0.28 * far);
+      }
+    } else if(prefs.demersal && prefs.breakPref === "stable"){
+      finalScore *= 0.78;
     }
   }
 
@@ -5095,6 +5125,44 @@ function isOnLand(lat, lng){
   return false;
 }
 
+// Bay/sound rectangles where the coarse coastline polygon reads "land" but
+// the water is fishable (Chesapeake, Cape Cod Bay, etc.). Shared by seaDepth()
+// and isPredictWater() so CUDEM/ETOPO can't paint hotspots on outer beaches
+// (e.g. North Truro on the Cape) while still allowing in-bay scoring.
+const FISHABLE_BAY_SOUND_BOXES = [
+  {b:[36.95, 39.55, -77.30, -75.95], depth: 12},  // Chesapeake
+  {b:[38.85, 39.35, -75.45, -75.05], depth: 15},  // Delaware
+  {b:[35.20, 36.10, -76.30, -75.50], depth: 8},   // Pamlico Sound + Oregon Inlet
+  {b:[35.85, 36.20, -76.70, -75.85], depth: 6},   // Albemarle
+  {b:[34.65, 34.78, -76.70, -76.55], depth: 5},   // Bogue Sound water (between mainland & barrier)
+  {b:[34.55, 34.85, -76.55, -76.30], depth: 4},   // Core Sound / Back Sound
+  {b:[40.95, 41.20, -73.70, -71.95], depth: 25},  // Long Island Sound
+  {b:[41.78, 42.03, -70.55, -70.15], depth: 35},  // Cape Cod Bay (tightened from coastal overlap)
+  {b:[41.45, 41.75, -71.45, -71.20], depth: 18},  // Narragansett
+  {b:[41.45, 41.70, -71.05, -70.70], depth: 20},  // Buzzards
+  {b:[25.40, 25.75, -80.25, -80.15], depth: 4},   // Biscayne
+  {b:[24.95, 25.25, -81.10, -80.50], depth: 3},   // Florida Bay
+  {b:[27.20, 29.00, -80.78, -80.62], depth: 3},   // Indian River
+  {b:[26.40, 26.75, -82.20, -81.85], depth: 4},   // Charlotte Harbor
+  {b:[27.55, 28.05, -82.75, -82.45], depth: 8},   // Tampa Bay
+  {b:[29.65, 29.85, -85.10, -84.70], depth: 5},   // Apalachicola
+  {b:[30.20, 30.65, -88.20, -87.50], depth: 10},  // Mobile Bay
+  {b:[29.10, 29.55, -90.50, -89.50], depth: 5},   // Barataria
+  {b:[29.20, 29.55, -94.95, -94.60], depth: 7},   // Galveston
+  {b:[28.10, 28.55, -96.70, -96.20], depth: 4},   // San Antonio
+  {b:[27.55, 27.95, -97.40, -97.05], depth: 4},   // Corpus Christi
+];
+function fishableBaySoundDepthM(lat, lng){
+  for(const bay of FISHABLE_BAY_SOUND_BOXES){
+    const [latMin, latMax, lngMin, lngMax] = bay.b;
+    if(lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax) return bay.depth;
+  }
+  return null;
+}
+function isFishableBaySound(lat, lng){
+  return fishableBaySoundDepthM(lat, lng) != null;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // BATHYMETRY REFERENCE POINTS
 //
@@ -5161,38 +5229,8 @@ function seaDepth(lat, lng){
   if(lng < -98 || lng > -64) return 3000;
 
   // ── STEP 1: Bay/sound polygons (act as "holes" in the land polygon) ──
-  // The main coastline polygon traces the outer coast and treats Chesapeake
-  // Bay, Delaware Bay, etc. as "inside" (land). These rectangles override
-  // that by explicitly marking known fishable bay water FIRST.
-  const bayDepths = [
-    {b:[36.95, 39.55, -77.30, -75.95], depth: 12},  // Chesapeake
-    {b:[38.85, 39.35, -75.45, -75.05], depth: 15},  // Delaware
-    {b:[35.20, 36.10, -76.30, -75.50], depth: 8},   // Pamlico Sound + Oregon Inlet
-    {b:[35.85, 36.20, -76.70, -75.85], depth: 6},   // Albemarle
-    {b:[34.65, 34.78, -76.70, -76.55], depth: 5},   // Bogue Sound water (between mainland & barrier)
-    {b:[34.55, 34.85, -76.55, -76.30], depth: 4},   // Core Sound / Back Sound
-    {b:[40.95, 41.20, -73.70, -71.95], depth: 25},  // Long Island Sound
-    {b:[41.78, 42.03, -70.55, -70.15], depth: 35},  // Cape Cod Bay (tightened from coastal overlap)
-    {b:[41.45, 41.75, -71.45, -71.20], depth: 18},  // Narragansett
-    {b:[41.45, 41.70, -71.05, -70.70], depth: 20},  // Buzzards
-    {b:[25.40, 25.75, -80.25, -80.15], depth: 4},   // Biscayne
-    {b:[24.95, 25.25, -81.10, -80.50], depth: 3},   // Florida Bay
-    {b:[27.20, 29.00, -80.78, -80.62], depth: 3},   // Indian River
-    {b:[26.40, 26.75, -82.20, -81.85], depth: 4},   // Charlotte Harbor
-    {b:[27.55, 28.05, -82.75, -82.45], depth: 8},   // Tampa Bay
-    {b:[29.65, 29.85, -85.10, -84.70], depth: 5},   // Apalachicola
-    {b:[30.20, 30.65, -88.20, -87.50], depth: 10},  // Mobile Bay
-    {b:[29.10, 29.55, -90.50, -89.50], depth: 5},   // Barataria
-    {b:[29.20, 29.55, -94.95, -94.60], depth: 7},   // Galveston
-    {b:[28.10, 28.55, -96.70, -96.20], depth: 4},   // San Antonio
-    {b:[27.55, 27.95, -97.40, -97.05], depth: 4},   // Corpus Christi
-  ];
-  for(const bay of bayDepths){
-    const [latMin, latMax, lngMin, lngMax] = bay.b;
-    if(lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax){
-      return bay.depth;
-    }
-  }
+  const bayDepth = fishableBaySoundDepthM(lat, lng);
+  if(bayDepth != null) return bayDepth;
 
   // ── STEP 2: Coastline polygon — anything inside is solid land ──
   // The land polygons are the source of truth for the outer land/water
@@ -5729,11 +5767,148 @@ function estuarySalinity(lat, lng){
   return 1;  // open coast / shelf — full ocean salinity
 }
 
+// ── Prediction-only charted structure (wrecks/reefs/ledges) ─────────────────
+// The full waypoint database (~12k) powers scoring proximity — it is NOT drawn
+// on the map (the Waypoints layer stays user-controlled with its own cap).
+const PREDICT_BOTTOM_STRUCTURE_TYPES = new Set(["wk", "rf", "st", "ld", "rk", "hl", "hp", "tw"]);
+const PREDICT_PELAGIC_STRUCTURE_TYPES = new Set(["cy", "pf", "rg", "tw"]);
+let _predictStructureNear = null;   // Map "lat,lng" (grid-snapped) → { nm, canyon }
+let _predictStructureSpatial = null; // { binDeg, originLat, originLng, bins: Map }
+
+// Charted wreck/reef positions for bite-map scoring (not map display). Gated the
+// same way as the Waypoints layer — Bite Map itself is already Pro-only.
+function predictChartedStructureAllowed(){
+  if(typeof BW_PREMIUM !== "undefined" && BW_PREMIUM) return true;
+  try {
+    const cfg = (typeof window !== "undefined") ? window.BW_DATA_CONFIG : null;
+    return !!(cfg && cfg.embeddedFallback);
+  } catch(_e){ return false; }
+}
+
+function predictStructureTypeSet(speciesId){
+  const prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
+  if(prefs && prefs.structureProx){
+    return new Set([...PREDICT_BOTTOM_STRUCTURE_TYPES, ...PREDICT_PELAGIC_STRUCTURE_TYPES]);
+  }
+  const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
+  if(sp && sp.cat === "offshore") return PREDICT_PELAGIC_STRUCTURE_TYPES;
+  if(prefs && (prefs.demersal || prefs.breakPref === "stable")) return PREDICT_BOTTOM_STRUCTURE_TYPES;
+  return PREDICT_BOTTOM_STRUCTURE_TYPES;
+}
+
+function chartedStructureRowsNearPort(port, radiusNm, typeSet){
+  if(!port || !typeSet || !typeSet.size) return [];
+  let rows = [];
+  if(Array.isArray(_wpInRangeCache) && _wpInRangeCache.length){
+    rows = _wpInRangeCache.filter(w => w && typeSet.has(w.t));
+  } else if(typeof window !== "undefined" && window.BW_WAYPOINTS && Array.isArray(window.BW_WAYPOINTS.wp)){
+    for(const row of window.BW_WAYPOINTS.wp){
+      if(!Array.isArray(row) || row.length < 4) continue;
+      const t = row[3];
+      if(!typeSet.has(t)) continue;
+      rows.push({ name: row[0], lat: row[1], lng: row[2], t });
+    }
+  }
+  return filterWaypointsForPortAndRadius(port, rows, radiusNm);
+}
+
+function collectPredictStructureCandidates(port, radiusNm, speciesId){
+  const out = [];
+  if(typeof CANYONS !== "undefined" && Array.isArray(CANYONS)){
+    for(const c of CANYONS){
+      if(c.lat == null || c.lng == null) continue;
+      if(speciesId && Array.isArray(c.fish) && c.fish.length && !c.fish.includes(speciesId)) continue;
+      if(port && typeof reachableFromPort === "function" && !reachableFromPort(port, c.lat, c.lng)) continue;
+      if(port && typeof nmBetween === "function" && nmBetween(port.lat, port.lng, c.lat, c.lng) > radiusNm + 0.05) continue;
+      out.push({ lat: c.lat, lng: c.lng, canyon: c });
+    }
+  }
+  if(predictChartedStructureAllowed()){
+    const types = predictStructureTypeSet(speciesId);
+    for(const w of chartedStructureRowsNearPort(port, radiusNm, types)){
+      out.push({
+        lat: w.lat, lng: w.lng,
+        canyon: { name: w.name || "Charted structure", type: w.t, lat: w.lat, lng: w.lng, fish: [] },
+      });
+    }
+  }
+  return out;
+}
+
+function _structureSnapKey(lat, lng, step, originLat, originLng){
+  const oLa = originLat != null ? originLat : 0;
+  const oLn = originLng != null ? originLng : 0;
+  const snap = (v, o, st) => o + Math.round((v - o) / st) * st;
+  return `${snap(lat, oLa, step).toFixed(4)},${snap(lng, oLn, step).toFixed(4)}`;
+}
+
+function buildPredictStructureSpatialIndex(candidates, originLat, originLng){
+  const binDeg = 0.2;
+  const bins = new Map();
+  for(const p of candidates){
+    const i = Math.floor((p.lat - originLat) / binDeg);
+    const j = Math.floor((p.lng - originLng) / binDeg);
+    const k = `${i},${j}`;
+    let arr = bins.get(k);
+    if(!arr){ arr = []; bins.set(k, arr); }
+    arr.push(p);
+  }
+  _predictStructureSpatial = { binDeg, originLat, originLng, bins };
+}
+
+function nearestStructureAmongCandidates(lat, lng, candidates){
+  let best = null, bestC = null;
+  for(const p of candidates){
+    const d = (typeof nmBetween === "function")
+      ? nmBetween(lat, lng, p.lat, p.lng)
+      : Math.hypot((lat - p.lat) * 60, (lng - p.lng) * 60 * Math.cos(lat * Math.PI / 180));
+    if(best == null || d < best){ best = d; bestC = p.canyon; }
+  }
+  return best == null ? null : { canyon: bestC, nm: best };
+}
+
+function nearestStructureFromSpatialIndex(lat, lng){
+  const idx = _predictStructureSpatial;
+  if(!idx || !idx.bins) return null;
+  const i0 = Math.floor((lat - idx.originLat) / idx.binDeg);
+  const j0 = Math.floor((lng - idx.originLng) / idx.binDeg);
+  const pool = [];
+  for(let di = -3; di <= 3; di++){
+    for(let dj = -3; dj <= 3; dj++){
+      const arr = idx.bins.get(`${i0 + di},${j0 + dj}`);
+      if(arr) pool.push(...arr);
+    }
+  }
+  if(!pool.length) return null;
+  return nearestStructureAmongCandidates(lat, lng, pool);
+}
+
+function precomputePredictStructureNear(latMin, latMax, lngMin, lngMax, step, originLat, originLng, candidates){
+  _predictStructureNear = new Map();
+  if(!candidates.length) return;
+  buildPredictStructureSpatialIndex(candidates, originLat, originLng);
+  for(let la = latMin; la <= latMax + 1e-9; la += step){
+    for(let ln = lngMin; ln <= lngMax + 1e-9; ln += step){
+      if(typeof isPredictWater === "function" && !isPredictWater(la, ln)) continue;
+      const hit = nearestStructureAmongCandidates(la, ln, candidates);
+      if(hit) _predictStructureNear.set(_structureSnapKey(la, ln, step, originLat, originLng), hit);
+    }
+  }
+}
+
 // Nearest mapped structure (reef/wreck/lump/shoal/ledge) to a point, in nm,
 // considering only structures relevant to the species when fish info is given.
 // Used to lift structure-oriented species' scores near real structure so the
 // ledges/rips read hotter than open flat bottom. Returns null if none in range.
 function nearestMappedStructure(lat, lng, speciesId){
+  const step = (_predictStructureNear && _predictGridStep) ? _predictGridStep : 0.1;
+  const oLa = (_predictGridOrigin && _predictGridOrigin.lat != null) ? _predictGridOrigin.lat : 0;
+  const oLn = (_predictGridOrigin && _predictGridOrigin.lng != null) ? _predictGridOrigin.lng : 0;
+  const key = _structureSnapKey(lat, lng, step, oLa, oLn);
+  if(_predictStructureNear && _predictStructureNear.has(key)) return _predictStructureNear.get(key);
+  const spatial = nearestStructureFromSpatialIndex(lat, lng);
+  if(spatial) return spatial;
+
   if(typeof CANYONS === "undefined" || !Array.isArray(CANYONS)) return null;
   let best = null, bestC = null;
   for(const c of CANYONS){
@@ -6402,7 +6577,11 @@ function predictResultCacheKey(){
     : "0";
   return `${activePort || ""}:${activeSpId || ""}:${FORECAST_HOUR_OFFSET || 0}:${reportSig}:${predictOceanFingerprint()}`;
 }
-function invalidatePredictCache(){ _predictResultCache = null; }
+function invalidatePredictCache(){
+  _predictResultCache = null;
+  _predictStructureNear = null;
+  _predictStructureSpatial = null;
+}
 
 // Rank score for hotspot badge selection — favors in-season, high-confidence runs.
 function hotspotRankScore(cell){
@@ -6430,9 +6609,11 @@ function cmpHotspotStable(a, b){
 // genuinely different areas. Shared by renderPrediction and topBriefHotspots so
 // the banner run plan and map badges always agree. Badge numbers (#1, #2, #3)
 // always follow raw bite score — highest % is #1.
-function pickTopHotspotBadges(hotspots, limit){
+function pickTopHotspotBadges(hotspots, limit, speciesId){
   limit = limit || 3;
   if(!Array.isArray(hotspots) || !hotspots.length) return [];
+  const sid = speciesId ||
+    (typeof activeSpId !== "undefined" ? activeSpId : null);
   const chosen = [];
   const sepFor = (cell) => {
     const d = (typeof cell.distNm === "number") ? cell.distNm : 20;
@@ -6441,6 +6622,9 @@ function pickTopHotspotBadges(hotspots, limit){
   const ranked = hotspots.slice().sort(cmpHotspotStable);
   for(const cell of ranked){
     if(chosen.length >= limit) break;
+    if(typeof predictHeatCellVisible === "function"){
+      if(!predictHeatCellVisible(cell.lat, cell.lng, sid)) continue;
+    } else if(typeof isPredictWater === "function" && !isPredictWater(cell.lat, cell.lng)) continue;
     const minSep = sepFor(cell);
     const farEnough = chosen.every(c => nmBetween(c.lat, c.lng, cell.lat, cell.lng) >= minSep);
     if(farEnough) chosen.push(cell);
@@ -6633,6 +6817,8 @@ function requireForecastAccess(lat, lng){
 // in progressively. A generation token cancels a stale run if the user switches
 // species/port before it finishes (prevents two runs racing onto the map).
 let _predictGen = 0;
+let _predictGridStep = 0.1;
+let _predictGridOrigin = { lat: 0, lng: 0 };
 function computePredictionGridAsync(speciesId, onProgress, onDone){
   const myGen = ++_predictGen;
   if(speciesId === "all"){ onDone && onDone(null, myGen); return myGen; }
@@ -6682,6 +6868,16 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
     latMin = LAT_MIN; latMax = LAT_MAX; lngMin = LNG_MIN; lngMax = LNG_MAX;
     step = 0.25;
     ROWS_PER_FRAME = 6;
+  }
+
+  _predictGridStep = step;
+  _predictGridOrigin = { lat: latMin, lng: lngMin };
+  if(port){
+    const structCandidates = collectPredictStructureCandidates(port, maxRange, speciesId);
+    precomputePredictStructureNear(latMin, latMax, lngMin, lngMax, step, latMin, lngMin, structCandidates);
+  } else {
+    _predictStructureNear = null;
+    _predictStructureSpatial = null;
   }
 
   const heatGrid = [];
@@ -6794,7 +6990,14 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
             if(speciesId && Array.isArray(c.fish) && c.fish.length && !c.fish.includes(speciesId)) continue;
             const s = scoreWithPenalty(c.lat, c.lng);
             if(!s || !s.result || s.result.score < PREDICT_HOTSPOT_SCORE_MIN) continue;
-            hotspotGrid.push({ lat: c.lat, lng: c.lng, distNm: s.distNm, ...s.result });
+            const pin = { lat: c.lat, lng: c.lng, distNm: s.distNm, ...s.result };
+            hotspotGrid.push(pin);
+            // Named grounds are not on the 0.1° lattice — inject into the heat
+            // field so badges and the painted map stay aligned.
+            if(s.result.score >= PREDICT_HEAT_SCORE_MIN){
+              const dup = heatGrid.some(h => Math.abs(h.lat - c.lat) < 1e-5 && Math.abs(h.lng - c.lng) < 1e-5);
+              if(!dup) heatGrid.push(pin);
+            }
           }
         }
         refineList = hotspotGrid.slice().sort(cmpHotspotStable);
@@ -7430,50 +7633,17 @@ const HeatCanvasLayer = L.Layer.extend({
         const score = sLo + (sHi - sLo) * fLat;  // interp along lat
         if(score < PREDICT_HEAT_SCORE_MIN) continue;
 
-        // ── REAL bathymetry land mask (authoritative when loaded) ──
-        // CUDEM/ETOPO store land as depth 0 and water as depth > 0. When the bathy
-        // grid is loaded for this area (it is during a prediction render), this
-        // is a precise, basemap-independent land cut for coastlines, bays,
-        // sounds and rivers everywhere from Maine to Southern California — so the heat never
-        // paints over land even when the satellite basemap pixel is ambiguous
-        // (turbid bay water, shadows, vegetation reading as "water").
-        // Prefer the stable port-scoped predict bathy grid (same as scoring).
-        // Viewport BATHY_GRID can briefly lag during pan; BlueTopo hillshade
-        // then mislabels shelf water as land and the heat field goes blank.
-        let bathyWater = false;
-        let _rd = null;
-        if(typeof depthAtFromGrid === "function" && typeof PREDICT_BATHY_GRID !== "undefined" && PREDICT_BATHY_GRID){
-          _rd = depthAtFromGrid(PREDICT_BATHY_GRID, plat, plng);
-        }
-        if((_rd == null || !isFinite(_rd)) && typeof realDepthAt === "function"){
-          _rd = realDepthAt(plat, plng);
-        }
-        if(_rd != null && isFinite(_rd) && _rd <= 0) continue;
-        if(_rd != null && isFinite(_rd) && _rd > 0) bathyWater = true;
-
-        // ── Water/land mask — basemap pixel first, polygon fallback ──
-        // When bathy confirms water, skip basemap misreads (BlueTopo hillshade
-        // often classifies shelf pixels as land).
-        let isWater = null;
-        if(!bathyWater && useBasemap){
-          // Bake pixels are container pixels shifted by the padding. Anything
-          // in the padded skirt falls outside the snapshot, where isWater
-          // returns null and the polygon check below takes over.
-          isWater = BasemapSampler.isWater(x - padX, y - padY);
-        }
-        if(isWater === false) continue;              // definitive land
-        if(isWater === null && haveLandCheck){
-          // Sampler couldn't decide → fall back to polygon
-          if(!isFishableWater(plat, plng)) continue;
-        }
-        if(haveSpeciesMask){
-          if(!speciesHabitat.includes(classifyWaterType(plat, plng))) continue;
-        }
-        // Geographic range check — pixels outside the species lat band are
-        // transparent. Uses the central helper so per-region (Atlantic/Gulf)
-        // species like bluefin tuna are filtered correctly.
-        if(haveLatRange){
-          if(!speciesAllowedAtLat(sid, plat, plng)) continue;
+        // ── Land/habitat mask — MUST match computePredictionGridAsync ──
+        // Basemap pixels often call nearshore Gulf of Maine water "land" while
+        // the grid still scores those cells — which put #1/#2/#3 badges on the
+        // coast with no heat underneath. isPredictWater() + species gates are
+        // the same rules scoreCell() uses.
+        if(typeof predictHeatCellVisible === "function"){
+          if(!predictHeatCellVisible(plat, plng, sid)) continue;
+        } else {
+          if(haveLandCheck && !isFishableWater(plat, plng)) continue;
+          if(haveSpeciesMask && !speciesHabitat.includes(classifyWaterType(plat, plng))) continue;
+          if(haveLatRange && !speciesAllowedAtLat(sid, plat, plng)) continue;
         }
 
         // Feathered score floor: instead of a hard on/off at the cutoff (which
@@ -10139,7 +10309,7 @@ function drawPrediction(){
         return;
       }
       flushPredictLoadError();
-      const badges = pickTopHotspotBadges(hotspots, 3);
+      const badges = pickTopHotspotBadges(hotspots, 3, activeSpId);
       _predictResultCache = {
         key: predictResultCacheKey(),
         heatGrid, hotspots, badges,
@@ -10190,7 +10360,7 @@ function renderPrediction(grid, species, final, heatGridOverride, gridStep, grid
   // ── Top 3 hotspot badges (final paint only) ──
   // Use the precomputed badge list when provided (cached grid) so zoom/pan
   // never re-ranks the pins. Otherwise pick once from the scored hotspots.
-  const chosen = Array.isArray(badgesOverride) ? badgesOverride : pickTopHotspotBadges(hotspots, 3);
+  const chosen = Array.isArray(badgesOverride) ? badgesOverride : pickTopHotspotBadges(hotspots, 3, species && species.id);
   chosen.forEach((cell, i) => {
     const badge = L.marker([cell.lat, cell.lng], {
       icon: L.divIcon({
@@ -14409,8 +14579,33 @@ function toggleLegendDetail(key){
       btn.setAttribute("aria-label", (expanded ? "Hide" : "Show") + " " + key + " details");
     }
   }
+  if(key === "bite"){
+    const biteDetail = document.querySelector('#bite-banner .legend-detail[data-detail-key="bite"]');
+    const biteBtn = document.querySelector("#bite-banner .ocean-legend-detail-toggle");
+    if(biteDetail) biteDetail.style.display = expanded ? "block" : "none";
+    if(biteBtn){
+      biteBtn.textContent = expanded ? "Hide details ▴" : "How the bite map works ▾";
+      biteBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+      biteBtn.setAttribute("aria-label", (expanded ? "Hide" : "Show") + " bite map details");
+    }
+  }
   restackTopLegends();
   if(typeof syncPredictLoadingPosition === "function") syncPredictLoadingPosition();
+}
+
+// User-facing methodology — data sources, structure tuning, and what is NOT drawn.
+function biteMapMethodologyHtml(){
+  // Bite Map is a Pro feature — anyone reading this banner already has access.
+  return `<div style="font-size:12px;color:#cfe5ff;line-height:1.55">
+    <p style="margin:0 0 8px"><b style="color:#fb923c">Bite Score</b> is a modeled fishing-quality index for your target species — not a guarantee. It blends season, depth, temperature, tide, wind, chlorophyll, and other factors with weights tuned per species.</p>
+    <ul style="margin:0 0 8px;padding-left:18px">
+      <li><b style="color:#e2eaf2">Bottom structure</b> — scored against our charted wreck, reef, and ledge database (same data as the Waypoints layer) plus hand-picked major grounds. Those spots <b>shape the heat</b> near real hard bottom; they are <b>not</b> all plotted on the map unless you turn Waypoints on.</li>
+      <li><b style="color:#e2eaf2">Heat vs pins</b> — the colored field is scored water in range of your home port. Numbered <b>#1–#3</b> badges mark the strongest areas (often on named grounds), not every wreck in the database.</li>
+      <li><b style="color:#e2eaf2">Land &amp; habitat</b> — coastlines and species depth rules mask land and water this fish does not use. Depth comes from NOAA bathymetry where available.</li>
+      <li><b style="color:#e2eaf2">Forecast pills</b> — Now / +12h / +24h shift weather and ocean inputs; scores can change with the forecast hour.</li>
+    </ul>
+    <p style="margin:0;font-size:11px;color:#9ec5e8">Reference only — verify spots on your chartplotter before running offshore.</p>
+  </div>`;
 }
 
 function toggleOceanLegendDetail(){
@@ -14734,6 +14929,27 @@ function updateBiteBanner(){
     fcToggleLbl.textContent = FORECAST_HOUR_OFFSET === 0
       ? "Now"
       : (typeof biteForecastTimeLabel === "function" ? biteForecastTimeLabel() : `+${FORECAST_HOUR_OFFSET}h`);
+  }
+  _oceanLegendDetailByKey.bite = biteMapMethodologyHtml();
+  const biteAbout = document.getElementById("bite-banner-methodology");
+  if(biteAbout && layerVis.predict){
+    const phone = (typeof isPhoneView === "function") && isPhoneView();
+    const expanded = !!LEGEND_DETAIL_EXPANDED.bite;
+    const btnAction = phone ? "openOceanLegendSheet('bite')" : "toggleLegendDetail('bite')";
+    const btnLabel = phone ? "How the bite map works ▾" : (expanded ? "Hide details ▴" : "How the bite map works ▾");
+    biteAbout.innerHTML = `<button type="button" class="ocean-legend-toggle ocean-legend-detail-toggle" onclick="${btnAction}" style="
+        width:100%;margin-top:6px;padding:7px 10px;border-radius:6px;cursor:pointer;pointer-events:auto;
+        background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+        color:#bfe3f5;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;
+        text-transform:uppercase" aria-expanded="${expanded ? "true" : "false"}"
+        aria-label="${phone ? "How the bite map works" : (expanded ? "Hide bite map details" : "How the bite map works")}">${btnLabel}</button>
+      <div class="legend-detail" data-detail-key="bite" style="display:${phone ? "none" : (expanded ? "block" : "none")};margin-top:6px">${_oceanLegendDetailByKey.bite}</div>`;
+    if(typeof shieldMapOverlayFromLeaflet === "function" && !biteAbout.dataset.bwShielded){
+      shieldMapOverlayFromLeaflet(biteAbout);
+      biteAbout.dataset.bwShielded = "1";
+    }
+  } else if(biteAbout){
+    biteAbout.innerHTML = "";
   }
   const fc = document.getElementById("bite-banner-forecast");
   if(fc){
