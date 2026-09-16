@@ -11,7 +11,7 @@ const {
   isNewEnglandBluefinGrounds, NE_SPECIES_PREFS, nearestStructureNm, CANYONS,
   GULF_SPECIES_PREFS, usesGulfSpeciesPrefs, isGulfContext,
   gulfYellowfinStructureLift, gulfYellowfinStructureKind, pickTopHotspotBadges,
-  speciesRunRangeNm,
+  speciesRunRangeNm, predictCoastLimits, portOceanBbox,
 } = loadBw([
     "PREDICT_SPECIES_PREFS", "PREDICT_WEIGHTS", "PORTS", "SPECIES_LAT_RANGE",
     "PACIFIC_SPECIES_PREFS", "SEFL_SPECIES_PREFS", "REGIONAL_SEASONS",
@@ -22,7 +22,7 @@ const {
     "isNewEnglandBluefinGrounds", "NE_SPECIES_PREFS", "nearestStructureNm", "CANYONS",
     "GULF_SPECIES_PREFS", "usesGulfSpeciesPrefs", "isGulfContext",
     "gulfYellowfinStructureLift", "gulfYellowfinStructureKind", "pickTopHotspotBadges",
-    "speciesRunRangeNm",
+    "speciesRunRangeNm", "predictCoastLimits", "portOceanBbox",
   ]);
 
 const { check, done } = makeChecker();
@@ -384,10 +384,16 @@ console.log("\nGulf of Maine black sea bass stay on nearshore wrecks, not 400 ft
     depthBandScore(115 / 3.28084, atl.depthBands) === 1);
   check("NJ winter 400 ft wreck stays in-band south of New England",
     depthBandScore(400 / 3.28084, atl.depthBands) >= 0.9);
-  check("Portland BSB run is a nearshore wreck day, not 70 nm",
-    speciesRunRangeNm("blackseabass", portland) <= 45);
+  check("Portland BSB run hugs the nearshore wreck line (~28 nm)",
+    speciesRunRangeNm("blackseabass", portland) <= 28);
   check("VA BSB keeps the 70 nm winter-wreck run",
     speciesRunRangeNm("blackseabass", vb) >= 70);
+  const env = predictCoastLimits(portland.lat, portland.lng);
+  check("Atlantic envelope reaches Portland / Casco Bay", env.latMax >= 43.7);
+  check("Atlantic envelope reaches Downeast latitudes", env.latMax >= 44.9);
+  const bb = portOceanBbox(portland);
+  check("Portland ocean bbox is not clipped at 43.5°N", bb.latMax > 43.5);
+  check("Portland bbox includes water north of the harbor", bb.latMax >= portland.lat);
   const jeffs = CANYONS.filter(c => /jeffrey/i.test(c.name));
   check("Jeffrey's Ledge is listed once", jeffs.length === 1);
   check("the duplicate Plattes Bank pin is gone",

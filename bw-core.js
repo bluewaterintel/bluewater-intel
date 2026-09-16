@@ -4740,8 +4740,13 @@ function nmOffshore(lat, lng){
 // This is the line that, west of it, is solid land (no fishing). For OBX
 // region this is the mainland shore, NOT the barrier islands.
 function mainlandCoastLng(lat){
-  // New England
-  if(lat > 43.5) return -70.40;
+  // New England — Maine coast runs ENE; a single -70.40 cut north of 43.5°
+  // treated Casco / midcoast / Downeast as 100 nm of open ocean.
+  if(lat > 44.7) return -67.05;  // Machias / Eastport
+  if(lat > 44.35) return -68.15; // Mount Desert / Bar Harbor
+  if(lat > 43.95) return -69.10; // Penobscot / Port Clyde
+  if(lat > 43.70) return -69.70; // Boothbay / Small Point
+  if(lat > 43.5) return -70.22;  // Cape Elizabeth / Portland
   if(lat > 43.0) return -70.65;
   if(lat > 42.5) return -70.55;
   if(lat > 42.1) return -70.40;
@@ -6541,7 +6546,7 @@ function speciesRunRangeNm(speciesId, portObj){
   if(speciesId === "blackseabass" && portObj
      && typeof isNewEnglandBluefinGrounds === "function"
      && isNewEnglandBluefinGrounds(portObj.lat, portObj.lng)){
-    cap = 45;
+    cap = 28;
   }
   return cap == null ? portMax : Math.min(cap, portMax);
 }
@@ -6828,6 +6833,15 @@ function requireForecastAccess(lat, lng){
 // animation frame, so the main thread stays responsive and the heat map fills
 // in progressively. A generation token cancels a stale run if the user switches
 // species/port before it finishes (prevents two runs racing onto the map).
+// Scoring / ocean-fetch envelope. 43.5°N used to clip Portland (43.66°N) and
+// all of Casco Bay, so Maine bite maps painted only south of the port. 45°N
+// matches SPECIES_LAT_RANGE and the New England grounds box.
+function predictCoastLimits(lat, lng){
+  const pac = typeof isPacificContext === "function" && isPacificContext(lat, lng);
+  if(pac) return { latMin: 29.0, latMax: 42.5, lngMin: -126.0, lngMax: -116.0 };
+  return { latMin: 24.0, latMax: 45.0, lngMin: -97.5, lngMax: -66.5 };
+}
+
 let _predictGen = 0;
 let _predictGridStep = 0.1;
 let _predictGridOrigin = { lat: 0, lng: 0 };
@@ -6847,10 +6861,11 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   // bounding box (min > max), producing zero cells and a hung ocean fetch — the
   // "Generating heat map…" spinner that never finished.
   const _pac = !!port && typeof isPacificContext === "function" && isPacificContext(port.lat, port.lng);
-  const LAT_MIN = _pac ? 29.0  : 24.0;
-  const LAT_MAX = _pac ? 42.5  : 43.5;
-  const LNG_MIN = _pac ? -126.0 : -97.5;
-  const LNG_MAX = _pac ? -116.0 : -68.5;
+  const env = (typeof predictCoastLimits === "function")
+    ? predictCoastLimits(port ? port.lat : 35, port ? port.lng : -75)
+    : { latMin: _pac ? 29.0 : 24.0, latMax: _pac ? 42.5 : 45.0,
+        lngMin: _pac ? -126.0 : -97.5, lngMax: _pac ? -116.0 : -66.5 };
+  const LAT_MIN = env.latMin, LAT_MAX = env.latMax, LNG_MIN = env.lngMin, LNG_MAX = env.lngMax;
 
   // ── Scope the fine grid to the active port's fishing range ──────────────────
   // Scoring the whole coast at a fine step would cover tens of thousands of
@@ -18322,7 +18337,11 @@ async function ensureBriefOceanData(pinLL, portObj){
   try {
     if(briefGridsCoverPin(pinLL)) return;
     if(typeof buildPredictInputs !== "function") return;
-    const LAT_MIN = 24.0, LAT_MAX = 43.5, LNG_MIN = -97.5, LNG_MAX = -68.5;
+    const env = predictCoastLimits(
+      portObj ? portObj.lat : pinLL.lat,
+      portObj ? portObj.lng : pinLL.lng
+    );
+    const LAT_MIN = env.latMin, LAT_MAX = env.latMax, LNG_MIN = env.lngMin, LNG_MAX = env.lngMax;
     let latMin, latMax, lngMin, lngMax;
     if(portObj){
       const maxRange = (typeof maxRangeForPort === "function") ? maxRangeForPort(portObj) : 100;
@@ -19608,12 +19627,10 @@ function portOceanBbox(p){
   const maxRange = (typeof maxRangeForPort === "function") ? maxRangeForPort(p) : 100;
   const degLat = (maxRange / 60) + 0.15;
   const degLng = (maxRange / (60 * Math.cos(p.lat * Math.PI / 180))) + 0.15;
-  const _pac = typeof isPacificContext === "function" && isPacificContext(p.lat, p.lng);
-  const LAT_MIN = _pac ? 29.0 : 24.0, LAT_MAX = _pac ? 42.5 : 43.5;
-  const LNG_MIN = _pac ? -126.0 : -97.5, LNG_MAX = _pac ? -116.0 : -68.5;
+  const env = predictCoastLimits(p.lat, p.lng);
   return {
-    latMin: Math.max(LAT_MIN, p.lat - degLat), latMax: Math.min(LAT_MAX, p.lat + degLat),
-    lngMin: Math.max(LNG_MIN, p.lng - degLng), lngMax: Math.min(LNG_MAX, p.lng + degLng),
+    latMin: Math.max(env.latMin, p.lat - degLat), latMax: Math.min(env.latMax, p.lat + degLat),
+    lngMin: Math.max(env.lngMin, p.lng - degLng), lngMax: Math.min(env.lngMax, p.lng + degLng),
   };
 }
 
