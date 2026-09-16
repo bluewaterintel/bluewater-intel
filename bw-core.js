@@ -5767,11 +5767,146 @@ function estuarySalinity(lat, lng){
   return 1;  // open coast / shelf — full ocean salinity
 }
 
+// ── Prediction-only charted structure (wrecks/reefs/ledges) ─────────────────
+// The full waypoint database (~12k) powers scoring proximity — it is NOT drawn
+// on the map (the Waypoints layer stays user-controlled with its own cap).
+const PREDICT_BOTTOM_STRUCTURE_TYPES = new Set(["wk", "rf", "st", "ld", "rk", "hl", "hp", "tw"]);
+const PREDICT_PELAGIC_STRUCTURE_TYPES = new Set(["cy", "pf", "rg", "tw"]);
+let _predictStructureNear = null;   // Map "lat,lng" (grid-snapped) → { nm, canyon }
+let _predictStructureSpatial = null; // { binDeg, originLat, originLng, bins: Map }
+
+function predictChartedStructureAllowed(){
+  if(typeof BW_PREMIUM !== "undefined" && BW_PREMIUM) return true;
+  try {
+    const cfg = (typeof window !== "undefined") ? window.BW_DATA_CONFIG : null;
+    return !!(cfg && cfg.embeddedFallback);
+  } catch(_e){ return false; }
+}
+
+function predictStructureTypeSet(speciesId){
+  const prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
+  if(prefs && prefs.structureProx){
+    return new Set([...PREDICT_BOTTOM_STRUCTURE_TYPES, ...PREDICT_PELAGIC_STRUCTURE_TYPES]);
+  }
+  const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
+  if(sp && sp.cat === "offshore") return PREDICT_PELAGIC_STRUCTURE_TYPES;
+  if(prefs && (prefs.demersal || prefs.breakPref === "stable")) return PREDICT_BOTTOM_STRUCTURE_TYPES;
+  return PREDICT_BOTTOM_STRUCTURE_TYPES;
+}
+
+function chartedStructureRowsNearPort(port, radiusNm, typeSet){
+  if(!port || !typeSet || !typeSet.size) return [];
+  let rows = [];
+  if(Array.isArray(_wpInRangeCache) && _wpInRangeCache.length){
+    rows = _wpInRangeCache.filter(w => w && typeSet.has(w.t));
+  } else if(typeof window !== "undefined" && window.BW_WAYPOINTS && Array.isArray(window.BW_WAYPOINTS.wp)){
+    for(const row of window.BW_WAYPOINTS.wp){
+      if(!Array.isArray(row) || row.length < 4) continue;
+      const t = row[3];
+      if(!typeSet.has(t)) continue;
+      rows.push({ name: row[0], lat: row[1], lng: row[2], t });
+    }
+  }
+  return filterWaypointsForPortAndRadius(port, rows, radiusNm);
+}
+
+function collectPredictStructureCandidates(port, radiusNm, speciesId){
+  const out = [];
+  if(typeof CANYONS !== "undefined" && Array.isArray(CANYONS)){
+    for(const c of CANYONS){
+      if(c.lat == null || c.lng == null) continue;
+      if(speciesId && Array.isArray(c.fish) && c.fish.length && !c.fish.includes(speciesId)) continue;
+      if(port && typeof reachableFromPort === "function" && !reachableFromPort(port, c.lat, c.lng)) continue;
+      if(port && typeof nmBetween === "function" && nmBetween(port.lat, port.lng, c.lat, c.lng) > radiusNm + 0.05) continue;
+      out.push({ lat: c.lat, lng: c.lng, canyon: c });
+    }
+  }
+  if(predictChartedStructureAllowed()){
+    const types = predictStructureTypeSet(speciesId);
+    for(const w of chartedStructureRowsNearPort(port, radiusNm, types)){
+      out.push({
+        lat: w.lat, lng: w.lng,
+        canyon: { name: w.name || "Charted structure", type: w.t, lat: w.lat, lng: w.lng, fish: [] },
+      });
+    }
+  }
+  return out;
+}
+
+function _structureSnapKey(lat, lng, step, originLat, originLng){
+  const oLa = originLat != null ? originLat : 0;
+  const oLn = originLng != null ? originLng : 0;
+  const snap = (v, o, st) => o + Math.round((v - o) / st) * st;
+  return `${snap(lat, oLa, step).toFixed(4)},${snap(lng, oLn, step).toFixed(4)}`;
+}
+
+function buildPredictStructureSpatialIndex(candidates, originLat, originLng){
+  const binDeg = 0.2;
+  const bins = new Map();
+  for(const p of candidates){
+    const i = Math.floor((p.lat - originLat) / binDeg);
+    const j = Math.floor((p.lng - originLng) / binDeg);
+    const k = `${i},${j}`;
+    let arr = bins.get(k);
+    if(!arr){ arr = []; bins.set(k, arr); }
+    arr.push(p);
+  }
+  _predictStructureSpatial = { binDeg, originLat, originLng, bins };
+}
+
+function nearestStructureAmongCandidates(lat, lng, candidates){
+  let best = null, bestC = null;
+  for(const p of candidates){
+    const d = (typeof nmBetween === "function")
+      ? nmBetween(lat, lng, p.lat, p.lng)
+      : Math.hypot((lat - p.lat) * 60, (lng - p.lng) * 60 * Math.cos(lat * Math.PI / 180));
+    if(best == null || d < best){ best = d; bestC = p.canyon; }
+  }
+  return best == null ? null : { canyon: bestC, nm: best };
+}
+
+function nearestStructureFromSpatialIndex(lat, lng){
+  const idx = _predictStructureSpatial;
+  if(!idx || !idx.bins) return null;
+  const i0 = Math.floor((lat - idx.originLat) / idx.binDeg);
+  const j0 = Math.floor((lng - idx.originLng) / idx.binDeg);
+  const pool = [];
+  for(let di = -3; di <= 3; di++){
+    for(let dj = -3; dj <= 3; dj++){
+      const arr = idx.bins.get(`${i0 + di},${j0 + dj}`);
+      if(arr) pool.push(...arr);
+    }
+  }
+  if(!pool.length) return null;
+  return nearestStructureAmongCandidates(lat, lng, pool);
+}
+
+function precomputePredictStructureNear(latMin, latMax, lngMin, lngMax, step, originLat, originLng, candidates){
+  _predictStructureNear = new Map();
+  if(!candidates.length) return;
+  buildPredictStructureSpatialIndex(candidates, originLat, originLng);
+  for(let la = latMin; la <= latMax + 1e-9; la += step){
+    for(let ln = lngMin; ln <= lngMax + 1e-9; ln += step){
+      if(typeof isPredictWater === "function" && !isPredictWater(la, ln)) continue;
+      const hit = nearestStructureAmongCandidates(la, ln, candidates);
+      if(hit) _predictStructureNear.set(_structureSnapKey(la, ln, step, originLat, originLng), hit);
+    }
+  }
+}
+
 // Nearest mapped structure (reef/wreck/lump/shoal/ledge) to a point, in nm,
 // considering only structures relevant to the species when fish info is given.
 // Used to lift structure-oriented species' scores near real structure so the
 // ledges/rips read hotter than open flat bottom. Returns null if none in range.
 function nearestMappedStructure(lat, lng, speciesId){
+  const step = (_predictStructureNear && _predictGridStep) ? _predictGridStep : 0.1;
+  const oLa = (_predictGridOrigin && _predictGridOrigin.lat != null) ? _predictGridOrigin.lat : 0;
+  const oLn = (_predictGridOrigin && _predictGridOrigin.lng != null) ? _predictGridOrigin.lng : 0;
+  const key = _structureSnapKey(lat, lng, step, oLa, oLn);
+  if(_predictStructureNear && _predictStructureNear.has(key)) return _predictStructureNear.get(key);
+  const spatial = nearestStructureFromSpatialIndex(lat, lng);
+  if(spatial) return spatial;
+
   if(typeof CANYONS === "undefined" || !Array.isArray(CANYONS)) return null;
   let best = null, bestC = null;
   for(const c of CANYONS){
@@ -6440,7 +6575,11 @@ function predictResultCacheKey(){
     : "0";
   return `${activePort || ""}:${activeSpId || ""}:${FORECAST_HOUR_OFFSET || 0}:${reportSig}:${predictOceanFingerprint()}`;
 }
-function invalidatePredictCache(){ _predictResultCache = null; }
+function invalidatePredictCache(){
+  _predictResultCache = null;
+  _predictStructureNear = null;
+  _predictStructureSpatial = null;
+}
 
 // Rank score for hotspot badge selection — favors in-season, high-confidence runs.
 function hotspotRankScore(cell){
@@ -6676,6 +6815,8 @@ function requireForecastAccess(lat, lng){
 // in progressively. A generation token cancels a stale run if the user switches
 // species/port before it finishes (prevents two runs racing onto the map).
 let _predictGen = 0;
+let _predictGridStep = 0.1;
+let _predictGridOrigin = { lat: 0, lng: 0 };
 function computePredictionGridAsync(speciesId, onProgress, onDone){
   const myGen = ++_predictGen;
   if(speciesId === "all"){ onDone && onDone(null, myGen); return myGen; }
@@ -6725,6 +6866,16 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
     latMin = LAT_MIN; latMax = LAT_MAX; lngMin = LNG_MIN; lngMax = LNG_MAX;
     step = 0.25;
     ROWS_PER_FRAME = 6;
+  }
+
+  _predictGridStep = step;
+  _predictGridOrigin = { lat: latMin, lng: lngMin };
+  if(port){
+    const structCandidates = collectPredictStructureCandidates(port, maxRange, speciesId);
+    precomputePredictStructureNear(latMin, latMax, lngMin, lngMax, step, latMin, lngMin, structCandidates);
+  } else {
+    _predictStructureNear = null;
+    _predictStructureSpatial = null;
   }
 
   const heatGrid = [];
