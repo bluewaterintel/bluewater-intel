@@ -13,10 +13,23 @@ const authgate = readFileSync(join(root, "bw-authgate.js"), "utf8");
 const auth = readFileSync(join(root, "bw-auth.js"), "utf8");
 const confirmedHtml = readFileSync(join(root, "email-confirmed.html"), "utf8");
 const buildScript = readFileSync(join(root, "scripts/build-ios-www.mjs"), "utf8");
+const capacitor = readFileSync(join(root, "bw-capacitor.js"), "utf8");
+
+assert.match(capacitor, /presentationStyle: platform === "ios" \? "fullscreen" : "popover"/);
+assert.match(capacitor, /App\.openUrl/);
+assert.doesNotMatch(
+  capacitor,
+  /Browser\.open\(\{ url, presentationStyle: "popover" \}\)/,
+  "iOS must not use popover-only Browser.open",
+);
 
 // Native Stripe subscribers should open stripe-portal, not show a dead-end toast.
 assert.match(billing, /openStripeBillingPortal/);
 assert.match(billing, /bwBillingSource\(p\) === "stripe"/);
+assert.match(billing, /await openBillingUrl\(j\.url\)/);
+assert.match(billing, /billingStatusEl/);
+assert.match(billing, /wireIosBillingTapFallback\(page\)/);
+assert.match(billing, /Opening billing/);
 assert.doesNotMatch(
   billing,
   /can't be canceled from the App Store or Google Play/,

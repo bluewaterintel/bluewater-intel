@@ -72,12 +72,32 @@
   const plugins = cap.Plugins || {};
 
   async function openExternalUrl(url) {
+    if (!url) return;
     const Browser = plugins.Browser;
+    const App = plugins.App;
+    const platform = typeof cap.getPlatform === "function" ? cap.getPlatform() : "";
+    // iPhone: presentationStyle "popover" often never appears (no popover
+    // source view). Use fullscreen in-app Safari, then the system browser.
     if (Browser && Browser.open) {
-      await Browser.open({ url, presentationStyle: "popover" });
-      return;
+      try {
+        await Browser.open({
+          url,
+          presentationStyle: platform === "ios" ? "fullscreen" : "popover",
+        });
+        return;
+      } catch (e) {
+        console.warn("BW_CAPACITOR: Browser.open failed", e);
+      }
     }
-    window.location.href = url;
+    if (App && App.openUrl) {
+      try {
+        await App.openUrl({ url });
+        return;
+      } catch (e) {
+        console.warn("BW_CAPACITOR: App.openUrl failed", e);
+      }
+    }
+    window.open(url, "_blank") || (window.location.href = url);
   }
 
   // Hide the native splash only after auth/session is resolved (see bw-authgate.js).
