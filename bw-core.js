@@ -16156,15 +16156,18 @@ async function refreshEntitlement(){
       premium = true; paid = true; admin = true;                     // owner fast-path
     } else if(u && window.BW_AUTH && window.BW_AUTH._sb){
       const { data: p, error } = await window.BW_AUTH._sb
-        .from("profiles").select("is_owner, subscription_status, current_period_end, plan_selected_at").maybeSingle();
+        .from("profiles").select("is_owner, subscription_status, subscription_interval, current_period_end, billing_source, plan_selected_at").maybeSingle();
       if(error) throw error;
       if(p){
         const st = p.subscription_status;
         const cpe = p.current_period_end ? new Date(p.current_period_end).getTime() : 0;
+        const storePaid = (p.billing_source === "apple" || p.billing_source === "google")
+          && cpe > Date.now() && st !== "canceled";
         if(p.is_owner){ premium = true; paid = true; admin = true; }              // owner: full access
         else if(st === "active" || st === "lifetime"){ premium = true; paid = true; }
         else if(st === "trialing"){ premium = true; paid = false; trialing = true; }
         else if(cpe > Date.now() && st !== "canceled"){ premium = true; paid = true; } // grace period
+        else if(storePaid){ premium = true; paid = true; } // IAP row synced without status (repair)
         // Returning subscriber / plan already chosen — remember locally so offline
         // sessions don't re-open the post-signup plan picker.
         if(p.plan_selected_at || p.is_owner || premium){

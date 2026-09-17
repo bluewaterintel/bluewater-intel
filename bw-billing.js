@@ -697,34 +697,39 @@
   window.renderNavPlan = async function(){
     const el = document.getElementById("nav-plan"); if(!el) return;
     let tier = "Free", detail = "Maps, ports, catches & your own waypoints";
-    let st = "none", interval = null, isOwner = false;
+    let st = "none", interval = null, isOwner = false, showPro = false, showTrial = false;
     try {
       const s = sb();
       if(s){
-        const { data:p } = await s.from("profiles").select("is_owner, subscription_status, subscription_interval").maybeSingle();
+        const { data:p } = await s.from("profiles").select("is_owner, subscription_status, subscription_interval, current_period_end, billing_source").maybeSingle();
         st = (p && p.subscription_status) || "none";
         interval = p && p.subscription_interval;
         isOwner = !!(p && p.is_owner);
+        const cpe = p && p.current_period_end ? new Date(p.current_period_end).getTime() : 0;
+        const storePaid = p && (p.billing_source === "apple" || p.billing_source === "google")
+          && cpe > Date.now() && st !== "canceled";
+        showPro = st === "active" || storePaid;
+        showTrial = st === "trialing";
         if(isOwner){ tier="Owner"; detail="Full access · unlimited"; }
-        else if(st==="active"){ tier="Pro"; detail="Full app · all waypoints · 2 AI briefs/day"; }
-        else if(st==="trialing"){ tier="7 Day Trial"; detail="Full app · all waypoints · 1 free AI brief"; }
+        else if(showPro){ tier="Pro"; detail="Full app · all waypoints · 2 AI briefs/day"; }
+        else if(showTrial){ tier="7 Day Trial"; detail="Full app · all waypoints · 1 free AI brief"; }
       }
     } catch(e){ /* show free */ }
     const badgeStyle = "font-family:inherit;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.45);color:#86efac;font-size:11px;font-weight:700;padding:7px 12px;border-radius:7px;white-space:nowrap;text-align:center";
     let actionHtml = `<button type="button" onclick="openPricing()" style="font-family:inherit;background:#2979b5;border:none;color:#fff;font-size:11px;font-weight:700;padding:7px 12px;border-radius:7px;cursor:pointer">Upgrade</button>`;
     if(isOwner){
       actionHtml = `<span style="${badgeStyle}">Owner</span>`;
-    } else if(st==="active"){
+    } else if(showPro){
       const planLabel = interval === "year" ? "PRO Annual" : "PRO Monthly";
       actionHtml = `<span style="${badgeStyle}">${planLabel}</span>`;
-    } else if(st==="trialing"){
+    } else if(showTrial){
       actionHtml = `<span style="${badgeStyle}">7 Day Trial</span>`;
     }
     // Entitled accounts lose the Upgrade button, which otherwise makes the plan
     // list unreachable — including for App Review, who sign in already entitled.
     // Billing is managed on the Account page (Stripe vs App Store vs Play),
     // not from this menu card — a dead-looking shortcut confused website subscribers.
-    const entitled = isOwner || st==="active" || st==="trialing";
+    const entitled = isOwner || showPro || showTrial;
     const viewPlansHtml = entitled
       ? `<button type="button" onclick="openPricing()" style="font-family:inherit;background:transparent;border:1px solid rgba(107,191,234,.35);color:#6bbfea;font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;cursor:pointer">View plans</button>`
       : "";
