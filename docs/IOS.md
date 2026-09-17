@@ -239,10 +239,13 @@ npm run build:ios && npx cap sync ios
 
 ```bash
 supabase secrets set REVENUECAT_WEBHOOK_AUTH=your-long-random-secret
-supabase secrets set REVENUECAT_SECRET_API_KEY=sk_your_revenuecat_secret_key
+supabase secrets set REVENUECAT_SECRET_API_KEY=sk_your_revenuecat_v2_secret_key
+supabase secrets set REVENUECAT_PROJECT_ID=proj_your_project_id
 supabase functions deploy revenuecat-webhook --no-verify-jwt
 supabase functions deploy iap-sync
 ```
+
+Use a **V2** secret key with **Customer information → Read** (V1 keys and V2 keys are not interchangeable with the REST paths we call). Copy **Project ID** (`proj_…`) from RevenueCat → **Project settings → General**.
 
 Webhook URL:
 ```
