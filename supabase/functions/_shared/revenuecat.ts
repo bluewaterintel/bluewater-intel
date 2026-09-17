@@ -79,6 +79,14 @@ function subscriptionHasPro(sub: RcV2Subscription): boolean {
   return isProProduct(sub.product_id ?? "");
 }
 
+function subscriptionInterval(productHint: string, sub: RcV2Subscription): string {
+  if (/annual|year/i.test(productHint)) return "year";
+  const start = sub.current_period_starts_at;
+  const end = sub.current_period_ends_at;
+  if (start != null && end != null && end - start > 180 * 24 * 60 * 60 * 1000) return "year";
+  return "month";
+}
+
 function profilePatchFromV2Subscription(appUserId: string, sub: RcV2Subscription) {
   let productHint = sub.product_id ?? "";
   for (const ent of sub.entitlements?.items ?? []) {
@@ -95,7 +103,7 @@ function profilePatchFromV2Subscription(appUserId: string, sub: RcV2Subscription
     id: appUserId,
     billing_source: billingSourceFromRcStore(sub.store),
     subscription_status: status,
-    subscription_interval: /annual|year/i.test(productHint) ? "year" : "month",
+    subscription_interval: subscriptionInterval(productHint, sub),
     current_period_end: msToIso(sub.current_period_ends_at),
     updated_at: new Date().toISOString(),
   };
