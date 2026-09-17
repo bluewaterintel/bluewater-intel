@@ -5,7 +5,8 @@
 // Fallback when the RevenueCat webhook is delayed or missed. The iOS app calls
 // this after purchase/restore so Pro unlocks without waiting on webhook delivery.
 //
-// SECRETS: REVENUECAT_SECRET_API_KEY (RevenueCat project secret key, NOT appl_ SDK key)
+// SECRETS: REVENUECAT_SECRET_API_KEY (V2 secret, Customer information: Read),
+//         REVENUECAT_PROJECT_ID (proj_… from Project settings → General)
 //   RESEND_API_KEY, ALERT_EMAIL — owner email when sync newly grants Pro/trial
 // ============================================================================
 
@@ -18,6 +19,7 @@ import {
 import { fetchRcProfilePatch } from "../_shared/revenuecat.ts";
 
 const RC_SECRET = Deno.env.get("REVENUECAT_SECRET_API_KEY") ?? "";
+const RC_PROJECT = Deno.env.get("REVENUECAT_PROJECT_ID") ?? "";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
@@ -42,6 +44,11 @@ Deno.serve(async (req) => {
       status: 503,
     });
   }
+  if (!RC_PROJECT || RC_PROJECT.includes("YOUR_")) {
+    return new Response(JSON.stringify({
+      error: "REVENUECAT_PROJECT_ID not configured (required for V2 secret keys).",
+    }), { status: 503 });
+  }
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -56,7 +63,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const beforeStatus = (beforeProf?.subscription_status as string | null) ?? "none";
 
-    const patch = await fetchRcProfilePatch(user.id, RC_SECRET);
+    const patch = await fetchRcProfilePatch(user.id, RC_SECRET, RC_PROJECT);
     const { error } = await admin.from("profiles").upsert(patch, { onConflict: "id" });
     if (error) {
       console.error("iap-sync upsert failed", error.message);
