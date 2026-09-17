@@ -9,6 +9,21 @@ export type ProfileEntitlementSnapshot = {
   billing_source?: string | null;
 };
 
+/** True when profiles row grants Pro (matches app gating, simplified). */
+export function profileEntitled(st: string | null | undefined): boolean {
+  return st === "active" || st === "trialing" || st === "lifetime";
+}
+
+export function appleTierLabel(
+  status: string | null | undefined,
+  interval: string | null | undefined,
+): string {
+  const planName = interval === "year" ? "Pro — Annual" : "Pro — Monthly";
+  if (status === "trialing") return `7-day free trial → ${planName}`;
+  if (status === "active") return planName;
+  return planName;
+}
+
 function fmtWhen(iso: string | null | undefined): string {
   if (!iso) return "—";
   try { return new Date(iso).toUTCString(); } catch { return iso; }
@@ -76,5 +91,38 @@ export async function notifyOwnerStripeSubscriber(opts: {
     await sendOwnerEmail({ subject: `New subscriber: ${opts.tierLabel}`, html });
   } catch (e) {
     console.error("notifyOwnerStripeSubscriber failed", (e as Error)?.message);
+  }
+}
+
+/**
+ * Apple — iap-sync promoted a user who was not entitled before (webhook missed / partial row).
+ * Fires on none/canceled → active/trialing. Skips if they were already entitled (sign-in resync).
+ */
+export async function notifyOwnerAppleIapSyncBackup(opts: {
+  email: string | null;
+  userId: string;
+  tierLabel: string;
+  beforeStatus: string | null;
+  profile: ProfileEntitlementSnapshot;
+}): Promise<void> {
+  try {
+    const html = ownerEmailShell("🍎 App Store entitlement synced (iap-sync)", `
+      <p style="margin:0 0 12px;font-size:13px;color:#9ec5e8">
+        The app called <b>iap-sync</b> and Supabase was updated from
+        <b>${esc(opts.beforeStatus ?? "none")}</b> → <b>${esc(opts.profile.subscription_status ?? "—")}</b>.
+        Use this when RevenueCat shows a subscription but the webhook may not have run.
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;color:#e8f4ff">
+        <tr><td style="padding:6px 0;color:#9ec5e8;width:130px">Email</td><td style="padding:6px 0;font-weight:700">${esc(opts.email ?? "(unknown)")}</td></tr>
+        <tr><td style="padding:6px 0;color:#9ec5e8">Supabase user</td><td style="padding:6px 0;font-size:12px">${esc(opts.userId)}</td></tr>
+        <tr><td style="padding:6px 0;color:#9ec5e8">Tier</td><td style="padding:6px 0;font-weight:700">${esc(opts.tierLabel)}</td></tr>
+        ${profileRows(opts.profile)}
+      </table>`);
+    await sendOwnerEmail({
+      subject: `App Store sync (iap-sync): ${opts.tierLabel}`,
+      html,
+    });
+  } catch (e) {
+    console.error("notifyOwnerAppleIapSyncBackup failed", (e as Error)?.message);
   }
 }
