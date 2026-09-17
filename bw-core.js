@@ -295,11 +295,54 @@ function mapReport(r){
   };
 }
 
-// Load recent community reports (de-identified) into SOCIAL; refresh dependent UI.
+// Load community reports (de-identified) into SOCIAL; refresh dependent UI.
+// ────────────────────────────────────────────────────────────────────────────
+// HOW FAR BACK: the bite-map factor never looks past 72h (reportsBoost drops
+// anything older), so the history window exists purely for the FORUM — anglers
+// want to read what was biting this week last season, not just this month. Boot
+// loads a light 90 days; opening the forum widens to a year, and its "Any time"
+// filter drops the date bound entirely. The window only ever GROWS during a
+// session, so a background refresh can't silently discard history the user
+// already pulled in.
+const REPORTS_DEFAULT_DAYS = 90;
+let _reportsLoadedDays = 0;          // days of history currently in SOCIAL (Infinity = all)
 let _reportsLoading = false;
-async function loadReports(){
-  if(_reportsLoading) return;
+let _reportsLoadPromise = null;
+let _reportsQueuedOpts = null;
+
+function _mergeReportOpts(a, b){
+  if(!a) return { ...b };
+  if(!b) return { ...a };
+  const toDays = (o) => o.sinceDays === null ? Infinity : (o.sinceDays || REPORTS_DEFAULT_DAYS);
+  const maxDays = Math.max(toDays(a), toDays(b));
+  return {
+    sinceDays: maxDays === Infinity ? null : maxDays,
+    limit: Math.max(a.limit || 0, b.limit || 0) || undefined,
+    region: b.region || a.region,
+  };
+}
+
+async function loadReports(opts = {}){
   if(typeof window === "undefined" || !window.BW_AUTH || !window.BW_AUTH.fetchReports) return;
+  if(_reportsLoadPromise){
+    _reportsQueuedOpts = _mergeReportOpts(_reportsQueuedOpts, opts);
+    return _reportsLoadPromise;
+  }
+  _reportsLoadPromise = _loadReportsOnce(opts).finally(async () => {
+    _reportsLoadPromise = null;
+    if(_reportsQueuedOpts){
+      const next = _reportsQueuedOpts;
+      _reportsQueuedOpts = null;
+      await loadReports(next);
+    }
+  });
+  return _reportsLoadPromise;
+}
+
+async function _loadReportsOnce(opts = {}){
+  if(_reportsLoading) return;
+  const requested = opts.sinceDays === null ? Infinity : (opts.sinceDays || REPORTS_DEFAULT_DAYS);
+  const wantDays = Math.max(requested, _reportsLoadedDays || 0);
   _reportsLoading = true;
   const prevReportSig = (typeof SOCIAL !== "undefined" && SOCIAL.length)
     ? `${SOCIAL.length}:${SOCIAL[0]?.hoursAgo ?? ""}:${SOCIAL[0]?.id ?? ""}`
@@ -311,7 +354,11 @@ async function loadReports(){
     } else {
       _myReportIds = new Set();
     }
-    const rows = await window.BW_AUTH.fetchReports({ sinceDays: 21, limit: 400 });
+    const rows = await window.BW_AUTH.fetchReports({
+      sinceDays: wantDays === Infinity ? null : wantDays,
+      limit: opts.limit || (wantDays > 180 ? 3000 : 800),
+    });
+    _reportsLoadedDays = wantDays;
     SOCIAL = (rows || []).map(mapReport);
     const newReportSig = SOCIAL.length
       ? `${SOCIAL.length}:${SOCIAL[0]?.hoursAgo ?? ""}:${SOCIAL[0]?.id ?? ""}`
@@ -1481,7 +1528,7 @@ async function dtFetchWaypoints(p){
     const sbc = window.BW_AUTH && window.BW_AUTH._sb;
     if(!sbc) return [];
     const types = (typeof wpTypeFilter !== "undefined" && wpTypeFilter) ? [...wpTypeFilter] : null;
-    const radius = (typeof wpRadiusNm !== "undefined") ? wpRadiusNm : 40;
+    const radius = (typeof wpRadiusNm !== "undefined") ? wpRadiusNm : WP_DEFAULT_RADIUS_NM;
     const { data, error } = await sbc.rpc("pack_waypoints_within", {
       p_port: activePort, p_lat: p.lat, p_lng: p.lng, p_radius_nm: radius, p_types: types,
     });
@@ -2688,15 +2735,24 @@ async function buildWindFieldForMap(){
   updateOceanLegend();
   return WIND_FIELD;
 }
-function windScore(lat, lng, speciesPrefs, windDir){
+function windScore(lat, lng, speciesPrefs, windDir, speciesId){
   // windDir is the REAL wind direction (degrees FROM) from the nearest NDBC buoy,
   // passed in from the ocean field. No real observation → neutral (we never
   // synthesize a direction).
   if(windDir == null || !isFinite(windDir)) return 0.5;
+  const from = ((windDir % 360) + 360) % 360;
   // Onshore wind on the East Coast = wind FROM the east (~45° to 135°).
   // Offshore wind = FROM the west (~225° to 315°).
-  const isOnshore = (windDir >= 45 && windDir <= 135);
-  const isOffshore = (windDir >= 225 && windDir <= 315);
+  const isOnshore = (from >= 45 && from <= 135);
+  const isOffshore = (from >= 225 && from <= 315);
+  // Sailfish winter run: north / northeast against the northbound Stream
+  // stacks bait on the SE FL reef. West wind blows it off.
+  if(speciesId === "sailfish" || (speciesId === "wahoo" && isSeFloridaAtlantic(lat, lng))){
+    if(from <= 90 || from >= 330) return 0.95;
+    if(isOnshore) return 0.80;
+    if(isOffshore) return 0.45;
+    return 0.65;
+  }
   // Offshore species generally prefer some onshore wind (stacks bait against structure)
   // but not too strong; light onshore is ideal.
   // Inshore species like calm or light offshore wind (clearer water).
@@ -2739,18 +2795,184 @@ function windScore(lat, lng, speciesPrefs, windDir){
 // PREDICT_WEIGHTS moved to bw-data-species.js (Approach A modularization)
 
 // Helper — return the appropriate weight table for a species
-function predictWeightsFor(speciesId){
+function predictWeightsFor(speciesId, lat, lng){
   const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
   const cat = sp ? sp.cat : "offshore";
   // Nearshore splits into two archetypes with opposite drivers: roving pelagics
   // (mackerel, albies, cobia) chase temp/bait/color edges, while reef/bottom
   // demersals (snapper, grouper, tog, AJ, sea bass, etc.) key on structure +
   // current. Route the demersal/bottom-flagged nearshore fish to the reef table.
+  if(speciesId === "mahi" && PREDICT_WEIGHTS.mahi) return PREDICT_WEIGHTS.mahi;
+  if(speciesId === "sailfish" && PREDICT_WEIGHTS.sailfish) return PREDICT_WEIGHTS.sailfish;
+  if(speciesId === "skipjack" && PREDICT_WEIGHTS.skipjack) return PREDICT_WEIGHTS.skipjack;
+  if(speciesId === "wahoo" && PREDICT_WEIGHTS.wahooSeFl && isSeFloridaAtlantic(lat, lng)){
+    return PREDICT_WEIGHTS.wahooSeFl;
+  }
   if(cat === "nearshore"){
     const prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
     if(prefs && (prefs.demersal || prefs.bottom)) return PREDICT_WEIGHTS.nearshoreReef;
   }
   return PREDICT_WEIGHTS[cat] || PREDICT_WEIGHTS.offshore;
+}
+
+// Recent weather change from live buoy/forecast obs (wind, seas, 24h pressure
+// trend). During a blow the bite scatters; 24-72h after a front (rising
+// pressure, seas settling) fish re-orient and feed; many days of settled
+// weather is neutral. Missing inputs stay at 0.5 / "steady" — never synthesized.
+function weatherChangeFromObs({ windKt, waveFt, pressureTrend } = {}){
+  const parts = [];
+  if(waveFt != null && isFinite(waveFt)) parts.push(`${Math.round(waveFt * 10) / 10} ft seas`);
+  if(windKt != null && isFinite(windKt)) parts.push(`${Math.round(windKt)} kt`);
+  if(pressureTrend != null && isFinite(pressureTrend)){
+    const sign = pressureTrend > 0 ? "+" : "";
+    parts.push(`${sign}${pressureTrend.toFixed(1)} hPa`);
+  }
+  const raw = parts.length ? parts.join(" · ") : "—";
+  const hasWind = windKt != null && isFinite(windKt);
+  const hasWave = waveFt != null && isFinite(waveFt);
+  const hasPres = pressureTrend != null && isFinite(pressureTrend);
+  if(!hasWind && !hasWave && !hasPres) return { score: 0.5, label: "steady", raw: "—" };
+
+  const seas = hasWave ? waveFt : null;
+  const wind = hasWind ? windKt : null;
+  const pres = hasPres ? pressureTrend : null;
+  const blow = Math.max(
+    seas != null ? Math.max(0, Math.min(1, (seas - 4) / 6)) : 0,
+    wind != null ? Math.max(0, Math.min(1, (wind - 12) / 16)) : 0,
+  );
+
+  if(blow >= 0.5){
+    const score = Math.max(0.18, 0.40 - 0.28 * blow);
+    return { score, label: "fresh blow", raw };
+  }
+  if(pres != null && pres <= -2) return { score: 0.32, label: "front arriving", raw };
+  if(pres != null && pres >= 2 && blow < 0.35) return { score: 0.82, label: "post-front", raw };
+  if(blow >= 0.25) return { score: 0.40, label: "unsettled", raw };
+  return { score: 0.5, label: "steady", raw };
+}
+
+function bluewaterGateFor(speciesId, depthM, lat, lng){
+  if(!(depthM > 0)) return 1;
+  // Blackfin wrecks and mahi weed lines start ~80 ft, not 50 m. Full credit
+  // by ~400 ft so Hatteras/Lookout structure is not treated as "too inshore."
+  if(speciesId === "blackfin" || speciesId === "mahi" || speciesId === "skipjack"){
+    // Gulf blackfin: Panhandle beach bait-chase is 30-80 ft. Full credit by
+    // ~165 ft so The Edge / Destin wrecks still outrank a 3-mile slick, but
+    // 40 ft water is "good" instead of vetoed. Atlantic keeps the 80 ft floor
+    // that stops a VA Beach inner-shelf bloom.
+    if(speciesId === "blackfin" && typeof isGulfContext === "function" && isGulfContext(lat, lng)){
+      if(depthM >= 50) return 1;
+      if(depthM >= 10)  return 0.50 + 0.50 * ((depthM - 10) / (50 - 10));
+      return 0.20 + 0.30 * (depthM / 10);
+    }
+    if(depthM >= 120) return 1;
+    if(depthM >= 25)  return 0.45 + 0.55 * ((depthM - 25) / (120 - 25));
+    return 0.12 + 0.33 * (depthM / 25);
+  }
+  // Sailfish (and SE FL wahoo) kite/troll the reef and Stream wall in 50-250 ft.
+  // The generic 180 m full-credit ramp treated Sailfish Alley as "too inshore."
+  if(speciesId === "sailfish" || (speciesId === "wahoo" && isSeFloridaAtlantic(lat, lng))){
+    // Gulf sails: Sep-Oct they slide in with bait a few miles off PCB/Destin.
+    // Full credit by ~130 ft (The Edge still wins); 40-60 ft is fishable.
+    if(speciesId === "sailfish" && typeof isGulfContext === "function" && isGulfContext(lat, lng)){
+      if(depthM >= 40) return 1;
+      if(depthM >= 8)  return 0.50 + 0.50 * ((depthM - 8) / (40 - 8));
+      return 0.20 + 0.30 * (depthM / 8);
+    }
+    if(depthM >= 80) return 1;
+    if(depthM >= 15)  return 0.45 + 0.55 * ((depthM - 15) / (80 - 15));
+    return 0.12 + 0.33 * (depthM / 15);
+  }
+  // Gulf yellowfin/wahoo: Midnight Lump tops sit in ~180-400 ft, not 180 m
+  // canyon water. Full credit from the Gulf yellowfin floor (~180 ft).
+  // Atlantic yellowfin keeps the 180 m ramp.
+  if((speciesId === "yellowfin" || speciesId === "wahoo") &&
+     typeof isGulfContext === "function" && isGulfContext(lat, lng)){
+    if(depthM >= 55) return 1;
+    if(depthM >= 18)  return 0.45 + 0.55 * ((depthM - 18) / (55 - 18));
+    return 0.12 + 0.33 * (depthM / 18);
+  }
+  if(depthM >= 180) return 1;
+  if(depthM >= 50)  return 0.35 + 0.65 * ((depthM - 50) / (180 - 50));
+  return 0.10 + 0.25 * (depthM / 50);
+}
+
+// Stuart / Palm Beach / Miami Atlantic — Stream hugs the beach. Used so wahoo
+// on the 150-250 ft wall is not gated like a Mid-Atlantic canyon fish.
+function isSeFloridaAtlantic(lat, lng){
+  return lat != null && lng != null && isFinite(lat) && isFinite(lng)
+    && lat < 29.5 && lat >= 24.2 && lng > -81.3 && lng < -79.4;
+}
+
+// Key West / Marathon / Islamorada. West of the SE FL Atlantic strip, so
+// isSeFloridaAtlantic() is false here — mahi still needs the tropical SST band.
+function isFloridaKeys(lat, lng){
+  return lat != null && lng != null && isFinite(lat) && isFinite(lng)
+    && lat < 25.5 && lat >= 24.0 && lng > -83.0 && lng < -80.0;
+}
+
+function usesSeFlSpeciesPrefs(speciesId, lat, lng){
+  if(typeof SEFL_SPECIES_PREFS === "undefined" || !SEFL_SPECIES_PREFS[speciesId]) return false;
+  if(typeof isSeFloridaAtlantic === "function" && isSeFloridaAtlantic(lat, lng)) return true;
+  if(speciesId === "mahi" && isFloridaKeys(lat, lng)) return true;
+  return false;
+}
+
+// Gulf Loop Current / LA lumps / TX breaks. Keys stay on SEFL mahi prefs.
+function usesGulfSpeciesPrefs(speciesId, lat, lng){
+  if(typeof GULF_SPECIES_PREFS === "undefined" || !GULF_SPECIES_PREFS[speciesId]) return false;
+  return typeof isGulfContext === "function" && isGulfContext(lat, lng);
+}
+
+// Stellwagen / Jeffrey's / GOM bluefin grounds. Used so summer giants score
+// the banks, not Mass Bay beach water. Hatteras winter stays on the base table.
+function isNewEnglandBluefinGrounds(lat, lng){
+  return lat != null && lng != null && isFinite(lat) && isFinite(lng)
+    && lat >= 41.0 && lat <= 45.0 && lng > -72.5 && lng < -66.0;
+}
+
+// Table 3 (1.00) is peak. Table 2 (0.67) used to display as peak because the
+// cutoff was 0.66. Only a 3 should read peak; a 2 is good.
+function seasonAlignmentLabel(seasonScore){
+  if(!(seasonScore > 0)) return "off";
+  if(seasonScore >= 0.83) return "peak";
+  if(seasonScore >= 0.50) return "good";
+  return "off";
+}
+
+// Chlorophyll factor. "weed" is the mahi/paddy proxy: moderate color plus a
+// color edge (sargassum and kelp sit on green-to-blue rips). No dedicated
+// sargassum feed — this uses the VIIRS chlorophyll we already have.
+function chlorScoreForPref(pref, chlor, chlorBreak){
+  if(chlor == null || !isFinite(chlor)) return 0;
+  if(pref === "low")  return chlor < 0.2 ? 1.0 : chlor < 0.5 ? 0.6 : 0.2;
+  if(pref === "high") return chlor > 1.0 ? 1.0 : chlor > 0.5 ? 0.6 : 0.2;
+  const gradScore = (typeof BW_BREAKS !== "undefined" && BW_BREAKS.chlorEdgeStrength)
+    ? BW_BREAKS.chlorEdgeStrength(chlorBreak) : 0;
+  if(pref === "weed"){
+    const inBand = (chlor >= 0.08 && chlor <= 0.45);
+    const bandScore = inBand ? 1.0 : (chlor < 0.08 ? 0.45 : 0.25);
+    return Math.min(1, 0.40 * bandScore + 0.60 * gradScore);
+  }
+  if(pref === "edge"){
+    const inBand = (chlor >= 0.1 && chlor <= 0.45);
+    const bandScore = inBand ? 1.0 : (chlor < 0.1 ? 0.5 : 0.35);
+    return Math.min(1, 0.35 * bandScore + 0.65 * gradScore);
+  }
+  if(pref === "any") return 0.7;
+  return 0.5;
+}
+
+// Canyon-depth bonus is for tuna/billfish holding on the drop. Mahi ride
+// floating cover over any fishable blue water — do not treat 400 m as better.
+// Gulf yellowfin hold on deepwater floaters/rigs, not a 100-500 m canyon wall,
+// so a Lump cell must not outrank the Floaters just for sitting in 200-400 m.
+function canyonDepthBoost(speciesId, bands, depth, lat, lng){
+  if(speciesId === "mahi" || speciesId === "sailfish" || speciesId === "skipjack") return 0;
+  if(speciesId === "yellowfin" && lat != null &&
+     typeof isGulfContext === "function" && isGulfContext(lat, lng)) return 0;
+  const wantsCanyon = Array.isArray(bands) && bands.some(([, mx]) => mx >= 150);
+  return (wantsCanyon && depth > 100 && depth < 500) ? 0.10 : 0;
 }
 
 // ── Recent weather change (24-48h shift) ───────────────────────────────────
@@ -3161,6 +3383,10 @@ function knownStructureDepthM(lat, lng, maxNm = 1.5){
 function predictDepth(lat, lng){
   const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
   if(real != null && real <= 0) return real;
+  // CUDEM can report positive depth on narrow beaches/peninsulas; coastline wins.
+  if(typeof isOnLand === "function" && isOnLand(lat, lng) && !isFishableBaySound(lat, lng)){
+    return seaDepth(lat, lng);
+  }
   const known = knownStructureDepthM(lat, lng);
   if(known != null){
     // Use curated depth when the grid is missing, or clearly shoaled relative to
@@ -3198,12 +3424,30 @@ function isPredictWater(lat, lng){
   // Inland freshwater (Lake Okeechobee, etc.) is never a saltwater fishing
   // spot, regardless of what the bathymetry grid says — exclude it first.
   if(isInlandFreshwater(lat, lng)) return false;
+  // Coastline polygons trump bathy grids on beaches and barrier islands — otherwise
+  // a shoal pixel on the Outer Cape (North Truro) becomes a scored hotspot.
+  if(typeof isOnLand === "function" && isOnLand(lat, lng) && !isFishableBaySound(lat, lng)){
+    return false;
+  }
   // Prefer the port-scoped bite-map bathy grid (stable for the whole fishing
   // range). BATHY_GRID is often viewport-sized (currents layer), so using it
   // here made the scored cells change as the user zoomed/panned.
   const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
   if(real != null) return real > 0;
   return (typeof isFishableWater === "function") ? isFishableWater(lat, lng) : false;
+}
+
+// Same land/habitat gates the async grid uses — shared with the heat canvas bake
+// so numbered badges never land where the painted field is masked off.
+function predictHeatCellVisible(lat, lng, speciesId){
+  if(typeof isPredictWater === "function" && !isPredictWater(lat, lng)) return false;
+  if(speciesId && typeof classifyWaterType === "function" && typeof speciesAllowedInWater === "function"){
+    if(!speciesAllowedInWater(speciesId, classifyWaterType(lat, lng))) return false;
+  }
+  if(speciesId && typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(speciesId, lat, lng)){
+    return false;
+  }
+  return true;
 }
 
 function decimateOceanPts(pts, max){
@@ -3348,6 +3592,7 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
     // have now, then quietly upgrade once fronts arrive so yellowfin/etc don't
     // stick on an SST-only field until the user manually re-runs.
     schedulePredictFrontsUpgrade(latMin, latMax, lngMin, lngMax, fcHour, data);
+    scheduleChlorUpgrade(latMin, latMax, lngMin, lngMax);
     return;
   }
   // Partial payload — still apply any grids we got (especially bathy for depth).
@@ -3359,6 +3604,7 @@ async function buildPredictInputs(latMin, latMax, lngMin, lngMax){
     if(data.chlor?.rows?.length) applyChlorData(data.chlor);
     if(data.sst?.rows?.length) applySstData(data.sst);
     if(Array.isArray(data.field) && data.field.length) applyOceanField(data.field, data.fieldStepNm);
+    scheduleChlorUpgrade(latMin, latMax, lngMin, lngMax);
   }
   // Per-point fallback can take minutes. Only attempt it when we have remaining
   // budget and no usable field yet — then race it against what's left.
@@ -3442,9 +3688,19 @@ function scoreCell(lat, lng, speciesId){
      typeof PACIFIC_SPECIES_PREFS !== "undefined" && PACIFIC_SPECIES_PREFS[speciesId]){
     prefs = PACIFIC_SPECIES_PREFS[speciesId];
   }
+  if(typeof usesSeFlSpeciesPrefs === "function" && usesSeFlSpeciesPrefs(speciesId, lat, lng)){
+    prefs = SEFL_SPECIES_PREFS[speciesId];
+  }
+  if(typeof isNewEnglandBluefinGrounds === "function" && isNewEnglandBluefinGrounds(lat, lng) &&
+     typeof NE_SPECIES_PREFS !== "undefined" && NE_SPECIES_PREFS[speciesId]){
+    prefs = NE_SPECIES_PREFS[speciesId];
+  }
+  if(typeof usesGulfSpeciesPrefs === "function" && usesGulfSpeciesPrefs(speciesId, lat, lng)){
+    prefs = GULF_SPECIES_PREFS[speciesId];
+  }
 
   // ── Get the right weight table for this species category ──
-  const W = predictWeightsFor(speciesId);
+  const W = predictWeightsFor(speciesId, lat, lng);
   const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
   const speciesCat = sp ? sp.cat : "offshore";
 
@@ -3477,6 +3733,9 @@ function scoreCell(lat, lng, speciesId){
   }
   chlorObj = chlorObj ?? { value: null, observedAtMs: null };
   const windObj  = ocean?.wind  ?? { value: null, dir: null, observedAtMs: null };
+  let waveObj = ocean?.waves;
+  if(!waveObj || waveObj.value == null) waveObj = nearestFieldSample(lat, lng, "waves");
+  waveObj = waveObj ?? { value: null, observedAtMs: null };
   const presObj  = ocean?.pressure ?? { value: null, observedAtMs: null };
   const tideObj  = ocean?.tide  ?? { value: null, observedAtMs: null };
 
@@ -3545,59 +3804,10 @@ function scoreCell(lat, lng, speciesId){
     else if(depth <= 600) bt = 50 - (depth - 350) / 250 * 3;   // 50→47
     else                  bt = 47;
     tempForScore = bt;
-  } else if(_isDemersal && sst != null && depth != null && depth > 0 &&
-            isColdPoolShelf(lat, lng, depth)){
-    // MID-ATLANTIC / NE SHELF: cold pool. A shallow (~50 ft) summer mixed layer
-    // over a sharp thermocline, then near-constant cold winter water below. This
-    // is what makes offshore fluke, sea bass and tog work here in summer — the
-    // bottom is 15-25°F cooler than the surface, not ~equal to it.
-    const coreF = coldPoolCoreF(lat);
-    let btFull;
-    if(depth <= 15)      btFull = sst;                                        // mixed layer
-    else if(depth <= 35) btFull = sst - (depth - 15) / 20 * (sst - coreF);    // sharp thermocline
-    else                 btFull = coreF;                                      // cold pool core
-    btFull = Math.max(btFull, 38);
-    // Stratification from the surface-to-core CONTRAST rather than an absolute
-    // SST ramp. A warm surface over cold winter water stratifies; a cold winter
-    // surface means a well-mixed column where the bottom tracks the surface. The
-    // absolute ramp under-stratified the Gulf of Maine, where deep water is cold
-    // year-round even under a 60°F surface.
-    const strat = Math.max(0, Math.min(1, (sst - coreF) / 12));
-    tempForScore = Math.max(38, sst - strat * Math.max(0, sst - btFull));
   } else if(_isDemersal && sst != null && depth != null && depth > 0){
-    // THERMOCLINE bottom-temp estimate (°F), stratification-aware so ONE formula
-    // works from the Gulf to the Gulf of Maine without region hardcoding.
-    //
-    // Step 1 — fully-stratified profile (warm-surface summer, e.g. the Gulf/SE):
-    // a warm near-surface mixed layer to ~30m (100 ft); a sharp thermocline
-    // through ~60-100m (200-330 ft) where temperature plunges ~10-20°F; a slow
-    // decline toward cold deep water that levels near a constant ~40°F below
-    // ~1200m (≈3,900 ft). Anchored so 300 ft under an 84°F surface reads ≈69°F.
-    const d = depth; // meters
-    let btFull;
-    if(d <= 30)       btFull = sst;                                   // mixed layer ≈ surface
-    else if(d <= 60)  btFull = sst - (d - 30) / 30 * 4;               // top of thermocline: 0→4°F
-    else if(d <= 100) btFull = sst - 4 - (d - 60) / 40 * 14;         // sharp drop: 4→18°F (≈300 ft ⇒ sst−15)
-    else if(d <= 200) btFull = sst - 18 - (d - 100) / 100 * 8;       // easing: 18→26°F
-    else if(d <= 1200){
-      // Slow decline from the shelf-break value toward the near-constant ~40°F
-      // deep water (~3,900 ft). Rarely reached by shelf demersal species.
-      const shelf = sst - 26;
-      btFull = shelf - (d - 200) / 1000 * (shelf - 40);
-    } else            btFull = 40;                                    // near-constant abyssal water
-    btFull = Math.max(btFull, 40);
-    // Step 2 — scale the deficit by stratification strength. A warm surface over
-    // cold deep water stratifies (full thermocline); a cold surface (NE winter,
-    // high latitude) means a well-mixed column where the bottom ≈ the surface.
-    // So a 42°F Gulf-of-Maine surface in January produces ~no deficit (mixed),
-    // while an 84°F Gulf surface in July produces the full drop. This fixes NE
-    // groundfish being wrongly penalized by warm summer surface AND wrongly
-    // refrigerated by a season-agnostic deficit in winter.
-    // (Heuristic — replace with a real subsurface/bottom-temp feed, e.g.
-    //  HYCOM/GLORYS reanalysis, for the true Mid-Atlantic cold pool.)
-    const strat = Math.max(0, Math.min(1, (sst - 50) / (78 - 50)));
-    const deficit = Math.max(0, sst - btFull);
-    tempForScore = Math.max(40, sst - strat * deficit);
+    // Shelf bottom temp from SST + depth. MAB/NE uses the cold-pool profile
+    // (north of 35.4°N); Gulf and SAB use a tanh thermocline. Same SST feed.
+    tempForScore = demersalBottomTempF(lat, lng, depth, sst);
   }
   let tempScore = 0;
   if(tempForScore != null && tempForScore >= prefs.tempIdeal[0] && tempForScore <= prefs.tempIdeal[1]){
@@ -3666,23 +3876,7 @@ function scoreCell(lat, lng, speciesId){
   // ── Factor 2: Chlorophyll preference ──
   let chlorScore = 0;
   if(chlor != null){
-    chlorScore = 0.5;
-    if(prefs.chlorPref === "low")  chlorScore = chlor < 0.2 ? 1.0 : chlor < 0.5 ? 0.6 : 0.2;
-    if(prefs.chlorPref === "high") chlorScore = chlor > 1.0 ? 1.0 : chlor > 0.5 ? 0.6 : 0.2;
-    if(prefs.chlorPref === "edge"){
-      // "Edge" species want the COLOR CHANGE, not flat green water. A concentration
-      // in the productive band is necessary but NOT sufficient: a uniform field
-      // (no break) scores only moderate, and the score climbs toward 1.0 only when
-      // a real chlorophyll gradient is present at this cell. chlorBreak (mg/m³ per
-      // 10nm) is the gradient computed above; chlorEdgeStrength normalizes it 0..1.
-      // This stops the map from rewarding areas that are simply green.
-      const gradScore = (typeof BW_BREAKS !== "undefined" && BW_BREAKS.chlorEdgeStrength)
-        ? BW_BREAKS.chlorEdgeStrength(chlorBreak) : 0;
-      const inBand = (chlor >= 0.1 && chlor <= 0.45);      // clean-to-productive edge water
-      const bandScore = inBand ? 1.0 : (chlor < 0.1 ? 0.5 : 0.35); // sterile blue mid / pea-green low
-      chlorScore = Math.min(1, 0.35 * bandScore + 0.65 * gradScore);
-    }
-    if(prefs.chlorPref === "any")  chlorScore = 0.7;
+    chlorScore = chlorScoreForPref(prefs.chlorPref, chlor, chlorBreak);
   }
 
   // ── Factor 3: Depth/structure match ──
@@ -3718,8 +3912,13 @@ function scoreCell(lat, lng, speciesId){
       bandScore = Math.max(0, 1 - below / 12);
     } else {
       // TOO DEEP: gentler decay (a species can stray a bit deeper than ideal).
+      // New England sea bass: 120 m of slack from a 46 m ceiling still scored
+      // 415 ft GOM water as a depth match. Drop them over ~32 m instead.
       const above = depth - bMax;
-      bandScore = Math.max(0, 1 - above / 120);
+      const deepDecayM = (speciesId === "blackseabass"
+        && typeof isNewEnglandBluefinGrounds === "function"
+        && isNewEnglandBluefinGrounds(lat, lng)) ? 32 : 120;
+      bandScore = Math.max(0, 1 - above / deepDecayM);
     }
     if(bandScore > depthScore) depthScore = bandScore;
   }
@@ -3727,9 +3926,7 @@ function scoreCell(lat, lng, speciesId){
   // Canyon-edge bonus only applies if at least one band actually wants
   // canyon-depth water (otherwise we'd be giving a free boost to flounder
   // happening to drift over a canyon).
-  const wantsCanyon = bands.some(([mn, mx]) => mx >= 150);
-  const canyonBoost = (wantsCanyon && depth > 100 && depth < 500) ? 0.10 : 0;
-  depthScore = Math.min(1, depthScore + canyonBoost);
+  depthScore = Math.min(1, depthScore + canyonDepthBoost(speciesId, bands, depth, lat, lng));
 
   // ── Factor 4: Thermal break (temperature gradient / color line) ──
   // Pelagic predators hunt the EDGE between cold and warm water. The
@@ -3931,10 +4128,15 @@ function scoreCell(lat, lng, speciesId){
       : (0.55 + 0.45 * tide);   // moderate
 
   // ── Factor 11: Wind direction relative to structure (real buoy wind) ──
-  const windScoreVal = windScore(lat, lng, prefs, windObj.dir);
+  const windScoreVal = windScore(lat, lng, prefs, windObj.dir, speciesId);
 
-  // ── Factor 12: Recent weather change ──
-  const wxChangeScoreVal = 0.5;
+  const wxChange = weatherChangeFromObs({
+    windKt: windObj && windObj.value,
+    waveFt: waveObj && waveObj.value,
+    pressureTrend: presObj && presObj.value,
+  });
+  const wxChangeScoreVal = wxChange.score;
+  const wxLabel = wxChange.label;
 
   // ── Factor 13: Moon phase (multi-day lunar energy, independent of solunar) ──
   // Captures the full/new vs quarter moon influence on feeding aggression
@@ -4055,14 +4257,7 @@ function scoreCell(lat, lng, speciesId){
   // their depth band requirement already places them correctly. Depth is meters.
   const _bluewaterExempt = (speciesId === "bluefin") || !!prefs.bottom;
   if(speciesCat === "offshore" && !_bluewaterExempt && depth != null && depth > 0){
-    // Ramp: <50m (inner shelf) heavily suppressed, ~50-180m (shelf edge)
-    // climbing, >180m (true blue water) full credit. Smooth so the heat map
-    // transitions cleanly from green inshore to red at the edge.
-    let bluewaterGate;
-    if(depth >= 180)      bluewaterGate = 1.0;
-    else if(depth >= 50)  bluewaterGate = 0.35 + 0.65 * ((depth - 50) / (180 - 50));
-    else                  bluewaterGate = 0.10 + 0.25 * (depth / 50);   // 0.10–0.35
-    finalScore = finalScore * bluewaterGate;
+    finalScore = finalScore * bluewaterGateFor(speciesId, depth, lat, lng);
   }
 
   // ── SEASON GATE ──
@@ -4146,18 +4341,43 @@ function scoreCell(lat, lng, speciesId){
   // open Nantucket Sound). We give a smooth bonus that decays with distance to
   // the nearest mapped structure of interest, capped so it shapes — not
   // dominates — the field.
-  if(prefs.breakPref === "stable" && typeof nearestStructureNm === "function"){
-    const dNm = nearestStructureNm(lat, lng, speciesId);
-    if(dNm != null){
+  if((prefs.breakPref === "stable" || prefs.structureProx) && typeof nearestMappedStructure === "function"){
+    const hit = nearestMappedStructure(lat, lng, speciesId);
+    if(hit && hit.nm != null){
       // Full bonus within ~2nm of structure, fading to none by ~12nm.
-      const prox = Math.max(0, Math.min(1, (12 - dNm) / (12 - 2)));
-      finalScore = finalScore * (1 + 0.35 * prox);   // up to +35% on structure
+      const prox = Math.max(0, Math.min(1, (12 - hit.nm) / (12 - 2)));
+      let lift = 0.35;
+      if(prefs.structureProx && speciesId === "yellowfin" &&
+         typeof gulfYellowfinStructureLift === "function"){
+        lift = gulfYellowfinStructureLift(hit.canyon);
+      }
+      finalScore = finalScore * (1 + lift * prox);
+      // Demersal reef/wreck fish: open flat bottom away from mapped structure
+      // should not read as "excellent" just because temp/season align.
+      if(prefs.demersal && prefs.breakPref === "stable" && hit.nm > 12){
+        const far = Math.min(1, (hit.nm - 12) / 35);
+        finalScore *= (1 - 0.28 * far);
+      }
+    } else if(prefs.demersal && prefs.breakPref === "stable"){
+      finalScore *= 0.78;
     }
   }
 
   // Cap at 1.0 so we don't exceed the heat-map's full-intensity range (the
   // structure-proximity bonus above can push slightly past 1.0).
   finalScore = Math.min(1.0, finalScore);
+
+  // Vermilion (beeliner): rare north of Cape Hatteras in shallow water. Structure
+  // weight can still paint 100 ft inner-shelf cells Excellent even when the
+  // temperature story is wrong — apply a habitat multiplier after the other
+  // gates so those cells cannot outrank real 150-250 ft ledges.
+  let vermilionGate = null;
+  if(speciesId === "vermilion" && depth != null && depth > 0){
+    vermilionGate = vermilionLatitudeGate(lat, depth, tempForScore);
+    if(vermilionGate.penalty < 1){
+      finalScore *= vermilionGate.penalty;
+    }
+  }
 
   // ── SCORE NORMALIZATION ──
   // The raw weighted average compresses into ~0.25-0.70 because most secondary
@@ -4255,7 +4475,7 @@ function scoreCell(lat, lng, speciesId){
   //    Tuna/billfish hold at the shelf edge and beyond; inner-shelf water is the
   //    wrong habitat regardless of temperature, so this is a high-confidence "no".
   //    Excludes bluefin (shelf-feeders in season) and bottom-dwellers (tilefish).
-  if(speciesCat === "offshore" && !(speciesId === "bluefin") && !_isBottom && depth != null && depth > 0 && depth < 50){
+  if(speciesCat === "offshore" && !(speciesId === "bluefin" || speciesId === "blackfin" || speciesId === "mahi" || speciesId === "sailfish" || speciesId === "skipjack" || (speciesId === "wahoo" && isSeFloridaAtlantic(lat, lng))) && !_isBottom && depth != null && depth > 0 && depth < 50){
     confidence = Math.max(confidence, 82);
     freshnessAnnotations.push({ variable: "depth",
       message: "Too far inshore for an offshore species — the bite is at the shelf edge." });
@@ -4268,31 +4488,28 @@ function scoreCell(lat, lng, speciesId){
   const moonName = moon < 0.08 || moon > 0.92 ? "new" :
                    Math.abs(moon - 0.5) < 0.08 ? "full" :
                    moon < 0.5 ? "waxing" : "waning";
-  // Weather-change factor is held neutral in the production path (synthetic
-  // weather data was removed and no real weather-shift feed is wired yet), so the
-  // label is a fixed neutral value rather than reading the removed wxChange object.
-  const wxLabel = "steady";
 
+  const droppedKeys = new Set((fr?.droppedFactors || []).map(f => f.key));
   const allFactors = [
-    {name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: (_isBottom || _isDemersal) ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
-    {name:"Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
-    {name:"Bottom structure",   weight:(W.structure||0), score:structureScore,
+    {key:"temp", name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: (_isBottom || _isDemersal) ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
+    {key:"depth", name: ((W.structure || 0) === 0 && (speciesId === "mahi" || speciesId === "sailfish" || speciesId === "skipjack" || speciesId === "wahoo")) ? "Water depth" : "Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
+    {key:"structure", name:"Bottom structure",   weight:(W.structure||0), score:structureScore,
      raw: structureScore > 0.05 ? `${Math.round(structureScore*100)}% · edge/slope` : "flat bottom"},
-    {name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
-    {name:"Chlorophyll",        weight:W.chlorophyll,   score:chlorScore,
+    {key:"pres", name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
+    {key:"chlor", name:"Chlorophyll",        weight:W.chlorophyll,   score:chlorScore,
      raw: chlor != null
-          ? `${chlor.toFixed(2)} mg/m³` + (prefs.chlorPref === "edge" && chlorBreak > 0 ? ` · ${chlorBreak.toFixed(2)}/10nm edge` : "")
+          ? `${chlor.toFixed(2)} mg/m³` + ((prefs.chlorPref === "edge" || prefs.chlorPref === "weed") && chlorBreak > 0 ? ` · ${chlorBreak.toFixed(2)}/10nm edge` : "")
           : "—"},
     // Reports: only shown when there ARE positive nearby reports. Absence of
     // reports is not a negative signal so we don't display a "—" row that
     // suggests one. Weight shown is an effective bonus weight.
-    ...(reportScore > 0.05 ? [{name:"🎣 Recent catch reports", weight:0.18, score:Math.min(1, reportScore * 2.5), raw:"+bonus"}] : []),
-    {name:"Solunar window",     weight:W.solunar,       score:solunarScoreVal,  raw:solunar > 0.7 ? "MAJOR" : solunar > 0.4 ? "minor" : "off"},
-    {name:BITE_FACTOR_TEMP_BREAK, weight:W.thermalBreak,  score:breakScore,
+    ...(reportScore > 0.05 ? [{key:"reports", name:"🎣 Recent catch reports", weight:0.18, score:Math.min(1, reportScore * 2.5), raw:"+bonus"}] : []),
+    {key:"solunar", name:"Solunar window",     weight:W.solunar,       score:solunarScoreVal,  raw:solunar > 0.7 ? "MAJOR" : solunar > 0.4 ? "minor" : "off"},
+    {key:"break", name:BITE_FACTOR_TEMP_BREAK, weight:W.thermalBreak,  score:breakScore,
      raw: frontSensor === "ssh"
           ? (tBreak > 0 ? `SSH front · ${tBreak.toFixed(1)}°F/10nm` : "SSH front")
           : (tBreak > 0 ? `${tBreak.toFixed(1)}°F/10nm` : (_sshEdge01 > 0 ? "SSH front" : "—"))},
-    {name:BITE_FACTOR_FRONT_CONVERGENCE, weight:(W.convergence||0), score:convergence,
+    {key:"convergence", name:BITE_FACTOR_FRONT_CONVERGENCE, weight:(W.convergence||0), score:convergence,
      raw: convergence > 0
           ? `${Math.round(convergence*100)}% stack` + (
               [_sshEdge01>0?"SSH":null, _curEdge01>0?"current":null, chlorBreak>0?"color":null]
@@ -4301,13 +4518,15 @@ function scoreCell(lat, lng, speciesId){
                 : ""
             )
           : "—"},
-    {name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
-    {name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw:wxLabel},
-    {name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonScore > 0.66 ? "peak" : seasonScore > 0.33 ? "good" : "off"},
-    {name:"Moon phase",         weight:W.moonPhase || 0,score:moonPhaseScoreVal,raw:moonName.toUpperCase()},
-    {name:"Wind direction",     weight:W.wind,          score:windScoreVal,     raw:windObj.dir != null ? `${Math.round(windObj.dir)}°` : "—"}]
-  // Drop factors that aren't applicable to this species category
-  .filter(f => f.weight > 0)
+    {key:"tide", name:"Tide stage",         weight:W.tide,          score:tideScoreVal,     raw:tide == null ? "—" : (tideObj.state ? tideObj.state + (tide > 0.6 ? " (ripping)" : tide > 0.25 ? " (moving)" : " (slack)") : (tide > 0.6 ? "ripping" : tide > 0.25 ? "moving" : "slack"))},
+    {key:"weather", name:"Weather change",     weight:W.weatherChange, score:wxChangeScoreVal, raw: (wxChange.raw && wxChange.raw !== "—") ? `${wxLabel} · ${wxChange.raw}` : wxLabel},
+    {key:"season", name:"Season alignment",   weight:W.season,        score:seasonScore,      raw:seasonAlignmentLabel(seasonScore)},
+    {key:"moon", name:"Moon phase",         weight:W.moonPhase || 0,score:moonPhaseScoreVal,raw:moonName.toUpperCase()},
+    {key:"wind", name:"Wind direction",     weight:W.wind,          score:windScoreVal,     raw:windObj.dir != null ? `${Math.round(windObj.dir)}°` : "—"}]
+  // Drop factors that aren't applicable to this species category, and env
+  // factors freshness already excluded from the score (stale pressure must not
+  // still appear as a contributing bar with a live-looking 1.9 hPa reading).
+  .filter(f => f.weight > 0 && !droppedKeys.has(f.key))
   // Keep BOTH the factor's own 0–1 quality (how good this signal is here — drives
   // the display bar so "peak"/"MAJOR" reads as a full bar) AND its weighted
   // contribution (quality×weight — drives the sort so the biggest drivers lead).
@@ -4339,9 +4558,11 @@ function scoreCell(lat, lng, speciesId){
     // actually belongs in this area/time; seasonStrength is the 0–1 seasonal fit.
     topFactor,
     topFactors,
-    inSeason: !_seasonOutOfRange,
-    outOfRange: _seasonOutOfRange,
+    inSeason: !_seasonOutOfRange && !(vermilionGate && vermilionGate.status === "NORTH_OF_HATTERAS"),
+    outOfRange: _seasonOutOfRange || !!(vermilionGate && vermilionGate.status === "NORTH_OF_HATTERAS"),
     seasonStrength: Math.round(seasonScore * 100) / 100,
+    vermilionGate,
+    tempForScore,
   };
 }
 
@@ -4519,8 +4740,13 @@ function nmOffshore(lat, lng){
 // This is the line that, west of it, is solid land (no fishing). For OBX
 // region this is the mainland shore, NOT the barrier islands.
 function mainlandCoastLng(lat){
-  // New England
-  if(lat > 43.5) return -70.40;
+  // New England — Maine coast runs ENE; a single -70.40 cut north of 43.5°
+  // treated Casco / midcoast / Downeast as 100 nm of open ocean.
+  if(lat > 44.7) return -67.05;  // Machias / Eastport
+  if(lat > 44.35) return -68.15; // Mount Desert / Bar Harbor
+  if(lat > 43.95) return -69.10; // Penobscot / Port Clyde
+  if(lat > 43.70) return -69.70; // Boothbay / Small Point
+  if(lat > 43.5) return -70.22;  // Cape Elizabeth / Portland
   if(lat > 43.0) return -70.65;
   if(lat > 42.5) return -70.55;
   if(lat > 42.1) return -70.40;
@@ -4650,6 +4876,7 @@ function barrierCoastLng(lat){
 // longitude) from the barrier coastline to the shelf break (where depth
 // rapidly drops from ~200m to >1000m). Captures real shelf width variation.
 function atlanticShelfWidthDeg(lat){
+  if(lat > 43.2) return 0.50;   // Gulf of Maine — 200 m inside ~30 nm, not Georges
   if(lat > 42.5) return 1.6;    // Georges Bank — very wide
   if(lat > 41.5) return 1.4;
   if(lat > 40.5) return 1.2;
@@ -4701,13 +4928,17 @@ function gulfShelfWidthDeg(lng){
 // as "land".
 //
 // Additional polygons handle separate landmasses: Long Island, Cape Cod arm,
-// FL Keys chain.
+// FL Keys chain, Gulf of Maine islands (Mount Desert, Deer Isle, etc.).
 // ════════════════════════════════════════════════════════════════════════════
 
 const MAIN_COAST = [
   // ── MAINE/NH/MA northern coast (Eastport south to Cape Ann) ──
-  [44.90, -66.95], [44.50, -67.40], [44.10, -68.20], [43.85, -68.95],
-  [43.65, -69.65], [43.30, -70.20], [42.95, -70.75], [42.65, -70.62],
+  // Follow the MAINLAND, not a chord across Casco/Saco. The old
+  // [43.65,-69.65]→[43.30,-70.20] cut sat EAST of Portland and classified
+  // Casco Bay as land — Bite Map could only paint a thin strip seaward of it.
+  [44.90, -66.95], [44.70, -67.35], [44.40, -68.10], [44.15, -68.70],
+  [43.90, -69.40], [43.75, -69.75], [43.66, -70.25], [43.55, -70.24],
+  [43.40, -70.43], [43.08, -70.72], [42.88, -70.80], [42.65, -70.62],
   // ── MA outer coast: Cape Ann → MA Bay (note: MA_MAINLAND_FILL covers
   // Boston/South Shore mainland separately so we can keep MAIN_COAST as a
   // clean arc here without trying to trace the harbor in detail) ──
@@ -4853,6 +5084,80 @@ const NANTUCKET = [
   [41.30, -70.20],   // back to start
 ];
 
+// Mount Desert Island, ME. MAIN_COAST chord Schoodic→Stonington cuts the
+// northern half as "mainland" but leaves the southern lobe (Southwest Harbor,
+// Northeast Harbor, Seawall, Bass Harbor Head) as ocean — CUDEM then paints
+// a BSB hotspot on town land. Trace the whole island, including that lobe.
+const MOUNT_DESERT_ISLAND = [
+  [44.430, -68.280], // Hulls Cove
+  [44.392, -68.183], // Bar Harbor
+  [44.352, -68.172], // Schooner Head
+  [44.312, -68.174], // Otter Point
+  [44.268, -68.248], // east of Seawall
+  [44.238, -68.292], // Seawall
+  [44.221, -68.337], // Bass Harbor Head
+  [44.238, -68.375], // Bernard / Bass Harbor west
+  [44.280, -68.360], // west of Southwest Harbor
+  [44.318, -68.415], // Seal Cove
+  [44.365, -68.418], // Pretty Marsh
+  [44.405, -68.360], // Indian Point
+  [44.430, -68.305], // Town Hill
+  [44.430, -68.280],
+];
+
+// Deer Isle, ME (Stonington sits on the south shore). The port itself was
+// classified as water, so Bite Map could pin the town.
+const DEER_ISLE = [
+  [44.298, -68.685], // Little Deer Isle north
+  [44.270, -68.605], // Eggemoggin Reach NE
+  [44.175, -68.575], // east shore
+  [44.148, -68.655], // Stonington south shore
+  [44.155, -68.720], // southwest
+  [44.230, -68.745], // west shore
+  [44.285, -68.720], // northwest
+  [44.298, -68.685],
+];
+
+// Swans Island, south of MDI.
+const SWANS_ISLAND = [
+  [44.195, -68.430],
+  [44.185, -68.380],
+  [44.145, -68.390],
+  [44.140, -68.455],
+  [44.170, -68.475],
+  [44.195, -68.430],
+];
+
+// Isle au Haut, south of Stonington.
+const ISLE_AU_HAUT = [
+  [44.100, -68.625],
+  [44.080, -68.600],
+  [44.040, -68.615],
+  [44.045, -68.655],
+  [44.090, -68.655],
+  [44.100, -68.625],
+];
+
+// Vinalhaven, Penobscot Bay.
+const VINALHAVEN = [
+  [44.100, -68.800],
+  [44.085, -68.775],
+  [44.020, -68.825],
+  [44.040, -68.905],
+  [44.095, -68.885],
+  [44.100, -68.800],
+];
+
+// Great + Little Cranberry, immediately south of Northeast Harbor.
+const CRANBERRY_ISLES = [
+  [44.262, -68.268],
+  [44.258, -68.248],
+  [44.250, -68.235],
+  [44.242, -68.248],
+  [44.248, -68.268],
+  [44.262, -68.268],
+];
+
 // Florida Keys arc (Key Largo → Key West)
 const FL_KEYS = [
   [25.20, -80.30], [25.10, -80.40], [24.95, -80.55], [24.80, -80.75],
@@ -4882,7 +5187,7 @@ const MA_MAINLAND_FILL = [
   [42.45, -71.10],   // back to start
 ];
 
-const LAND_POLYGONS = [MAIN_COAST, LONG_ISLAND, CAPE_COD, FL_KEYS, MA_MAINLAND_FILL, MARTHAS_VINEYARD, NANTUCKET];
+const LAND_POLYGONS = [MAIN_COAST, LONG_ISLAND, CAPE_COD, FL_KEYS, MA_MAINLAND_FILL, MARTHAS_VINEYARD, NANTUCKET, MOUNT_DESERT_ISLAND, DEER_ISLE, SWANS_ISLAND, ISLE_AU_HAUT, VINALHAVEN, CRANBERRY_ISLES];
 
 // ── Point-in-polygon test (ray casting algorithm) ──
 // Returns true if (lat, lng) lies inside the polygon. Uses the horizontal
@@ -4907,6 +5212,45 @@ function isOnLand(lat, lng){
     if(pointInPolygon(lat, lng, poly)) return true;
   }
   return false;
+}
+
+// Bay/sound rectangles where the coarse coastline polygon reads "land" but
+// the water is fishable (Chesapeake, Cape Cod Bay, etc.). Shared by seaDepth()
+// and isPredictWater() so CUDEM/ETOPO can't paint hotspots on outer beaches
+// (e.g. North Truro on the Cape) while still allowing in-bay scoring.
+const FISHABLE_BAY_SOUND_BOXES = [
+  {b:[36.95, 39.55, -77.30, -75.95], depth: 12},  // Chesapeake
+  {b:[38.85, 39.35, -75.45, -75.05], depth: 15},  // Delaware
+  {b:[35.20, 36.10, -76.30, -75.50], depth: 8},   // Pamlico Sound + Oregon Inlet
+  {b:[35.85, 36.20, -76.70, -75.85], depth: 6},   // Albemarle
+  {b:[34.65, 34.78, -76.70, -76.55], depth: 5},   // Bogue Sound water (between mainland & barrier)
+  {b:[34.55, 34.85, -76.55, -76.30], depth: 4},   // Core Sound / Back Sound
+  {b:[40.95, 41.20, -73.70, -71.95], depth: 25},  // Long Island Sound
+  {b:[41.78, 42.03, -70.55, -70.15], depth: 35},  // Cape Cod Bay (tightened from coastal overlap)
+  {b:[43.55, 43.78, -70.18, -69.92], depth: 18},  // Casco Bay water (east of Portland peninsula)
+  {b:[41.45, 41.75, -71.45, -71.20], depth: 18},  // Narragansett
+  {b:[41.45, 41.70, -71.05, -70.70], depth: 20},  // Buzzards
+  {b:[25.40, 25.75, -80.25, -80.15], depth: 4},   // Biscayne
+  {b:[24.95, 25.25, -81.10, -80.50], depth: 3},   // Florida Bay
+  {b:[27.20, 29.00, -80.78, -80.62], depth: 3},   // Indian River
+  {b:[26.40, 26.75, -82.20, -81.85], depth: 4},   // Charlotte Harbor
+  {b:[27.55, 28.05, -82.75, -82.45], depth: 8},   // Tampa Bay
+  {b:[29.65, 29.85, -85.10, -84.70], depth: 5},   // Apalachicola
+  {b:[30.20, 30.65, -88.20, -87.50], depth: 10},  // Mobile Bay
+  {b:[29.10, 29.55, -90.50, -89.50], depth: 5},   // Barataria
+  {b:[29.20, 29.55, -94.95, -94.60], depth: 7},   // Galveston
+  {b:[28.10, 28.55, -96.70, -96.20], depth: 4},   // San Antonio
+  {b:[27.55, 27.95, -97.40, -97.05], depth: 4},   // Corpus Christi
+];
+function fishableBaySoundDepthM(lat, lng){
+  for(const bay of FISHABLE_BAY_SOUND_BOXES){
+    const [latMin, latMax, lngMin, lngMax] = bay.b;
+    if(lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax) return bay.depth;
+  }
+  return null;
+}
+function isFishableBaySound(lat, lng){
+  return fishableBaySoundDepthM(lat, lng) != null;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -4957,42 +5301,26 @@ function bathyRefDepth(lat, lng){
 // can't represent.
 function seaDepth(lat, lng){
   // Out of envelope → just return abyssal (irrelevant)
+  //
+  // KNOWN GAP — this static model is Atlantic/Gulf only. Everything west of
+  // -98° (i.e. the entire Pacific coast) returns 3000 m, and the land polygons
+  // behind isOnLand()/isFishableWater() carry no West Coast geometry either, so
+  // inland California reads as fishable water here.
+  //
+  // It does not bite in practice because predictDepth() and isPredictWater()
+  // both prefer the fetched bathymetry grid, and the ocean function's CUDEM
+  // bounds (lat 23-52, lng -127 to -65) plus its global ETOPO fallback do cover
+  // California. This path is only reached when that fetch is unavailable — and
+  // when it is, every Pacific nearshore species (cayellowtail, lingcod, calico
+  // bass) reads 3000 m and scores zero on depth. Giving the West Coast a real
+  // static shelf model + coastline is the fix; it needs a Pacific coastline
+  // dataset, so it is deliberately not attempted inline here.
   if(lat < 22 || lat > 45) return 3000;
   if(lng < -98 || lng > -64) return 3000;
 
   // ── STEP 1: Bay/sound polygons (act as "holes" in the land polygon) ──
-  // The main coastline polygon traces the outer coast and treats Chesapeake
-  // Bay, Delaware Bay, etc. as "inside" (land). These rectangles override
-  // that by explicitly marking known fishable bay water FIRST.
-  const bayDepths = [
-    {b:[36.95, 39.55, -77.30, -75.95], depth: 12},  // Chesapeake
-    {b:[38.85, 39.35, -75.45, -75.05], depth: 15},  // Delaware
-    {b:[35.20, 36.10, -76.30, -75.50], depth: 8},   // Pamlico Sound + Oregon Inlet
-    {b:[35.85, 36.20, -76.70, -75.85], depth: 6},   // Albemarle
-    {b:[34.65, 34.78, -76.70, -76.55], depth: 5},   // Bogue Sound water (between mainland & barrier)
-    {b:[34.55, 34.85, -76.55, -76.30], depth: 4},   // Core Sound / Back Sound
-    {b:[40.95, 41.20, -73.70, -71.95], depth: 25},  // Long Island Sound
-    {b:[41.78, 42.03, -70.55, -70.15], depth: 35},  // Cape Cod Bay (tightened from coastal overlap)
-    {b:[41.45, 41.75, -71.45, -71.20], depth: 18},  // Narragansett
-    {b:[41.45, 41.70, -71.05, -70.70], depth: 20},  // Buzzards
-    {b:[25.40, 25.75, -80.25, -80.15], depth: 4},   // Biscayne
-    {b:[24.95, 25.25, -81.10, -80.50], depth: 3},   // Florida Bay
-    {b:[27.20, 29.00, -80.78, -80.62], depth: 3},   // Indian River
-    {b:[26.40, 26.75, -82.20, -81.85], depth: 4},   // Charlotte Harbor
-    {b:[27.55, 28.05, -82.75, -82.45], depth: 8},   // Tampa Bay
-    {b:[29.65, 29.85, -85.10, -84.70], depth: 5},   // Apalachicola
-    {b:[30.20, 30.65, -88.20, -87.50], depth: 10},  // Mobile Bay
-    {b:[29.10, 29.55, -90.50, -89.50], depth: 5},   // Barataria
-    {b:[29.20, 29.55, -94.95, -94.60], depth: 7},   // Galveston
-    {b:[28.10, 28.55, -96.70, -96.20], depth: 4},   // San Antonio
-    {b:[27.55, 27.95, -97.40, -97.05], depth: 4},   // Corpus Christi
-  ];
-  for(const bay of bayDepths){
-    const [latMin, latMax, lngMin, lngMax] = bay.b;
-    if(lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax){
-      return bay.depth;
-    }
-  }
+  const bayDepth = fishableBaySoundDepthM(lat, lng);
+  if(bayDepth != null) return bayDepth;
 
   // ── STEP 2: Coastline polygon — anything inside is solid land ──
   // The land polygons are the source of truth for the outer land/water
@@ -5148,19 +5476,34 @@ function classifyWaterType(lat, lng){
 
 // ── MID-ATLANTIC BIGHT / NE SHELF COLD POOL ─────────────────────────────────
 // From spring through fall a mass of cold winter water stays trapped on the
-// shelf beneath the seasonal thermocline, from Nantucket Shoals down to Cape
-// Hatteras. It is the single biggest reason a bottom fish's water differs from
-// the surface here: in August the surface off Virginia Beach reads ~79°F while
-// the bottom in 100 ft is ~55-62°F.
+// shelf beneath the seasonal thermocline, from Nantucket Shoals down to just
+// north of Cape Hatteras. It is the single biggest reason a bottom fish's water
+// differs from the surface here: in August the surface off Virginia Beach reads
+// ~79°F while the bottom in 100 ft is ~55-62°F.
 //
-// The general thermocline curve in scoreCell() was anchored for the GULF (deep
-// mixed layer, no cold pool), so it reported the bottom at 100 ft as ~79°F —
-// wrong by 15-25°F here, which is what made offshore fluke on the Triangle
-// Wrecks score as too-warm. These two helpers gate a cold-pool profile to the
-// region it actually applies to and leave every other coast alone.
+// South of 35.4°N the shelf is Gulf Stream / SAB water, not the cold pool.
+// Applying the MAB profile at Oregon Inlet / Diamond Shoals invented a ~66°F
+// "bottom" in 98 ft of 85°F water and then scored that as perfect vermilion
+// habitat. The SAB/Gulf demersal curve (tanh) is used south of that line.
 //
 // (Heuristic tuned to published MAB bottom-temp ranges — replace with a real
 //  subsurface feed, e.g. HYCOM/GLORYS, when one is wired.)
+
+const COLD_POOL_SOUTH_LAT = 35.4;   // Cape Hatteras / Oregon Inlet
+const COLD_POOL_NORTH_LAT = 44.5;
+const VERMILION_NORTH_LAT = 35.4;   // hard Atlantic cutoff — not present north of here
+const VERMILION_SHALLOW_FT = 120;
+
+// SAB / Gulf summer thermocline (tanh). T(z) in °F, z in meters:
+//   T(z) = T_deep + (T_sst - T_deep)/2 * (1 - tanh((z - z_m) / d))
+// T_deep ≈ 19°C (66°F) so 220 ft lands in the 64-72°F beeliner zone, not the
+// 12°C abyssal remnant. z_m ≈ 130 ft so 100 ft is still mostly surface-warm.
+const SHELF_THERMOCLINE_DEEP_F = 19 * 9 / 5 + 32; // 66.2°F
+const SHELF_THERMOCLINE_ZM_M = 40;                 // ~131 ft
+const SHELF_THERMOCLINE_D_M = 12;
+
+function fToC(f){ return (f - 32) * 5 / 9; }
+function cToF(c){ return c * 9 / 5 + 32; }
 
 // Cold-pool core temperature (°F): coldest to the north, warmest at the
 // Hatteras end where the pool thins and erodes first.
@@ -5169,14 +5512,122 @@ function coldPoolCoreF(lat){
   return 60 - t * 14;   // ~60°F off Hatteras → ~46°F in the Gulf of Maine
 }
 
-// True only on the Atlantic shelf between Hatteras and the Gulf of Maine. Past
+// True only on the Atlantic shelf between 35.4°N and the Gulf of Maine. Past
 // the shelf break (>200 m) it is slope/Gulf Stream water, not cold pool.
 function isColdPoolShelf(lat, lng, depthM){
-  if(lat < 35.0 || lat > 44.5) return false;
+  if(lat < COLD_POOL_SOUTH_LAT || lat > COLD_POOL_NORTH_LAT) return false;
   if(depthM == null || !(depthM > 0) || depthM > 200) return false;
   if(typeof isGulfContext === "function" && isGulfContext(lat, lng)) return false;
   if(typeof isPacificContext === "function" && isPacificContext(lat, lng)) return false;
   return true;
+}
+
+function coldPoolBottomF(lat, depthM, sstF){
+  const coreF = coldPoolCoreF(lat);
+  let btFull;
+  if(depthM <= 15)      btFull = sstF;                                           // mixed layer
+  else if(depthM <= 35) btFull = sstF - (depthM - 15) / 20 * (sstF - coreF);     // sharp thermocline
+  else                  btFull = coreF;                                           // cold pool core
+  btFull = Math.max(btFull, 38);
+  const strat = Math.max(0, Math.min(1, (sstF - coreF) / 12));
+  return Math.max(38, sstF - strat * Math.max(0, sstF - btFull));
+}
+
+function shelfTanhBottomF(depthM, sstF){
+  if(sstF == null || !(depthM > 0)) return sstF;
+  const tDeep = SHELF_THERMOCLINE_DEEP_F;
+  const btFull = tDeep + ((sstF - tDeep) / 2) * (1 - Math.tanh((depthM - SHELF_THERMOCLINE_ZM_M) / SHELF_THERMOCLINE_D_M));
+  const btClamped = Math.min(sstF, Math.max(40, btFull));
+  // Warm summer SST → full thermocline; cold winter SST → mixed column ≈ SST.
+  const strat = Math.max(0, Math.min(1, (sstF - 50) / (78 - 50)));
+  const deficit = Math.max(0, sstF - btClamped);
+  return Math.max(40, sstF - strat * deficit);
+}
+
+function demersalBottomTempF(lat, lng, depthM, sstF){
+  if(sstF == null || !(depthM > 0)) return sstF;
+  if(isColdPoolShelf(lat, lng, depthM)) return coldPoolBottomF(lat, depthM, sstF);
+  return shelfTanhBottomF(depthM, sstF);
+}
+
+function vermilionLatitudeGate(lat, depthM, bottomTempF){
+  const depthFt = (depthM != null && depthM > 0) ? depthM * 3.28084 : 0;
+  // Hard geographic veto: do not paint vermilion north of 35.4°N, including
+  // warm-core / Gulf Stream rings. Captains should not see this species on
+  // the VA / northern OBX shelf.
+  if(lat > VERMILION_NORTH_LAT){
+    return { active: true, status: "NORTH_OF_HATTERAS", penalty: 0 };
+  }
+  // Inner shelf on the Cape itself: 100 ft of summer surface water is not
+  // beeliner habitat even when a thermocline model invents 66°F.
+  if(lat >= 35.0 && depthFt > 0 && depthFt < VERMILION_SHALLOW_FT){
+    return { active: true, status: "SHALLOW_NORTHERN_SHELF", penalty: 0.1 };
+  }
+  return { active: false, status: "OK", penalty: 1 };
+}
+
+function vermilionTempScoreF(tempF){
+  const p = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS.vermilion : null;
+  if(!p || tempF == null) return 0;
+  if(tempF >= p.tempIdeal[0] && tempF <= p.tempIdeal[1]) return 1;
+  if(tempF < p.tempIdeal[0]){
+    const buf = Math.max(0.5, p.tempIdeal[0] - p.tempWorking[0]);
+    const s = buf / 2.355, dl = p.tempIdeal[0] - tempF;
+    return Math.exp(-(dl * dl) / (2 * s * s));
+  }
+  const buf = Math.max(0.5, p.tempWorking[1] - p.tempIdeal[1]);
+  const s = buf / 2.355, dl = tempF - p.tempIdeal[1];
+  return Math.exp(-(dl * dl) / (2 * s * s));
+}
+
+function vermilionDepthScoreM(depthM){
+  const p = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS.vermilion : null;
+  const bands = (p && p.depthBands) ? p.depthBands : [[30, 91]];
+  let best = 0;
+  for(const [bMin, bMax] of bands){
+    let bandScore;
+    if(depthM >= bMin && depthM <= bMax) bandScore = 1;
+    else if(depthM < bMin) bandScore = Math.max(0, 1 - (bMin - depthM) / 12);
+    else bandScore = Math.max(0, 1 - (depthM - bMax) / 120);
+    if(bandScore > best) best = bandScore;
+  }
+  return best;
+}
+
+// Structured habitat check for vermilion (tests + scoreCell gate). Uses the
+// same SST already on the map — does not fetch a second feed.
+function evaluateVermilionHabitat(lat, lon, depthFeet, sstF){
+  const depthM = depthFeet / 3.28084;
+  const sstC = sstF != null ? fToC(sstF) : null;
+  const bottomF = demersalBottomTempF(lat, lon, depthM, sstF);
+  const bottomC = bottomF != null ? fToC(bottomF) : null;
+  const gate = vermilionLatitudeGate(lat, depthM, bottomF);
+  const tempSc = vermilionTempScoreF(bottomF);
+  const depthSc = vermilionDepthScoreM(depthM);
+  const suitability = Math.max(0, Math.min(1, tempSc * depthSc * gate.penalty));
+  let recommendation;
+  if(gate.status === "SHALLOW_NORTHERN_SHELF"){
+    recommendation = "Too shallow on the northern edge — look for 150–250 ft ledges.";
+  } else if(gate.status === "NORTH_OF_HATTERAS"){
+    recommendation = "North of 35.4°N — vermilion are not a fishery here.";
+  } else if(suitability >= 0.7){
+    recommendation = "Prime beeliner depth under the thermocline.";
+  } else if(tempSc < 0.4){
+    recommendation = "Bottom is outside the 64–72°F beeliner zone.";
+  } else {
+    recommendation = "Marginal vermilion habitat.";
+  }
+  return {
+    coordinates: { lat, lon },
+    depth_feet: depthFeet,
+    sst_celsius: sstC,
+    estimated_bottom_temp_celsius: bottomC,
+    estimated_bottom_temp_fahrenheit: bottomF,
+    latitude_gate_active: gate.active,
+    latitude_gate_status: gate.status,
+    suitability_score: suitability,
+    recommendation,
+  };
 }
 
 // Species → valid habitat types
@@ -5229,9 +5680,10 @@ const SPECIES_HABITAT = {
   croaker:       ["bay", "inshore"],
   sheepshead:    ["bay", "inshore"],
   tautog:        ["inshore", "nearshore"],
+  porgy:         ["inshore", "nearshore"],          // rockpiles, mussel beds, wrecks
   // ── FLORIDA / TROPICAL SPECIES ────────────────────────────────────
-  tarpon:        ["bay", "inshore"],            // FL flats, lagoons, passes
-  snook:         ["bay", "inshore"],            // FL east coast inlets & lagoons
+  tarpon:        ["bay", "inshore"],            // FL flats, lagoons, passes — not Stream water
+  snook:         ["bay", "inshore"],            // inlets, beaches, mangroves — not 6 nm wrecks
   bonefish:      ["bay", "inshore"],            // FL Keys flats
   permit:        ["bay", "inshore", "nearshore"],   // Flats + nearshore wrecks
   ceromack:      ["nearshore", "inshore"],          // Like Spanish mackerel but warmer water
@@ -5251,12 +5703,108 @@ const SPECIES_HABITAT = {
   vermilion:     ["nearshore", "offshore"],          // Deeper reefs / shelf ledges
   lanesnap:      ["nearshore", "inshore"],          // Gulf reefs
   yellowtail:    ["nearshore", "inshore"],          // FL Keys reefs, classic Keys species
-  // ── PACIFIC / SOUTHERN CALIFORNIA ─────────────────────────────────
+  // ── PACIFIC / CALIFORNIA ──────────────────────────────────────────
   cayellowtail:  ["nearshore", "offshore"],         // SoCal banks, kelp edges, hard bottom, paddies
+  lingcod:       ["nearshore", "offshore"],         // rocky reefs and pinnacles, 33-394 ft
+  calicobass:    ["nearshore", "inshore"],          // kelp line and shallow hard bottom
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// EFFECTIVE HABITAT — depth buckets derived from the species' own depth bands
+//
+// SPECIES_HABITAT above is a COARSE three-bucket proxy, but classifyWaterType()
+// resolves those buckets from real bathymetry with hard edges at 30 ft and
+// 100 ft — and the mask is a HARD VETO applied before scoreCell() ever looks at
+// the far more carefully researched depthBands. So whenever the mask and the
+// depth bands disagreed, the coarse mask won and the species silently vanished
+// at a bucket boundary.
+//
+// That bit us three times, each fixed by hand for one species at a time:
+//   • flounder — Triangle Wrecks off Virginia Beach sit right on the 100 ft
+//     line, so wreck cells flipped in and out of the map on one foot of depth.
+//   • vermilion — a nearshore-only mask blanked out the ENTIRE 100-300 ft band
+//     where they actually hold, so the bite map rendered nothing at all.
+//   • blackseabass — masked ["nearshore","inshore"] with depthBands reaching
+//     427 ft, which deleted every cell at or past 100 ft. That is exactly the
+//     100-115 ft of water off Virginia Beach that holds the biggest sea bass.
+//
+// Rather than keep patching individual species, derive the depth buckets from
+// each species' own depthBands and UNION them into the curated mask. This can
+// only ever ADD a bucket the species' own researched depth range already asks
+// for — it never removes one — and the depth FACTOR still scores normally, so a
+// species does not suddenly rate well at a depth it dislikes. It just stops
+// being hard-deleted from water it demonstrably lives in.
+//
+// "bay" is deliberately NOT derived: it comes from BAY_BOXES geometry, not from
+// depth, so it stays entirely under the curated mask's control.
+//
+// tests/habitat-depth-consistency.test.mjs slices the block between the two
+// markers below and pins this invariant.
+//
+// ── habitat-derivation:begin ───────────────────────────────────────────────
+// Mirrors classifyWaterType()'s depth ladder, in feet.
+const HABITAT_DEPTH_BUCKETS_FT = [
+  ["inshore",     0,  30],
+  ["nearshore",  30, 100],
+  ["offshore",  100, Infinity],
+];
+
+// Which depth buckets does this set of [minM, maxM] bands actually reach?
+function depthBucketsForBands(bands){
+  const out = [];
+  if(!Array.isArray(bands)) return out;
+  for(const [name, loFt, hiFt] of HABITAT_DEPTH_BUCKETS_FT){
+    for(const band of bands){
+      if(!Array.isArray(band)) continue;
+      const bLoFt = band[0] * 3.281, bHiFt = band[1] * 3.281;
+      if(bLoFt < hiFt && bHiFt >= loFt){ out.push(name); break; }
+    }
+  }
+  return out;
+}
+
+const _effHabitatCache = new Map();
+
+// Curated mask ∪ the depth buckets the species' own depthBands reach.
+// Returns null for species with no curated mask (caller treats that as
+// "allowed everywhere", the long-standing safe default).
+function effectiveSpeciesHabitat(speciesId){
+  if(_effHabitatCache.has(speciesId)) return _effHabitatCache.get(speciesId);
+  const curated = (typeof SPECIES_HABITAT !== "undefined") ? SPECIES_HABITAT[speciesId] : null;
+  if(!curated){
+    _effHabitatCache.set(speciesId, null);
+    return null;
+  }
+  // The two prefs tables are top-level `const` in classic scripts, so they are
+  // lexical bindings rather than globalThis properties and must be referenced by
+  // name. PACIFIC_SPECIES_PREFS is declared further down this same file, so a
+  // caller that ran during script evaluation (rather than on interaction, as all
+  // of today's callers do) would hit its temporal dead zone — and `typeof`
+  // does NOT shield against that. Catch it and skip the memo so an early call
+  // degrades to today's curated-mask-only behavior instead of poisoning the
+  // cache for the rest of the session.
+  const tables = [];
+  try {
+    if(typeof PREDICT_SPECIES_PREFS !== "undefined") tables.push(PREDICT_SPECIES_PREFS);
+    if(typeof PACIFIC_SPECIES_PREFS  !== "undefined") tables.push(PACIFIC_SPECIES_PREFS);
+  } catch(_){
+    return curated;
+  }
+  // Union across BOTH coasts' bands: PACIFIC_SPECIES_PREFS swaps in different
+  // depth bands for West-Coast cells, and a widening union is safe for either.
+  const merged = new Set(curated);
+  for(const table of tables){
+    const prefs = table[speciesId];
+    if(prefs && prefs.depthBands) depthBucketsForBands(prefs.depthBands).forEach(b => merged.add(b));
+  }
+  const out = [...merged];
+  _effHabitatCache.set(speciesId, out);
+  return out;
+}
+// ── habitat-derivation:end ─────────────────────────────────────────────────
+
 function speciesAllowedInWater(speciesId, waterType){
-  const allowed = SPECIES_HABITAT[speciesId];
+  const allowed = effectiveSpeciesHabitat(speciesId);
   if(!allowed) return true;  // unknown species: allow everywhere (safe default)
   return allowed.includes(waterType);
 }
@@ -5309,24 +5857,189 @@ function estuarySalinity(lat, lng){
   return 1;  // open coast / shelf — full ocean salinity
 }
 
+// ── Prediction-only charted structure (wrecks/reefs/ledges) ─────────────────
+// The full waypoint database (~12k) powers scoring proximity — it is NOT drawn
+// on the map (the Waypoints layer stays user-controlled with its own cap).
+const PREDICT_BOTTOM_STRUCTURE_TYPES = new Set(["wk", "rf", "st", "ld", "rk", "hl", "hp", "tw"]);
+const PREDICT_PELAGIC_STRUCTURE_TYPES = new Set(["cy", "pf", "rg", "tw"]);
+let _predictStructureNear = null;   // Map "lat,lng" (grid-snapped) → { nm, canyon }
+let _predictStructureSpatial = null; // { binDeg, originLat, originLng, bins: Map }
+
+// Charted wreck/reef positions for bite-map scoring (not map display). Gated the
+// same way as the Waypoints layer — Bite Map itself is already Pro-only.
+function predictChartedStructureAllowed(){
+  if(typeof BW_PREMIUM !== "undefined" && BW_PREMIUM) return true;
+  try {
+    const cfg = (typeof window !== "undefined") ? window.BW_DATA_CONFIG : null;
+    return !!(cfg && cfg.embeddedFallback);
+  } catch(_e){ return false; }
+}
+
+function predictStructureTypeSet(speciesId){
+  const prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
+  if(prefs && prefs.structureProx){
+    return new Set([...PREDICT_BOTTOM_STRUCTURE_TYPES, ...PREDICT_PELAGIC_STRUCTURE_TYPES]);
+  }
+  const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
+  if(sp && sp.cat === "offshore") return PREDICT_PELAGIC_STRUCTURE_TYPES;
+  if(prefs && (prefs.demersal || prefs.breakPref === "stable")) return PREDICT_BOTTOM_STRUCTURE_TYPES;
+  return PREDICT_BOTTOM_STRUCTURE_TYPES;
+}
+
+function chartedStructureRowsNearPort(port, radiusNm, typeSet){
+  if(!port || !typeSet || !typeSet.size) return [];
+  let rows = [];
+  if(Array.isArray(_wpInRangeCache) && _wpInRangeCache.length){
+    rows = _wpInRangeCache.filter(w => w && typeSet.has(w.t));
+  } else if(typeof window !== "undefined" && window.BW_WAYPOINTS && Array.isArray(window.BW_WAYPOINTS.wp)){
+    for(const row of window.BW_WAYPOINTS.wp){
+      if(!Array.isArray(row) || row.length < 4) continue;
+      const t = row[3];
+      if(!typeSet.has(t)) continue;
+      rows.push({ name: row[0], lat: row[1], lng: row[2], t });
+    }
+  }
+  return filterWaypointsForPortAndRadius(port, rows, radiusNm);
+}
+
+function collectPredictStructureCandidates(port, radiusNm, speciesId){
+  const out = [];
+  if(typeof CANYONS !== "undefined" && Array.isArray(CANYONS)){
+    for(const c of CANYONS){
+      if(c.lat == null || c.lng == null) continue;
+      if(speciesId && Array.isArray(c.fish) && c.fish.length && !c.fish.includes(speciesId)) continue;
+      if(port && typeof reachableFromPort === "function" && !reachableFromPort(port, c.lat, c.lng)) continue;
+      if(port && typeof nmBetween === "function" && nmBetween(port.lat, port.lng, c.lat, c.lng) > radiusNm + 0.05) continue;
+      out.push({ lat: c.lat, lng: c.lng, canyon: c });
+    }
+  }
+  if(predictChartedStructureAllowed()){
+    const types = predictStructureTypeSet(speciesId);
+    for(const w of chartedStructureRowsNearPort(port, radiusNm, types)){
+      out.push({
+        lat: w.lat, lng: w.lng,
+        canyon: { name: w.name || "Charted structure", type: w.t, lat: w.lat, lng: w.lng, fish: [] },
+      });
+    }
+  }
+  return out;
+}
+
+function _structureSnapKey(lat, lng, step, originLat, originLng){
+  const oLa = originLat != null ? originLat : 0;
+  const oLn = originLng != null ? originLng : 0;
+  const snap = (v, o, st) => o + Math.round((v - o) / st) * st;
+  return `${snap(lat, oLa, step).toFixed(4)},${snap(lng, oLn, step).toFixed(4)}`;
+}
+
+function buildPredictStructureSpatialIndex(candidates, originLat, originLng){
+  const binDeg = 0.2;
+  const bins = new Map();
+  for(const p of candidates){
+    const i = Math.floor((p.lat - originLat) / binDeg);
+    const j = Math.floor((p.lng - originLng) / binDeg);
+    const k = `${i},${j}`;
+    let arr = bins.get(k);
+    if(!arr){ arr = []; bins.set(k, arr); }
+    arr.push(p);
+  }
+  _predictStructureSpatial = { binDeg, originLat, originLng, bins };
+}
+
+function nearestStructureAmongCandidates(lat, lng, candidates){
+  let best = null, bestC = null;
+  for(const p of candidates){
+    const d = (typeof nmBetween === "function")
+      ? nmBetween(lat, lng, p.lat, p.lng)
+      : Math.hypot((lat - p.lat) * 60, (lng - p.lng) * 60 * Math.cos(lat * Math.PI / 180));
+    if(best == null || d < best){ best = d; bestC = p.canyon; }
+  }
+  return best == null ? null : { canyon: bestC, nm: best };
+}
+
+function nearestStructureFromSpatialIndex(lat, lng){
+  const idx = _predictStructureSpatial;
+  if(!idx || !idx.bins) return null;
+  const i0 = Math.floor((lat - idx.originLat) / idx.binDeg);
+  const j0 = Math.floor((lng - idx.originLng) / idx.binDeg);
+  const pool = [];
+  for(let di = -3; di <= 3; di++){
+    for(let dj = -3; dj <= 3; dj++){
+      const arr = idx.bins.get(`${i0 + di},${j0 + dj}`);
+      if(arr) pool.push(...arr);
+    }
+  }
+  if(!pool.length) return null;
+  return nearestStructureAmongCandidates(lat, lng, pool);
+}
+
+function precomputePredictStructureNear(latMin, latMax, lngMin, lngMax, step, originLat, originLng, candidates){
+  _predictStructureNear = new Map();
+  if(!candidates.length) return;
+  buildPredictStructureSpatialIndex(candidates, originLat, originLng);
+  for(let la = latMin; la <= latMax + 1e-9; la += step){
+    for(let ln = lngMin; ln <= lngMax + 1e-9; ln += step){
+      if(typeof isPredictWater === "function" && !isPredictWater(la, ln)) continue;
+      const hit = nearestStructureAmongCandidates(la, ln, candidates);
+      if(hit) _predictStructureNear.set(_structureSnapKey(la, ln, step, originLat, originLng), hit);
+    }
+  }
+}
+
+// Nearest mapped structure (reef/wreck/lump/shoal/ledge) to a point, in nm,
+// considering only structures relevant to the species when fish info is given.
+// Used to lift structure-oriented species' scores near real structure so the
+// ledges/rips read hotter than open flat bottom. Returns null if none in range.
+function nearestMappedStructure(lat, lng, speciesId){
+  const step = (_predictStructureNear && _predictGridStep) ? _predictGridStep : 0.1;
+  const oLa = (_predictGridOrigin && _predictGridOrigin.lat != null) ? _predictGridOrigin.lat : 0;
+  const oLn = (_predictGridOrigin && _predictGridOrigin.lng != null) ? _predictGridOrigin.lng : 0;
+  const key = _structureSnapKey(lat, lng, step, oLa, oLn);
+  if(_predictStructureNear && _predictStructureNear.has(key)) return _predictStructureNear.get(key);
+  const spatial = nearestStructureFromSpatialIndex(lat, lng);
+  if(spatial) return spatial;
+
+  if(typeof CANYONS === "undefined" || !Array.isArray(CANYONS)) return null;
+  let best = null, bestC = null;
+  for(const c of CANYONS){
+    if(c.lat == null || c.lng == null) continue;
+    if(speciesId && Array.isArray(c.fish) && c.fish.length && !c.fish.includes(speciesId)) continue;
+    const d = (typeof nmBetween === "function")
+      ? nmBetween(lat, lng, c.lat, c.lng)
+      : Math.hypot((lat - c.lat) * 60, (lng - c.lng) * 48);
+    if(best == null || d < best){ best = d; bestC = c; }
+  }
+  return best == null ? null : { canyon: bestC, nm: best };
+}
+
 // Nearest mapped structure (reef/wreck/lump/shoal/ledge) to a point, in nm,
 // considering only structures relevant to the species when fish info is given.
 // Used to lift structure-oriented species' scores near real structure so the
 // ledges/rips read hotter than open flat bottom. Returns null if none in range.
 function nearestStructureNm(lat, lng, speciesId){
-  if(typeof CANYONS === "undefined" || !Array.isArray(CANYONS)) return null;
-  let best = null;
-  for(const c of CANYONS){
-    if(c.lat == null || c.lng == null) continue;
-    // If the structure lists target species, prefer ones that include this
-    // species; otherwise any mapped structure counts.
-    if(speciesId && Array.isArray(c.fish) && c.fish.length && !c.fish.includes(speciesId)) continue;
-    const d = (typeof nmBetween === "function")
-      ? nmBetween(lat, lng, c.lat, c.lng)
-      : Math.hypot((lat - c.lat) * 60, (lng - c.lng) * 48);
-    if(best == null || d < best) best = d;
-  }
-  return best;
+  const hit = nearestMappedStructure(lat, lng, speciesId);
+  return hit ? hit.nm : null;
+}
+
+// Gulf yellowfin giants: fall (Sep-Nov) on the deepwater floaters/rigs,
+// winter (Dec-Feb) on Midnight Lump. Same proximity curve, bigger lift on
+// the in-season structure so the numbered pin can land on the Floaters in fall.
+function gulfYellowfinStructureKind(canyon){
+  if(!canyon) return "other";
+  const type = String(canyon.type || "").toLowerCase();
+  const name = String(canyon.name || "").toLowerCase();
+  if(type === "rig" || type === "platform" || /floater|petronius/.test(name)) return "rig";
+  if(type === "lump" || /\blump/.test(name)) return "lump";
+  return "other";
+}
+function gulfYellowfinStructureLift(canyon, monthIndex){
+  const kind = gulfYellowfinStructureKind(canyon);
+  const mo = (monthIndex != null && isFinite(monthIndex)) ? monthIndex : new Date().getMonth();
+  const fallGiants = mo === 8 || mo === 9 || mo === 10;   // Sep-Nov
+  const winterLump = mo === 11 || mo === 0 || mo === 1;   // Dec-Feb
+  if(fallGiants && kind === "rig") return 0.50;
+  if(winterLump && kind === "lump") return 0.50;
+  return 0.35;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -5370,11 +6083,13 @@ const SPECIES_LAT_RANGE = {
   cobia:         [25.0, 40.5],   // FL through Chesapeake/DelMarVa up to NJ (summer)
   spanishmack:   [27.0, 41.0],   // FL through NJ
   // Blackfin: a warm-water / subtropical tuna. Common FL, Gulf, and the SE
-  // Atlantic; the OBX/Hatteras is the northern stronghold. Northern bound 35.9°N
-  // covers Oregon Inlet (~35.8°N) and the outer OBX Stream edge without opening
-  // the Mid-Atlantic shelf. Combined with breakPref:"edge" (so even within range
-  // it scores the Stream, not the inner shelf), this keeps blackfin realistic.
-  blackfin:      [24.0, 35.9],
+  // Atlantic; Hatteras/Lookout is the northern stronghold. 35.6°N keeps the
+  // Hatteras Stream in range and drops Oregon Inlet / VA so the stray northern
+  // edge cannot outrank the real grounds.
+  blackfin:      [24.0, 35.6],
+  // Vermilion (beeliner): Gulf year-round; South Atlantic ledges only as far
+  // north as Cape Hatteras (35.4°N). They are not a Mid-Atlantic / VA fishery.
+  vermilion:     {atlantic: [24.0, 35.4], gulf: [24.5, 30.5]},
   // ── MID-ATLANTIC + NEW ENGLAND ───────────────────────────────────────
   // Blueline tilefish: TWO populations, and the flat [33.0, 40.5] band this
   // replaces silently excluded one of them. That band hard-excluded everything
@@ -5395,6 +6110,10 @@ const SPECIES_LAT_RANGE = {
   bluefin:       {atlantic: [32.5, 45.0], gulf: [26.0, 30.5]},
   striper:       [33.0, 45.0],   // NC north; some FL strays in winter
   tautog:        [37.5, 43.0],   // NJ to MA
+  // Scup: Cape Cod down to the Chesapeake mouth. They occur to Hatteras but are
+  // not a fishery south of the Bay, and the Gulf has none at all — the explicit
+  // null Gulf band keeps them off the Gulf shelf, which shares these latitudes.
+  porgy:         {atlantic: [36.5, 43.0], gulf: null},
   // ── NEW ENGLAND ONLY ─────────────────────────────────────────────────
   cod:           [40.0, 45.0],   // GOM + Georges Bank
   haddock:       [40.0, 45.0],   // GOM + Georges Bank
@@ -5405,6 +6124,12 @@ const SPECIES_LAT_RANGE = {
   // it in California water. (Without this it would have no entry and default to
   // "allowed everywhere," lighting up the East Coast.)
   cayellowtail:  {atlantic: null, gulf: null},
+  // Lingcod and calico bass are Pacific-only for the same reason. Without an
+  // entry here they would default to "allowed everywhere" and light up the
+  // Atlantic and Gulf; the PACIFIC_SPECIES gate below is what admits them to
+  // California water.
+  lingcod:       {atlantic: null, gulf: null},
+  calicobass:    {atlantic: null, gulf: null},
   // Everything else (yellowfin, blue marlin, mahi, wahoo, sailfish, etc.)
   // has no entry — they range coast-wide.
 };
@@ -5417,16 +6142,27 @@ const SPECIES_LAT_RANGE = {
 // Atlantic/Gulf ranges so that:
 //   • Atlantic/Gulf-only species (redfish, striper, snapper, etc.) never light
 //     up the bite map in Pacific water — anything NOT in this list is excluded.
-//   • Focused on the core West-Coast targets for now (yellowtail + bluefin),
-//     plus the obvious pelagics that share those grounds.
+//   • The list covers the pelagics that share the SoCal offshore grounds plus
+//     the rocky-reef/kelp targets that carry the CA nearshore fishery.
 // A value of [minLat, maxLat] bounds the species; the check runs only for
 // Pacific coordinates, so it can never affect the East Coast.
+//
+// NOTE: the upper bound cannot usefully exceed 42.5°N — that is the ceiling in
+// isPacificContext() and in the Pacific bite-map bounding box.
 const PACIFIC_SPECIES = {
   bluefin:      [28.0, 42.0],   // Pacific bluefin — Baja/SoCal through central CA
   cayellowtail: [28.0, 36.5],   // California yellowtail — SoCal banks/kelp; strays to Monterey
   yellowfin:    [28.0, 35.5],   // warm-water/warm-year SoCal yellowfin
   bonito:       [28.0, 40.0],   // Pacific bonito — abundant off SoCal
   mahi:         [28.0, 34.5],   // dorado — warm months off SoCal/Baja
+  // Lingcod run the whole coast and are strongest from Point Conception north —
+  // the one CA species whose core fishery is the CENTRAL coast (Monterey, Moss
+  // Landing, Morro Bay, Port San Luis) rather than the SoCal bight.
+  lingcod:      [30.0, 42.5],
+  // Calico (kelp) bass follow the kelp: Baja through the Channel Islands, then
+  // thinning fast north of Point Conception (34.45°N). 35.8 reaches Morro Bay
+  // and Port San Luis without claiming a Monterey fishery that isn't there.
+  calicobass:   [28.0, 35.8],
 };
 
 // ── Pacific habitat overrides (West-Coast tuning pass) ──────────────────────
@@ -5448,6 +6184,28 @@ const PACIFIC_SPECIES_PREFS = {
   //     the SSH / surface-current FRONT-FUSION path so the map lights up real
   //     fronts and offshore structure instead of every patch of warm water.
   bluefin: { tempIdeal:[63,70], tempWorking:[60,74], chlorPref:"edge", depthBands:[[50,200],[200,900]], breakPref:"edge" },
+  // SoCal yellowfin are a DIFFERENT fishery from Atlantic canyon yellowfin, so
+  // they get their own habitat rather than sharing the Atlantic numbers:
+  //   • TEMPERATURE — the base band is [70,78] ideal because that is Gulf Stream
+  //     water. The California Current is far cooler: SoCal yellowfin show up as
+  //     the water crosses ~65-66°F and the bite is best in the high 60s to low
+  //     70s. Scored against the Atlantic band, a banner 70°F San Diego day sat
+  //     at the very bottom edge of "ideal" and a very fishable 67°F day was
+  //     already penalized as too cold.
+  //   • DEPTH — the base band starts at 150 m (492 ft) to keep Atlantic
+  //     yellowfin off the shallow Mid-Atlantic shelf. That guard is wrong here:
+  //     the SoCal fishery is fought over BANKS and kelp paddies (Nine Mile, the
+  //     43 Fathom, the 267/277, 14 Mile) that top out well shallower than that,
+  //     and the shelf is so narrow that shallow water is not a proxy for "too
+  //     close to the beach" the way it is off Virginia. Two bands: the bank/
+  //     shelf-edge zone and the deep trough/offshore water.
+  // Everything else carries over — chlorPref/breakPref "edge" is if anything
+  // MORE true here, since the SoCal fleet runs on the temp/color break.
+  yellowfin: { tempIdeal:[66,74], tempWorking:[62,78], chlorPref:"edge", depthBands:[[40,200],[200,1500]], breakPref:"edge" },
+  // SoCal dorado ride kelp paddies in California Current water (high 60s-low
+  // 70s), not Gulf Stream 74-82°F. Without this override a 70°F San Diego day
+  // was treated as too cold.
+  mahi: { tempIdeal:[68,76], tempWorking:[64,80], chlorPref:"weed", depthBands:[[30,400]], breakPref:"any" },
 };
 
 // Bahamas / Bahama-Bank water east of the Florida crossings. Several US
@@ -5509,6 +6267,11 @@ function speciesAllowedAtLat(speciesId, lat, lng){
 }
 
 // Species valid for a brief run zone (inshore includes bay fish).
+// Deliberately uses the CURATED mask, not effectiveSpeciesHabitat(): this drives
+// a UI picker with no depth to score against, so the depth-derived union would
+// over-reach — tarpon's 3-40 m band touches the "offshore" bucket, but tarpon
+// does not belong in an offshore trip's species list. The widened habitat is for
+// the per-cell map veto, where the depth FACTOR still grades the actual depth.
 function speciesAllowedInBriefZone(speciesId, zone){
   const allowed = SPECIES_HABITAT[speciesId];
   if(!allowed) return true;
@@ -5543,6 +6306,9 @@ function briefPinForZone(port, zone){
   return pointNmFromBearing(port.lat, port.lng, nm, portOffshoreBearing(port));
 }
 
+// Curated mask on purpose (see speciesAllowedInBriefZone) — this picks the
+// DEFAULT trip zone, which should follow the species' primary habitat rather
+// than the deepest water its depth band happens to touch.
 function defaultBriefRunZone(speciesId){
   const hab = SPECIES_HABITAT[speciesId];
   if(!hab) return "offshore";
@@ -5802,6 +6568,16 @@ function maxRangeForPort(portObj){
   return portFishingRangeNm(portObj);
 }
 
+// Ocean/bathy fetch radius. Scoring still uses speciesRunRangeNm; this only
+// sizes CUDEM + SST. A 140 nm box after the 45°N envelope covers too many
+// tiles from Portland and times out (Cape Cod still fits). Cap the Northeast.
+function predictInputsRangeNm(portObj){
+  const portMax = portFishingRangeNm(portObj);
+  if(!portObj || !Number.isFinite(portObj.lat)) return portMax;
+  if(portObj.lat >= 41.0) return Math.min(portMax, 75);
+  return portMax;
+}
+
 // ── Species run range (nm) ──────────────────────────────────────────────────
 // portFishingRangeNm() answers "how far will a boat leave this port," which is
 // an OFFSHORE number. Applied to inshore/nearshore species it put flounder
@@ -5830,6 +6606,8 @@ const SPECIES_RUN_NM = {
   falsealbacore: 30, bonito: 30, tripletail: 30,
   cobia: 35,
   tautog: 40, spadefish: 40, hogfish: 40,   // incl. winter offshore blackfish wrecks
+  porgy: 45,                                 // NE party-boat rockpiles + fall wrecks
+  calicobass: 65,                            // SoCal kelp line out to Catalina (22) / San Clemente (55)
   muttonsnap: 45, lanesnap: 45, yellowtail: 45,
   kingmack: 55,                              // SKA tournament boats run 40-70
   triggerfish: 60,
@@ -5838,6 +6616,7 @@ const SPECIES_RUN_NM = {
   snapper: 90, gaggrouper: 90, vermilion: 90, // wide west FL shelf runs
   cod: 100, haddock: 100, pollock: 100,      // Gulf of Maine banks: Cashes ~90
   cayellowtail: 100,                         // SoCal islands/banks: San Clemente 55
+  lingcod: 70,                               // CA reefs/pinnacles + island hard bottom
 };
 // Safety net for species added later without an explicit entry.
 const SPECIES_RUN_DEFAULT_NM = { inshore: 25, nearshore: 40 };
@@ -5851,7 +6630,14 @@ function speciesRunRangeNm(speciesId, portObj){
   const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
   const cat = sp ? sp.cat : null;
   if(!cat || cat === "offshore" || cat === "all") return portMax;
-  const cap = SPECIES_RUN_NM[speciesId] ?? SPECIES_RUN_DEFAULT_NM[cat];
+  let cap = SPECIES_RUN_NM[speciesId] ?? SPECIES_RUN_DEFAULT_NM[cat];
+  // Gulf of Maine / Cape sea bass are a nearshore wreck fishery, not a 70 nm
+  // winter-wreck run. Keep the Mid-Atlantic 70 nm cap south of the NE box.
+  if(speciesId === "blackseabass" && portObj
+     && typeof isNewEnglandBluefinGrounds === "function"
+     && isNewEnglandBluefinGrounds(portObj.lat, portObj.lng)){
+    cap = 28;
+  }
   return cap == null ? portMax : Math.min(cap, portMax);
 }
 
@@ -5898,7 +6684,11 @@ function predictResultCacheKey(){
     : "0";
   return `${activePort || ""}:${activeSpId || ""}:${FORECAST_HOUR_OFFSET || 0}:${reportSig}:${predictOceanFingerprint()}`;
 }
-function invalidatePredictCache(){ _predictResultCache = null; }
+function invalidatePredictCache(){
+  _predictResultCache = null;
+  _predictStructureNear = null;
+  _predictStructureSpatial = null;
+}
 
 // Rank score for hotspot badge selection — favors in-season, high-confidence runs.
 function hotspotRankScore(cell){
@@ -5926,9 +6716,11 @@ function cmpHotspotStable(a, b){
 // genuinely different areas. Shared by renderPrediction and topBriefHotspots so
 // the banner run plan and map badges always agree. Badge numbers (#1, #2, #3)
 // always follow raw bite score — highest % is #1.
-function pickTopHotspotBadges(hotspots, limit){
+function pickTopHotspotBadges(hotspots, limit, speciesId){
   limit = limit || 3;
   if(!Array.isArray(hotspots) || !hotspots.length) return [];
+  const sid = speciesId ||
+    (typeof activeSpId !== "undefined" ? activeSpId : null);
   const chosen = [];
   const sepFor = (cell) => {
     const d = (typeof cell.distNm === "number") ? cell.distNm : 20;
@@ -5937,12 +6729,43 @@ function pickTopHotspotBadges(hotspots, limit){
   const ranked = hotspots.slice().sort(cmpHotspotStable);
   for(const cell of ranked){
     if(chosen.length >= limit) break;
+    if(typeof predictHeatCellVisible === "function"){
+      if(!predictHeatCellVisible(cell.lat, cell.lng, sid)) continue;
+    } else if(typeof isPredictWater === "function" && !isPredictWater(cell.lat, cell.lng)) continue;
     const minSep = sepFor(cell);
     const farEnough = chosen.every(c => nmBetween(c.lat, c.lng, cell.lat, cell.lng) >= minSep);
     if(farEnough) chosen.push(cell);
   }
   chosen.sort(cmpHotspotStable);
   return chosen;
+}
+
+// Background chlor fill when predictinputs returned SST/wind but an empty
+// chlorophyll grid. The map overlay uses NASA GIBS tiles (always visual);
+// scoring uses NOAA CoastWatch ERDDAP, which can miss on a cold/timeout pass
+// even while GIBS still paints. Retry the chlor-only endpoint and redraw.
+let _chlorUpgradeTimer = null;
+let _chlorUpgradeKey = "";
+function scheduleChlorUpgrade(latMin, latMax, lngMin, lngMax){
+  if(typeof CHLOR_GRID !== "undefined" && CHLOR_GRID && CHLOR_GRID.rows && CHLOR_GRID.rows.length) return;
+  const key = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}`;
+  if(_chlorUpgradeKey === key && _chlorUpgradeTimer) return;
+  _chlorUpgradeKey = key;
+  if(_chlorUpgradeTimer) clearTimeout(_chlorUpgradeTimer);
+  _chlorUpgradeTimer = setTimeout(async () => {
+    _chlorUpgradeTimer = null;
+    try {
+      if(typeof buildChlorGrid !== "function") return;
+      await buildChlorGrid(latMin, latMax, lngMin, lngMax);
+      if(!CHLOR_GRID || !CHLOR_GRID.rows || !CHLOR_GRID.rows.length) return;
+      if(typeof invalidatePredictCache === "function") invalidatePredictCache();
+      if(typeof layerVis !== "undefined" && layerVis.predict &&
+         typeof activeSpId !== "undefined" && activeSpId && activeSpId !== "all" &&
+         typeof drawPrediction === "function"){
+        drawPrediction();
+      }
+    } catch(_e){}
+  }, 1800);
 }
 
 // One-shot background upgrade when predictinputs returned without SSH fronts.
@@ -6100,7 +6923,18 @@ function requireForecastAccess(lat, lng){
 // animation frame, so the main thread stays responsive and the heat map fills
 // in progressively. A generation token cancels a stale run if the user switches
 // species/port before it finishes (prevents two runs racing onto the map).
+// Scoring / ocean-fetch envelope. 43.5°N used to clip Portland (43.66°N) and
+// all of Casco Bay, so Maine bite maps painted only south of the port. 45°N
+// matches SPECIES_LAT_RANGE and the New England grounds box.
+function predictCoastLimits(lat, lng){
+  const pac = typeof isPacificContext === "function" && isPacificContext(lat, lng);
+  if(pac) return { latMin: 29.0, latMax: 42.5, lngMin: -126.0, lngMax: -116.0 };
+  return { latMin: 24.0, latMax: 45.0, lngMin: -97.5, lngMax: -66.5 };
+}
+
 let _predictGen = 0;
+let _predictGridStep = 0.1;
+let _predictGridOrigin = { lat: 0, lng: 0 };
 function computePredictionGridAsync(speciesId, onProgress, onDone){
   const myGen = ++_predictGen;
   if(speciesId === "all"){ onDone && onDone(null, myGen); return myGen; }
@@ -6110,6 +6944,9 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   // cap). The DATA bbox below deliberately stays on the full port range so the
   // bathymetry/ocean grid remains port-scoped and stable across species switches.
   const portRange = maxRangeForPort(port);
+  const dataRange = (typeof predictInputsRangeNm === "function")
+    ? predictInputsRangeNm(port)
+    : portRange;
   const maxRange = speciesRunRangeNm(speciesId, port);
   // Full-coast extent clamp. The Atlantic/Gulf box (default) is unchanged, so
   // East Coast behavior is identical. Pacific ports get their own West-Coast
@@ -6117,10 +6954,11 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   // bounding box (min > max), producing zero cells and a hung ocean fetch — the
   // "Generating heat map…" spinner that never finished.
   const _pac = !!port && typeof isPacificContext === "function" && isPacificContext(port.lat, port.lng);
-  const LAT_MIN = _pac ? 29.0  : 24.0;
-  const LAT_MAX = _pac ? 42.5  : 43.5;
-  const LNG_MIN = _pac ? -126.0 : -97.5;
-  const LNG_MAX = _pac ? -116.0 : -68.5;
+  const env = (typeof predictCoastLimits === "function")
+    ? predictCoastLimits(port ? port.lat : 35, port ? port.lng : -75)
+    : { latMin: _pac ? 29.0 : 24.0, latMax: _pac ? 42.5 : 45.0,
+        lngMin: _pac ? -126.0 : -97.5, lngMax: _pac ? -116.0 : -66.5 };
+  const LAT_MIN = env.latMin, LAT_MAX = env.latMax, LNG_MIN = env.lngMin, LNG_MAX = env.lngMax;
 
   // ── Scope the fine grid to the active port's fishing range ──────────────────
   // Scoring the whole coast at a fine step would cover tens of thousands of
@@ -6130,8 +6968,8 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   let step, latMin, latMax, lngMin, lngMax, ROWS_PER_FRAME;
   let bboxLatMin = LAT_MIN, bboxLatMax = LAT_MAX, bboxLngMin = LNG_MIN, bboxLngMax = LNG_MAX;
   if(port){
-    const degLat = (portRange / 60) + 0.15;
-    const degLng = (portRange / (60 * Math.cos(port.lat * Math.PI / 180))) + 0.15;
+    const degLat = (dataRange / 60) + 0.15;
+    const degLng = (dataRange / (60 * Math.cos(port.lat * Math.PI / 180))) + 0.15;
     bboxLatMin = Math.max(LAT_MIN, port.lat - degLat);
     bboxLatMax = Math.min(LAT_MAX, port.lat + degLat);
     bboxLngMin = Math.max(LNG_MIN, port.lng - degLng);
@@ -6150,6 +6988,16 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
     latMin = LAT_MIN; latMax = LAT_MAX; lngMin = LNG_MIN; lngMax = LNG_MAX;
     step = 0.25;
     ROWS_PER_FRAME = 6;
+  }
+
+  _predictGridStep = step;
+  _predictGridOrigin = { lat: latMin, lng: lngMin };
+  if(port){
+    const structCandidates = collectPredictStructureCandidates(port, maxRange, speciesId);
+    precomputePredictStructureNear(latMin, latMax, lngMin, lngMax, step, latMin, lngMin, structCandidates);
+  } else {
+    _predictStructureNear = null;
+    _predictStructureSpatial = null;
   }
 
   const heatGrid = [];
@@ -6253,7 +7101,25 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
         }, myGen);
         requestAnimationFrame(step_frame);
       } else {
-        // Grid finished → begin the chunked hotspot refinement phase.
+        // Grid finished. Score named fishing grounds at their exact coordinates
+        // so badges can pin Midnight Lump / the Floaters / Triangle Wrecks
+        // instead of only the 0.1° lattice peak.
+        if(typeof CANYONS !== "undefined" && Array.isArray(CANYONS)){
+          for(const c of CANYONS){
+            if(c.lat == null || c.lng == null) continue;
+            if(speciesId && Array.isArray(c.fish) && c.fish.length && !c.fish.includes(speciesId)) continue;
+            const s = scoreWithPenalty(c.lat, c.lng);
+            if(!s || !s.result || s.result.score < PREDICT_HOTSPOT_SCORE_MIN) continue;
+            const pin = { lat: c.lat, lng: c.lng, distNm: s.distNm, ...s.result };
+            hotspotGrid.push(pin);
+            // Named grounds are not on the 0.1° lattice — inject into the heat
+            // field so badges and the painted map stay aligned.
+            if(s.result.score >= PREDICT_HEAT_SCORE_MIN){
+              const dup = heatGrid.some(h => Math.abs(h.lat - c.lat) < 1e-5 && Math.abs(h.lng - c.lng) < 1e-5);
+              if(!dup) heatGrid.push(pin);
+            }
+          }
+        }
         refineList = hotspotGrid.slice().sort(cmpHotspotStable);
         refineIdx = 0;
         phase = "refine";
@@ -6795,7 +7661,7 @@ const HeatCanvasLayer = L.Layer.extend({
 
     const haveLandCheck = (typeof isFishableWater === "function");
     const sid = this._opts.speciesId;
-    const speciesHabitat = (sid && typeof SPECIES_HABITAT !== "undefined") ? SPECIES_HABITAT[sid] : null;
+    const speciesHabitat = (sid && typeof effectiveSpeciesHabitat === "function") ? effectiveSpeciesHabitat(sid) : null;
     const haveSpeciesMask = !!(speciesHabitat && typeof classifyWaterType === "function");
     // Geographic range mask — does this species have any lat/region restrictions?
     const haveLatRange = !!(sid && typeof SPECIES_LAT_RANGE !== "undefined" &&
@@ -6887,50 +7753,17 @@ const HeatCanvasLayer = L.Layer.extend({
         const score = sLo + (sHi - sLo) * fLat;  // interp along lat
         if(score < PREDICT_HEAT_SCORE_MIN) continue;
 
-        // ── REAL bathymetry land mask (authoritative when loaded) ──
-        // CUDEM/ETOPO store land as depth 0 and water as depth > 0. When the bathy
-        // grid is loaded for this area (it is during a prediction render), this
-        // is a precise, basemap-independent land cut for coastlines, bays,
-        // sounds and rivers everywhere from Maine to Southern California — so the heat never
-        // paints over land even when the satellite basemap pixel is ambiguous
-        // (turbid bay water, shadows, vegetation reading as "water").
-        // Prefer the stable port-scoped predict bathy grid (same as scoring).
-        // Viewport BATHY_GRID can briefly lag during pan; BlueTopo hillshade
-        // then mislabels shelf water as land and the heat field goes blank.
-        let bathyWater = false;
-        let _rd = null;
-        if(typeof depthAtFromGrid === "function" && typeof PREDICT_BATHY_GRID !== "undefined" && PREDICT_BATHY_GRID){
-          _rd = depthAtFromGrid(PREDICT_BATHY_GRID, plat, plng);
-        }
-        if((_rd == null || !isFinite(_rd)) && typeof realDepthAt === "function"){
-          _rd = realDepthAt(plat, plng);
-        }
-        if(_rd != null && isFinite(_rd) && _rd <= 0) continue;
-        if(_rd != null && isFinite(_rd) && _rd > 0) bathyWater = true;
-
-        // ── Water/land mask — basemap pixel first, polygon fallback ──
-        // When bathy confirms water, skip basemap misreads (BlueTopo hillshade
-        // often classifies shelf pixels as land).
-        let isWater = null;
-        if(!bathyWater && useBasemap){
-          // Bake pixels are container pixels shifted by the padding. Anything
-          // in the padded skirt falls outside the snapshot, where isWater
-          // returns null and the polygon check below takes over.
-          isWater = BasemapSampler.isWater(x - padX, y - padY);
-        }
-        if(isWater === false) continue;              // definitive land
-        if(isWater === null && haveLandCheck){
-          // Sampler couldn't decide → fall back to polygon
-          if(!isFishableWater(plat, plng)) continue;
-        }
-        if(haveSpeciesMask){
-          if(!speciesHabitat.includes(classifyWaterType(plat, plng))) continue;
-        }
-        // Geographic range check — pixels outside the species lat band are
-        // transparent. Uses the central helper so per-region (Atlantic/Gulf)
-        // species like bluefin tuna are filtered correctly.
-        if(haveLatRange){
-          if(!speciesAllowedAtLat(sid, plat, plng)) continue;
+        // ── Land/habitat mask — MUST match computePredictionGridAsync ──
+        // Basemap pixels often call nearshore Gulf of Maine water "land" while
+        // the grid still scores those cells — which put #1/#2/#3 badges on the
+        // coast with no heat underneath. isPredictWater() + species gates are
+        // the same rules scoreCell() uses.
+        if(typeof predictHeatCellVisible === "function"){
+          if(!predictHeatCellVisible(plat, plng, sid)) continue;
+        } else {
+          if(haveLandCheck && !isFishableWater(plat, plng)) continue;
+          if(haveSpeciesMask && !speciesHabitat.includes(classifyWaterType(plat, plng))) continue;
+          if(haveLatRange && !speciesAllowedAtLat(sid, plat, plng)) continue;
         }
 
         // Feathered score floor: instead of a hard on/off at the cutoff (which
@@ -8024,6 +8857,31 @@ function _sstFcFillGaps(val, nLat, nLng){
 // is the union of exactly the per-polygon tests isOnLand ORs together.
 const SST_BARRIER_LAT_S = 33.80;
 const SST_BARRIER_LAT_N = 36.60;
+// barrierCoastLng() returns Atlantic Outer Banks longitudes (~-75 to -78)
+// at every latitude, including California's. Painting "everything west of
+// that line" as land is correct for Pamlico Sound and catastrophic for the
+// Pacific: it erases all SST north of Long Beach (33.80°N) out to Anacapa
+// and the Santa Barbara Channel. Only run the staircase on an Atlantic canvas.
+function _sstShouldPaintAtlanticBarrier(westLng){
+  return westLng > -98;
+}
+// CUDEM/ETOPO land flag for Pacific SST cells. LAND_POLYGONS have no West
+// Coast geometry, so without this MUR's land temperatures wash over San Diego,
+// Oceanside and the LA basin. Returns false when bathy hasn't loaded yet
+// (don't invent a coast by erasing ocean).
+function _sstBathySaysLand(lat, lng){
+  if(lng > -98) return false;
+  let d = null;
+  if(typeof depthAtFromGrid === "function"){
+    if(typeof BATHY_GRID !== "undefined" && BATHY_GRID)
+      d = depthAtFromGrid(BATHY_GRID, lat, lng);
+    if(d == null && typeof PREDICT_BATHY_GRID !== "undefined" && PREDICT_BATHY_GRID)
+      d = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng);
+  }
+  if(d == null && typeof realDepthAt === "function") d = realDepthAt(lat, lng);
+  if(d == null) return false;
+  return d <= 0;
+}
 
 // MAIN_COAST runs straight across the mouth of the Chesapeake, from the Cape
 // Charles tip to Virginia Beach, so every point behind that line tests as land
@@ -8085,6 +8943,8 @@ function _sstPaintLandShapes(cx, toX, toY, westLng){
   // Everything west of the Atlantic barrier is Pamlico / Core / Bogue Sound.
   // barrierCoastLng steps with latitude, so walk it north as a true staircase
   // (corner, then across) and close the shape off the west edge of the bitmap.
+  // Skip on Pacific canvases — see _sstShouldPaintAtlanticBarrier.
+  if(!_sstShouldPaintAtlanticBarrier(westLng)) return;
   if(typeof barrierCoastLng !== "function") return;
   // Probe finer than the narrowest band in barrierCoastLng (0.10° at Ocracoke)
   // so no step is skipped, then bisect onto the exact breakpoint latitude. A
@@ -8154,8 +9014,10 @@ function _sstLandMaskAtGrid(g){
   const d = cx.getImageData(0, 0, g.nLng, g.nLat).data;
   for(let i = 0; i < g.nLat; i++){
     const y = (g.nLat - 1) - i;
+    const lat = g.minLat + i * g.step;
     for(let j = 0; j < g.nLng; j++){
       if(d[(y * g.nLng + j) * 4 + 3] > 127) mask[i * g.nLng + j] = 1;
+      else if(_sstBathySaysLand(lat, g.minLng + j * g.step)) mask[i * g.nLng + j] = 1;
     }
   }
   return mask;
@@ -8225,6 +9087,19 @@ function _sstFcBuildSmallCanvas(g){
     cx.globalCompositeOperation = "destination-out";
     cx.drawImage(maskC, 0, 0);
     cx.restore();
+  }
+  // Pacific: polygon mask is a no-op (no CA coastline). Punch land out of the
+  // supersampled field from CUDEM/ETOPO so MUR doesn't wash inland.
+  if(g.minLng < -98){
+    const img2 = cx.getImageData(0, 0, w, h);
+    for(let y = 0; y < h; y++){
+      const lat = g.minLat + ((h - 1 - y) / scale) * g.step;
+      for(let x = 0; x < w; x++){
+        const lng = g.minLng + (x / scale) * g.step;
+        if(_sstBathySaysLand(lat, lng)) img2.data[(y * w + x) * 4 + 3] = 0;
+      }
+    }
+    cx.putImageData(img2, 0, 0);
   }
   return c;
 }
@@ -8393,6 +9268,18 @@ const SstForecastLayer = L.Layer.extend({
     // only costs resolution. Retry at the same step with a short backoff, and
     // fall back to tiles only once the retries are spent.
     const stepDeg = _sstStepForBox(bx, z);
+    // Pacific SST has no coastline polygons — CUDEM is the land mask. Load it
+    // in the background (same pattern as currents) and rebuild the canvas when
+    // it arrives so inland SoCal doesn't stay washed in MUR land temperatures.
+    if(bx.w < -98 && typeof buildBathyGrid === "function"
+       && typeof _bathyGridCoversView === "function"
+       && !_bathyGridCoversView(bx.s, bx.n, bx.w, bx.e)){
+      buildBathyGrid(bx.s, bx.n, bx.w, bx.e).then(() => {
+        if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
+        this._smallFor = null;
+        this._draw();
+      }).catch(() => {});
+    }
     const giveUp = () => {
       // MUR failed after retries — fall back to GIBS tiles rather than a blank
       // ocean. The legend switches to the global scale tag so it is honest
@@ -8577,7 +9464,8 @@ function applyAltimetryGrid(data){ ALTIMETRY_GRID = buildAltiGrid(data); }
 // an SLA-equivalent gradient and return the STRONGER of the two estimators, so a
 // real, sharp front scores like the wall it is instead of being averaged away.
 function sshBreakAt(lat, lng, grid){
-  const g = grid || PREDICT_ALTI_GRID;
+  const g = grid || PREDICT_ALTI_GRID
+    || (typeof ALTIMETRY_GRID !== "undefined" ? ALTIMETRY_GRID : null);
   if(!g || !g.nLat || !g.sla) return null;
   const iC = Math.round((lat-g.minLat)/g.step), jC = Math.round((lng-g.minLng)/g.step);
   // Coriolis parameter f at this latitude (1/s) for the geostrophic conversion
@@ -9060,6 +9948,7 @@ const AltimetryLayer = L.Layer.extend({
       if(typeof updateOceanLegend==="function") updateOceanLegend();
       this._draw();
     }).catch(()=>{
+      if(seq!==_altiFetchSeq||!layerVis.altimetry) return;
       ALTIMETRY_STATUS="unavailable";
       if(typeof updateOceanLegend==="function") updateOceanLegend();
     });
@@ -9540,7 +10429,7 @@ function drawPrediction(){
         return;
       }
       flushPredictLoadError();
-      const badges = pickTopHotspotBadges(hotspots, 3);
+      const badges = pickTopHotspotBadges(hotspots, 3, activeSpId);
       _predictResultCache = {
         key: predictResultCacheKey(),
         heatGrid, hotspots, badges,
@@ -9591,7 +10480,7 @@ function renderPrediction(grid, species, final, heatGridOverride, gridStep, grid
   // ── Top 3 hotspot badges (final paint only) ──
   // Use the precomputed badge list when provided (cached grid) so zoom/pan
   // never re-ranks the pins. Otherwise pick once from the scored hotspots.
-  const chosen = Array.isArray(badgesOverride) ? badgesOverride : pickTopHotspotBadges(hotspots, 3);
+  const chosen = Array.isArray(badgesOverride) ? badgesOverride : pickTopHotspotBadges(hotspots, 3, species && species.id);
   chosen.forEach((cell, i) => {
     const badge = L.marker([cell.lat, cell.lng], {
       icon: L.divIcon({
@@ -9717,25 +10606,35 @@ function showPredictionExplainer(cell, species){
 
 // Desktop: drag the bite explainer by its header so captains can park it aside
 // and see the heat map / hotspots behind it. Phone keeps the fixed sheet.
-let _explainerDragPos = null; // {left, top} when user has moved it this session
+// Freeze the pixel width/height captured at pointer-down so converting from
+// left+right centering to left-only does not stretch the card across the map.
+let _explainerDragPos = null; // {left, top, width, height} when user has moved it
+function applyExplainerMovedStyles(el, { left, top, width, height }){
+  if(!el || !el.style) return;
+  el.style.left = left + "px";
+  el.style.top = top + "px";
+  el.style.right = "auto";
+  el.style.bottom = "auto";
+  el.style.width = width + "px";
+  el.style.height = height + "px";
+  el.style.maxWidth = width + "px";
+  el.style.maxHeight = height + "px";
+}
 function bindExplainerDesktopDrag(div){
   if(!div || div._bwiDragBound) return;
   div._bwiDragBound = true;
   let dragging = false, startX = 0, startY = 0, origL = 0, origT = 0;
   const onMove = (e) => {
     if(!dragging) return;
+    const w = (_explainerDragPos && _explainerDragPos.width) || div.offsetWidth || 420;
+    const h = (_explainerDragPos && _explainerDragPos.height) || div.offsetHeight || 320;
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
-    const w = div.offsetWidth || 420;
-    const h = div.offsetHeight || 320;
     const left = Math.max(8, Math.min(window.innerWidth - w - 8, origL + dx));
     const top = Math.max(8, Math.min(window.innerHeight - 80, origT + dy));
-    div.style.left = left + "px";
-    div.style.top = top + "px";
-    div.style.right = "auto";
-    div.style.bottom = "auto";
-    div.style.maxHeight = `calc(100dvh - ${top + 14}px)`;
-    _explainerDragPos = { left, top };
+    const box = { left, top, width: w, height: h };
+    applyExplainerMovedStyles(div, box);
+    _explainerDragPos = box;
   };
   const onUp = () => {
     if(!dragging) return;
@@ -9754,10 +10653,14 @@ function bindExplainerDesktopDrag(div){
     const rect = div.getBoundingClientRect();
     startX = e.clientX; startY = e.clientY;
     origL = rect.left; origT = rect.top;
-    div.style.left = origL + "px";
-    div.style.top = origT + "px";
-    div.style.right = "auto";
-    div.style.bottom = "auto";
+    const box = {
+      left: origL,
+      top: origT,
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    };
+    applyExplainerMovedStyles(div, box);
+    _explainerDragPos = box;
     e.preventDefault();
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -9834,6 +10737,10 @@ function renderExplainerMain(){
   } else if(cell.inSeason === false || (cell.seasonStrength != null && cell.seasonStrength < 0.33)){
     gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.30);border-radius:8px;font-size:12px;color:#fde68a;line-height:1.5"><b>Marginal season</b> — fish are mostly elsewhere on the coast this month.</div>`;
     verdictText = "Marginal season — better runs are likely up or down the coast.";
+  } else if(cell.vermilionGate && cell.vermilionGate.active && cell.vermilionGate.status === "SHALLOW_NORTHERN_SHELF"){
+    gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.30);border-radius:8px;font-size:12px;color:#fde68a;line-height:1.5"><b>Shallow northern shelf</b> — vermilion hold 150–250 ft ledges here, not the inner 100 ft under the summer surface layer.</div>`;
+  } else if(cell.vermilionGate && cell.vermilionGate.active && cell.vermilionGate.status === "NORTH_OF_HATTERAS"){
+    gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);border-radius:8px;font-size:12px;color:#fecaca;line-height:1.5"><b>North of Cape Hatteras</b> — vermilion are not a fishery north of 35.4°N.</div>`;
   }
 
   const scorePct = Math.round(cell.score * 100);
@@ -10274,7 +11181,11 @@ function toggleLayer(key){
     updateRadarLoopControlVisibility();
   }
   else if(key==="waypoints"){
-    drawWaypoints();
+    if(layerVis.waypoints && typeof setWpRadius === "function"){
+      setWpRadius((typeof WP_MAP_DEFAULT_RADIUS_NM !== "undefined") ? WP_MAP_DEFAULT_RADIUS_NM : 60);
+    } else {
+      drawWaypoints();
+    }
     if(typeof drawUserWaypoints === "function") drawUserWaypoints();
     updateWaypointControlVisibility();
   }
@@ -10382,8 +11293,7 @@ function updateSatDateDisplay(){
       // Canvas MUR date — not the GIBS slider offset (those diverged and made
       // it look like historical GIBS was on when the local canvas was freshest).
       const d = new Date(SST_FORECAST_GRID.observedAtMs);
-      const back = Math.max(0, Math.round((Date.now() - SST_FORECAST_GRID.observedAtMs) / 86400000));
-      const age = back <= 0 ? "today" : back === 1 ? "1 day ago" : back + " days ago";
+      const age = formatObservedAgeDays(calendarDaysBeforeToday(SST_FORECAST_GRID.observedAtMs));
       el.textContent = `Observed ${d.toLocaleDateString(undefined, {month:"short", day:"numeric"})} · ${age}`;
     } else {
       const back = satCurrentDaysBack();
@@ -10450,6 +11360,20 @@ function updateSatDateControlVisibility(){
 // ── ALTIMETRY DATE CONTROL ───────────────────────────────────────────────────
 // Daily SSH is observed backward-only. Step day-by-day (slider or ◀▶) to read
 // eddy drift. No autoplay — captains inspect each pass at their own pace.
+function localCalendarDayStartMs(msOrDate){
+  const d = msOrDate instanceof Date ? msOrDate : new Date(msOrDate);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+function calendarDaysBeforeToday(observedAtMs, nowMs){
+  const now = nowMs != null ? nowMs : Date.now();
+  const diff = localCalendarDayStartMs(now) - localCalendarDayStartMs(observedAtMs);
+  return Math.max(0, Math.round(diff / 86400000));
+}
+function formatObservedAgeDays(n){
+  if(n <= 0) return "today";
+  if(n === 1) return "1 day ago";
+  return n + " days ago";
+}
 function altiDateLabel(){
   if(ALTIMETRY_GRID && ALTIMETRY_GRID.observedAtMs){
     return new Date(ALTIMETRY_GRID.observedAtMs).toLocaleDateString(undefined, { month:"short", day:"numeric" });
@@ -10463,8 +11387,7 @@ function updateAltiDateDisplay(){
   if(el){
     if(ALTIMETRY_GRID && ALTIMETRY_GRID.observedAtMs){
       const obs = new Date(ALTIMETRY_GRID.observedAtMs);
-      const ageDays = Math.max(0, Math.round((Date.now() - ALTIMETRY_GRID.observedAtMs) / 86400000));
-      const ageTxt = ageDays <= 0 ? "today" : ageDays === 1 ? "1 day ago" : `${ageDays} days ago`;
+      const ageTxt = formatObservedAgeDays(calendarDaysBeforeToday(ALTIMETRY_GRID.observedAtMs));
       el.textContent = `Observed ${obs.toLocaleDateString(undefined, { month:"short", day:"numeric" })} · ${ageTxt}`;
     } else {
       const age = altiDayOffset <= 0 ? "latest pass" : altiDayOffset === 1 ? "1 day earlier" : `${altiDayOffset} days earlier`;
@@ -13968,7 +14891,7 @@ function updateOceanLegend(){
     const altiTitleRow = loading
       ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
           <div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#e879f9;letter-spacing:.08em">FRONT CONVERGENCE (SSH)</div>
-          <span class="alti-spinner" aria-hidden="true"></span>
+          <div style="font-size:${legendMetaPx};font-weight:700;color:#e879f9;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;display:flex;align-items:center;gap:6px"><span class="alti-spinner" aria-hidden="true"></span>Loading…</div>
         </div>`
       : (ALTIMETRY_STATUS==="unavailable"
         ? `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">
@@ -14102,6 +15025,7 @@ function updateBiteBanner(){
       ? "Now"
       : (typeof biteForecastTimeLabel === "function" ? biteForecastTimeLabel() : `+${FORECAST_HOUR_OFFSET}h`);
   }
+  delete _oceanLegendDetailByKey.bite;
   const fc = document.getElementById("bite-banner-forecast");
   if(fc){
     if(layerVis.predict){
@@ -14877,7 +15801,7 @@ function drawCanyons(){
     const type = c.type || "canyon";
     const typeLabel = {canyon:"Canyon", wreck:"Wreck", reef:"Reef / Live Bottom",
                        lump:"Lump / Seamount", shoal:"Shoal", ledge:"Ledge / Drop",
-                       rock:"Rock Pile"}[type] || "Structure";
+                       rock:"Rock Pile", channel:"Shipping Channel"}[type] || "Structure";
     // Rocks render in gray so they read instantly as rock; others use their
     // data color (canyons blue, reefs green, lumps teal, etc.).
     const badgeColor = type === "rock" ? "#8a8f98" : c.color;
@@ -15115,9 +16039,13 @@ let wpLayerGroup = null;                 // single layer group holding waypoint 
 let _wpInRangeCache = null;              // cached in-range list so we don't recompute haversine on every pan
 let _wpRedrawBound = false;              // ensure map move/zoom handlers attach once
 let _wpMoveTimer = null;
-let wpRadiusNm = 40;                     // selected radius band (default 40nm)
+let wpRadiusNm = 60;                     // active radius band (map defaults to 60 nm)
 let wpTypeFilter = null;                 // null = all types, else Set of type codes
 const WP_RADII = [20, 40, 60, 100, 120, 140, 160];
+const WP_MAP_DEFAULT_RADIUS_NM = 60;     // map layer toggle — fewer markers, less pan lag
+const WP_DEFAULT_RADIUS_NM = 120;        // Waypoints & Structure panel browse default
+window.WP_MAP_DEFAULT_RADIUS_NM = WP_MAP_DEFAULT_RADIUS_NM;
+window.WP_DEFAULT_RADIUS_NM = WP_DEFAULT_RADIUS_NM;
 
 // How many waypoint markers / list rows to show at once. Scales with the selected
 // radius — wide bands (160 nm) can include thousands of spots near dense coasts.
@@ -15228,15 +16156,18 @@ async function refreshEntitlement(){
       premium = true; paid = true; admin = true;                     // owner fast-path
     } else if(u && window.BW_AUTH && window.BW_AUTH._sb){
       const { data: p, error } = await window.BW_AUTH._sb
-        .from("profiles").select("is_owner, subscription_status, current_period_end, plan_selected_at").maybeSingle();
+        .from("profiles").select("is_owner, subscription_status, subscription_interval, current_period_end, billing_source, plan_selected_at").maybeSingle();
       if(error) throw error;
       if(p){
         const st = p.subscription_status;
         const cpe = p.current_period_end ? new Date(p.current_period_end).getTime() : 0;
+        const storePaid = (p.billing_source === "apple" || p.billing_source === "google")
+          && cpe > Date.now() && st !== "canceled";
         if(p.is_owner){ premium = true; paid = true; admin = true; }              // owner: full access
         else if(st === "active" || st === "lifetime"){ premium = true; paid = true; }
         else if(st === "trialing"){ premium = true; paid = false; trialing = true; }
         else if(cpe > Date.now() && st !== "canceled"){ premium = true; paid = true; } // grace period
+        else if(storePaid){ premium = true; paid = true; } // IAP row synced without status (repair)
         // Returning subscriber / plan already chosen — remember locally so offline
         // sessions don't re-open the post-signup plan picker.
         if(p.plan_selected_at || p.is_owner || premium){
@@ -15319,6 +16250,13 @@ function applyEntitlementGating(){
     if(typeof updateRadarLoopControlVisibility === "function") updateRadarLoopControlVisibility();
     if(typeof updateAltiDateControlVisibility === "function") updateAltiDateControlVisibility();
   }
+  if(typeof wpSyncTabAccess === "function"){
+    const wpOv = document.getElementById("wp-overlay");
+    if(wpOv && wpOv.style.display === "block"){
+      wpSyncTabAccess();
+      if(typeof wpRender === "function") wpRender();
+    }
+  }
 }
 
 function applyAdminNavVisibility(){
@@ -15397,6 +16335,8 @@ function adminRenderDetail(){
         <button type="button" class="admin-btn ok" onclick="adminPreset('grant_pro')">Grant Pro (1yr)</button>
         <button type="button" class="admin-btn" onclick="adminPreset('grant_trial')">Grant Trial (7d)</button>
         <button type="button" class="admin-btn" onclick="adminPreset('grant_owner')">Make Owner</button>
+        <button type="button" class="admin-btn" onclick="adminSyncStripe()">Sync from Stripe</button>
+        <button type="button" class="admin-btn" onclick="adminSyncRevenueCat()">Sync from RevenueCat</button>
         <button type="button" class="admin-btn danger" onclick="adminPreset('revoke')">Revoke Access</button>
       </div>
       <div class="admin-field"><label>Display name</label><input id="admin-f-name" value="${escapeHtml(u.display_name || "")}"></div>
@@ -15564,6 +16504,42 @@ async function adminPreset(preset){
     adminShowMsg("Updated.", true);
     adminLoadStats();
   } catch(e){ adminShowMsg(e.message || "Update failed", false); }
+}
+
+async function adminSyncStripe(){
+  const u = adminSelectedUser();
+  if(!u) return;
+  if(!confirm(`Pull live Stripe subscription for ${u.email || u.id} and update their profile?`)) return;
+  try {
+    const data = await adminApi({ action: "sync_stripe", userId: u.id });
+    if(data.user){
+      const idx = _adminState.users.findIndex(x => x.id === u.id);
+      if(idx >= 0) _adminState.users[idx] = data.user;
+      adminRenderList();
+      adminRenderDetail();
+    }
+    const st = data.sync && data.sync.subscription_status;
+    adminShowMsg(st ? `Stripe sync complete — status: ${st}` : "Stripe sync complete.", true);
+    adminLoadStats();
+  } catch(e){ adminShowMsg(e.message || "Stripe sync failed", false); }
+}
+
+async function adminSyncRevenueCat(){
+  const u = adminSelectedUser();
+  if(!u) return;
+  if(!confirm(`Pull live App Store / RevenueCat subscription for ${u.email || u.id} and update their profile?`)) return;
+  try {
+    const data = await adminApi({ action: "sync_revenuecat", userId: u.id });
+    if(data.user){
+      const idx = _adminState.users.findIndex(x => x.id === u.id);
+      if(idx >= 0) _adminState.users[idx] = data.user;
+      adminRenderList();
+      adminRenderDetail();
+    }
+    const st = data.sync && data.sync.subscription_status;
+    adminShowMsg(st ? `RevenueCat sync complete — status: ${st}` : "RevenueCat sync complete.", true);
+    adminLoadStats();
+  } catch(e){ adminShowMsg(e.message || "RevenueCat sync failed", false); }
 }
 
 async function adminDeleteUser(){
@@ -16044,12 +17020,14 @@ async function drawRamps(){
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// MEMORY CARD EXPORT (Premium) — pick a port + range (up to 100 nm), export all
-// waypoints in that circle to a GPX file for a chartplotter memory card. This is
-// independent of the live map radius buttons so it never disturbs the map view.
+// MEMORY CARD EXPORT (Premium) — pick a port + range (up to 120 nm on the
+// slider; server cap 160 nm), export all waypoints in that circle to a GPX file
+// for a chartplotter memory card. Shares wpRadiusNm with the map + panel.
 // ════════════════════════════════════════════════════════════════════════════
 const MCE_MAX_NM = 160;        // charted waypoint export cap (matches server)
-let mceRangeNm = 50;           // default slider value
+const MCE_SLIDER_MAX_NM = 120; // Import/Export range slider top end
+window.MCE_SLIDER_MAX_NM = MCE_SLIDER_MAX_NM;
+let mceRangeNm = WP_DEFAULT_RADIUS_NM;
 let mcePort = null;            // selected port for export — no default; user must choose
 
 // Charted waypoints for an explicit port via the server-enforced RPC.
@@ -16091,7 +17069,11 @@ function mceBuildGpx(items, portName, radiusNm){
 }
 
 function mceOnPortChange(v){ mcePort = v; mceUpdate(); }
-function mceOnRangeChange(v){ mceRangeNm = Math.min(MCE_MAX_NM, Math.max(1, parseInt(v,10)||1)); mceUpdate(); }
+function mceOnRangeChange(v){
+  mceRangeNm = Math.min(MCE_SLIDER_MAX_NM, Math.max(1, parseInt(v, 10) || 1));
+  if(typeof setWpRadius === "function") setWpRadius(mceRangeNm);
+  mceUpdate();
+}
 
 // Unified export: a single source selector decides what the one Download button
 // exports — the user's own saved waypoints, or the built-in dataset by port+range.
@@ -16111,6 +17093,10 @@ function expOnSourceChange(v){
 }
 function expRun(){
   if(expSource === "dataset"){
+    if(typeof BW_PREMIUM !== "undefined" && !BW_PREMIUM){
+      if(typeof openPricing === "function") openPricing();
+      return;
+    }
     mceExport();
   } else {
     wpExportGPX();
@@ -16218,8 +17204,10 @@ function gpxEscape(s){
 function setWpRadius(nm){
   const cap = (typeof waypointMaxRangeNm === "function") ? waypointMaxRangeNm() : 160;
   wpRadiusNm = Math.min(cap, Math.max(20, nm));
-  const sel = document.getElementById("wp-radius-select");
-  if(sel && Number(sel.value) !== nm) sel.value = String(nm);
+  for(const id of ["wp-radius-select", "wp-panel-radius-select"]){
+    const sel = document.getElementById(id);
+    if(sel && Number(sel.value) !== wpRadiusNm) sel.value = String(wpRadiusNm);
+  }
   drawWaypoints();
   drawRamps();
   if(typeof wpFetchCharted === "function") wpFetchCharted(true);
@@ -17419,10 +18407,16 @@ async function ensureBriefOceanData(pinLL, portObj){
   try {
     if(briefGridsCoverPin(pinLL)) return;
     if(typeof buildPredictInputs !== "function") return;
-    const LAT_MIN = 24.0, LAT_MAX = 43.5, LNG_MIN = -97.5, LNG_MAX = -68.5;
+    const env = predictCoastLimits(
+      portObj ? portObj.lat : pinLL.lat,
+      portObj ? portObj.lng : pinLL.lng
+    );
+    const LAT_MIN = env.latMin, LAT_MAX = env.latMax, LNG_MIN = env.lngMin, LNG_MAX = env.lngMax;
     let latMin, latMax, lngMin, lngMax;
     if(portObj){
-      const maxRange = (typeof maxRangeForPort === "function") ? maxRangeForPort(portObj) : 100;
+      const maxRange = (typeof predictInputsRangeNm === "function")
+        ? predictInputsRangeNm(portObj)
+        : ((typeof maxRangeForPort === "function") ? maxRangeForPort(portObj) : 100);
       const degLat = (maxRange / 60) + 0.15;
       const degLng = (maxRange / (60 * Math.cos(portObj.lat * Math.PI / 180))) + 0.15;
       latMin = portObj.lat - degLat; latMax = portObj.lat + degLat;
@@ -18053,7 +19047,8 @@ function buildSpDropdown(){
   const cats=["offshore","nearshore","inshore"];
   let html="";
   cats.forEach(cat=>{
-    const items=SPECIES.filter(s=>s.cat===cat && s.id!=="all");
+    const items=SPECIES.filter(s=>s.cat===cat && s.id!=="all")
+      .slice().sort((a,b)=>a.name.localeCompare(b.name, undefined, {sensitivity:"base"}));
     html+=`<div class="sc-lbl">${cat.toUpperCase()}</div>`;
     items.forEach(sp=>{
       html+=`<button class="sp-opt ${sp.id===activeSpId?"sel":""}" onclick="selectSp('${sp.id}')">
@@ -18231,7 +19226,7 @@ const ONBOARD_STEPS = [
       <p>Tap <b>Menu</b> (top right) anytime:</p>
       <ul class="onboard-list">
         <li><b>Map &amp; Data</b> — Offshore Chart, Fishing Reports</li>
-        <li><b>My Tools</b> — My Catches, AI Catch Measure, Virtual Tackle Box, Captain's Briefs, Download My Trip, Waypoints &amp; Structure</li>
+        <li><b>My Tools</b> — My Catches, Virtual Tackle Box, Captain's Briefs, Download My Trip, Waypoints &amp; Structure</li>
         <li><b>Reference</b> — Regulations, Terminal Tackle, Fish Encyclopedia, full Tutorial, Help &amp; Contact, Legal</li>
       </ul>
       <p>You're set — pick a port and species, then explore the layers.</p>
@@ -18501,7 +19496,21 @@ function isPortOutOfSpeciesRange(portName, speciesId){
     // Per-region format — choose by port's coast
     const inGulf = (typeof isGulfContext === "function") && isGulfContext(port.lat, port.lng);
     band = inGulf ? range.gulf : range.atlantic;
-    if(!band) return true;  // species absent from this coast entirely
+    if(!band){
+      // Pacific-only species use {atlantic:null, gulf:null} in SPECIES_LAT_RANGE
+      // and their real band lives in PACIFIC_SPECIES — same split as
+      // speciesAllowedAtLat(). Without this, every CA port falsely triggers the
+      // empty-state warning because isGulfContext is false and atlantic is null.
+      if(typeof isPacificContext === "function" && isPacificContext(port.lat, port.lng)){
+        const pac = (typeof PACIFIC_SPECIES !== "undefined") ? PACIFIC_SPECIES[speciesId] : null;
+        if(pac){
+          if(port.lat < pac[0] - buffer) return true;
+          if(port.lat > pac[1] + buffer) return true;
+          return false;
+        }
+      }
+      return true;  // species absent from this coast entirely
+    }
   }
   if(port.lat < band[0] - buffer) return true;  // port too far south
   if(port.lat > band[1] + buffer) return true;  // port too far north
@@ -18552,7 +19561,7 @@ function buildPortDropdown(){
   let html="";
   PORT_GROUPS.forEach(group=>{
     html+=`<div class="sc-lbl">${group.label.toUpperCase()}</div>`;
-    group.ports.forEach(port=>{
+    group.ports.slice().sort((a,b)=>a.localeCompare(b, undefined, {sensitivity:"base"})).forEach(port=>{
       const isSel = port===activePort;
       html+=`<button class="sp-opt ${isSel?"sel":""}" onclick="selectPort('${port.replace(/'/g,"\\'")}')">
         <span style="font-size:13px;width:11px;flex-shrink:0">⚓</span>${port}
@@ -18687,15 +19696,15 @@ function selectPort(name, opts){
 // from init, selectPort, and tab-focus recovery — idempotent and best-effort.
 function portOceanBbox(p){
   if(!p) return null;
-  const maxRange = (typeof maxRangeForPort === "function") ? maxRangeForPort(p) : 100;
+  const maxRange = (typeof predictInputsRangeNm === "function")
+    ? predictInputsRangeNm(p)
+    : ((typeof maxRangeForPort === "function") ? maxRangeForPort(p) : 100);
   const degLat = (maxRange / 60) + 0.15;
   const degLng = (maxRange / (60 * Math.cos(p.lat * Math.PI / 180))) + 0.15;
-  const _pac = typeof isPacificContext === "function" && isPacificContext(p.lat, p.lng);
-  const LAT_MIN = _pac ? 29.0 : 24.0, LAT_MAX = _pac ? 42.5 : 43.5;
-  const LNG_MIN = _pac ? -126.0 : -97.5, LNG_MAX = _pac ? -116.0 : -68.5;
+  const env = predictCoastLimits(p.lat, p.lng);
   return {
-    latMin: Math.max(LAT_MIN, p.lat - degLat), latMax: Math.min(LAT_MAX, p.lat + degLat),
-    lngMin: Math.max(LNG_MIN, p.lng - degLng), lngMax: Math.min(LNG_MAX, p.lng + degLng),
+    latMin: Math.max(env.latMin, p.lat - degLat), latMax: Math.min(env.latMax, p.lat + degLat),
+    lngMin: Math.max(env.lngMin, p.lng - degLng), lngMax: Math.min(env.lngMax, p.lng + degLng),
   };
 }
 
@@ -18818,16 +19827,15 @@ function syncExplainerPosition(){
     expl.style.right = "";
     expl.style.top = "";
     expl.style.bottom = "auto";
+    expl.style.width = "";
+    expl.style.height = "";
+    expl.style.maxWidth = "";
     expl.style.maxHeight = "";
     return;
   }
   if(_explainerDragPos){
     expl.classList.add("explainer-moved");
-    expl.style.left = _explainerDragPos.left + "px";
-    expl.style.top = _explainerDragPos.top + "px";
-    expl.style.right = "auto";
-    expl.style.bottom = "auto";
-    expl.style.maxHeight = `calc(100dvh - ${_explainerDragPos.top + 14}px)`;
+    applyExplainerMovedStyles(expl, _explainerDragPos);
     return;
   }
   expl.classList.remove("explainer-moved");
@@ -18838,6 +19846,9 @@ function syncExplainerPosition(){
   expl.style.bottom = `${bottomPad}px`;
   expl.style.left = "";
   expl.style.right = "";
+  expl.style.width = "";
+  expl.style.height = "";
+  expl.style.maxWidth = "";
   expl.style.maxHeight = `calc(100dvh - ${top + bottomPad}px)`;
 }
 
@@ -19138,7 +20149,7 @@ function ensurePredictLayerOn(){
 // ════════════════════════════════════════════════════════════════════════════
 // Menu items that require a Pro subscription (Model B). Free users see them
 // with a PRO badge; tapping opens the upgrade modal instead of the feature.
-const PRO_MENU_FNS = ["openReports", "openWaypoints", "openDownloadTrip"];
+const PRO_MENU_FNS = ["openReports", "openDownloadTrip"];
 const PAID_MENU_FNS = ["openRecentBriefs"];
 let _navBackGuard = false;
 
@@ -19287,6 +20298,9 @@ function signUp(){
   else document.getElementById("bw-auth-gate").style.display = "flex";
 }
 async function signOut(){
+  if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.markExplicitSignOut){
+    try { await window.BW_BIOMETRIC.markExplicitSignOut(); } catch(e){}
+  }
   await window.BW_AUTH.signOut();
   location.reload();
 }
@@ -19435,13 +20449,19 @@ window.bwOnSignedIn = async function (user) {
     if(typeof drawCatchPins === "function") drawCatchPins();
   }
   try {
-    CM_state.log = await window.BW_AUTH.fetchLog("catch_meter");
-    TB_state.favorites = await window.BW_AUTH.fetchLog("tide_favorites");
-
-    // Load community fishing reports (de-identified) for the forum + reports factor.
-    if (typeof loadReports === "function") loadReports();
+    try {
+      TB_state.favorites = await window.BW_AUTH.fetchLog("tide_favorites");
+    } catch(e){
+      console.warn("tide_favorites log hydrate failed", e);
+      if(!TB_state.favorites) TB_state.favorites = [];
+    }
   } catch (e) {
-    console.error("logs/reports hydrate failed", e);
+    console.error("logs hydrate failed", e);
+  }
+  try {
+    if (typeof loadReports === "function") await loadReports();
+  } catch (e) {
+    console.error("reports hydrate failed", e);
   }
 };
 
@@ -19468,7 +20488,11 @@ function syncNavMenuPosition(){
 
 function toggleNav(){
   const m=document.getElementById('nav-menu');
-  const opening = m.style.display==='none';
+  // Read the COMPUTED display, not the inline one. #nav-menu is hidden by the
+  // stylesheet, so on a fresh load m.style.display is "" rather than "none" —
+  // reading the inline value made the first tap after launch decide it was
+  // already open and "close" it, so the menu only appeared on the second tap.
+  const opening = getComputedStyle(m).display === 'none';
   m.style.display = opening ? 'block' : 'none';
   // Toggle a body class so the map's floating UI (zoom buttons, right-side
   // icon column) can fade out via CSS while the menu is open.

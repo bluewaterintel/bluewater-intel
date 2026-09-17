@@ -54,8 +54,10 @@
 
   if (native) {
     document.documentElement.classList.add("bw-native");
-    if (typeof cap.getPlatform === "function" && cap.getPlatform() === "ios") {
-      document.documentElement.classList.add("bw-ios");
+    if (typeof cap.getPlatform === "function") {
+      const platform = cap.getPlatform();
+      if (platform === "ios") document.documentElement.classList.add("bw-ios");
+      if (platform === "android") document.documentElement.classList.add("bw-android");
     }
   }
 
@@ -87,11 +89,14 @@
   };
 
   async function initNativeShell() {
-    // Status bar — match app header
+    // Status bar — match app header. Capacitor: DARK = dark icons (light bg),
+    // LIGHT = light icons (dark bg). Android needs LIGHT on navy; iOS already
+    // uses DARK in capacitor.config / existing builds — leave that path alone.
     try {
       const StatusBar = plugins.StatusBar;
       if (StatusBar) {
-        await StatusBar.setStyle({ style: "DARK" });
+        const platform = typeof cap.getPlatform === "function" ? cap.getPlatform() : "";
+        await StatusBar.setStyle({ style: platform === "android" ? "LIGHT" : "DARK" });
         await StatusBar.setBackgroundColor({ color: "#0a1628" });
       }
     } catch (e) { /* non-fatal */ }
@@ -128,8 +133,12 @@
       if (u.searchParams.get("recovery") === "1" && typeof window.openPasswordRecoveryModal === "function") {
         window.openPasswordRecoveryModal();
       }
-      if (u.searchParams.get("confirmed") === "1" && typeof showToast === "function") {
-        showToast("Email confirmed — welcome aboard!", "success");
+      if (u.searchParams.get("confirmed") === "1") {
+        if (typeof window.showEmailConfirmedScreen === "function") {
+          window.showEmailConfirmedScreen();
+        } else if (typeof showToast === "function") {
+          showToast("Email confirmed — return to the app and sign in.", "success");
+        }
       }
       if (u.searchParams.get("checkout") === "success" && typeof showToast === "function") {
         showToast("Subscription active — Pro features unlocked.", "success");

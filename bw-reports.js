@@ -679,7 +679,7 @@ const LEGAL_PRIVACY_HTML = `
   <p style="${_LEGAL_P}"><b>Location:</b> if you grant permission, approximate or precise device location, used on your device to show relevant conditions and predictions for your area. <b>Your device GPS location is never shared with anyone</b> and is not sold or included in aggregated data. Separately, if you post a fishing report, the <b>port you select</b> (a named harbor or access point, not your live GPS track) is shown with that public report. You can decline or revoke device location permission in your device settings.</p>
   <p style="${_LEGAL_P}"><b>Information collected automatically:</b> basic technical and usage information needed to operate and improve the Services and fix problems — for example, device and app version, general usage patterns, and, on the website, standard log data such as IP address and browser type. Where any of this is associated with you, we treat it as personal information under this policy.</p>
   <p style="${_LEGAL_P}"><b>App diagnostics &amp; performance data:</b> to keep the app reliable, we collect diagnostic, error/crash, and performance information — for example, app events (such as opening a screen or toggling a layer), error and crash reports, and performance metrics. This data is used <b>solely</b> to diagnose problems, fix bugs, and improve the app's performance and stability. It does not include your GPS location, saved spots, names, or email. Because this information is necessary to operate and maintain the Services, its collection is a required part of using the app and is <b>not optional</b>; if you do not wish for it to be collected, please do not use the Services. We continue to apply data-minimization and de-identification practices to this data.</p>
-  <p style="${_LEGAL_P}"><b>Account and payment information:</b> when you create an account or purchase a paid subscription, we collect the information needed to provide it, such as your email address and subscription status. <b>Payments are processed by Stripe, Inc.</b>, our third-party payment processor, under Stripe's own privacy policy. Stripe collects and processes your payment-card and billing details directly; <b>we do not collect or store your full payment-card number</b>. We receive limited billing information from Stripe — such as your subscription plan, status, and the result of a charge — to manage your account and access. We do not use your payment information for advertising.</p>
+  <p style="${_LEGAL_P}"><b>Account and payment information:</b> when you create an account or purchase a paid subscription, we collect the information needed to provide it, such as your email address and subscription status. <b>Website payments are processed by Stripe, Inc.</b> under Stripe's own privacy policy. <b>In-app subscriptions on iOS are billed by Apple; on Android they are billed by Google Play.</b> Those stores collect and process payment details directly; <b>we do not collect or store your full payment-card number</b>. We receive limited billing information — such as your subscription plan, status, and the result of a charge — to manage your account and access. We do not use your payment information for advertising.</p>
 
   <div style="${_LEGAL_H}">3. Cookies &amp; Similar Technologies</div>
   <p style="${_LEGAL_P}">On the website we may use cookies or similar technologies to keep you signed in, remember your preferences, understand general usage, and support advertising. Where we serve ads, we expect to favor <b>contextual</b> ads (based on the content you're viewing) rather than ads targeted using your personal profile; if we ever use targeted advertising that involves sharing personal information with an ad network, we will provide the disclosures and opt-out choices required by law. You can set your browser to refuse some or all cookies, though parts of the website may then not function properly.</p>
@@ -857,13 +857,41 @@ function renderRegulations(){
 }
 
 let rpRegion = "all";  // active region tab in the forum
-function openReports(){
+async function openReports(){
   document.getElementById("rp-overlay").style.display = "block";
   document.body.style.overflow = "hidden";
   rpPopulateFilters();
+  const list = document.getElementById("rp-list");
+  if(list) list.innerHTML = `<div id="rp-empty"><div style="font-size:13px;color:#9ec5e8">Loading reports…</div></div>`;
+  // Pull a full year so "what was biting last season" is browsable without the
+  // user having to widen the time filter first.
+  if(typeof loadReports === "function"){
+    try { await loadReports({ sinceDays: 365 }); }
+    catch(e){ console.warn("reports forum load failed", e); }
+  }
+  rpPopulateFilters();
   rpRender();
-  // Pull the latest community reports, then re-render.
-  if(typeof loadReports === "function") loadReports().then(() => { rpPopulateFilters(); rpRender(); });
+}
+
+// The time dropdown filters what's on screen AND, when the user asks for more
+// history than is loaded, pulls the extra reports from the server.
+async function rpSetTimeFilter(){
+  const sel = document.getElementById("rp-time");
+  if(!sel) return;
+  const v = sel.value;
+  const needDays = v === "all" ? null : Math.ceil(parseInt(v, 10) / 24);
+  const have = (typeof _reportsLoadedDays === "number") ? _reportsLoadedDays : 0;
+  const needsFetch = needDays === null ? have !== Infinity : needDays > have;
+  if(needsFetch && typeof loadReports === "function"){
+    sel.disabled = true;
+    const list = document.getElementById("rp-list");
+    if(list) list.innerHTML = `<div id="rp-empty"><div style="font-size:13px;color:#9ec5e8">Loading older reports…</div></div>`;
+    try { await loadReports({ sinceDays: needDays }); }
+    catch(e){ console.warn("report history fetch failed", e); }
+    finally { sel.disabled = false; }
+    rpPopulateFilters();
+  }
+  rpRender();
 }
 function closeReports(){
   document.getElementById("rp-overlay").style.display = "none";
@@ -930,11 +958,22 @@ function rpRender(){
   // List
   const container = document.getElementById("rp-list");
   if(list.length === 0){
+    // Distinguish "nobody has posted" from "your filters hid everything" — the
+    // latter used to read as an empty forum even when the archive had reports.
+    const filtered = SOCIAL.length > 0;
     container.innerHTML = `
       <div id="rp-empty">
-        <div style="font-size:48px;margin-bottom:12px">🎣</div>
-        <div style="font-size:14px;font-weight:600;color:#9ec5e8;margin-bottom:6px">No reports yet${rpRegion!=="all"?" for "+(REGION_LABELS[rpRegion]||rpRegion):""}</div>
-        <div style="font-size:11px">Be the first — tap <b>✏️ Post</b> to share what's biting.</div>
+        <div style="font-size:48px;margin-bottom:12px">${filtered ? "🔍" : "🎣"}</div>
+        <div style="font-size:14px;font-weight:600;color:#9ec5e8;margin-bottom:6px">${
+          filtered
+            ? "No reports match these filters"
+            : `No reports yet${rpRegion !== "all" ? " for " + (REGION_LABELS[rpRegion] || rpRegion) : ""}`
+        }</div>
+        <div style="font-size:11px">${
+          filtered
+            ? `Widen the time range to <b>Any time</b>, clear the search, or pick <b>All Regions</b> to see the ${SOCIAL.length} loaded report${SOCIAL.length === 1 ? "" : "s"}.`
+            : "Be the first — tap <b>✏️ Post</b> to share what's biting."
+        }</div>
       </div>`;
     return;
   }
@@ -1131,6 +1170,12 @@ function rpFmtDate(isoDate){
 function rpFmtTime(hours){
   if(hours < 1) return "Just now";
   if(hours < 24) return `${Math.round(hours)}h ago`;
-  const days = Math.round(hours/24);
-  return `${days}d ago`;
+  const days = Math.round(hours / 24);
+  if(days < 14) return `${days}d ago`;
+  if(days < 60) return `${Math.round(days / 7)}w ago`;
+  // Archive reports are read seasonally ("last October"), so months and years
+  // read better than a four-digit day count.
+  const months = Math.round(days / 30.44);
+  if(months < 24) return `${months}mo ago`;
+  return `${(days / 365.25).toFixed(1)}y ago`;
 }

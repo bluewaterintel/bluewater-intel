@@ -26,7 +26,6 @@ const TARGETS = [
   { anchor: `// ── Client billing glue`,                             file: "bw-billing.js",        title: "Stripe billing + entitlement glue" },
   { anchor: `Static HEAT zone data removed`,                          file: "bw-core.js",           title: "Core engine — map, layers, prediction/bite-map, ports & canyons" },
   { anchor: `// ENCYCLOPEDIA LOGIC`,                                  file: "bw-encyclopedia.js",   title: "Fish encyclopedia UI logic" },
-  { anchor: `// SPECIES DATABASE — length-to-weight`,                 file: "bw-catch-measure.js",  title: "Catch measure — length-to-weight formulas + regulations" },
   { anchor: `// TACKLE DATABASE — curated`,                           file: "bw-tackle-engine.js",  title: "Tackle box scoring engine + UI" },
   { anchor: `// FISHING REPORTS PAGE`,                                file: "bw-reports.js",        title: "Fishing reports page + tutorial overlay" },
   { anchor: `// TERMINAL TACKLE DATA`,                                file: "bw-knots.js",          title: "Terminal tackle — animated fishing knots" },

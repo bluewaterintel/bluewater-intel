@@ -15,8 +15,9 @@
 <script src="bw-capacitor.js"></script>
 <script src="bw-iap.js?v=20260828a"></script>
 <script src="bw-data-source.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="bw-auth.js?v=20260822c"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.2"></script>
+<script src="bw-auth.js?v=20260914a"></script>
+<script src="bw-biometric-auth.js?v=20260903c"></script>
 <script src="bw-freshness.js"></script>
 <script src="bw-ocean.js?v=20260719j"></script>
 <script src="bw-wind.js?v=20260712c"></script>
@@ -31,11 +32,11 @@
 <script src="bw-data-buoys.js"></script>
 <script src="bw-data-ports.js"></script>
 <script src="bw-tide-stations.js?v=20260717c"></script>
-<script src="bw-data-species.js?v=20260813d"></script>
-<script src="bw-data-canyons.js?v=20260826a"></script>
+<script src="bw-data-species.js?v=20260916j"></script>
+<script src="bw-data-canyons.js?v=20260916i"></script>
 <script src="bw-data-closures.js"></script>
 <script src="bw-data-bathy.js"></script>
-<script src="bw-data-encyclopedia.js?v=20260804a"></script>
+<script src="bw-data-encyclopedia.js?v=20260916i"></script>
 <script src="bw-data-tackle.js"></script>
 <!-- Boat-ramp dataset companion. EMPTY by default so the app runs fine until a ramp CSV
      is wired in (same one-step swap as the waypoints). Format mirrors BW_WAYPOINTS:
@@ -424,26 +425,13 @@ select.hsel option{background:#0f2444;color:#f0f6ff;padding:8px}
     touch-action:pan-y;
     padding-bottom:env(safe-area-inset-bottom, 0px);
     box-sizing:border-box;
-  }
-  /* Cover subpixel gaps / the header's bottom border so no map bleeds through. */
-  #nav-menu::before{
-    content:"";
-    position:absolute;
-    bottom:100%;
-    left:0;right:0;
-    height:4px;
-    background:#0f2444;
-    pointer-events:none;
-  }
-  /* Same at the bottom edge — rounded corners + subpixel layout can flash map. */
-  #nav-menu::after{
-    content:"";
-    position:absolute;
-    top:100%;
-    left:0;right:0;
-    height:4px;
-    background:#0f2444;
-    pointer-events:none;
+    /* Cover subpixel gaps at the top/bottom seams so no map bleeds through.
+       This MUST be a box-shadow, not ::before/::after — the menu is its own
+       scroll container, so an absolutely-positioned pseudo-element at
+       `top:100%` is placed one element-height down the SCROLLED CONTENT and
+       rides up into the middle of the list as you scroll, painting a stray
+       horizontal bar across the rows at a device-dependent offset. */
+    box-shadow:0 -4px 0 #0f2444, 0 4px 0 #0f2444, 0 16px 48px rgba(0,0,0,.7) !important;
   }
 }
 
@@ -946,14 +934,14 @@ body.modal-open #brief-toggle{
   background:rgba(255,255,255,.06);
 }
 .wp-fc-popup .leaflet-popup-close-button:hover{ background:rgba(255,255,255,.14); }
-/* iOS: buoy info bubbles — tuck the × inside the card (matches waypoint popups). */
-html.bw-ios .buoy-popup .leaflet-popup-content-wrapper{
+/* Native: buoy info bubbles — tuck the × inside the card (matches waypoint popups). */
+html.bw-native .buoy-popup .leaflet-popup-content-wrapper{
   background:rgba(15,28,52,.97) !important;
   border-radius:12px;
   padding-top:4px;
 }
-html.bw-ios .buoy-popup .leaflet-popup-content{ margin:14px 32px 12px 14px; }
-html.bw-ios .buoy-popup .leaflet-popup-close-button{
+html.bw-native .buoy-popup .leaflet-popup-content{ margin:14px 32px 12px 14px; }
+html.bw-native .buoy-popup .leaflet-popup-close-button{
   color:#9ec5e8 !important;
   font-size:18px !important;
   width:26px !important;height:26px !important;
@@ -964,27 +952,27 @@ html.bw-ios .buoy-popup .leaflet-popup-close-button{
   background:rgba(255,255,255,.08);
   line-height:1 !important;
 }
-html.bw-ios .buoy-popup .leaflet-popup-close-button:hover{ background:rgba(255,255,255,.16); }
-/* iOS: species detail — full-screen page with safe-area header (not a centered card). */
-html.bw-ios #enc-modal{
+html.bw-native .buoy-popup .leaflet-popup-close-button:hover{ background:rgba(255,255,255,.16); }
+/* Native: species detail — full-screen page with safe-area header (not a centered card). */
+html.bw-native #enc-modal{
   background:#0a1a2e;
   -webkit-overflow-scrolling:touch;
 }
-html.bw-ios #enc-modal > .enc-modal-panel{
+html.bw-native #enc-modal > .enc-modal-panel{
   max-width:none;margin:0;min-height:100%;
   border-radius:0;border:none;box-shadow:none;
 }
-html.bw-ios #enc-modal .enc-modal-hdr{
+html.bw-native #enc-modal .enc-modal-hdr{
   position:sticky;top:0;z-index:2;
   padding:calc(12px + env(safe-area-inset-top, 0px)) 16px 12px !important;
   background:linear-gradient(180deg,#0d1e33,#0a1a2e);
 }
-html.bw-ios #enc-modal .enc-modal-back{
+html.bw-native #enc-modal .enc-modal-back{
   display:flex !important;
   touch-action:manipulation;
   -webkit-tap-highlight-color:rgba(125,211,252,.15);
 }
-html.bw-ios #enc-modal .enc-modal-close-x{ display:none !important; }
+html.bw-native #enc-modal .enc-modal-close-x{ display:none !important; }
 html.bw-native .bw-native-only{ display:inline !important; }
 html.bw-native .bw-stripe-only{ display:none !important; }
 #layers-toggle, #ruler-toggle, #wpdrop-toggle, #basemap-toggle, #settings-toggle, #catch-log-toggle{
@@ -1807,6 +1795,15 @@ body.bw-controls-collapsed #ocean-opacity-control{display:none !important}
 .wp-radius-btn.sel{
   background:rgba(239,68,68,.30);border-color:rgba(239,68,68,.75);color:#fff;
 }
+/* Waypoint legend selects — Chrome desktop ignores option bg unless color-scheme is dark. */
+#waypoint-legend select{
+  color-scheme:dark;
+  background-color:#0f2444;
+}
+#waypoint-legend select option{
+  background-color:#0f2444;
+  color:#fecaca;
+}
 #scale-bar-track{
   position:relative;
   height:16px;
@@ -2338,9 +2335,8 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
   transition:background .15s;
 }
 /* Inset hairline divider between rows (not after the last) */
-.nav-row:not(:last-child)::after{
-  content:"";position:absolute;left:55px;right:0;bottom:0;
-  height:1px;background:rgba(255,255,255,.07);
+.nav-row:not(:last-child){
+  border-bottom:1px solid rgba(255,255,255,.07);
 }
 .nav-row:active{background:rgba(125,211,252,.12)}
 @media (hover:hover){ .nav-row:hover{background:rgba(125,211,252,.08)} }
@@ -2712,7 +2708,11 @@ body.nav-open .leaflet-control-attribution{
     <div class="auth-gate-actions">
       <button id="bw-auth-signin" type="button" onclick="window.bwAuthGateSignIn && window.bwAuthGateSignIn(event)" style="
         width:100%;padding:14px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:17px;
-        cursor:pointer;font-family:inherit;margin-bottom:12px">Sign In</button>
+        cursor:pointer;font-family:inherit;margin-bottom:10px">Sign In</button>
+      <button id="bw-auth-biometric" type="button" onclick="window.bwAuthGateBiometric && window.bwAuthGateBiometric(event)" style="
+        display:none;width:100%;padding:14px;border:1px solid rgba(52,211,153,.45);border-radius:10px;
+        background:rgba(52,211,153,.12);color:#86efac;font-weight:700;font-size:16px;
+        cursor:pointer;font-family:inherit;margin-bottom:12px">Sign in with Face ID</button>
       <div style="text-align:center;margin-top:0;margin-bottom:12px">
         <a id="bw-auth-forgot" href="#" onclick="window.bwAuthGateForgot && window.bwAuthGateForgot(event)" style="color:#7dd3fc;font-size:14px;text-decoration:none">Forgot password?</a>
       </div>
@@ -2722,7 +2722,7 @@ body.nav-open .leaflet-control-attribution{
     </div>
   </div>
 </div>
-<script src="bw-authgate.js?v=20260901a"></script>
+<script src="bw-authgate.js?v=20260914a"></script>
 
 <!-- PRICING / UPGRADE MODAL ------------------------------------------------- -->
 <div id="pricing-modal" style="display:none;position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.62);
@@ -2827,7 +2827,7 @@ body.bw-plan-screen-open .leaflet-container{pointer-events:none !important}
   width:100%;
   padding:8px 0 4px;
 }
-html.bw-ios .auth-gate-shell .auth-marketing-copy > div:nth-child(3){ display:none; }
+html.bw-native .auth-gate-shell .auth-marketing-copy > div:nth-child(3){ display:none; }
 .auth-gate-shell.auth-kb-open .auth-marketing-copy > div:nth-child(2),
 .auth-gate-shell.auth-kb-open .auth-marketing-copy > div:nth-child(3){ display:none; }
 .auth-gate-shell.auth-kb-open .auth-gate-scroll .auth-fullscreen-panel{
@@ -2944,6 +2944,24 @@ body.bw-auth-screen-open .leaflet-container{
   </div>
 </div>
 
+<!-- EMAIL CONFIRMED — native app return (no web sign-in trap) ---------------- -->
+<div id="email-confirmed-page" style="display:none;position:fixed;inset:0;z-index:100006;
+     background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
+     overflow-y:auto;overflow-x:hidden;padding:0;font-family:'Segoe UI',system-ui,sans-serif">
+  <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-marlin-br">
+  <img src="/icons/marlin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-marlin-tl">
+  <img src="/icons/bluefin-watermark.png" alt="" aria-hidden="true" class="auth-wm auth-wm-bluefin-bl">
+  <div style="position:relative;z-index:1;max-width:480px;margin:0 auto;padding:48px 26px 40px;text-align:center">
+    <div style="width:72px;height:72px;border-radius:50%;background:rgba(34,197,94,.14);border:1px solid rgba(134,239,172,.45);display:flex;align-items:center;justify-content:center;margin:0 auto 22px">
+      <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="#86efac" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+    </div>
+    <div style="font-size:24px;font-weight:800;color:#f0f6ff;margin-bottom:12px">Email confirmed!</div>
+    <div style="font-size:15px;color:#cfe5ff;line-height:1.6;margin-bottom:8px">Your registration is complete.</div>
+    <div style="font-size:13px;color:#9ab3cc;line-height:1.6;margin-bottom:28px">Return to the Bluewater Intel app and sign in to choose your plan (Free or Pro) and start fishing.</div>
+    <button type="button" onclick="emailConfirmedContinue()" style="width:100%;max-width:280px;padding:13px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:16px;cursor:pointer;font-family:inherit">Continue to Sign In</button>
+  </div>
+</div>
+
 <!-- CHECK-YOUR-EMAIL CONFIRMATION SCREEN -------------------------------------- -->
 <div id="verify-email-page" style="display:none;position:fixed;inset:0;z-index:100006;
      background:linear-gradient(160deg,#0a1628 0%,#0d2847 50%,#0a1628 100%);
@@ -3028,11 +3046,15 @@ body.bw-auth-screen-open .leaflet-container{
       <div id="acct-plan-label" style="font-size:20px;font-weight:800;color:#f0f6ff;margin-bottom:6px">Free</div>
       <div id="acct-plan-detail" style="font-size:13px;color:#9ec5e8;line-height:1.55;margin-bottom:16px">Maps, ports, catches &amp; your own waypoints.</div>
       <div id="acct-plan-actions" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+      <div id="acct-plan-msg" style="display:none;font-size:12px;margin-top:10px;line-height:1.45"></div>
       <!-- Cancellation path depends on where the subscription was purchased
            (App Store vs. our website), so this is filled in by openAccountPage(). -->
       <div id="acct-billing-help" style="display:none;margin-top:14px;padding:12px 14px;border-radius:10px;
            background:rgba(41,121,181,.14);border:1px solid rgba(107,191,234,.3);font-size:12.5px;color:#cfe5ff;line-height:1.55"></div>
     </div>
+
+    <!-- QUICK SIGN-IN (native Face ID / Touch ID / fingerprint — filled by JS) -->
+    <div id="acct-biometric-row" style="display:none;background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);border-radius:18px;padding:20px;margin-bottom:14px;box-shadow:0 16px 48px rgba(0,0,0,.35);backdrop-filter:blur(2px)"></div>
 
     <!-- HELP / LEGAL -->
     <div style="background:rgba(15,35,60,.92);border:1px solid rgba(107,191,234,.25);border-radius:18px;padding:6px;margin-bottom:14px;box-shadow:0 16px 48px rgba(0,0,0,.35);backdrop-filter:blur(2px);overflow:hidden">
@@ -3068,18 +3090,9 @@ body.bw-auth-screen-open .leaflet-container{
        background:#0f2444;border:1px solid rgba(107,191,234,.25);border-radius:16px;padding:24px 20px;box-shadow:0 24px 70px rgba(0,0,0,.6)">
     <div style="text-align:center;margin-bottom:6px">
       <div style="font-size:20px;font-weight:800;color:#f0f6ff">Choose your plan</div>
-      <div style="font-size:12.5px;color:#9ec5e8;margin-top:5px">Pick Free to use the baseline app, or upgrade for the Bite Map, ocean layers, charted waypoints, fishing reports &amp; the AI Captain's Brief.</div>
+      <div style="font-size:12.5px;color:#9ec5e8;margin-top:5px">Upgrade for the Bite Map, ocean &amp; wind layers, charted waypoints, fishing reports &amp; the AI Captain's Brief.</div>
     </div>
     <div id="plan-gate-msg" style="display:none;font-size:12px;color:#fca5a5;margin:10px 0;text-align:center"></div>
-
-    <!-- Free -->
-    <div style="background:rgba(107,191,234,.08);border:1px solid rgba(107,191,234,.28);border-radius:11px;padding:14px;margin:16px 0 12px">
-      <div style="font-size:15px;font-weight:800;color:#cfe5ff;margin-bottom:4px">Free</div>
-      <div style="font-size:11.5px;color:#9ec5e8;line-height:1.5;margin-bottom:10px">
-        Maps, ports, catches, and your own waypoints — no credit card required.
-      </div>
-      <button type="button" onclick="window.closePostSignupPlans()" style="width:100%;padding:11px;border:1px solid rgba(107,191,234,.45);border-radius:9px;background:transparent;color:#6bbfea;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">Continue with Free</button>
-    </div>
 
     <!-- 7-day trial (web / Stripe only) -->
     <div class="bw-stripe-trial-block" style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:14px;margin:16px 0 12px">
@@ -3115,6 +3128,15 @@ body.bw-auth-screen-open .leaflet-container{
       <a href="#" id="plan-gate-restore-link" class="bw-native-only" onclick="event.preventDefault();bwRestorePurchases()" style="display:none;color:#7dd3fc;font-size:12.5px;text-decoration:none">Restore Purchases</a>
     </div>
 
+    <!-- Free — last so paid options are seen first -->
+    <div id="plan-gate-free" style="background:rgba(107,191,234,.06);border:1px solid rgba(107,191,234,.22);border-radius:11px;padding:14px;margin:20px 0 0">
+      <div style="font-size:15px;font-weight:800;color:#cfe5ff;margin-bottom:4px">Free</div>
+      <div style="font-size:11.5px;color:#9ec5e8;line-height:1.5;margin-bottom:10px">
+        No ocean or map layers. Ports, catches, and your own waypoints only.
+      </div>
+      <button type="button" onclick="window.closePostSignupPlans()" style="width:100%;padding:11px;border:1px solid rgba(107,191,234,.35);border-radius:9px;background:transparent;color:#6bbfea;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">Free</button>
+    </div>
+
     <div id="plan-gate-checkout-note" style="font-size:10px;color:#7d9bb8;margin-top:16px;line-height:1.5;text-align:center">
       Secure checkout by Stripe. By continuing you agree to the
       <a href="#" onclick="event.preventDefault();if(typeof openLegal==='function')openLegal();" style="color:#7dd3fc;text-decoration:none">Terms &amp; subscription policy</a>.
@@ -3122,7 +3144,7 @@ body.bw-auth-screen-open .leaflet-container{
   </div>
 </div>
 
-<script src="bw-billing.js?v=20260831a"></script>
+<script src="bw-billing.js?v=20260913a"></script>
 
 <!-- HEADER -->
 <div id="hdr">
@@ -3265,11 +3287,11 @@ body.bw-auth-screen-open .leaflet-container{
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
-        <button type="button" class="nav-row" onclick="navOpenFromMenu(openCatchMeasure)">
-          <span class="nav-ico">📏</span>
+        <button type="button" class="nav-row" onclick="navOpenFromMenu(openWaypoints)">
+          <span class="nav-ico">📍</span>
           <span class="nav-row-body">
-            <span class="nav-row-title">AI Catch Measure</span>
-            <span class="nav-row-sub">Offline camera fish measurement &amp; weight estimate</span>
+            <span class="nav-row-title">My Waypoints</span>
+            <span class="nav-row-sub">Your saved spots · Pro unlocks charted database</span>
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
@@ -3294,14 +3316,6 @@ body.bw-auth-screen-open .leaflet-container{
           <span class="nav-row-body">
             <span class="nav-row-title">Download My Trip</span>
             <span class="nav-row-sub">Full offline snapshot — bite map, tides, waypoints &amp; charts</span>
-          </span>
-          <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
-        </button>
-        <button type="button" class="nav-row" data-pro="1" onclick="navOpenFromMenu(openWaypoints)">
-          <span class="nav-ico">📍</span>
-          <span class="nav-row-body">
-            <span class="nav-row-title">Waypoints &amp; Structure</span>
-            <span class="nav-row-sub">Wrecks, reefs, ledges · import/export GPX</span>
           </span>
           <span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7d9bb8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
         </button>
@@ -3580,7 +3594,7 @@ body.bw-auth-screen-open .leaflet-container{
   <div id="wp-map-source-section" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)">
     <label for="wp-map-source" style="display:block;font-size:9px;color:#f87171;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:4px">Map shows</label>
     <select id="wp-map-source" onchange="setWpMapSource(this.value)" aria-label="Waypoint map source" style="
-      width:100%;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);
+      width:100%;background-color:#0f2444;border:1px solid rgba(239,68,68,.35);
       color:#fecaca;font-weight:700;font-size:12px;border-radius:8px;padding:6px 8px;
       font-family:inherit;cursor:pointer;outline:none;
     ">
@@ -3593,7 +3607,7 @@ body.bw-auth-screen-open .leaflet-container{
   <div id="wp-radius-section" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)">
     <label for="wp-radius-select" style="display:block;font-size:9px;color:#f87171;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:4px">Distance from port</label>
     <select id="wp-radius-select" onchange="setWpRadius(Number(this.value))" aria-label="Waypoint distance from port" style="
-      width:100%;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);
+      width:100%;background-color:#0f2444;border:1px solid rgba(239,68,68,.35);
       color:#fecaca;font-weight:700;font-size:12px;border-radius:8px;padding:6px 8px;
       font-family:inherit;cursor:pointer;outline:none;
     "></select>
@@ -3830,7 +3844,7 @@ body.bw-auth-screen-open .leaflet-container{
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="LORAN-C TD lines matched to Grease Charts AC006/AC007: 9960-Y west-to-east family (MD→Hatteras), plus 7980-Z land-to-sea 45xxx south of Cape Fear (AC002).">
+    <label class="layer-row" title="LORAN-C TD lines: 9960-Y west-to-east family (MD→Hatteras), plus 7980-Z land-to-sea 45xxx south of Cape Fear.">
       <input type="checkbox" id="chk-loran" onchange="toggleLayer('loran')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:transparent;border:1px dashed #f97316;border-radius:0"></span>
@@ -4204,7 +4218,7 @@ body.bw-auth-screen-open .leaflet-container{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260822a"></script>
+<script src="bw-core.js?v=20260916k"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
@@ -4365,164 +4379,6 @@ body.bw-auth-screen-open .leaflet-container{
 </style>
 
 <script src="bw-encyclopedia.js"></script>
-
-<!-- ═══════════════════════════════════════════════════════════════════════════
-     AI CATCH MEASURE — fully offline-capable
-     ═══════════════════════════════════════════════════════════════════════════ -->
-<div id="cm-overlay" class="menu-page-overlay" style="
-  display:none;position:fixed;inset:0;z-index:5000;
-  background:#0a1a2e;color:#e8f4ff;
-  overflow-y:auto;-webkit-overflow-scrolling:touch;
-  font-family:'Segoe UI',Arial,sans-serif;
-">
-  <!-- Header -->
-  <div class="menu-page-hdr" style="
-    position:sticky;top:0;z-index:10;
-    background:linear-gradient(180deg,#0a1a2e,#0f2444);
-    border-bottom:1px solid rgba(107,191,234,.18);
-    padding:12px 16px;display:flex;align-items:center;gap:12px;
-    box-shadow:0 4px 16px rgba(0,0,0,.5);
-  ">
-    <button type="button" class="nav-back-btn" data-nav-close="closeCatchMeasure" aria-label="Back to menu" style="
-      width:38px;height:38px;flex-shrink:0;
-      background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.28);
-      color:#cfe5ff;border-radius:10px;
-      display:flex;align-items:center;justify-content:center;cursor:pointer;
-    "><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:17px;font-weight:800;color:#f0f6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📏 AI Catch Measure</div>
-      <div class="overlay-page-sub">Works Offline · Camera + Reference</div>
-    </div>
-    <div id="cm-online-pill" style="
-      font-size:9px;font-weight:700;letter-spacing:.08em;
-      padding:4px 10px;border-radius:10px;display:flex;align-items:center;gap:5px;
-      background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#34d399;
-    "><span id="cm-online-dot" style="width:6px;height:6px;border-radius:50%;background:#10b981"></span><span id="cm-online-txt">ONLINE</span></div>
-  </div>
-
-  <!-- Tab nav -->
-  <div style="display:flex;border-bottom:1px solid rgba(107,191,234,.1);background:rgba(0,0,0,.2)">
-    <button class="cm-tab active" data-tab="measure" onclick="cmSwitchTab('measure')">📐 Measure</button>
-    <button class="cm-tab" data-tab="log" onclick="cmSwitchTab('log')">📋 Catch Log</button>
-    <button class="cm-tab" data-tab="help" onclick="cmSwitchTab('help')">❓ How To</button>
-  </div>
-
-  <!-- Tab content -->
-  <div id="cm-content" style="padding:20px;max-width:760px;margin:0 auto"></div>
-</div>
-
-<style>
-.cm-tab{
-  flex:1;background:transparent;border:none;color:#5d96c4;
-  padding:14px 12px;font-size:12px;font-weight:600;letter-spacing:.05em;
-  cursor:pointer;border-bottom:3px solid transparent;
-  font-family:inherit;transition:all .15s;
-}
-.cm-tab:hover{color:#9ec5e8;background:rgba(255,255,255,.02)}
-.cm-tab.active{color:#7dd3fc;border-bottom-color:#2979b5;background:rgba(41,121,181,.08)}
-
-.cm-step{
-  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));
-  border:1px solid rgba(107,191,234,.15);
-  border-radius:14px;padding:18px;margin-bottom:14px;
-}
-.cm-step h3{
-  font-size:11px;color:#6bbfea;letter-spacing:.16em;
-  font-weight:700;text-transform:uppercase;margin-bottom:12px;
-  display:flex;align-items:center;gap:8px;
-}
-.cm-step-num{
-  background:rgba(41,121,181,.25);border:1px solid rgba(41,121,181,.5);
-  color:#7dd3fc;width:22px;height:22px;border-radius:50%;
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:bold;
-}
-.cm-step.done .cm-step-num{background:rgba(16,185,129,.25);border-color:rgba(16,185,129,.5);color:#34d399}
-.cm-step.done .cm-step-num::before{content:"✓"}
-.cm-step.disabled{opacity:.4;pointer-events:none}
-
-.cm-btn{
-  background:linear-gradient(180deg,#2979b5,#1a5a9a);
-  border:none;color:white;padding:12px 20px;border-radius:10px;
-  font-size:13px;font-weight:600;cursor:pointer;
-  font-family:inherit;transition:all .15s;
-  box-shadow:0 4px 12px rgba(41,121,181,.35);
-  display:inline-flex;align-items:center;gap:8px;
-}
-.cm-btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(41,121,181,.45)}
-.cm-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
-.cm-btn-secondary{
-  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
-  box-shadow:none;color:#cfe5ff;
-}
-.cm-btn-secondary:hover{background:rgba(255,255,255,.1);box-shadow:none}
-.cm-btn-danger{background:linear-gradient(180deg,#dc2626,#991b1b);box-shadow:0 4px 12px rgba(220,38,38,.3)}
-
-.cm-input,.cm-select{
-  width:100%;background:rgba(255,255,255,.05);
-  border:1px solid rgba(107,191,234,.2);color:#f0f6ff;
-  padding:11px 14px;border-radius:8px;font-size:14px;
-  font-family:inherit;outline:none;
-}
-.cm-input:focus,.cm-select:focus{border-color:rgba(107,191,234,.5);box-shadow:0 0 0 3px rgba(107,191,234,.1)}
-.cm-select option{background:#0f2444;color:#f0f6ff}
-
-.cm-photo-zone{
-  border:2px dashed rgba(107,191,234,.3);border-radius:14px;
-  padding:30px 20px;text-align:center;cursor:pointer;
-  transition:all .15s;background:rgba(255,255,255,.02);
-}
-.cm-photo-zone:hover{border-color:rgba(107,191,234,.6);background:rgba(107,191,234,.04)}
-
-.cm-result-card{
-  background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(34,197,94,.04));
-  border:1px solid rgba(16,185,129,.3);border-radius:12px;
-  padding:18px;margin-top:14px;
-}
-.cm-result-card.warning{
-  background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(245,158,11,.04));
-  border-color:rgba(245,158,11,.3);
-}
-.cm-result-card.danger{
-  background:linear-gradient(135deg,rgba(220,38,38,.12),rgba(220,38,38,.04));
-  border-color:rgba(220,38,38,.4);
-}
-
-.cm-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:10px}
-.cm-stat{background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:10px 12px}
-.cm-stat-label{font-size:9px;color:#5d96c4;letter-spacing:.1em;font-weight:600;text-transform:uppercase}
-.cm-stat-val{font-size:18px;color:#f0f6ff;font-weight:700;margin-top:3px}
-.cm-stat-sub{font-size:9px;color:#9ca3af;margin-top:1px}
-
-.cm-log-card{
-  background:rgba(255,255,255,.03);border:1px solid rgba(107,191,234,.15);
-  border-radius:10px;padding:12px 14px;margin-bottom:8px;
-  display:flex;align-items:center;gap:12px;
-}
-.cm-log-thumb{
-  width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.3);
-  display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;
-  background-size:cover;background-position:center;
-}
-
-#cm-canvas-wrap{position:relative;display:inline-block;max-width:100%}
-#cm-canvas{max-width:100%;border-radius:10px;display:block;background:#000}
-#cm-overlay-canvas{position:absolute;top:0;left:0;pointer-events:auto;cursor:crosshair}
-
-.cm-marker-dot{
-  position:absolute;width:18px;height:18px;border-radius:50%;
-  border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.6);
-  transform:translate(-50%,-50%);pointer-events:none;
-}
-
-@media (max-width:680px){
-  #cm-content{padding:14px!important}
-  .cm-step{padding:14px}
-  .cm-stat-val{font-size:16px}
-}
-</style>
-
-<script src="bw-catch-measure.js"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      VIRTUAL TACKLE BOX — smart lure/bait recommendations
@@ -4777,7 +4633,7 @@ body.bw-auth-screen-open .leaflet-container{
       <div class="tut-step-num">5</div>
       <div class="tut-step-body">
         <div class="tut-step-title">Explore the menu</div>
-        <div class="tut-step-desc">Tap <b>MENU</b> in the top right. It's organized into grouped sections like iOS Settings: <b>Map &amp; Data</b> (Offshore Chart, Fishing Reports), <b>My Tools</b> (My Catches with logging + pattern analytics, Waypoints &amp; Structure, AI Catch Measure, Virtual Tackle Box, Download My Trip), and <b>Reference</b> (Regulations, Terminal Tackle, Fish Encyclopedia, Tutorial, Help &amp; Contact). Ocean layers — SST, chlorophyll, wind, radar, currents, and front convergence — are toggled on the map itself under <b>Layers</b>. To log a catch, open <b>My Catches</b> and tap <b>Log a Catch</b>.</div>
+        <div class="tut-step-desc">Tap <b>MENU</b> in the top right. It's organized into grouped sections like iOS Settings: <b>Map &amp; Data</b> (Offshore Chart, Fishing Reports), <b>My Tools</b> (My Catches with logging + pattern analytics, Waypoints &amp; Structure, Virtual Tackle Box, Download My Trip), and <b>Reference</b> (Regulations, Terminal Tackle, Fish Encyclopedia, Tutorial, Help &amp; Contact). Ocean layers — SST, chlorophyll, wind, radar, currents, and front convergence — are toggled on the map itself under <b>Layers</b>. To log a catch, open <b>My Catches</b> and tap <b>Log a Catch</b>.</div>
       </div>
     </div>
 
@@ -5263,8 +5119,12 @@ body.bw-auth-screen-open .leaflet-container{
       <select class="rp-filter" id="rp-species" onchange="rpRender()">
         <option value="all">All Species</option>
       </select>
-      <select class="rp-filter" id="rp-time" onchange="rpRender()">
-        <option value="all">Any Time</option>
+      <select class="rp-filter" id="rp-time" onchange="rpSetTimeFilter()">
+        <option value="8760">Last 12 months</option>
+        <option value="all">Any time (full archive)</option>
+        <option value="4380">Last 6 months</option>
+        <option value="2160">Last 90 days</option>
+        <option value="720">Last 30 days</option>
         <option value="168">Last 7 days</option>
         <option value="48">Last 48 hours</option>
         <option value="24">Last 24 hours</option>
@@ -5475,7 +5335,7 @@ input[type="date"].rp-post-input::-webkit-calendar-picker-indicator{
 }
 </style>
 
-<script src="bw-reports.js?v=20260816b"></script>
+<script src="bw-reports.js?v=20260903a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TERMINAL TACKLE — Knots, Crimps, Connections
@@ -5915,6 +5775,21 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
   font-family:inherit;outline:none;cursor:pointer;
 }
 .wp-filter option{background:#0f2444;color:#f0f6ff}
+#wp-overlay .wp-filter,
+#wp-overlay .wp-range-select{
+  color-scheme:dark;
+  background-color:#0f2444;
+}
+.wp-range-bar{
+  padding:12px 16px;
+  background:rgba(0,0,0,.22);
+  border-bottom:1px solid rgba(107,191,234,.1);
+  display:flex;flex-direction:column;gap:6px;
+}
+.wp-range-label{
+  font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9ec5e8;
+}
+.wp-range-select{width:100%}
 
 .wp-btn{
   background:rgba(41,121,181,.18);border:1px solid rgba(41,121,181,.4);
@@ -6166,7 +6041,7 @@ body.explainer-open{overflow:hidden;overscroll-behavior:none}
 }
 </style>
 
-<script src="bw-waypoints-ui.js?v=20260816b"></script>
+<script src="bw-waypoints-ui.js?v=20260915j"></script>
 
 <style>
 /* ── 6-DAY FORECAST MODAL ─────────────────────────────────────────────────── */

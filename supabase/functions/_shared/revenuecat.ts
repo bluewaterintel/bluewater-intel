@@ -303,3 +303,15 @@ export async function syncRevenueCatEntitlementForUser(
   if (error) throw new Error(error.message);
   return patch;
 }
+
+/** Pull live RevenueCat entitlements for a Supabase user id and upsert profiles. */
+export async function syncRevenueCatEntitlementForUser(
+  admin: { from: (table: string) => { upsert: (row: unknown, opts: { onConflict: string }) => Promise<{ error: { message: string } | null }> } },
+  userId: string,
+  secretKey: string,
+) {
+  const patch = await fetchRcProfilePatch(userId, secretKey);
+  const { error } = await admin.from("profiles").upsert(patch, { onConflict: "id" });
+  if (error) throw new Error(error.message);
+  return patch;
+}

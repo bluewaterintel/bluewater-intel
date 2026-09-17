@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Stage the web app into www/ for Capacitor iOS packaging.
+ * Stage the web app into www/ for Capacitor native packaging (iOS + Android).
  * Copies only runtime assets — not backend, scripts, or dev tooling.
  */
 import { cpSync, mkdirSync, rmSync, readdirSync, statSync, existsSync } from "node:fs";
@@ -14,6 +14,7 @@ const www = join(root, "www");
 const COPY_FILES = [
   "index.html",
   "auth-gate.html",
+  "email-confirmed.html",
   "manifest.json",
   "sw.js",
   "terms.html",
@@ -31,7 +32,7 @@ function copyDir(src, dest) {
 }
 
 function main() {
-  console.log("Building www/ for Capacitor iOS…");
+  console.log("Building www/ for Capacitor…");
 
   // Fresh staging dir
   if (existsSync(www)) rmSync(www, { recursive: true, force: true });

@@ -82,8 +82,8 @@ const WP_PUBLIC = [
    region:"Virginia Beach, VA", desc:"4 islands and 17-mile structure. Massive striper, cobia, tautog, sheepshead grounds."},
   {id:"p-chestertower",name:"Chesapeake Light Tower",   type:"tower",  lat:36.9050, lng:-75.7130, depth:"40-50ft",
    region:"Virginia Beach, VA", desc:"Famous offshore tower 14nm E of Va Beach. Spadefish, AJs, cobia in summer."},
-  {id:"p-trianglewrk", name:"Triangle Wrecks",         type:"wreck",  lat:36.9100, lng:-75.6500, depth:"60-90ft",
-   region:"Virginia Beach, VA", desc:"Cluster of three wrecks 15nm E of Va Beach. Spadefish, BSB, flounder."},
+  {id:"p-trianglewrk", name:"Triangle Wrecks",         type:"wreck",  lat:36.99042, lng:-75.38827, depth:"90-110ft",
+   region:"Virginia Beach, VA", desc:"Cluster of wrecks ~30nm ENE of Va Beach. Spadefish, BSB, flounder."},
 
   // ── CHESAPEAKE BAY — INSIDE THE BAY ───────────────────────────────────
   {id:"p-cbbt-island1",name:"CBBT 1st Island",          type:"reef",   lat:36.9920, lng:-76.0890, depth:"15-40ft",
@@ -576,30 +576,77 @@ function wpChartedSaveButtonHtml(lat, lng, name, panelType){
   </button>`;
 }
 
+function wpHasPremium(){
+  return (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM;
+}
+
+// Free users: personal waypoints + GPX import/export of their own spots only.
+const WP_FREE_TABS = new Set(["mine", "import"]);
+
+function wpSyncTabAccess(){
+  const premium = wpHasPremium();
+  document.querySelectorAll(".wp-tab").forEach(t => {
+    const tab = t.dataset.tab;
+    const allowed = premium || WP_FREE_TABS.has(tab);
+    t.style.display = allowed ? "" : "none";
+  });
+  const titleEl = document.querySelector("#wp-overlay .wp-page-title");
+  const subEl = document.querySelector("#wp-overlay .wp-page-sub");
+  if(titleEl) titleEl.textContent = premium ? "📍 Waypoints & Structure" : "⭐ My Waypoints";
+  if(subEl){
+    subEl.textContent = premium
+      ? "Waypoints · GPX Import/Export · Private Storage"
+      : "Your saved spots · GPX Import/Export";
+  }
+  if(!premium && !WP_FREE_TABS.has(WP_state.tab)){
+    WP_state.tab = "mine";
+    WP_state.regionFilter = "all";
+    document.querySelectorAll(".wp-tab").forEach(t => {
+      t.classList.toggle("active", t.dataset.tab === "mine");
+    });
+  }
+}
+window.wpSyncTabAccess = wpSyncTabAccess;
+
+function wpOnPanelRadiusChange(nm){
+  if(typeof setWpRadius !== "function") return;
+  setWpRadius(nm);
+  if(typeof wpFetchCharted === "function") wpFetchCharted(true);
+}
+
 function openWaypoints(){
   if(!WP_state.userPoints.length) WP_state.userPoints = wpLoadUser();
   WP_state.mapSource = wpLoadMapSource();
-  // Public tab always scopes to a port — default to the map's active home port.
-  // My Waypoints tab is global: always start on All Ports so saved spots aren't
-  // hidden by whichever port is selected on the map.
-  if(WP_state.tab === "public" && WP_state.regionFilter === "all" &&
-     typeof activePort !== "undefined" && activePort){
-    WP_state.regionFilter = activePort;
-  } else if(WP_state.tab === "mine"){
+  const premium = wpHasPremium();
+  if(premium && typeof setWpRadius === "function"){
+    setWpRadius((typeof WP_DEFAULT_RADIUS_NM !== "undefined") ? WP_DEFAULT_RADIUS_NM : 120);
+  }
+  if(premium){
+    // Always land on the charted Waypoints tab so the distance-from-port control
+    // is visible (mobile users were stuck on My Waypoints with no range selector).
+    WP_state.tab = "public";
+    if(typeof activePort !== "undefined" && activePort){
+      WP_state.regionFilter = activePort;
+    }
+  } else {
+    WP_state.tab = "mine";
     WP_state.regionFilter = "all";
   }
   document.getElementById("wp-overlay").style.display = "block";
   document.body.style.overflow = "hidden";
+  wpSyncTabAccess();
   wpRender();
-  // Pull the charted database for the active port so Pro users can browse the
-  // full ~13k dataset in the panel (not just the curated public spots).
-  if(typeof wpFetchCharted === "function") wpFetchCharted();
+  if(premium && typeof wpFetchCharted === "function") wpFetchCharted(true);
 }
 function closeWaypoints(){
   document.getElementById("wp-overlay").style.display = "none";
   document.body.style.overflow = "";
 }
 function wpSwitchTab(tab){
+  if(!wpHasPremium() && !WP_FREE_TABS.has(tab)){
+    if(typeof openPricing === "function") openPricing();
+    return;
+  }
   WP_state.tab = tab;
   WP_state.search = "";
   if(tab === "mine"){
@@ -610,7 +657,7 @@ function wpSwitchTab(tab){
   }
   document.querySelectorAll(".wp-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
   wpRender();
-  if(tab === "public" && typeof wpFetchCharted === "function") wpFetchCharted();
+  if(tab === "public" && wpHasPremium() && typeof wpFetchCharted === "function") wpFetchCharted();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -671,8 +718,16 @@ function mceInitControls(){
   } else if(sel){
     sel.value = mcePort || "";
   }
+  if(typeof wpRadiusNm !== "undefined"){
+    mceRangeNm = Math.min(
+      (typeof MCE_SLIDER_MAX_NM !== "undefined") ? MCE_SLIDER_MAX_NM : 120,
+      wpRadiusNm,
+    );
+  }
   const slider = document.getElementById("mce-range");
   if(slider) slider.value = mceRangeNm;
+  const rangeLabel = document.getElementById("mce-range-label");
+  if(rangeLabel) rangeLabel.textContent = mceRangeNm + " nm";
   if(defaultSource === "dataset") mceUpdate();
 }
 
@@ -742,6 +797,20 @@ function wpFilteredList(list){
   return out;
 }
 
+function wpRangeBar(){
+  if(!wpHasPremium()) return "";
+  const radii = (typeof WP_RADII !== "undefined") ? WP_RADII : [20, 40, 60, 100, 120, 140, 160];
+  const radiusNm = (typeof wpRadiusNm !== "undefined") ? wpRadiusNm : 120;
+  return `
+    <div class="wp-range-bar">
+      <label class="wp-range-label" for="wp-panel-radius-select">Distance from port</label>
+      <select id="wp-panel-radius-select" class="wp-filter wp-range-select" aria-label="Distance from port"
+        onchange="wpOnPanelRadiusChange(Number(this.value))">
+        ${radii.map(nm => `<option value="${nm}" ${radiusNm === nm ? "selected" : ""}>Within ${nm} nm</option>`).join("")}
+      </select>
+    </div>`;
+}
+
 function wpToolbar(includeAdd){
   const ports = (typeof PORTS !== "undefined") ? Object.keys(PORTS).sort() : [];
   const publicTab = WP_state.tab === "public";
@@ -771,6 +840,7 @@ function wpStatsBar(list, label, extra){
       ${extra || ""}
       ${WP_state.typeFilter !== "all" ? `<span>· Type: <b>${wpType(WP_state.typeFilter).name}</b></span>` : ""}
       ${WP_state.regionFilter !== "all" ? `<span>· Port: <b>${WP_state.regionFilter}</b></span>` : ""}
+      ${WP_state.tab === "public" && typeof wpRadiusNm !== "undefined" ? `<span>· Range: <b>${wpRadiusNm} nm</b></span>` : ""}
     </div>
   `;
 }
@@ -932,11 +1002,12 @@ function wpRenderPublic(){
   const exportBtn = (premium && WP_state.chartedStatus === "live" && chartedExportN > 0) ? `
     <div class="wp-export-charted">
       <button class="wp-btn primary wp-export-charted-btn" onclick="wpExportChartedGPX()">⬇ Export ${chartedExportN.toLocaleString()} charted waypoints to GPX</button>
-      <div class="wp-export-charted-hint">Exports charted database entries within range of <b>${displayPort}</b>. Adjust port/range in the Import / Export tab.</div>
+      <div class="wp-export-charted-hint">Exports charted database entries within range of <b>${displayPort}</b>. Adjust range with the distance dropdown above.</div>
     </div>
   ` : "";
 
   return `
+    ${wpRangeBar()}
     ${wpToolbar(false)}
     ${wpStatsBar(list, "waypoints", statsExtra)}
     ${banner}
@@ -1032,10 +1103,11 @@ function wpRenderMine(){
 
 // ── IMPORT / EXPORT TAB ───────────────────────────────────────────────────
 function wpRenderImport(){
+  const premium = wpHasPremium();
   return `
     <div style="max-width:760px;margin:0 auto;padding:20px">
       <div class="wp-info-box" style="margin:0 0 16px">
-        <b>📥 GPX is the universal standard</b> — every chartplotter brand (Garmin, Raymarine, Furuno, Simrad, Lowrance) and most fishing apps can import and export GPX files. Use <b>Fishing Waypoints by Port &amp; Range</b> below to download the full charted database around any home port — no need to save spots one at a time.
+        <b>📥 GPX is the universal standard</b> — every chartplotter brand (Garmin, Raymarine, Furuno, Simrad, Lowrance) and most fishing apps can import and export GPX files.${premium ? " Use <b>Fishing Waypoints by Port &amp; Range</b> below to download the full charted database around any home port — no need to save spots one at a time." : " Import your chartplotter file or export the waypoints you've saved here."}
       </div>
 
       <div style="background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));border:1px solid rgba(107,191,234,.18);border-radius:12px;padding:18px;margin-bottom:14px">
@@ -1056,7 +1128,7 @@ function wpRenderImport(){
 
         <label style="display:block;font-size:10px;font-weight:700;color:#6bbfea;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px">What to export</label>
         <select id="exp-source" onchange="expOnSourceChange(this.value)" style="width:100%;background:#0f2444;border:1px solid rgba(107,191,234,.3);color:#f0f6ff;font-size:14px;padding:10px 12px;border-radius:10px;font-family:inherit;margin-bottom:14px">
-          <option value="dataset">🌊 Fishing Waypoints by Port &amp; Range</option>
+          ${premium ? `<option value="dataset">🌊 Fishing Waypoints by Port &amp; Range</option>` : ""}
           <option value="mine">⭐ My Saved Waypoints (${WP_state.userPoints.length})</option>
         </select>
 
@@ -1069,11 +1141,11 @@ function wpRenderImport(){
 
           <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px">
             <label style="font-size:10px;font-weight:700;color:#6bbfea;letter-spacing:.08em;text-transform:uppercase">Range from Port</label>
-            <span id="mce-range-label" style="font-size:15px;font-weight:800;color:#f0f6ff">50 nm</span>
+            <span id="mce-range-label" style="font-size:15px;font-weight:800;color:#f0f6ff">120 nm</span>
           </div>
-          <input id="mce-range" type="range" min="1" max="100" value="50" oninput="mceOnRangeChange(this.value)" style="width:100%;accent-color:#2979b5;margin-bottom:2px">
+          <input id="mce-range" type="range" min="1" max="120" value="120" oninput="mceOnRangeChange(this.value)" style="width:100%;accent-color:#2979b5;margin-bottom:2px">
           <div style="display:flex;justify-content:space-between;font-size:9px;color:#5d96c4;margin-bottom:14px">
-            <span>1 nm</span><span>Max 100 nm</span>
+            <span>1 nm</span><span>Max 120 nm</span>
           </div>
 
           <div style="background:rgba(15,36,68,.5);border:1px solid rgba(107,191,234,.2);border-radius:10px;padding:12px;margin-bottom:14px">
@@ -1380,7 +1452,7 @@ function wpShowEditor(isNew){
             <span id="wp-edit-type-preview" class="wp-type-preview" style="color:${wpType(p.sourceType||p.type||"wreck").color}">${wpTypeIconHTML(p.sourceType||p.type||"wreck")}</span>
             <select class="wp-select" id="wp-edit-type" style="flex:1" onchange="wpEditTypePreview(this.value)">
               ${Object.entries(WP_TYPES).filter(([k]) => k !== "private").map(([k,v]) =>
-                `<option value="${k}" ${(p.sourceType||p.type)===k?"selected":""}>${v.icon} ${v.name}</option>`
+                `<option value="${k}" ${(p.sourceType||p.type)===k?"selected":""}>${v.name}</option>`
               ).join("")}
             </select>
           </div>

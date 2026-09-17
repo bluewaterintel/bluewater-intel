@@ -6,19 +6,25 @@
 
 const CANYONS=[
   // ── NEW ENGLAND OFFSHORE GROUNDS ─────────────────────────────────────
-  {name:"Jeffrey\'s Ledge",  color:"#1a4fa8", lat:42.80,  lng:-70.10,
+  {name:"Jeffrey\'s Ledge",  color:"#1a4fa8", lat:42.80,  lng:-70.17,
    desc:"42°48N 70°06W — Major haddock, cod, pollock grounds 20-40nm NE of Portsmouth. Bluefin tuna in summer/fall. Stripers nearshore.",
    fish:["bluefin","cod","haddock","striper"]},
   {name:"Stellwagen Bank",  color:"#1a4fa8", lat:42.40,  lng:-70.30,
    desc:"42°24N 70°18W — National Marine Sanctuary 25nm E of Boston. Giant bluefin tuna, whales, prolific bait. Trolling and chunking grounds.",
    fish:["bluefin","cod","haddock"]},
-  {name:"Cashes Ledge",     color:"#1a4fa8", lat:42.85,  lng:-68.95,
+  {name:"Cashes Ledge",     color:"#1a4fa8", lat:42.88,  lng:-68.92,
    desc:"42°51N 68°57W — Deep offshore bank 80nm E of Portsmouth. Cod, pollock, redfish. Underwater mountain peaks rising from 600ft.",
    fish:["cod","haddock","pollock"]},
-  {name:"Block Canyon",     color:"#1a4fa8", lat:39.78,  lng:-71.50,
+  {name:"Wilkinson Basin",  color:"#7c2d8e", lat:42.73,  lng:-69.60,
+   desc:"42°44N 69°36W — Deep GOM basin between Jeffrey's Ledge and Cashes, ~800-1,000 ft. Maine swordfish night-drop and historic harpoon water. Not a 1,500-2,000 ft canyon wall.",
+   fish:["swordfish","bluefin"]},
+  {name:"Jordan Basin",     color:"#7c2d8e", lat:43.50,  lng:-67.85,
+   desc:"43°30N 67°51W — Eastern Gulf of Maine basin ~900 ft. Summer swordfish and bluefin over the deep hole, east of Cashes.",
+   fish:["swordfish","bluefin"]},
+  {name:"Block Canyon",     color:"#1a4fa8", lat:39.78,  lng:-71.7,
    desc:"39°47N 71°30W — 80nm S of Block Island. Yellowfin, bigeye, white/blue marlin in summer. Tilefish on the canyon walls.",
    fish:["yellowfin","bigeye","whitemarlin","bluemarlin","tilefish"]},
-  {name:"Atlantis Canyon",  color:"#1a4fa8", lat:39.95,  lng:-70.18,
+  {name:"Atlantis Canyon",  color:"#1a4fa8", lat:39.99,  lng:-70.20,
    desc:"39°57N 70°11W — Major canyon 90nm SE of Nantucket. Bigeye tuna at night, yellowfin daytime, white marlin late summer.",
    fish:["bigeye","yellowfin","whitemarlin","swordfish"]},
   {name:"Veatch Canyon",    color:"#1a4fa8", lat:39.93,  lng:-69.60,
@@ -48,12 +54,9 @@ const CANYONS=[
    fish:["bluemarlin","whitemarlin","yellowfin","wahoo","sailfish","mahi"]},
 
   // ── SOUTH ATLANTIC / FLORIDA OFFSHORE GROUNDS ────────────────────────
-  {name:"Charleston Bump", color:"#1a4fa8", lat:31.70, lng:-79.10,
+  {name:"Charleston Bump", color:"#1a4fa8", lat:31.70, lng:-78.80,
    desc:"~85nm SE of Charleston. Major Gulf Stream feature. Wahoo highway, blackfin, blue marlin, swordfish on night drops.",
    fish:["wahoo","blackfin","bluemarlin","swordfish","mahi"]},
-  {name:"Hetzel Shoals",  color:"#1e63c0", lat:31.10, lng:-79.60,
-   desc:"Shelf break ~70nm E of Savannah. Live bottom + Gulf Stream edge. Wahoo, mahi, billfish in summer.",
-   fish:["wahoo","mahi","sailfish","blackfin"]},
   {name:"Snapper Banks",  color:"#1e63c0", lat:30.60, lng:-80.30,
    desc:"~45nm E of St. Augustine. Live bottom ledges 100-180ft. Red snapper, vermilion, grouper, AJs.",
    fish:["snapper","grouper","triggerfish"]},
@@ -63,7 +66,7 @@ const CANYONS=[
   {name:"Cape Canaveral Edge", color:"#1a4fa8", lat:28.40, lng:-80.10,
    desc:"Gulf Stream edge ~30nm E of the Cape. Famous sailfish grounds Dec-March; wahoo, mahi, blackfin year-round.",
    fish:["sailfish","wahoo","mahi","blackfin","kingmack"]},
-  {name:"Push Button Hill", color:"#1e63c0", lat:27.70, lng:-79.85,
+  {name:"Push Button Hill", color:"#1e63c0", lat:27.15, lng:-79.9,
    desc:"~25nm E of Fort Pierce. Sailfish capital structure. Live-baiting central in winter. Mahi, kingfish year-round.",
    fish:["sailfish","mahi","kingmack","wahoo"]},
   {name:"Sailfish Alley",  color:"#1a4fa8", lat:27.10, lng:-80.00,
@@ -72,10 +75,10 @@ const CANYONS=[
   {name:"West Palm Edge",  color:"#1a4fa8", lat:26.70, lng:-79.95,
    desc:"Gulf Stream wall runs within 2-3nm of Palm Beach. Sailfish, wahoo, blackfin, kingfish — closest blue water on the coast.",
    fish:["sailfish","wahoo","blackfin","kingmack","mahi"]},
-  {name:"Miami Sword Hole", color:"#7c2d8e", lat:25.85, lng:-79.85,
+  {name:"Miami Sword Hole", color:"#7c2d8e", lat:25.75, lng:-79.87,
    desc:"~20nm E of Miami. Deep-drop swordfish grounds 1500-2000ft. Daytime sword pioneered here.",
    fish:["swordfish","tilefish","mahi"]},
-  {name:"Marathon Hump",   color:"#1a4fa8", lat:24.45, lng:-80.95,
+  {name:"Marathon Hump",   color:"#1a4fa8", lat:24.43, lng:-80.75,
    desc:"~17nm S of Marathon. Smaller hump than Islamorada's but consistent for blackfin and kings.",
    fish:["blackfin","kingmack","mahi","wahoo"]},
   {name:"Key West Wall",   color:"#1a4fa8", lat:24.30, lng:-81.80,
@@ -83,7 +86,7 @@ const CANYONS=[
    fish:["sailfish","blackfin","wahoo","mahi","kingmack"]},
 
   // ── BAHAMAS (marquee grounds off the Florida crossings) ──────────────
-  {name:"Bimini Wall",     color:"#1a4fa8", lat:25.740, lng:-79.420, type:"ledge",
+  {name:"Bimini Wall",     color:"#1a4fa8", lat:25.760, lng:-79.304, type:"ledge",
    desc:"The drop-off just W of Bimini where the Gulf Stream sweeps the island shelf into 1,000+ fathoms — ~50nm from Miami. Blue & white marlin, wahoo, tuna, and mahi push right to the edge.",
    fish:["bluemarlin","whitemarlin","sailfish","spearfish","wahoo","yellowfin","blackfin","mahi"]},
   {name:"Tongue of the Ocean", color:"#1a4fa8", lat:24.700, lng:-77.750, type:"canyon",
@@ -113,69 +116,59 @@ const CANYONS=[
 
   // ═════════════════ GULF OF MEXICO STRUCTURES ════════════════════════
   // ── FLORIDA GULF COAST ──────────────────────────────────────────────
-  {name:"Madison-Swanson",  color:"#1e63c0", lat:29.20, lng:-85.60,
+  {name:"Madison-Swanson",  color:"#1e63c0", lat:29.28, lng:-85.63,
    desc:"Marine protected area + edge ~70nm S of Panama City. Famous gag grouper aggregation site. Closed certain months — check FWC.",
    fish:["gaggrouper","amberjack","snapper"]},
-  {name:"Steamboat Lumps",  color:"#1e63c0", lat:28.45, lng:-84.85,
+  {name:"Steamboat Lumps",  color:"#1e63c0", lat:28.23, lng:-84.80,
    desc:"Protected reef cluster ~85nm WNW of Tampa. Important gag and red grouper spawning ground; check seasonal closures.",
    fish:["gaggrouper","snapper","amberjack"]},
   {name:"The Edge (FL Gulf)", color:"#1a4fa8", lat:28.00, lng:-85.10,
    desc:"~100nm W of Tampa where the FL shelf drops from 180ft to 600ft+. Tilefish, snowy grouper, blueline. Long run but legendary.",
    fish:["tilefish","grouper","snapper"]},
-  {name:"Pulley Ridge",     color:"#1a4fa8", lat:25.10, lng:-83.70,
+  {name:"Pulley Ridge",     color:"#1a4fa8", lat:24.75, lng:-83.75,
    desc:"~140nm W of Naples. Deepest known photosynthetic coral reef. Mutton snapper, red grouper, scamp. Long but rewarding run.",
    fish:["muttonsnap","gaggrouper","snapper","hogfish"]},
 
   // ── DESOTO CANYON / FL PANHANDLE ─────────────────────────────────────
-  {name:"DeSoto Canyon",    color:"#1a4fa8", lat:29.20, lng:-87.40,
+  {name:"DeSoto Canyon",    color:"#1a4fa8", lat:29.05, lng:-86.00,
    desc:"Major submarine canyon ~50nm S of Pensacola. Blue marlin and yellowfin highway. Loop Current eddy formation zone.",
    fish:["bluemarlin","yellowfin","wahoo","mahi","sailfish","tilefish"]},
-  {name:"The Spur",         color:"#1a4fa8", lat:29.30, lng:-87.85,
-   desc:"DeSoto Canyon's western branch ~55nm S of Orange Beach. Marlin, yellowfin, blackfin around floating debris and weedlines.",
-   fish:["bluemarlin","yellowfin","blackfin","wahoo","mahi"]},
-  {name:"Nipple / Elbow",   color:"#1a4fa8", lat:29.55, lng:-87.65,
-   desc:"Famous closer-in spots ~30-40nm S of Pensacola/Orange Beach. Edge of the shelf. Great for shorter-range billfish.",
-   fish:["bluemarlin","wahoo","mahi","yellowfin"]},
+
+
 
   // ── ALABAMA / MISSISSIPPI ────────────────────────────────────────────
   {name:"131 Hole",         color:"#1e63c0", lat:29.40, lng:-88.00,
    desc:"~55nm S of Dauphin Island. Classic wahoo and yellowfin spot in summer.",
    fish:["wahoo","yellowfin","blackfin","mahi"]},
-  {name:"Petronius Rig",    color:"#7c2d8e", lat:29.10, lng:-87.95,
+  {name:"Petronius Rig",    type:"rig", color:"#7c2d8e", lat:29.10, lng:-87.95,
    desc:"Towering platform in 1700ft. Holds yellowfin, blackfin, blue marlin year-round. Night-fishing legend.",
-   fish:["yellowfin","blackfin","bluemarlin","swordfish"]},
+   fish:["yellowfin","blackfin","bluemarlin","swordfish","wahoo","mahi"]},
 
   // ── LOUISIANA — THE FLOATERS AND LUMPS ───────────────────────────────
-  {name:"Midnight Lump",    color:"#1a4fa8", lat:28.80, lng:-89.90,
+  {name:"Midnight Lump",    type:"lump", color:"#1a4fa8", lat:28.7, lng:-89.55,
    desc:"Salt dome ~17nm SW of South Pass. THE wintertime yellowfin spot. Tens of miles of boats during peak Jan-Feb season.",
-   fish:["yellowfin","blackfin","wahoo"]},
-  {name:"Sackett Bank",     color:"#1e63c0", lat:28.65, lng:-89.55,
-   desc:"~30nm SE of South Pass. Year-round tuna magnet. Yellowfin, blackfin, wahoo.",
    fish:["yellowfin","blackfin","wahoo","mahi"]},
-  {name:"The Lumps (LA)",   color:"#1e63c0", lat:28.50, lng:-89.20,
+    {name:"The Lumps (LA)",   type:"lump", color:"#1e63c0", lat:28.50, lng:-89.20,
    desc:"Cluster of seamounts SE of Mississippi Delta. Year-round bait magnets — every pelagic in the Gulf passes through.",
    fish:["yellowfin","blackfin","wahoo","mahi","bluemarlin"]},
-  {name:"Mississippi Canyon",color:"#1a4fa8", lat:28.20, lng:-89.20,
+  {name:"Mississippi Canyon",color:"#1a4fa8", lat:28.79, lng:-89.18,
    desc:"Deep canyon system SE of the Delta. Blue marlin, swordfish, yellowfin. Drilling-rig floaters scattered throughout.",
-   fish:["bluemarlin","swordfish","yellowfin","tilefish","blackfin"]},
-  {name:"The Floaters (LA)",color:"#7c2d8e", lat:27.80, lng:-90.50,
-   desc:"Floating production platforms in 3000-7000ft of water (Marlin, Petronius, Atlantis, Holstein). Concentrate bait + pelagics. Night swords.",
-   fish:["yellowfin","blackfin","bluemarlin","swordfish","wahoo"]},
+   fish:["bluemarlin","swordfish","yellowfin","tilefish","blackfin","wahoo","mahi"]},
+  {name:"The Floaters (LA)", type:"rig", color:"#7c2d8e", lat:28.40, lng:-89.45,
+   desc:"Floating production platforms in 3000-7000ft of water (Marlin, Petronius, Atlantis, Holstein). Concentrate bait + pelagics. Night swords. Fall/winter yellowfin giants.",
+   fish:["yellowfin","blackfin","bluemarlin","swordfish","wahoo","mahi"]},
 
   // ── TEXAS GULF ───────────────────────────────────────────────────────
-  {name:"East Breaks",      color:"#1a4fa8", lat:27.45, lng:-94.50,
+  {name:"East Breaks",      color:"#1a4fa8", lat:27.45, lng:-95.50,
    desc:"~120nm SE of Galveston. Shelf-edge drop. Blue marlin, yellowfin, swordfish at night. Long but classic TX overnight run.",
    fish:["bluemarlin","yellowfin","blackfin","swordfish","wahoo"]},
-  {name:"The Hilltops",     color:"#1e63c0", lat:28.10, lng:-94.90,
-   desc:"~100nm S of Freeport. Salt domes holding yellowfin and big AJ. Summer tuna.",
-   fish:["yellowfin","blackfin","amberjack","wahoo"]},
-  {name:"Hospital Rock",    color:"#1e63c0", lat:27.30, lng:-95.95,
+    {name:"Hospital Rock",    color:"#1e63c0", lat:27.55, lng:-96.48,
    desc:"~90nm SE of Port O'Connor. Classic Texas tuna run. Yellowfin, blackfin, kings.",
    fish:["yellowfin","blackfin","kingmack","wahoo"]},
   {name:"Flower Garden Banks",color:"#1a4fa8", lat:27.90, lng:-93.80,
    desc:"~110nm SSE of Galveston. National Marine Sanctuary; northernmost coral reef in US. Limited harvest — check regs. Trophy AJs, snapper near edges.",
    fish:["amberjack","snapper","gaggrouper","muttonsnap"]},
-  {name:"Baker Bank",       color:"#1e63c0", lat:27.10, lng:-96.30,
+  {name:"Baker Bank",       color:"#1e63c0", lat:27.75, lng:-96.30,
    desc:"~70nm SE of Port O'Connor. Classic snapper and grouper rock pile.",
    fish:["snapper","gaggrouper","amberjack","kingmack"]},
 
@@ -187,20 +180,44 @@ const CANYONS=[
   // type: "wreck" | "reef" | "lump" | "shoal" | "ledge"
   // ════════════════════════════════════════════════════════════════════════
 
+  // ── SOUTHERN NEW ENGLAND (Point Judith / Block Island / Cape & Islands) ──
+  // The inshore bottom structure that the Point Judith, Montauk and Cape Cod
+  // fleets actually fish. Previously only the offshore canyons were mapped down
+  // here, which left the region's whole rockpile/rip/shoal fishery — scup, sea
+  // bass, tog, striper, fluke — with no structure to score against.
+  {name:"Coxes Ledge",       type:"ledge", color:"#16a34a", lat:41.06, lng:-71.15,
+   desc:"Shoal rising to ~114ft roughly 22nm SE of Point Judith — equidistant from Block Island, Montauk and the Cape, so expect company. Summer cod on the wrecks and the \"Mountains\" high spots, sea bass and scup over the rough bottom, and early-season bluefin on top. Reference only — not for navigation.",
+   fish:["cod","blackseabass","porgy","flounder","bluefin"]},
+  {name:"Southwest Ledge (Block Island)", type:"ledge", color:"#16a34a", lat:41.12, lng:-71.66,
+   desc:"Boulder ledge off the southwest corner of Block Island. Trophy striped bass on the rip, sea bass and scup on the rockpiles, tog in the fall, and cod in winter. Note: the ledge crosses the 3nm line and striped bass may not be taken in federal waters — watch the boundary. Reference only — not for navigation.",
+   fish:["striper","blackseabass","porgy","tautog","bluefish","cod"]},
+  {name:"Sow and Pigs Reef", type:"reef", color:"#16a34a", lat:41.41, lng:-70.96,
+   desc:"Rocky reef running off the west end of Cuttyhunk at the mouth of Buzzards Bay. A classic striper and blackfish rip; scup and sea bass hold on the rocks through the summer. Reference only — not for navigation.",
+   fish:["striper","tautog","blackseabass","porgy","bluefish"]},
+  {name:"Middle Ground (Vineyard Sound)", type:"shoal", color:"#16a34a", lat:41.44, lng:-70.72,
+   desc:"Long shoal splitting Vineyard Sound between Naushon and Martha's Vineyard. Hard tide over the bar stacks bait — stripers and bluefish on the rip, scup and fluke on the edges. Reference only — not for navigation.",
+   fish:["striper","bluefish","porgy","flounder"]},
+  {name:"Bishop and Clerks", type:"shoal", color:"#16a34a", lat:41.575, lng:-70.25,
+   desc:"Charted shoal and old light foundation off Point Gammon, south of Hyannis. The Nantucket Sound scup and sea bass standby, with stripers and blues working the rip on a moving tide. Reference only — not for navigation.",
+   fish:["porgy","blackseabass","striper","bluefish","flounder"]},
+
   // ── NORTHEAST ──
   {name:"Shrewsbury Rocks", type:"rock", color:"#16a34a", lat:40.32, lng:-73.95,
-   desc:"Nearshore rock structure off NJ. Striped bass & bluefish in season, tog on the rocks.",
-   fish:["striper","bluefish","tautog"]},
+   desc:"Nearshore rock structure off NJ. Striped bass & bluefish in season, tog on the rocks, and scup over the rockpiles in summer.",
+   fish:["striper","bluefish","tautog","porgy"]},
 
   // ── MID-ATLANTIC ──
   {name:"Jackspot (Jack Spot)", type:"shoal", color:"#0ea5a5", lat:38.16, lng:-74.73,
    desc:"~22nm SE of Ocean City MD. Famous shoal/lump — historic white marlin & tuna grounds, the OC tournament run.",
    fish:["whitemarlin","yellowfin","bluefin","mahi"]},
   {name:"Chesapeake Light Tower", type:"reef", color:"#16a34a", lat:36.91, lng:-75.71,
-   desc:"~13nm off Virginia Beach. Tower structure & nearby wrecks — cobia, red drum, flounder, sea bass.",
-   fish:["cobia","flounder","blackseabass","redfish"]},
+   desc:"~13nm off Virginia Beach. Tower structure & nearby wrecks — cobia, red drum, flounder, sea bass, and spring/fall scup.",
+   fish:["cobia","flounder","blackseabass","porgy","redfish"]},
+  {name:"Triangle Wrecks", type:"wreck", color:"#16a34a", lat:36.99042, lng:-75.38827,
+   desc:"Cluster of wrecks ~30nm ENE of Virginia Beach (Lillian Luckenbach, Cuyahoga, Haviland, Morgan, Webster) in 90-110 ft. The local sea-bass and fluke congregation — spadefish in summer. Reference only — not for navigation.",
+   fish:["blackseabass","flounder","spadefish","porgy","cobia"]},
   // ── CHESAPEAKE BAY STRUCTURE ─────────────────────────────────────────
-  {name:"CBBT", type:"structure", color:"#16a34a", lat:36.97, lng:-76.08,
+  {name:"CBBT", type:"structure", color:"#16a34a", lat:37.041, lng:-76.069,
    desc:"Chesapeake Bay Bridge-Tunnel — the bay mouth's premier structure. Cobia sight-casting in summer, plus trophy striped bass, flounder, sheepshead and sea bass on the pilings and islands.",
    fish:["cobia","striper","flounder","sheepshead","blackseabass","redfish"]},
   {name:"Latimer Shoal", type:"lump", color:"#16a34a", lat:37.13181, lng:-75.99854,
@@ -220,18 +237,12 @@ const CANYONS=[
   {name:"The Point", type:"ledge", color:"#1e63c0", lat:35.53608, lng:-74.84481,
    desc:"35°32N 74°51W — The legendary convergence off Cape Hatteras where the cold Labrador Current collides with the warm Gulf Stream. One of the most productive bluewater zones on the East Coast — tuna, billfish, wahoo, dolphin stack on the temperature break.",
    fish:["yellowfin","bigeye","bluemarlin","whitemarlin","wahoo","mahi"]},
-  {name:"The Rockpile", type:"rock", color:"#16a34a", lat:34.55, lng:-76.40,
-   desc:"Off Cape Lookout. Live-bottom rock ledges — grouper, snapper, big kings & cobia in season.",
-   fish:["gaggrouper","snapper","kingmack","cobia"]},
   {name:"AR-315 (Hutton)", type:"reef", color:"#16a34a", lat:34.30, lng:-76.62,
    desc:"NC artificial reef off Beaufort Inlet. Sunken vessels — sea bass, flounder, kings, amberjack.",
    fish:["blackseabass","flounder","kingmack","amberjack"]},
-  {name:"Big Rock", type:"ledge", color:"#1e63c0", lat:34.42, lng:-76.10,
+  {name:"Big Rock", type:"ledge", color:"#1e63c0", lat:34.17, lng:-76.16,
    desc:"~40nm off Morehead City at the Gulf Stream edge. Namesake of the Big Rock Blue Marlin Tournament — blue marlin, dolphin, wahoo, tuna.",
    fish:["bluemarlin","mahi","wahoo","yellowfin"]},
-  {name:"1700 Rock", type:"rock", color:"#16a34a", lat:34.05, lng:-76.30,
-   desc:"Bottom ledge off Cape Fear region. Grouper & snapper bottom fishing, kings on the troll.",
-   fish:["gaggrouper","snapper","kingmack"]},
 
   // ── SOUTH CAROLINA / GEORGIA ──
   {name:"The Georgetown Hole", type:"lump", color:"#0ea5a5", lat:33.10, lng:-78.62,
@@ -259,10 +270,7 @@ const CANYONS=[
    fish:["sailfish","mahi","kingmack","blackfin"]},
 
   // ── FLORIDA KEYS ──
-  {name:"The Marathon Hump (W. Hump)", type:"lump", color:"#0ea5a5", lat:24.45, lng:-80.78,
-   desc:"Seamount rising from 1000ft to ~480ft off Marathon. Blackfin tuna, almaco jack, bonito stacked over the structure year-round.",
-   fish:["blackfin","amberjack","bonito","wahoo"]},
-  {name:"Islamorada Hump", type:"lump", color:"#0ea5a5", lat:24.83, lng:-80.45,
+  {name:"Islamorada Hump", type:"lump", color:"#0ea5a5", lat:24.81, lng:-80.45,
    desc:"Underwater seamount off Islamorada. Blackfin tuna, amberjack, kingfish; current-swept structure.",
    fish:["blackfin","amberjack","kingmack"]},
   {name:"Alligator Reef", type:"reef", color:"#16a34a", lat:24.85, lng:-80.62,
@@ -270,62 +278,56 @@ const CANYONS=[
    fish:["yellowtail","snapper","gaggrouper","sailfish"]},
 
   // ── GULF — WEST FLORIDA ──
-  {name:"The Middle Grounds", type:"reef", color:"#16a34a", lat:28.55, lng:-84.30,
-   desc:"Florida Middle Grounds — vast live-bottom reef system ~80-100nm off Tampa/Clearwater. Grouper, snapper, amberjack stronghold.",
-   fish:["gaggrouper","snapper","amberjack","kingmack"]},
-  {name:"The Elbow", type:"reef", color:"#16a34a", lat:28.00, lng:-84.10,
+   {name:"The Elbow", type:"reef", color:"#16a34a", lat:27.68, lng:-84.15,
    desc:"Hard-bottom area off the central Gulf coast. Gag & red grouper, mangrove & red snapper.",
    fish:["gaggrouper","snapper","muttonsnap"]},
 
   // ── GULF — PANHANDLE / AL / MS ──
   {name:"The Edge (Destin)", type:"ledge", color:"#1e63c0", lat:29.80, lng:-86.50,
-   desc:"The 100-fathom ledge off Destin — the closest blue water in the Gulf. Tuna, wahoo, dolphin, marlin in the spring/summer.",
-   fish:["yellowfin","wahoo","mahi","bluemarlin"]},
-  {name:"Trysler Grounds", type:"reef", color:"#16a34a", lat:29.40, lng:-87.20,
+   desc:"The 100-fathom ledge off Destin — the closest blue water in the Gulf. Tuna, wahoo, dolphin, marlin in the spring/summer; blackfin and sailfish mix in on bait through fall.",
+   fish:["yellowfin","wahoo","mahi","bluemarlin","blackfin","sailfish"]},
+  {name:"Trysler Grounds", type:"reef", color:"#16a34a", lat:29.10, lng:-87.45,
    desc:"Live-bottom grounds off Pensacola/Orange Beach. Snapper, grouper, triggerfish, amberjack.",
    fish:["snapper","gaggrouper","amberjack","kingmack"]},
-  {name:"The Nipple", type:"lump", color:"#0ea5a5", lat:29.20, lng:-87.55,
+  {name:"The Nipple", type:"lump", color:"#0ea5a5", lat:29.99, lng:-86.99,
    desc:"Famous bottom contour/lump off Pensacola at the shelf edge. Tuna, wahoo, dolphin, marlin stage here.",
    fish:["yellowfin","wahoo","mahi","bluemarlin"]},
-  {name:"The Spur", type:"lump", color:"#0ea5a5", lat:29.05, lng:-87.40,
+  {name:"The Spur", type:"lump", color:"#0ea5a5", lat:29.45, lng:-86.95,
    desc:"Bottom feature SE of the Nipple. Blue water pelagics — tuna, wahoo, billfish.",
    fish:["yellowfin","wahoo","bluemarlin","mahi"]},
 
   // ── GULF — LOUISIANA ──
-  {name:"The Midnight Lump (Sackett Bank)", type:"lump", color:"#0ea5a5", lat:28.75, lng:-89.55,
-   desc:"Salt dome rising to ~240ft ~25nm SW of the MS River mouth. Legendary winter yellowfin tuna spot; wahoo, AJ.",
-   fish:["yellowfin","wahoo","amberjack","blackfin"]},
-  {name:"The Lump / Blocks (Venice)", type:"reef", color:"#16a34a", lat:28.85, lng:-89.30,
+    {name:"The Lump / Blocks (Venice)", type:"reef", color:"#16a34a", lat:28.85, lng:-89.30,
    desc:"Oil platform clusters & rigs off Venice LA. The rigs hold everything — tuna, cobia, mangrove snapper, AJ.",
-   fish:["yellowfin","cobia","snapper","amberjack"]},
+   fish:["yellowfin","cobia","snapper","amberjack","wahoo","mahi","blackfin"]},
   // ── LONG ISLAND SOUTH SHORE (Long Beach / Freeport, NY) ───────────────
   {name:"The Mud Hole",      type:"ledge", color:"#16a34a", lat:40.22, lng:-73.70,
    desc:"Glacial trough ~20-25nm SE of Jones/East Rockaway Inlet. Summer/fall fluke, sea bass, and bluefish staging; migratory striped bass on the edges. Reference only — not for navigation.",
-   fish:["flounder","blackseabass","bluefish","striper"]},
+   fish:["flounder","blackseabass","porgy","bluefish","striper"]},
   {name:"Cholera Bank",      type:"reef", color:"#16a34a", lat:40.445, lng:-73.545,
    desc:"Classic live-bottom rise ~18nm off the south shore. Sea bass, porgy, and summer cod; bluefish and bonito on bait. Reference only — not for navigation.",
-   fish:["blackseabass","bluefish","bonito","cod"]},
+   fish:["blackseabass","porgy","bluefish","bonito","cod"]},
   {name:"Atlantic Beach Reef", type:"reef", color:"#16a34a", lat:40.535, lng:-73.715,
    desc:"NYSDEC artificial reef off East Rockaway Inlet. Sea bass, tautog, and fluke over the structure; close-to-home grounds for Long Beach & Freeport fleets. Reference only — not for navigation.",
-   fish:["blackseabass","tautog","flounder"]},
+   fish:["blackseabass","tautog","porgy","flounder"]},
   // ── CENTRAL NJ (Toms River / Barnegat) ────────────────────────────────
   {name:"Barnegat Ridge",    type:"reef", color:"#16a34a", lat:39.78, lng:-73.95,
-   desc:"Bottom rise ~20nm off Barnegat Inlet. Bonito, false albacore, and bluefish in late summer; sea bass on the structure. Reference only — not for navigation.",
-   fish:["bonito","bluefish","blackseabass","falsealbacore"]},
+   desc:"Bottom rise ~20nm off Barnegat Inlet. Bonito, false albacore, and bluefish in late summer; sea bass and scup on the structure. Reference only — not for navigation.",
+   fish:["bonito","bluefish","blackseabass","porgy","falsealbacore"]},
   {name:"Garden State North Reef", type:"reef", color:"#16a34a", lat:39.63, lng:-74.01,
-   desc:"NJ artificial reef off Barnegat Light. Tautog, sea bass, and fluke over sunken barges and reef balls. Reference only — not for navigation.",
-   fish:["tautog","blackseabass","flounder"]},
+   desc:"NJ artificial reef off Barnegat Light. Tautog, sea bass, scup, and fluke over sunken barges and reef balls. Reference only — not for navigation.",
+   fish:["tautog","blackseabass","porgy","flounder"]},
   {name:"Barnegat Light Triple Wrecks", type:"wreck", color:"#16a34a", lat:39.72, lng:-73.53,
-   desc:"Wreck cluster offshore of Barnegat Inlet. Cod and pollock in the cold months; sea bass and ling year-round. Reference only — not for navigation.",
-   fish:["cod","pollock","blackseabass"]},
+   desc:"Wreck cluster offshore of Barnegat Inlet. Cod and pollock in the cold months; sea bass and ling year-round, with big fall scup on the wrecks. Reference only — not for navigation.",
+   fish:["cod","pollock","blackseabass","porgy"]},
   // ── ATLANTIC CITY, NJ ─────────────────────────────────────────────────
   {name:"Atlantic City Reef", type:"reef", color:"#16a34a", lat:39.235, lng:-74.20,
-   desc:"NJ artificial reef ~8nm off Absecon Inlet. Sea bass, tautog, and fluke over the structure; a mainstay for the AC fleet. Reference only — not for navigation.",
-   fish:["blackseabass","tautog","flounder"]},
+   desc:"NJ artificial reef ~8nm off Absecon Inlet. Sea bass, tautog, scup, and fluke over the structure; a mainstay for the AC fleet. Reference only — not for navigation.",
+   fish:["blackseabass","tautog","porgy","flounder"]},
   {name:"Little Egg Reef",   type:"reef", color:"#16a34a", lat:39.47, lng:-74.20,
-   desc:"NJ artificial reef off Little Egg Inlet. Sea bass and tog over reef structure; fluke on the sand edges. Reference only — not for navigation.",
-   fish:["blackseabass","tautog","flounder"]},
-  {name:"Lobster Claw",      type:"ledge", color:"#16a34a", lat:39.30, lng:-73.55,
+   desc:"NJ artificial reef off Little Egg Inlet. Sea bass, tog, and scup over reef structure; fluke on the sand edges. Reference only — not for navigation.",
+   fish:["blackseabass","tautog","porgy","flounder"]},
+  {name:"Lobster Claw",      type:"ledge", color:"#16a34a", lat:38.84, lng:-73.57,
    desc:"Deepwater lump ~50nm SE of Atlantic City on the way to the canyons. Bluefin and yellowfin chunking grounds in summer/fall. Reference only — not for navigation.",
    fish:["bluefin","yellowfin","mahi"]},
   // ── BRUNSWICK, GA ─────────────────────────────────────────────────────
@@ -346,17 +348,17 @@ const CANYONS=[
    desc:"21-fathom ledge line ~25nm off Melbourne. Mutton and mangrove snapper, gag grouper, and amberjack over the rock. Reference only — not for navigation.",
    fish:["muttonsnap","snapper","gaggrouper","amberjack"]},
   // ── VERO BEACH, FL ────────────────────────────────────────────────────
-  {name:"8A Reef",           type:"reef", color:"#16a34a", lat:27.62, lng:-80.18,
-   desc:"Nearshore reef line off Sebastian Inlet, ~6-9nm. Snapper, sheepshead, and flounder on the structure; cobia and kingfish migrating through. Reference only — not for navigation.",
-   fish:["snapper","sheepshead","flounder","cobia"]},
-  {name:"Bethel Shoal",      type:"shoal", color:"#16a34a", lat:27.70, lng:-80.20,
+    {name:"Bethel Shoal",      type:"shoal", color:"#16a34a", lat:27.72, lng:-80.12,
    desc:"Shoal and hard bottom off Vero Beach. Kingfish, Spanish mackerel, and cobia in season; snapper and grouper on the rock. Reference only — not for navigation.",
    fish:["kingmack","spanishmack","cobia","snapper"]},
   // ── CLEARWATER, FL (Gulf) ─────────────────────────────────────────────
   {name:"Clearwater Nearshore Hardbottom", type:"reef", color:"#16a34a", lat:27.95, lng:-83.05,
    desc:"Nearshore ledges and hard bottom ~12-25nm off Clearwater. Gag and red grouper, mangrove and lane snapper, hogfish, and Spanish mackerel. Reference only — not for navigation.",
    fish:["gaggrouper","snapper","hogfish","spanishmack"]},
-  {name:"The Elbow (Florida Middle Grounds)", type:"ledge", color:"#16a34a", lat:28.55, lng:-84.30,
+  {name:"Egmont Channel", type:"channel", color:"#1a5878", lat:27.60, lng:-82.86,
+   desc:"Tampa Bay shipping channel west of Egmont Key, ~5-12nm from the Skyway. Fall/spring kingfish highway on the channel edges and The Hill; cobia on buoys and rays, Spanish on bait. Reference only — not for navigation.",
+   fish:["kingmack","cobia","spanishmack"]},
+  {name:"Middle Grounds", type:"ledge", color:"#16a34a", lat:28.45, lng:-84.30,
    desc:"Prominent ledge on the SE edge of the Florida Middle Grounds, ~80-100nm off Clearwater. Gag and red grouper, amberjack, and red snapper on the deep rock. Long run — reference only, not for navigation.",
    fish:["gaggrouper","snapper","amberjack","vermilion"]},
   // ── VENICE, FL (Gulf — distinct from Venice, LA) ──────────────────────
@@ -372,19 +374,20 @@ const CANYONS=[
   // Well-known banks, kelp beds, and island grounds for the SoCal fleet:
   // yellowtail, Pacific bluefin, dorado (mahi) and bonito, plus calico bass and
   // white seabass on the hard-bottom/kelp spots. Species chips use the app's
-  // Pacific species IDs (cayellowtail, bluefin, yellowfin, bonito, mahi).
+  // Pacific species IDs (cayellowtail, bluefin, yellowfin, bonito, mahi,
+  // lingcod, calicobass).
   // Coordinates are approximate area references — NOT for navigation.
   // ══════════════════════════════════════════════════════════════════════════
   // ── SAN DIEGO ──
   {name:"Point Loma Kelp", type:"reef", color:"#16a34a", lat:32.667, lng:-117.267,
-   desc:"The classic San Diego inshore kelp line off Point Loma, ~40-120ft. Yellowtail, calico bass, bonito and barracuda in the stringers; white seabass at first light. Reference only — not for navigation.",
-   fish:["cayellowtail","bonito","yellowfin"]},
+   desc:"The classic San Diego inshore kelp line off Point Loma, ~40-120ft. Yellowtail, calico bass, bonito and barracuda in the stringers; white seabass at first light, and lingcod on the deeper hard bottom outside the kelp. Reference only — not for navigation.",
+   fish:["cayellowtail","calicobass","lingcod","bonito","yellowfin"]},
   {name:"La Jolla Kelp / Canyon Edge", type:"ledge", color:"#1e63c0", lat:32.85, lng:-117.29,
-   desc:"Kelp beds and the head of La Jolla Canyon just off the beach. Yellowtail, calico bass and white seabass on the hard bottom; bluefin and yellowfin push in over the canyon on warm years. Reference only — not for navigation.",
-   fish:["cayellowtail","bluefin","yellowfin"]},
+   desc:"Kelp beds and the head of La Jolla Canyon just off the beach. Yellowtail, calico bass and white seabass on the hard bottom, lingcod on the canyon-rim rock; bluefin and yellowfin push in over the canyon on warm years. Note the La Jolla SMR closure just north — check the boundary. Reference only — not for navigation.",
+   fish:["cayellowtail","calicobass","lingcod","bluefin","yellowfin"]},
   {name:"Los Coronados Islands", type:"rock", color:"#16a34a", lat:32.417, lng:-117.258,
-   desc:"Island group ~18nm S of San Diego (Mexican waters — Mexican fishing license required). Yellowtail on the hard-bottom high spots, bonito and calico bass in the boiler rocks. Reference only — not for navigation.",
-   fish:["cayellowtail","bonito"]},
+   desc:"Island group ~18nm S of San Diego (Mexican waters — Mexican fishing license required). Yellowtail on the hard-bottom high spots, bonito and calico bass in the boiler rocks, lingcod on the deeper rock. Reference only — not for navigation.",
+   fish:["cayellowtail","calicobass","lingcod","bonito"]},
   {name:"Nine Mile Bank", type:"lump", color:"#0ea5a5", lat:32.60, lng:-117.42,
    desc:"Productive bank ~9nm off Point Loma paralleling the shelf. A prime kelp-paddy troll zone — yellowtail, dorado and bonito on the paddies, bluefin schools sweeping through in summer. Reference only — not for navigation.",
    fish:["cayellowtail","bluefin","mahi","yellowfin"]},
@@ -400,31 +403,64 @@ const CANYONS=[
    fish:["bluefin","mahi","cayellowtail","yellowfin"]},
   // ── OFFSHORE BANKS & ISLANDS ──
   {name:"San Clemente Island", type:"rock", color:"#16a34a", lat:32.90, lng:-118.49,
-   desc:"Offshore island ~55nm off San Diego. Yellowtail and white seabass on the hard bottom and boiler rocks, calico bass in the kelp, bonito on top. Reference only — not for navigation.",
-   fish:["cayellowtail","bonito"]},
+   desc:"Offshore island ~55nm off San Diego. Yellowtail and white seabass on the hard bottom and boiler rocks, calico bass in the kelp, lingcod on the deep rock, bonito on top. Reference only — not for navigation.",
+   fish:["cayellowtail","calicobass","lingcod","bonito"]},
   {name:"Tanner Bank", type:"lump", color:"#0ea5a5", lat:32.72, lng:-119.12,
-   desc:"Offshore seamount NW of San Clemente Island. Big yellowtail on the structure and bluefin over the top in season — a long run for quality fish. Reference only — not for navigation.",
-   fish:["cayellowtail","bluefin","yellowfin"]},
+   desc:"Offshore seamount NW of San Clemente Island. Big yellowtail on the structure, trophy lingcod on the hard bottom, and bluefin over the top in season — a long run for quality fish. Reference only — not for navigation.",
+   fish:["cayellowtail","lingcod","bluefin","yellowfin"]},
   {name:"Cortes Bank", type:"lump", color:"#0ea5a5", lat:32.45, lng:-119.18,
-   desc:"Legendary offshore bank ~100nm off San Diego rising near the surface (Bishop Rock). Trophy yellowtail, bluefin and white seabass over the seamount. Reference only — not for navigation.",
-   fish:["cayellowtail","bluefin","yellowfin"]},
+   desc:"Legendary offshore bank ~100nm off San Diego rising near the surface (Bishop Rock). Trophy yellowtail, bluefin and white seabass over the seamount, with big lingcod and calico bass on the shallow crown. Reference only — not for navigation.",
+   fish:["cayellowtail","calicobass","lingcod","bluefin","yellowfin"]},
   {name:"Santa Catalina Island", type:"rock", color:"#16a34a", lat:33.35, lng:-118.42,
-   desc:"Island ~22nm off the LA coast. Yellowtail and calico bass on the front-side kelp and hard bottom, bonito on the surface; marlin and dorado offshore in late summer. Reference only — not for navigation.",
-   fish:["cayellowtail","bonito","mahi"]},
+   desc:"Island ~22nm off the LA coast. Yellowtail and calico bass on the front-side kelp and hard bottom, lingcod on the back-side rock, bonito on the surface; marlin and dorado offshore in late summer. Reference only — not for navigation.",
+   fish:["cayellowtail","calicobass","lingcod","bonito","mahi"]},
   {name:"Farnsworth Bank", type:"lump", color:"#0ea5a5", lat:33.34, lng:-118.52,
-   desc:"Pinnacle bank off the west end of Catalina. Yellowtail and white seabass over the structure, calico bass on the reef; bluefin over the top on warm years. Reference only — not for navigation.",
-   fish:["cayellowtail","bluefin"]},
+   desc:"Pinnacle bank off the west end of Catalina. Yellowtail and white seabass over the structure, calico bass on the reef and lingcod on the pinnacle tops; bluefin over the top on warm years. Reference only — not for navigation.",
+   fish:["cayellowtail","calicobass","lingcod","bluefin"]},
   {name:"Horseshoe Kelp", type:"reef", color:"#16a34a", lat:33.68, lng:-118.23,
-   desc:"Hard-bottom reef complex off the LA/Long Beach breakwater. Yellowtail, calico and sand bass, bonito and barracuda — the classic close-in LA grounds. Reference only — not for navigation.",
-   fish:["cayellowtail","bonito"]},
+   desc:"Hard-bottom reef complex off the LA/Long Beach breakwater. Yellowtail, calico and sand bass, bonito and barracuda — the classic close-in LA grounds, with lingcod on the deeper edges. Reference only — not for navigation.",
+   fish:["cayellowtail","calicobass","lingcod","bonito"]},
   // ── CHANNEL ISLANDS (Santa Barbara / Ventura) ──
   {name:"Santa Barbara Island", type:"rock", color:"#16a34a", lat:33.475, lng:-119.04,
-   desc:"Small offshore island SW of the LA basin. Yellowtail and white seabass on the hard bottom, calico bass and bonito in the kelp. Reference only — not for navigation.",
-   fish:["cayellowtail","bonito"]},
+   desc:"Small offshore island SW of the LA basin. Yellowtail and white seabass on the hard bottom, calico bass and bonito in the kelp, lingcod on the deep rock. Reference only — not for navigation.",
+   fish:["cayellowtail","calicobass","lingcod","bonito"]},
   {name:"Anacapa Island", type:"reef", color:"#16a34a", lat:34.01, lng:-119.42,
-   desc:"Eastern Channel Islands reef and kelp off Ventura/Oxnard. Calico bass, yellowtail and white seabass on the reefs; a reliable inshore island run. Reference only — not for navigation.",
-   fish:["cayellowtail","bonito"]},
+   desc:"Eastern Channel Islands reef and kelp off Ventura/Oxnard. Calico bass, yellowtail and white seabass on the reefs, lingcod on the hard bottom off the ends; a reliable inshore island run. Several MPAs ring the island — check CDFW boundaries. Reference only — not for navigation.",
+   fish:["cayellowtail","calicobass","lingcod","bonito"]},
   {name:"Santa Cruz Island", type:"reef", color:"#16a34a", lat:34.02, lng:-119.75,
-   desc:"Largest Channel Island, off Santa Barbara. Kelp and hard-bottom grounds for calico bass, yellowtail and white seabass; bonito on top. Reference only — not for navigation.",
-   fish:["cayellowtail","bonito"]}
+   desc:"Largest Channel Island, off Santa Barbara. Kelp and hard-bottom grounds for calico bass, yellowtail and white seabass; lingcod on the reefs and pinnacles, bonito on top. Several MPAs ring the island — check CDFW boundaries. Reference only — not for navigation.",
+   fish:["cayellowtail","calicobass","lingcod","bonito"]},
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // CENTRAL CALIFORNIA — Monterey / Moss Landing / Morro Bay / Port San Luis
+  // The central coast had NO mapped grounds at all, which mattered more than it
+  // looked: nearestStructureNm() only counts structure whose `fish` list holds
+  // the target species, so lingcod — whose strongest California fishery is
+  // exactly this stretch — collected no structure credit anywhere north of the
+  // Channel Islands, and the four central-coast home ports had nothing to show
+  // in Major Fishing Areas.
+  //
+  // The central coast is also blanketed by California's MPA network, and several
+  // of the best-known rockfish marks (Portuguese Ledge, Soquel Canyon, Point
+  // Lobos, Point Buchon, Point Sur, Point Sal, Point Conception) sit inside
+  // reserves where take of lingcod and rockfish is prohibited. The entries below
+  // are deliberately placed on open grounds outside those closures — but MPA and
+  // groundfish-depth (RCA) boundaries move, so ALWAYS check current CDFW
+  // regulations before dropping lines.
+  // ══════════════════════════════════════════════════════════════════════════
+  {name:"Monterey Canyon Head", type:"ledge", color:"#16a34a", lat:36.80, lng:-121.82,
+   desc:"The head of the Monterey Submarine Canyon, which comes within a mile of the Moss Landing harbor mouth — deep water closer to the beach than anywhere else on the coast. Lingcod and rockfish hold on the canyon-rim rock; the Portuguese Ledge and Soquel Canyon SMCAs lie offshore of here and prohibit take of non-pelagic finfish. Reference only — not for navigation.",
+   fish:["lingcod"]},
+  {name:"Point Pinos Outer Reefs", type:"reef", color:"#16a34a", lat:36.645, lng:-121.955,
+   desc:"Rock and pinnacle ground on the open-bay side of Point Pinos, outside the shoreline reserves off Pacific Grove and Asilomar. The everyday Monterey lingcod and rockfish run — high-relief rock in 150-250ft with strong upwelling. Check CDFW MPA boundaries inshore. Reference only — not for navigation.",
+   fish:["lingcod"]},
+  {name:"Estero Bay & Cayucos Reefs", type:"reef", color:"#16a34a", lat:35.44, lng:-120.92,
+   desc:"Rocky nearshore reefs and kelp between Morro Rock and Point Estero, 30-80ft. Lingcod, cabezon and rockfish in the structure; the semi-protected bay stays fishable when the open coast is rough, so it is Morro Bay's foul-weather standby. Reference only — not for navigation.",
+   fish:["lingcod","calicobass"]},
+  {name:"Santa Rosa Reef", type:"reef", color:"#16a34a", lat:35.16, lng:-120.79,
+   desc:"Tabletop reef in San Luis Obispo Bay off Port San Luis — a 20-30ft crown with a sheer wall dropping into 60-70ft, wrapped in kelp. Lingcod, kelp greenling and rockfish on the edges; a short run from Avila. Reference only — not for navigation.",
+   fish:["lingcod","calicobass"]},
+  {name:"San Simeon Reef", type:"reef", color:"#16a34a", lat:35.62, lng:-121.26,
+   desc:"Offshore hard bottom ~25nm NW of Morro Bay in 200-300ft, well outside the Cambria and Piedras Blancas closures. The central coast's deep-water bottom grounds — trophy lingcod and quality vermilion rockfish for boats willing to make the run north. Reference only — not for navigation.",
+   fish:["lingcod"]}
 ];

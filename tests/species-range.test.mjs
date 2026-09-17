@@ -13,10 +13,11 @@ import { loadBw, makeChecker } from "./load-bw.mjs";
 
 const {
   PORTS, SPECIES, PREDICT_SPECIES_PREFS, SPECIES_RUN_NM,
-  speciesRunRangeNm, portFishingRangeNm, isGulfContext,
+  speciesRunRangeNm, portFishingRangeNm, isGulfContext, isPortOutOfSpeciesRange,
 } = loadBw([
   "PORTS", "SPECIES", "PREDICT_SPECIES_PREFS", "SPECIES_RUN_NM",
   "speciesRunRangeNm", "portFishingRangeNm", "isGulfContext", "flPeninsulaDivide",
+  "isPortOutOfSpeciesRange",
 ]);
 
 const { check, done } = makeChecker();
@@ -109,6 +110,27 @@ console.log("\nevery inshore/nearshore species has an explicit cap:");
   check("inshore caps are all <= nearshore-scale runs", SPECIES
     .filter((s) => s.cat === "inshore")
     .every((s) => SPECIES_RUN_NM[s.id] <= 40));
+}
+
+console.log("\nPacific-only species — empty-state range check (isPortOutOfSpeciesRange):");
+{
+  // SPECIES_LAT_RANGE stores {atlantic:null, gulf:null} for Pacific-only fish;
+  // the real band is in PACIFIC_SPECIES. Before the fix, San Diego + CA
+  // yellowtail falsely hit "OUTSIDE SPECIES RANGE" because isGulfContext was
+  // false and atlantic:null was treated as "absent from this coast".
+  for (const sp of ["cayellowtail", "lingcod", "calicobass"]) {
+    check(`${sp} from San Diego is in range (no false empty-state warning)`,
+      !isPortOutOfSpeciesRange("San Diego, CA", sp));
+    check(`${sp} from Monterey is in range`,
+      !isPortOutOfSpeciesRange("Monterey, CA", sp));
+  }
+  check("CA yellowtail from Miami is out of range",
+    isPortOutOfSpeciesRange("Miami, FL", "cayellowtail"));
+  // Pelagics with Atlantic SPECIES_LAT_RANGE bands or no entry were never broken.
+  for (const sp of ["bluefin", "yellowfin", "bonito"]) {
+    check(`${sp} from San Diego was never falsely out of range`,
+      !isPortOutOfSpeciesRange("San Diego, CA", sp));
+  }
 }
 
 console.log("\nFL peninsula divide — Gulf ports classify as Gulf:");

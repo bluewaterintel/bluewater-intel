@@ -61,9 +61,11 @@
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Bluewater Intel uses your location while you are using the app to center the fishing map and log catch locations when you choose to use GPS.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Take a photo of your catch for length and weight estimation.</string>
+	<string>Take a photo of your catch to attach to your catch log.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Select a catch photo for measurement.</string>
+	<string>Select a catch photo to attach to your catch log.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Sign in quickly and securely with Face ID instead of typing your password.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

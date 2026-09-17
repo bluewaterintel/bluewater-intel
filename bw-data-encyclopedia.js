@@ -129,7 +129,7 @@ const ENC_SPECIES = [
     },
     facts:{ size:"40-90 lbs", record:"142 lbs (Atlantic)", legal:"63\" lower jaw fork length", season:"July - October" },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0},
-    where:"SE FL/Keys (Stuart, Palm Beach, Miami) and the Bahamas are the classic WINTER run (Dec-Mar), often stacking on north cold fronts. Off NC (Oregon Inlet/Hatteras) and the Mid-Atlantic it's a summer-fall Gulf Stream fishery — the 100-fathom line and the Charleston Bump.",
+    where:"SE FL/Keys (Stuart, Palm Beach, Miami) and the Bahamas are the classic WINTER run (Dec-Mar), often stacking on north cold fronts. Off NC (Oregon Inlet/Hatteras) and the Mid-Atlantic it's a summer-fall Gulf Stream fishery — the 100-fathom line and the Charleston Bump. Eastern Gulf (Panama City/Destin): late summer/fall they hunt bait within a few miles of the beach as well as on The Edge.",
     tackle:[
       "20-30 lb class spinning or trolling outfits",
       "16-30 class lever-drag reels with 20-30 lb mono",
@@ -150,10 +150,10 @@ const ENC_SPECIES = [
   },
   {
     id:"swordfish", name:"Swordfish", color:"#7c2d8e", cat:"offshore",
-    snippet:"The gladiators of the deep. Daytime deep-drop or nighttime drift fishery in 1,000-2,000 ft. Hatteras Hole is the East Coast hot spot.",
-    facts:{ size:"100-500 lbs", record:"1,182 lbs (Chile)", legal:"47\" lower jaw fork length", season:"Regional — SE FL/Keys/Bahamas peak in WINTER (Dec-Mar); NC & Mid-Atlantic canyons are a summer-fall Gulf Stream fishery (Jul-Oct); Gulf late spring-summer" },
+    snippet:"The gladiators of the deep. Canyon daytime drops in 1,500-2,000 ft; Gulf of Maine is a shallower basin fishery around 600-1,000 ft. Hatteras Hole is the East Coast canyon hot spot.",
+    facts:{ size:"100-500 lbs", record:"1,182 lbs (Chile)", legal:"47\" lower jaw fork length", season:"Regional — SE FL/Keys/Bahamas peak in WINTER (Dec-Mar); NC & Mid-Atlantic canyons are a summer-fall Gulf Stream fishery (Jul-Oct); Gulf of Maine basins Jul-Sep; Gulf of Mexico late spring-summer" },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"Hatteras Hole, Norfolk Canyon, Hudson Canyon. Daytime swordfishing in 1,500-2,000 ft. Night fishing in 1,000-1,500 ft over the canyon edges.",
+    where:"Hatteras Hole, Norfolk Canyon, Hudson Canyon: daytime 1,500-2,000 ft, night 1,000-1,500 ft on the walls. Gulf of Maine: Wilkinson and Jordan basins at 100-150 fathoms (600-900 ft), including the historic summer harpoon bite — not those canyon walls, and not Jeffrey's/Stellwagen skinny water.",
     tackle:[
       "80-130 lb class swordfish rods (electric or manual)",
       "Heavy-duty deep-drop electric reel or 80-class manual 2-speed",
@@ -171,6 +171,7 @@ const ENC_SPECIES = [
       "Night: drift over the canyon edge with baits at 100, 200, 300, 400 ft",
       "Stop the drift if you mark fish — don't troll past them",
       "Hatteras Hole: SE of Hatteras Inlet, 35.08°N 75.42°W",
+      "Gulf of Maine: night-drop or harpoon over Wilkinson/Jordan (~600-1,000 ft). The 1,500-2,000 ft electric-reel drop is Hudson/Hatteras/Miami",
       "Bites are subtle — sometimes just a flutter on the rod tip",
       "Always fish strobes — sword visibility is very low at depth"],
   },
@@ -188,9 +189,9 @@ const ENC_SPECIES = [
         {species:"Bigeye Tuna", tell:"Bigeye has a noticeably LARGER eye, shorter pectoral and dorsal/anal fins (never the long sickles of a big yellowfin), and finlets are yellow with a darker edge. Bigeye body is deeper/heavier-bodied; yellowfin is sleeker. On the dock, the liver tells it for certain — bigeye liver has striations (lines), yellowfin's is smooth."},
         {species:"Blackfin Tuna", tell:"Blackfin is much smaller (rarely over 40 lbs), has DARK/dusky finlets (not bright yellow), and a shorter, stubbier body. Yellowfin's fins and finlets are vividly yellow."}]
     },
-    facts:{ size:"30-200 lbs", record:"427 lbs (Mexico)", legal:"27\" curved fork length", season:"April–October (regional — Hatteras peaks spring; Mid-Atlantic peaks mid-summer)" },
+    facts:{ size:"30-200 lbs", record:"427 lbs (Mexico)", legal:"27\" curved fork length", season:"Regional — Hatteras peaks spring; Mid-Atlantic peaks mid-summer; Gulf LA/TX fall-winter giants (Sep-Feb) plus summer schoolies on the rigs" },
     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"Hatteras/Oregon Inlet Gulf Stream edge (spring peak), Mid-Atlantic canyons off MD/DE/NJ (mid-summer peak as fish push north), Hudson Canyon and New England canyons (late summer). Often with porpoise pods or weed lines.",
+    where:"Hatteras/Oregon Inlet Gulf Stream edge (spring peak), Mid-Atlantic canyons off MD/DE/NJ (mid-summer peak as fish push north), Hudson Canyon and New England canyons (late summer). Gulf: Midnight Lump, the LA lumps/floaters, Mississippi Canyon, and TX East Breaks — fall Loop-Current giants and the winter Lump run. Often with porpoise pods or weed lines.",
     tackle:[
       "30-50 lb class trolling outfits",
       "30-50 class lever-drag reels with 50-80 lb mono or 80-130 lb braid",
@@ -262,7 +263,7 @@ const ENC_SPECIES = [
     },
     facts:{ size:"15-40 lbs", record:"49 lbs (Bermuda)", legal:"No federal size limit", season:"April - November" },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"Hatteras shelf, Cape Lookout, Charleston Bump, Myrtle Beach offshore wrecks. Often on bottom structure in 80-300 ft.",
+    where:"Hatteras shelf, Cape Lookout, Charleston Bump, Myrtle Beach offshore wrecks. Often on bottom structure in 80-300 ft. Gulf Panhandle (Panama City/Destin): late summer/fall they slide in with sardines and threadfin a few miles off the beach; The Edge is still the more consistent blue-water bite.",
     tackle:[
       "20-30 lb class spinning or conventional",
       "Sealed offshore spinning reels in the 8000-14000 size class",
@@ -308,9 +309,9 @@ const ENC_SPECIES = [
   {
     id:"mahi", name:"Mahi Mahi (Dolphinfish)", color:"#0f7a50", cat:"offshore",
     snippet:"The clown of the offshore — bright colors, aerial leaps, schools of dozens. Found on weedlines, floating debris, and color changes.",
-    facts:{ size:"5-50 lbs (cows up to 80)", record:"87 lbs (Costa Rica)", legal:"20\" fork length (most states); 10 fish per person bag limit", season:"Regional — NC/Mid-Atlantic late spring-summer (peak May-Jul); South FL/Keys/Bahamas spring peak (Mar-May) & near year-round; Gulf spring-fall" },
+    facts:{ size:"5-50 lbs (cows up to 80)", record:"87 lbs (Costa Rica)", legal:"20\" fork length (most states); 10 fish per person bag limit", season:"Regional — NC/Mid-Atlantic late spring-summer (peak May-Jul); South FL/Keys spring peak (Mar-May), still on weeds/debris through late summer; Gulf spring-fall" },
     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0},
-    where:"Anywhere offshore with weed lines, color changes, or floating debris. NC and the Mid-Atlantic in late spring-summer; South FL, the Keys, and the Bahamas in spring and near year-round; the Gulf spring-fall.",
+    where:"Anywhere offshore with weed lines, color changes, or floating debris. NC and the Mid-Atlantic in late spring-summer; South FL and the Keys peak in spring and stay findable under grass and floaters into late summer; the Gulf spring-fall.",
     tackle:[
       "20-30 lb spinning or light conventional",
       "6000-class offshore spinning reels with 30-50 lb braid",
@@ -332,9 +333,9 @@ const ENC_SPECIES = [
   {
     id:"cobia", name:"Cobia", color:"#8b5e1a", cat:"nearshore",
     snippet:"The brown bomber. Shallow-water bruisers cruising buoys, rays, and structure. Sight-casting is the most thrilling way to catch them.",
-    facts:{ size:"20-80 lbs", record:"135 lbs 9 oz (Australia)", legal:"36\" fork length (federal); state limits vary 1-2/day", season:"Regional — Mid-Atlantic/NC spring-summer (peak May-Jul as fish move north); SE & Gulf spring; South FL/Keys and Texas 'ling' run in spring" },
+    facts:{ size:"20-80 lbs", record:"135 lbs 9 oz (Australia)", legal:"36\" fork length (federal); state limits vary 1-2/day", season:"Regional — Mid-Atlantic/NC spring-summer (peak May-Jul as fish move north); SE & Gulf spring; Gulf wrecks/buoys stay fishable in 84-90°F water through early fall. South FL/Keys and Texas 'ling' run in spring" },
     seasons:{Jan:0,Feb:0,Mar:1,Apr:3,May:3,Jun:3,Jul:3,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0},
-    where:"Chesapeake Bay Bridge Tunnel, OBX inshore wrecks, Cape Lookout, Hatteras Inlet (spring-summer). South FL/Keys and the Texas 'ling' run in spring; Gulf beaches and buoys. Cruising rays and turtles in 10-50 ft.",
+    where:"Chesapeake Bay Bridge Tunnel, OBX inshore wrecks, Cape Lookout, Hatteras Inlet (spring-summer). South FL/Keys and the Texas 'ling' run in spring; Gulf beaches, buoys, and nearshore wrecks (Tampa/Panhandle stay on structure into early fall — they do not shut off with the Chesapeake fade). Cruising rays and turtles in 10-50 ft.",
     tackle:[
       "30-50 lb spinning gear with 50-80 lb braid",
       "Heavy 8000-14000 class sealed spinning reels",
@@ -356,7 +357,7 @@ const ENC_SPECIES = [
   {
     id:"redfish", name:"Redfish (Red Drum)", color:"#b91414", cat:"inshore",
     snippet:"The Carolina/Georgia inshore icon. From slot fish in marshes to giant 50+ pounders on the surf and inlets in fall.",
-    facts:{ size:"3-50+ lbs", record:"94 lbs (NC)", legal:"18-27\" slot (NC); 1 fish/day; max 1 over slot per year", season:"Regional — Atlantic & Gulf inshore; peak fall bull-drum run (Sep–Nov). NC/SC/GA sounds and Gulf TX–FL year-round." },
+    facts:{ size:"3-50+ lbs", record:"94 lbs (NC)", legal:"18-27\" slot (NC); 1 fish/day; max 1 over slot per year", season:"Regional — Atlantic & Gulf inshore; Chesapeake/VA fall bulls Oct–Nov (mid-Sep is the cooldown). NC/SC/GA sounds and Gulf TX–FL year-round." },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2},
     where:"Pamlico Sound, Cape Lookout, Charleston Harbor flats, Georgetown SC, and Gulf bays from FL through Texas. Marsh edges, oyster bars, inlets, and surf — not a New England or California fishery.",
     tackle:[
@@ -484,11 +485,11 @@ const ENC_SPECIES = [
       "Charleston/Hilton Head fleet absolutely loads up during the open season"],
   },
   {
-    id:"grouper", name:"Grouper (Gag/Black/Scamp)", color:"#4a4038", cat:"nearshore",
-    snippet:"Hard-pulling reef fish on bottom structure 80-300 ft. Several species; strict size and seasonal limits.",
+    id:"grouper", name:"Grouper (Black/Scamp)", color:"#4a4038", cat:"nearshore",
+    snippet:"Hard-pulling reef fish on bottom structure 80-300 ft. Mixed black, scamp, and red grouper; strict size and seasonal limits.",
     facts:{ size:"5-50 lbs", record:"110 lbs (gag, FL)", legal:"24\" gag, 22\" black; varies by state and species", season:"Regional — NC/SC ledges and Gulf reefs; summer–fall peak (May–Oct). Not a New England or Pacific fishery." },
     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0},
-    where:"Live bottom and ledges off NC, SC, and GA — Charleston Bump, Cape Lookout, Frying Pan Tower, Georgetown Hole — plus Gulf and FL Atlantic reefs. Use gaggrouper for Gulf gag-specific timing.",
+    where:"Live bottom and ledges off NC, SC, and GA — Charleston Bump, Cape Lookout, Frying Pan Tower, Georgetown Hole — plus deeper Gulf and FL Atlantic reefs (scamp, black, red). For Gulf gag on 40-120 ft hard bottom, use Gag Grouper — that entry has the shallower band and fall timing.",
     tackle:[
       "50-80 lb conventional, stout rod",
       "Stout 25-class lever-drag conventionals with 65-80 lb braid",
@@ -947,7 +948,7 @@ const ENC_SPECIES = [
     },
     facts:{ size:"5-25 lbs (smokers 40+)", record:"93 lbs (PR)", legal:"24 inch fork length federal", season:"Regional — NC/Mid-Atlantic summer-fall (Jun-Oct); they WINTER in South FL/Keys (Nov-Mar); Gulf runs spring & fall" },
     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"NC summer-fall: Frying Pan Tower, Cape Lookout shoals, Big Rock, AR-410 and the NC artificial reefs, Va Beach 4A buoy, 5-30 nm off. South FL/Keys in winter; Gulf reefs/wrecks spring & fall.",
+    where:"NC summer-fall: Frying Pan Tower, Cape Lookout shoals, Big Rock, AR-410 and the NC artificial reefs, Va Beach 4A buoy, 5-30 nm off. South FL/Keys in winter. Gulf fall/spring: beaches, shipping channels (Egmont Channel off Tampa), and 20-80 ft wrecks — not the 80-100 nm Middle Grounds run.",
     tackle:[
       "Medium-heavy 7 ft conventional or stout spinning rods",
       "Conventional 15-25 size or 6000-8000 spinning with 30-50 lb braid",
@@ -1026,9 +1027,9 @@ const ENC_SPECIES = [
   {
     id:"tarpon", name:"Tarpon", color:"#a8a8a8", cat:"inshore",
     snippet:"The Silver King. World-class gamefish that prowls Florida flats, passes, and beaches. Their gill-rattling, twisting jumps are legendary.",
-    facts:{ size:"40-150 lbs", record:"286 lbs (Africa)", legal:"Catch-and-release; tag required to harvest", season:"April - July (peak), year-round in south FL" },
-    seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:2,Sep:2,Oct:1,Nov:1,Dec:1},
-    where:"Florida Keys flats, Boca Grande Pass, Tampa Bay, Stuart/Jupiter beaches in spring, Homosassa flats in May-June. Backcountry of the Everglades year-round.",
+    facts:{ size:"40-150 lbs", record:"286 lbs (Africa)", legal:"Catch-and-release; tag required to harvest", season:"Spring beaches/passes (Mar–Jun) and the SE FL fall mullet run (Aug–Oct); year-round in south FL" },
+    seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
+    where:"Florida Keys flats, Boca Grande Pass, Tampa Bay, Stuart/Vero/Jupiter beaches in spring and again on the fall mullet run, Homosassa flats in May-June. Backcountry of the Everglades year-round.",
     tackle:[
       "8-12 weight fly rods with floating or intermediate line for sight-fishing",
       "Conventional: 7-foot heavy spinning rod, 30-50 lb braid",
@@ -1293,9 +1294,9 @@ const ENC_SPECIES = [
   {
     id:"vermilion", name:"Vermilion Snapper", color:"#c43030", cat:"nearshore",
     snippet:"Beeliner. Smaller but plentiful Gulf snapper that fills coolers when bigger reds and gags shut off. Open year-round.",
-    facts:{ size:"1-4 lbs", record:"7 lbs 3 oz (FL)", legal:"Gulf: 10\" total, 10/day; year-round", season:"Regional — Gulf year-round; South Atlantic ledges spring–fall. Absent north of VA." },
+    facts:{ size:"1-4 lbs", record:"7 lbs 3 oz (FL)", legal:"Gulf: 10\" total, 10/day; year-round", season:"Regional — Gulf year-round; South Atlantic ledges spring–fall. Absent north of Cape Hatteras (35.4°N)." },
     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3},
-    where:"Gulf hard-bottom and natural ledges 100–300 ft (year-round beeliner schools), plus SC/GA/FL Atlantic ledges in warm months. Schools sit just above the structure.",
+    where:"Gulf and South Atlantic hard-bottom / live-bottom ledges 100–300 ft. Year-round beeliner schools in the Gulf; SC/GA/FL/NC Atlantic ledges in warm months. Schools sit just above the structure — in late summer the 65–70°F water is often under the thermocline around 150–250 ft, not in the 80°F+ surface layer.",
     tackle:[
       "7-foot medium-heavy conventional with 30-50 lb braid",
       "30-40 lb fluorocarbon leader",
@@ -1312,6 +1313,8 @@ const ENC_SPECIES = [
       "Drop, count to set depth above the structure (5-10 feet up)",
       "Bites are quick — set fast on circle hook with gentle pressure",
       "Stack multi-fish on the rig before reeling up for efficiency",
+      "If the bottom is above ~78°F they have moved deeper — look for cooler ledges in 150-300 ft",
+      "Below ~58°F they go lethargic and the bite dies; the 64-72°F band is the comfort zone",
       "Bag limits are GENEROUS — easy to fill the box once located"],
   },
   {
@@ -1385,4 +1388,115 @@ const ENC_SPECIES = [
       "Fish current edges and structure high spots — they stack on relief",
       "Grey light is prime; the bite often shuts off once the sun is high",
       "Great eating fresh — bleed immediately and ice down hard"],
+  },
+  {
+    id:"lingcod", name:"Lingcod", color:"#3f6b52", cat:"nearshore",
+    snippet:"California's rocky-reef apex ambush predator. Not a true cod — a huge-mouthed, teeth-everywhere greenling that inhales anything that fits. High-relief rock, big jigs, and a hard bite.",
+    ident:{
+      marks:[
+        "Enormous mouth full of long needle teeth — unmistakable up close",
+        "Long, tapered body with one continuous dorsal fin notched in the middle",
+        "Mottled brown, olive, grey or copper; about one in twenty has blue-green flesh (harmless, cooks white)",
+        "No barbels and no scales on the head, unlike the true cods",
+        "Big females are the trophies — most fish over 20 lbs are hens"],
+      confusedWith:[
+        {species:"Cabezon", tell:"Cabezon has a broad, blunt, frog-like head with fleshy branched barbels above the eyes and NO scales at all. Lingcod's head is long and wedge-shaped with a far bigger tooth-filled mouth. Cabezon roe is toxic; lingcod roe is not."},
+        {species:"Kelp Greenling", tell:"Same family but far smaller (1-3 lbs) with a small mouth and fine blue or brown spotting. If it has the huge toothy gape, it's a lingcod."}]
+    },
+    facts:{ size:"5-15 lbs common; 20-30+ lbs on the central coast pinnacles", record:"~56 lbs (Alaska); CA fish over 40 lbs are exceptional", legal:"CA: 22\" minimum, 2/day in most areas — season and depth (RCA) limits vary by management area, verify current CDFW regs", season:"California — spring (Apr-Jun) and fall (Sep-Nov) peaks; groundfish season is closed over the winter in most areas." },
+    seasons:{Jan:0,Feb:0,Mar:1,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1},
+    where:"High-relief rock, pinnacles, and reef edges in 40-350 ft. Monterey Bay and Point Sur, the Big Sur pinnacles, Morro Bay and Port San Luis reefs, the Farallones, and the SoCal island and bank hard bottom (Catalina, San Clemente, Coronados). A Pacific-only species — never on the Atlantic or Gulf.",
+    tackle:[
+      "Medium-heavy 7-8 ft conventional or heavy spinning rod with a stout backbone",
+      "50-65 lb braid — you need to pull them off the rock before they get their head down",
+      "40-60 lb fluorocarbon or mono leader",
+      "Shrimp-fly / dropper-loop rigs above a 8-16 oz torpedo sinker",
+      "4-10 oz leadhead jigs and 6-10 in swimbaits; metal jigs (Point Wilson Dart, Shimano Butterfly) for deep pinnacles"],
+    bait:[
+      "Live sanddab or small rockfish — the single best big-lingcod bait on the coast",
+      "Whole squid or squid strips on a dropper loop",
+      "Big soft-plastic swimbaits (white, root beer, sardine) on a heavy leadhead",
+      "Herring or mackerel fillet when live bait isn't available",
+      "A hooked rockfish coming up will often get grabbed — drop back down to it"],
+    tips:[
+      "Fish the UP-current edge of the pinnacle and stay in contact with the bottom",
+      "They do not run — they clamp and hold. Keep steady pressure and never give slack",
+      "Lingcod frequently follow a hooked fish to the surface without being hooked themselves; keep a gaff and a second rod ready",
+      "Bigger baits genuinely mean bigger fish — a 10 in swimbait is not too big",
+      "Slack tide is the easiest to fish, but the bite is best on moving water",
+      "Watch the Rockfish Conservation Area depth limits for your management area — they change by season"],
+  },
+  {
+    id:"calicobass", name:"Calico Bass (Kelp Bass)", color:"#7d8a3a", cat:"nearshore",
+    snippet:"The bread-and-butter fish of the Southern California kelp line. A structure-glued ambush feeder that lives in the stringers and eats anything swimming past — the most reliable inshore bite in the bight.",
+    ident:{
+      marks:[
+        "Olive-brown back broken by pale cream blotches — the 'calico' pattern",
+        "Third dorsal spine roughly the same length as the fourth and fifth (a flat-topped spiny dorsal)",
+        "Long, lean body compared to the deeper-bodied sand basses",
+        "No dark spotting on the belly or fins",
+        "'Bull' calicos over 5 lbs turn dark and coppery from living deep in the kelp"],
+      confusedWith:[
+        {species:"Barred Sand Bass", tell:"Sand bass have obvious dark vertical bars on the sides and a much longer third dorsal spine that stands well above the rest. They also live over sand and flat bottom, not in the kelp."},
+        {species:"Spotted Bay Bass", tell:"Much smaller and covered in distinct dark spots including on the fins; a bay and harbor fish rather than an open-coast kelp fish."}]
+    },
+    facts:{ size:"1-4 lbs common; a 5-8 lb 'bull' is the fish of the trip", record:"~14 lbs (CA)", legal:"CA: 14\" minimum, 5/day within a 10-fish combined bass limit — verify current CDFW regs", season:"Southern California year-round resident; best late spring through fall, spawning May-July." },
+    seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
+    where:"The kelp line and shallow hard bottom in 10-130 ft — Point Loma and La Jolla kelp, Horseshoe Kelp off Long Beach, Catalina and San Clemente front-side stringers, the Channel Islands (Anacapa, Santa Cruz, Santa Barbara Island), and the Coronados. Thin out north of Point Conception. A Pacific-only species.",
+    tackle:[
+      "7-8 ft medium or medium-heavy rod — long enough to swing a bait into the kelp",
+      "20-40 lb braid or straight 20-25 lb mono; heavy enough to pull a bull out of the stringers",
+      "20-30 lb fluorocarbon leader",
+      "Live-bait hooks #4 to 2/0 — small and thin so a sardine swims naturally",
+      "1/2-2 oz leadheads for plastics; small surface iron for fish boiling on the canopy"],
+    bait:[
+      "Live sardines and anchovies fly-lined into the kelp — the classic presentation",
+      "Live squid when the squid show; nothing outfishes it",
+      "5-7 in swimbaits (MC Swimbaits, Big Hammer) in sardine, smelt, or root beer",
+      "Plastic grubs and swimbaits hopped along the shallow reef edges",
+      "Surface iron (Tady 45 light) worked over the canopy at grey light"],
+    tips:[
+      "Cast INTO the kelp, not around it — the fish live in the stringers and you have to go get them",
+      "Fly-line a live bait with no weight and let it swim; add a rubber-core sinker only in current",
+      "Bull calicos hold deepest and tightest to structure, and they bite best at grey light and dusk",
+      "Set the hook and crank immediately to pull them clear of the kelp; hesitate and you're wrapped",
+      "Chum a few live baits to fire up the school before you cast",
+      "Mostly a catch-and-release fishery now — they grow very slowly, so a big bull is decades old"],
+  },
+  {
+    id:"porgy", name:"Porgy (Scup)", color:"#b07a8a", cat:"nearshore",
+    snippet:"The Northeast's most dependable bottom fish. Scup swarm rockpiles, mussel beds and wrecks from May through October, and the big fall 'humpbacks' are a genuinely strong pull on light tackle.",
+    ident:{
+      marks:[
+        "Deep, almost round silvery body with a dusky blue or bronze sheen and faint vertical bars",
+        "Steep forehead that becomes a pronounced hump on big fish — hence 'humpback'",
+        "Small mouth with strong incisor-like front teeth for crushing shellfish",
+        "Single continuous spiny dorsal fin; deeply forked tail",
+        "Rough scales and sharp fin spines — handle with a towel"],
+      confusedWith:[
+        {species:"Pinfish", tell:"Pinfish are a southern fish with obvious yellow-gold horizontal stripes and a dark shoulder spot. Scup are plain silver with no spot and are found from the Chesapeake north."},
+        {species:"Sheepshead", tell:"Sheepshead carry bold black vertical bars and protruding human-like teeth, and they hold on pilings and bridges rather than open rockpiles and wrecks."}]
+    },
+    facts:{ size:"0.5-2 lbs typical; 3-4 lb 'humpbacks' or 'dinner plates' in the fall", record:"4 lbs 9 oz (MA)", legal:"Varies by state and mode — typically 9-10\" minimum with a 30-50 fish bag; party/charter seasons differ. Verify current state regs", season:"Northeast/Mid-Atlantic — inshore May through October, with the biggest fish on deeper wrecks in September-November. Not a Gulf or Pacific fishery." },
+    seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:0},
+    where:"Rockpiles, mussel beds, reefs and wrecks in 20-120 ft from Cape Cod to the Chesapeake mouth — Narragansett Bay and the RI reefs, Block Island, Montauk and the Long Island rockpiles, Raritan Bay and the NJ ocean wrecks, and the DelMarVa inshore wrecks. Bigger fish move deeper as the season goes on. Not present on the Gulf coast or the Pacific.",
+    tackle:[
+      "Light or medium-light 6-7 ft rod with a sensitive tip — the bite is a fast tap",
+      "Small conventional or 3000-4000 spinning reel with 15-30 lb braid",
+      "20-30 lb fluorocarbon leader",
+      "Hi-lo (two-hook) rigs with #1 to 1/0 baitholder or small circle hooks — go small, their mouths are small",
+      "2-8 oz bank sinkers depending on depth and current"],
+    bait:[
+      "Squid strips cut small — the everyday standard",
+      "Clam, especially for the bigger fish",
+      "Sandworms or bloodworms when they're being picky",
+      "Small pieces of Berkley Gulp! on a teaser above the rig",
+      "Fresh bait beats frozen; re-bait often, they strip a hook fast"],
+    tips:[
+      "Cut the bait SMALL — a big chunk just gets stolen off a small mouth",
+      "Two hooks means double-headers; lift slowly and steadily so the second fish stays on",
+      "Do not swing on the first tap; wait for the rod to load then lift",
+      "The biggest fish sit on the deeper wrecks late in the fall, not on the summer inshore rockpiles",
+      "Scup often stack right on top of black sea bass and tog — the same drop can produce all three",
+      "Excellent eating despite the small size; scale and pan-fry whole, or fillet the bigger humpbacks"],
   }];

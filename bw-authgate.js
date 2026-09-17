@@ -40,6 +40,14 @@
   function showGate(){
     if(gate) gate.style.display="flex";
     syncAuthScreenBodyClass();
+    if(window.BW_BIOMETRIC){
+      try { window.BW_BIOMETRIC.syncLoginButton(); } catch(e){ /* non-fatal */ }
+      setTimeout(() => {
+        if(gate && gate.style.display !== "none" && window.BW_BIOMETRIC && window.BW_BIOMETRIC.tryAutoSignIn){
+          window.BW_BIOMETRIC.tryAutoSignIn().catch(() => {});
+        }
+      }, 450);
+    }
   }
   // Other modules (billing offline handler, plan picker) must not hide the gate
   // unless a real Supabase session exists.
@@ -51,9 +59,11 @@
     if(u) return;
     const ca = document.getElementById("create-account-page");
     const pw = document.getElementById("password-recovery-page");
+    const confirmed = document.getElementById("email-confirmed-page");
     const caOpen = ca && ca.style.display !== "none";
     const pwOpen = pw && pw.style.display !== "none";
-    if(caOpen || pwOpen) return;
+    const confirmedOpen = confirmed && confirmed.style.display !== "none";
+    if(caOpen || pwOpen || confirmedOpen) return;
     showGate();
   }
   function sessionStill(user){
@@ -72,11 +82,14 @@
     const ca = document.getElementById("create-account-page");
     const pw = document.getElementById("password-recovery-page");
     const verify = document.getElementById("verify-email-page");
+    const confirmed = document.getElementById("email-confirmed-page");
     const verifyOpen = verify && verify.style.display !== "none";
+    const confirmedOpen = confirmed && confirmed.style.display !== "none";
     return (gate && gate.style.display !== "none")
       || (ca && ca.style.display !== "none")
       || (pw && pw.style.display !== "none")
-      || verifyOpen;
+      || verifyOpen
+      || confirmedOpen;
   }
   function syncAuthScreenBodyClass(){
     try {
@@ -305,10 +318,18 @@
     // (trial / active subscription / owner) unlocks the PRO features — the Bite
     // Map, ocean layers, waypoints, fishing reports, and the AI brief — while
     // free users get the baseline app (maps, major areas, ports, catches,
-    // closures, catch-measure, regs) with those PRO features shown but locked.
+    // closures, regs) with those PRO features shown but locked.
     // We still refresh entitlement so the correct gating is applied, but we no
     // longer trap unentitled users on the plan picker.
     try {
+      const paidBeforeSync = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
+      if(fullHydrate && !paidBeforeSync){
+        if(!window.BW_NATIVE && typeof window.bwSyncStripeEntitlement === "function"){
+          await window.bwSyncStripeEntitlement();
+        } else if(window.BW_NATIVE && window.BW_IAP && window.BW_IAP.syncIapEntitlement){
+          await window.BW_IAP.syncIapEntitlement();
+        }
+      }
       if(typeof refreshEntitlement === "function") await refreshEntitlement();
     } catch(e){}
     // Plan onboarding is a ONE-TIME step. Supabase re-fires onAuthChange
@@ -420,9 +441,13 @@
           }
           return;  // signed in → onSignedIn handles the rest
         }
-        // No auto-session (they must sign in manually) → show the welcome banner
-        // on the sign-in screen so they know their email is confirmed.
-        showWelcomeBanner();
+        // Native app: dedicated confirmation screen (sign in stays in-app).
+        // Web: welcome banner on the sign-in gate.
+        if(window.BW_NATIVE && typeof window.showEmailConfirmedScreen === "function"){
+          window.showEmailConfirmedScreen();
+        } else {
+          showWelcomeBanner();
+        }
       };
       if (window.BW_AUTH) {
         setTimeout(handleConfirmedReturn, 600);
@@ -462,6 +487,37 @@
     return { email: em, password: passEl.value };
   }
 
+  async function doBiometricSignIn(){
+    msg.style.display="none";
+    const btn = document.getElementById("bw-auth-biometric");
+    if(btn){ btn.disabled = true; btn.textContent = "Checking…"; }
+    try {
+      if(!window.BW_BIOMETRIC || !window.BW_BIOMETRIC.signInWithBiometric){
+        showErr("Biometric sign-in is not available.");
+        return;
+      }
+      const email = await window.BW_BIOMETRIC.signInWithBiometric();
+      if(emailEl && email) emailEl.value = email;
+    } catch(e){
+      if(e && e.code === "EMAIL_NOT_CONFIRMED" && typeof window.showVerifyEmailScreen === "function"){
+        const em = emailEl && emailEl.value ? emailEl.value.trim() : "";
+        if(em) window.showVerifyEmailScreen(em);
+      }
+      const m = (e && e.message) ? e.message : "Biometric sign-in failed";
+      if(!/cancel/i.test(m)) showErr(m);
+    } finally {
+      if(btn && window.BW_BIOMETRIC && window.BW_BIOMETRIC.methodLabel){
+        window.BW_BIOMETRIC.methodLabel().then((name) => {
+          btn.disabled = false;
+          btn.textContent = "Sign in with " + name;
+        }).catch(() => { btn.disabled = false; btn.textContent = "Sign in with biometrics"; });
+      } else if(btn){
+        btn.disabled = false;
+        btn.textContent = "Sign in with biometrics";
+      }
+    }
+  }
+
   async function doSignIn(){
     msg.style.display="none";
     const c = validCreds(); if(!c) return;
@@ -473,12 +529,23 @@
         return;
       }
       await window.BW_AUTH.signIn(c.email, c.password);
+      if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.clearSkipAutoSignIn){
+        try { await window.BW_BIOMETRIC.clearSkipAutoSignIn(); } catch(e){}
+      }
+      if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.offerEnableAfterSignIn){
+        try { await window.BW_BIOMETRIC.offerEnableAfterSignIn(c.email, c.password); } catch(e){}
+        try { await window.BW_BIOMETRIC.syncLoginButton(); } catch(e2){}
+      }
     } catch(e){
       if(e && e.code === "EMAIL_NOT_CONFIRMED" && typeof window.showVerifyEmailScreen === "function"){
         const em = emailEl && emailEl.value ? emailEl.value.trim() : "";
         if(em) window.showVerifyEmailScreen(em);
       }
-      showErr(e.message || "Sign in failed");
+      const raw = (e && e.message) ? String(e.message) : "";
+      const network = /failed to fetch|networkerror|load failed|network request failed/i.test(raw);
+      showErr(network
+        ? "Can't reach the sign-in service. Check your connection, then hard-refresh this page (Ctrl+Shift+R) and try again."
+        : (raw || "Sign in failed"));
     } finally {
       if(btn){ btn.disabled = false; btn.textContent = "Sign In"; }
     }
@@ -512,9 +579,10 @@
     } catch(err){ showErr(err?.message || "Could not send reset email."); }
   }
 
-  const AUTH_ACTION_SEL = "#bw-auth-signin,#bw-auth-signup,#bw-auth-forgot";
+  const AUTH_ACTION_SEL = "#bw-auth-signin,#bw-auth-biometric,#bw-auth-signup,#bw-auth-forgot";
   const AUTH_ACTIONS = {
     "bw-auth-signin": doSignIn,
+    "bw-auth-biometric": doBiometricSignIn,
     "bw-auth-signup": openSignup,
     "bw-auth-forgot": doForgot,
   };
@@ -531,6 +599,7 @@
     fn();
   }
   window.bwAuthGateSignIn = (e) => runAuthAction("bw-auth-signin", e);
+  window.bwAuthGateBiometric = (e) => runAuthAction("bw-auth-biometric", e);
   window.bwAuthGateOpenSignup = (e) => runAuthAction("bw-auth-signup", e);
   window.bwAuthGateForgot = (e) => runAuthAction("bw-auth-forgot", e);
   if(!window.closeCreateAccount){

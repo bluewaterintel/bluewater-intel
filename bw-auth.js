@@ -120,15 +120,21 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   }
 
   function authRedirectUrl(query) {
-    // Email links always open in Mail/Safari first. Custom URL schemes
-    // (com.bluewaterintel.app://) render a blank page when iOS does not hand
-    // off to the app — use the HTTPS site so the user sees a confirmation page.
+    const q = String(query || "").replace(/^\?/, "");
     if (typeof window !== "undefined" && window.location && /^https?:\/\/(localhost|127\.0\.0\.1)/.test(window.location.origin)) {
-      return window.location.origin + "/?" + query;
+      return window.location.origin + "/?" + q;
     }
-    return "https://app.bluewaterintel.com/?" + query;
+    return "https://app.bluewaterintel.com/?" + q;
   }
-  const EMAIL_CONFIRM_REDIRECT = authRedirectUrl("confirmed=1");
+  // Native signups: land on a lightweight page that opens the app — not the
+  // full web sign-in gate (which confused users into signing up again on web).
+  function emailConfirmRedirectUrl() {
+    if (typeof window !== "undefined" && window.BW_NATIVE) {
+      return "https://app.bluewaterintel.com/email-confirmed.html?confirmed=1";
+    }
+    return authRedirectUrl("confirmed=1");
+  }
+  const EMAIL_CONFIRM_REDIRECT = emailConfirmRedirectUrl();
   const PASSWORD_RECOVERY_REDIRECT = authRedirectUrl("recovery=1");
 
   async function signUp(email, password, meta) {
@@ -166,7 +172,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     const { error } = await client.auth.resend({
       type: "signup",
       email,
-      options: { emailRedirectTo: EMAIL_CONFIRM_REDIRECT },
+      options: { emailRedirectTo: emailConfirmRedirectUrl() },
     });
     if (error) throw error;
   }
@@ -347,7 +353,9 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
   }
 
   // Reads the DE-IDENTIFIED public view (no user_id/PII; coords rounded; hashed handle).
-  async function fetchReports({ region = null, sinceDays = 21, limit = 400 } = {}) {
+  // Pass sinceDays: null to read the full archive — the forum offers "Any time"
+  // so anglers can compare this week against the same week in past seasons.
+  async function fetchReports({ region = null, sinceDays = 365, limit = 1000 } = {}) {
     let q = client.from("fishing_reports_public").select("*").order("created_at", { ascending: false }).limit(limit);
     if (region && region !== "all") q = q.eq("region", region);
     if (sinceDays) q = q.gte("created_at", new Date(Date.now() - sinceDays * 86400000).toISOString());
