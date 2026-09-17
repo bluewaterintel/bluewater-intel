@@ -53,6 +53,10 @@ run(SUPABASE, ["functions", "deploy", "stripe-webhook", "--no-verify-jwt"], cliE
 run(SUPABASE, ["functions", "deploy", "stripe-sync"], cliEnv);
 run(SUPABASE, ["functions", "deploy", "admin", "--no-verify-jwt"], cliEnv);
 
-console.log("\n✓ Stripe functions deployed (checkout, portal, webhook, sync, admin)");
+run(SUPABASE, ["functions", "deploy", "revenuecat-webhook", "--no-verify-jwt"], cliEnv);
+
+console.log("\n✓ Stripe + Apple billing functions deployed (checkout, portal, webhook, sync, admin, revenuecat-webhook)");
+console.log("Owner signup alerts need project secrets (once): RESEND_API_KEY, ALERT_EMAIL=info@bluewaterintel.com");
+console.log("  Run: npm run deploy:health   (sets Resend + alert secrets) or supabase secrets set …");
 console.log("Verify Stripe Dashboard → Webhooks points to:");
 console.log(`  https://${PROJECT_REF}.supabase.co/functions/v1/stripe-webhook`);
