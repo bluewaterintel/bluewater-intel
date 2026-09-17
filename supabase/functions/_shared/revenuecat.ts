@@ -64,10 +64,14 @@ function billingSourceFromRcStore(store: string | undefined): string {
   return "apple";
 }
 
+function isProEntitlementLookup(lookupKey: string | undefined): boolean {
+  return String(lookupKey ?? "").trim().toLowerCase() === PRO_ENTITLEMENT;
+}
+
 function subscriptionHasPro(sub: RcV2Subscription): boolean {
   const ents = sub.entitlements?.items ?? [];
   for (const ent of ents) {
-    if (ent.lookup_key === PRO_ENTITLEMENT) return true;
+    if (isProEntitlementLookup(ent.lookup_key)) return true;
     for (const prod of ent.products?.items ?? []) {
       if (isProProduct(prod.store_identifier ?? "")) return true;
     }
