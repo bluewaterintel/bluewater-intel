@@ -54,6 +54,7 @@ run(SUPABASE, ["functions", "deploy", "stripe-sync"], cliEnv);
 run(SUPABASE, ["functions", "deploy", "admin", "--no-verify-jwt"], cliEnv);
 
 run(SUPABASE, ["functions", "deploy", "revenuecat-webhook", "--no-verify-jwt"], cliEnv);
+run(SUPABASE, ["functions", "deploy", "iap-sync"], cliEnv);
 
 console.log("\n✓ Stripe + Apple billing functions deployed (checkout, portal, webhook, sync, admin, revenuecat-webhook)");
 console.log("Owner signup alerts need project secrets (once): RESEND_API_KEY, ALERT_EMAIL=info@bluewaterintel.com");
