@@ -20,8 +20,8 @@ npm -v
 echo "Installing npm dependencies..."
 npm ci
 
-echo "Building www/ and syncing Capacitor iOS project..."
-npm run cap:sync
+echo "Applying native-version.json, building www/, syncing Capacitor iOS..."
+npm run ios:prepare
 
 echo "Installing CocoaPods..."
 cd ios/App

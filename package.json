@@ -35,7 +35,8 @@
     "test:altimetry": "node tests/altimetry-dataset.test.mjs",
     "test:altimetrydate": "node tests/altimetry-date-age.test.mjs",
     "test:nativebilling": "node tests/native-billing-email.test.mjs && node tests/ios-stripe-portal-open.test.mjs",
-    "test": "npm run test:freshness && npm run test:wind && npm run test:ocean && npm run test:breaks && npm run test:range && npm run test:bottomtemp && npm run test:pelagic && npm run test:waypoints && npm run test:waypointradius && npm run test:habitat && npm run test:landgate && npm run test:troutsefl && npm run test:methodology && npm run test:coverage && npm run test:dropdowns && npm run test:sstmask && npm run test:altimetry && npm run test:altimetrydate && npm run test:nativebilling",
+    "test:nativeversion": "node tests/native-version.test.mjs",
+    "test": "npm run test:freshness && npm run test:wind && npm run test:ocean && npm run test:breaks && npm run test:range && npm run test:bottomtemp && npm run test:pelagic && npm run test:waypoints && npm run test:waypointradius && npm run test:habitat && npm run test:landgate && npm run test:troutsefl && npm run test:methodology && npm run test:coverage && npm run test:dropdowns && npm run test:sstmask && npm run test:altimetry && npm run test:altimetrydate && npm run test:nativebilling && npm run test:nativeversion",
     "maintenance:storage-dry-run": "node scripts/delete-stale-tile-prefixes.mjs --dry-run",
     "maintenance:storage-prune": "node scripts/delete-stale-tile-prefixes.mjs",
     "maintenance:branches": "node scripts/prune-remote-branches.mjs",
@@ -54,8 +55,11 @@
     "android:icon": "node scripts/copy-android-app-icon.mjs",
     "legal:pages": "node scripts/generate-legal-pages.mjs",
     "ios:sync": "npm run cap:sync && npm run cap:open:ios",
+    "ios:prepare": "node scripts/prepare-ios-release.mjs",
     "android:sync": "npm run cap:sync:android && npm run cap:open:android",
     "version:native": "node scripts/bump-native-version.mjs",
+    "version:verify": "node scripts/verify-native-version.mjs",
+    "version:apply": "node scripts/apply-native-version.mjs",
     "bundle:native": "npm run build:ios && npx cap sync"
   },
   "dependencies": {
