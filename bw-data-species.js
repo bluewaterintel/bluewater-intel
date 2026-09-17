@@ -872,8 +872,9 @@ const REGIONAL_SEASONS = {
   ],
 
   // ── SPECKLED TROUT (SPOTTED SEATROUT) ────────────────────────────────────
-  // Premier inshore fish from Chesapeake south through the Gulf. Spring and fall
-  // peaks; summer doldrums in the hottest shallows.
+  // Premier inshore/estuary fish from Chesapeake south through the Gulf.
+  // Mid-Atlantic: spring + fall peaks. Treasure Coast / south IRL: cool-water
+  // fishery — late fall through spring; Sep–Oct is still the summer doldrums.
   speckledtrout: [
     {centerLat: 36.9, centerLng: -76.0, radiusNm: 130, label: "VA Beach / Lynnhaven",
      seasons:{Jan:0,Feb:0,Mar:1,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:0}},
@@ -883,6 +884,10 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 29.0, centerLng: -80.9, radiusNm: 170, label: "NE FL (Mosquito Lagoon)",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
+    // Stuart / St. Lucie / Hobe Sound — must out-weight Mosquito Lagoon here.
+    // Sep:3 on the northern curve made mid-September 88°F water read "peak".
+    {centerLat: 27.15, centerLng: -80.25, radiusNm: 85, label: "Treasure Coast / south IRL",
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:3,Dec:3}},
     {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf",

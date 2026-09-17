@@ -3442,7 +3442,7 @@ function isPredictWater(lat, lng){
 function predictHeatCellVisible(lat, lng, speciesId){
   if(typeof isPredictWater === "function" && !isPredictWater(lat, lng)) return false;
   if(speciesId && typeof classifyWaterType === "function" && typeof speciesAllowedInWater === "function"){
-    if(!speciesAllowedInWater(speciesId, classifyWaterType(lat, lng))) return false;
+    if(!speciesAllowedInWater(speciesId, classifyWaterType(lat, lng), lat, lng)) return false;
   }
   if(speciesId && typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(speciesId, lat, lng)){
     return false;
@@ -5232,7 +5232,10 @@ const FISHABLE_BAY_SOUND_BOXES = [
   {b:[41.45, 41.70, -71.05, -70.70], depth: 20},  // Buzzards
   {b:[25.40, 25.75, -80.25, -80.15], depth: 4},   // Biscayne
   {b:[24.95, 25.25, -81.10, -80.50], depth: 3},   // Florida Bay
-  {b:[27.20, 29.00, -80.78, -80.62], depth: 3},   // Indian River
+  {b:[27.80, 29.00, -80.90, -80.52], depth: 3},   // North IRL / Mosquito Lagoon
+  {b:[27.40, 27.85, -80.50, -80.28], depth: 3},   // IRL Vero / Fort Pierce
+  {b:[27.12, 27.42, -80.40, -80.18], depth: 3},   // St Lucie River / Stuart / Jensen
+  {b:[26.95, 27.14, -80.18, -80.122], depth: 3},  // Hobe Sound (inside the barrier)
   {b:[26.40, 26.75, -82.20, -81.85], depth: 4},   // Charlotte Harbor
   {b:[27.55, 28.05, -82.75, -82.45], depth: 8},   // Tampa Bay
   {b:[29.65, 29.85, -85.10, -84.70], depth: 5},   // Apalachicola
@@ -5433,7 +5436,10 @@ const BAY_BOXES = new Float64Array([
   41.45, 41.70, -71.05, -70.70,
   25.30, 25.80, -80.30, -80.10,
   24.85, 25.30, -81.20, -80.40,
-  27.00, 29.10, -80.85, -80.55,
+  27.80, 29.10, -80.90, -80.52,  // North IRL / Mosquito Lagoon
+  27.40, 27.85, -80.50, -80.28,  // IRL Vero / Fort Pierce
+  27.12, 27.42, -80.40, -80.18,  // St Lucie River / Stuart / Jensen
+  26.95, 27.14, -80.18, -80.122,  // Hobe Sound (lagoon west of the barrier)
   30.30, 30.55, -81.55, -81.35,
   24.55, 24.95, -81.85, -81.00,
   26.40, 26.75, -82.20, -81.85,
@@ -5803,7 +5809,16 @@ function effectiveSpeciesHabitat(speciesId){
 }
 // ── habitat-derivation:end ─────────────────────────────────────────────────
 
-function speciesAllowedInWater(speciesId, waterType){
+function speciesAllowedInWater(speciesId, waterType, lat, lng){
+  // Treasure Coast / SE FL Atlantic: speckled trout are river/lagoon fish.
+  // classifyWaterType() calls any <30 ft cell "inshore", which painted the
+  // open Atlantic (Sailfish Alley, 13 ft beach strip) as trout water.
+  if(speciesId === "speckledtrout"
+    && waterType !== "bay"
+    && typeof isSeFloridaAtlantic === "function"
+    && isSeFloridaAtlantic(lat, lng)){
+    return false;
+  }
   const allowed = effectiveSpeciesHabitat(speciesId);
   if(!allowed) return true;  // unknown species: allow everywhere (safe default)
   return allowed.includes(waterType);
@@ -7019,7 +7034,7 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   // so micro-grid scores are directly comparable to the cell being refined.
   function scoreWithPenalty(la, ln){
     if(!isPredictWater(la, ln)) return null;
-    if(!speciesAllowedInWater(speciesId, classifyWaterType(la, ln))) return null;
+    if(!speciesAllowedInWater(speciesId, classifyWaterType(la, ln), la, ln)) return null;
     if(!speciesAllowedAtLat(speciesId, la, ln)) return null;
     if(port && !reachableFromPort(port, la, ln)) return null;  // stay on the port's coast
     let d = 0;
@@ -7073,7 +7088,7 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
           }
           if(!isPredictWater(lat, lng)) continue;
           const waterType = classifyWaterType(lat, lng);
-          if(!speciesAllowedInWater(speciesId, waterType)) continue;
+          if(!speciesAllowedInWater(speciesId, waterType, lat, lng)) continue;
           if(!speciesAllowedAtLat(speciesId, lat, lng)) continue;
           // Keep the bite map on the port's coast — don't recommend Atlantic spots
           // for a Gulf port (or vice-versa) across the FL peninsula.
