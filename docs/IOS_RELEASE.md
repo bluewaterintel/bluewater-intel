@@ -48,6 +48,16 @@ Then on the Mac: `git pull && npm ci && npm run ios:prepare` before Archive.
 
 Archive and upload require your Apple ID on a Mac. The agent can merge version bumps and `ios:prepare` logic; you run **`npm run ios:prepare`** locally so Xcode is verified before Archive.
 
+## Xcode 16+ “deployment target 14.0” pod errors
+
+If Issues list many Pods at **IPHONEOS_DEPLOYMENT_TARGET 14.0** (simulator range 15.0–27.x), re-run:
+
+```bash
+cd ios/App && pod install && cd ../..
+```
+
+The `Podfile` `post_install` hook forces all pods to **15.0** to match the app.
+
 ## Xcode Cloud (same failures as local Archive)
 
 If Cloud builds show **16 errors** on builds 93+, open the build → **Errors** tab (actool App Icon or Pods/Manifest.lock are common). After fixes land on `main`, use **Start Build** on latest `main` (not **Re-run** an old commit).
