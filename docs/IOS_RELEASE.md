@@ -20,8 +20,9 @@ In Xcode: **Product → Clean Build Folder**, then **Archive**.
 1. Writes `native-version.json` into `project.pbxproj` and `build.gradle`
 2. Copies the app icon and builds `www/`
 3. Runs `cap sync ios`
-4. On macOS: runs **`agvtool`** so the General tab matches the repo
-5. Runs **`xcodebuild -showBuildSettings`** and fails if Version/Build still disagree
+4. On macOS: runs **`pod install`** (Face ID / RevenueCat pods must match `Podfile.lock`)
+5. On macOS: runs **`agvtool`** so the General tab matches the repo
+6. Runs **`xcodebuild -showBuildSettings`** and fails if Version/Build still disagree
 
 ## Bump build for App Store Connect
 
@@ -46,3 +47,7 @@ Then on the Mac: `git pull && npm ci && npm run ios:prepare` before Archive.
 ## What we cannot do from Cloud Agent
 
 Archive and upload require your Apple ID on a Mac. The agent can merge version bumps and `ios:prepare` logic; you run **`npm run ios:prepare`** locally so Xcode is verified before Archive.
+
+## Xcode Cloud (same failures as local Archive)
+
+If Cloud builds show **16 errors** on builds 93+, open the build → **Errors** tab (actool App Icon or Pods/Manifest.lock are common). After fixes land on `main`, use **Start Build** on latest `main` (not **Re-run** an old commit).

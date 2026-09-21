@@ -17,6 +17,12 @@ import { verifyNativeVersion } from "./verify-native-version.mjs";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const iosAppDir = join(root, "ios/App");
 const workspace = join(iosAppDir, "App.xcworkspace");
+const isDarwin = process.platform === "darwin";
+
+function commandExists(cmd) {
+  const r = spawnSync("command", ["-v", cmd], { encoding: "utf8", shell: true });
+  return r.status === 0;
+}
 
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, {
@@ -53,6 +59,13 @@ run("npm", ["run", "ios:icon"]);
 run("npm", ["run", "build:ios"]);
 run("npx", ["cap", "sync", "ios"]);
 
+if (isDarwin && commandExists("pod")) {
+  console.log("\n--- macOS: pod install (Capacitor plugins / Podfile.lock) ---\n");
+  run("pod", ["install"], { cwd: iosAppDir });
+} else if (isDarwin) {
+  console.warn("\nwarning: CocoaPods `pod` not found — run: brew install cocoapods\n");
+}
+
 verify = verifyNativeVersion();
 if (!verify.ok) {
   console.error("After cap sync, native versions no longer match native-version.json:");
@@ -60,7 +73,6 @@ if (!verify.ok) {
   process.exit(1);
 }
 
-const isDarwin = process.platform === "darwin";
 if (isDarwin && existsSync(workspace)) {
   console.log("\n--- macOS: syncing Xcode version with agvtool ---\n");
   run("xcrun", ["agvtool", "new-marketing-version", expected.versionName], { cwd: iosAppDir });
