@@ -40,14 +40,17 @@ fi
 echo "==> ios:prepare (www, cap sync, pod install, iOS 15 pod patch, version check)..."
 npm run ios:prepare
 
-echo "==> pod update RevenueCat PurchasesHybridCommon (Xcode 27 / PaywallColor fix)..."
+echo "==> Clean CocoaPods install + RevenueCat PaywallColor patch (Xcode 27)..."
 cd ios/App
-pod update RevenueCat PurchasesHybridCommon RevenuecatPurchasesCapacitor 2>/dev/null || pod install
+rm -rf Pods
+pod install
 cd "$REPO_ROOT"
 node scripts/patch-pods-deployment-target.mjs
+node scripts/patch-revenuecat-paywall-color.mjs
 
-echo "==> Final pod deployment check..."
+echo "==> Final pod checks..."
 npm run ios:pods:verify-deployment
+npm run ios:revenuecat:verify
 
 echo ""
 echo "=== SUCCESS ==="

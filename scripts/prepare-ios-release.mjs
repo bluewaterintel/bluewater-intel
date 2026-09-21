@@ -63,9 +63,15 @@ if (isDarwin && commandExists("pod")) {
   console.log("\n--- macOS: pod install + patch Pods to iOS 15.0 ---\n");
   run("pod", ["install"], { cwd: iosAppDir });
   run("node", [join(root, "scripts/patch-pods-deployment-target.mjs")]);
+  run("node", [join(root, "scripts/patch-revenuecat-paywall-color.mjs")]);
   const podsCheck = runCapture("node", [join(root, "scripts/verify-ios-pods-deployment.mjs")]);
   if (podsCheck.status !== 0) {
     console.error(podsCheck.stdout + podsCheck.stderr);
+    process.exit(1);
+  }
+  const rcCheck = runCapture("node", [join(root, "scripts/verify-revenuecat-xcode27.mjs")]);
+  if (rcCheck.status !== 0) {
+    console.error(rcCheck.stdout + rcCheck.stderr);
     process.exit(1);
   }
 } else if (isDarwin) {

@@ -7,5 +7,7 @@ rm -rf Pods
 pod install
 cd "$ROOT"
 node scripts/patch-pods-deployment-target.mjs
+node scripts/patch-revenuecat-paywall-color.mjs
 node scripts/verify-ios-pods-deployment.mjs
+node scripts/verify-revenuecat-xcode27.mjs
 echo "Pods reinstalled — open ios/App/App.xcworkspace and Clean Build Folder."

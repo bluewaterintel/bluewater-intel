@@ -24,7 +24,7 @@ end
 
 target 'App' do
   capacitor_pods
-  # Add your Pods here
+  # RevenueCat 5.51.1 (PHC 17.25 from purchases-capacitor 11.3.x) needs PaywallColor patch on Xcode 27 — see scripts/patch-revenuecat-paywall-color.mjs
 end
 
 post_install do |installer|
