@@ -63,6 +63,7 @@
     "version:apply": "node scripts/apply-native-version.mjs",
     "ios:pods:verify": "node scripts/verify-ios-pods.mjs",
     "ios:pods:verify-deployment": "node scripts/verify-ios-pods-deployment.mjs",
+    "ios:pods:patch-deployment": "node scripts/patch-pods-deployment-target.mjs",
     "bundle:native": "npm run build:ios && npx cap sync"
   },
   "dependencies": {

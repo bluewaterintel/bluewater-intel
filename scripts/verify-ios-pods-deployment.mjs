@@ -16,14 +16,18 @@ if (!existsSync(pbx)) {
 }
 
 const text = readFileSync(pbx, "utf8");
-const bad = [...text.matchAll(/IPHONEOS_DEPLOYMENT_TARGET = (1[0-4](?:\.\d+)?|\d(?:\.\d+)?);/g)]
-  .map((m) => m[1])
-  .filter((v) => parseFloat(v) < 15);
+function findSub15(content) {
+  return [...content.matchAll(/IPHONEOS_DEPLOYMENT_TARGET = ([0-9]+(?:\.[0-9]+)?);/g)]
+    .map((m) => m[1])
+    .filter((v) => parseFloat(v) < 15);
+}
+
+const bad = findSub15(text);
 
 const uniqueBad = [...new Set(bad)];
 if (uniqueBad.length) {
   console.error("Pods project still has IPHONEOS_DEPLOYMENT_TARGET below 15.0:", uniqueBad.join(", "));
-  console.error("Run: cd ios/App && rm -rf Pods && pod install");
+  console.error("Run: sh scripts/ios-reinstall-pods.sh");
   process.exit(1);
 }
 

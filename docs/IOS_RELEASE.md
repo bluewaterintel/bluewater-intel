@@ -64,7 +64,18 @@ npm run ios:prepare
 sh scripts/ios-reinstall-pods.sh
 ```
 
+That runs `pod install` then **`patch-pods-deployment-target.mjs`** (rewrites any Pod target still on 14.x).
+
 Then **Product → Clean Build Folder**. Quit Xcode before `pod install` if the Pods project was open.
+
+### Archive now (ignore simulator Run errors)
+
+App Store **Archive** uses a **physical device** build, not the simulator. If you only need to upload:
+
+1. Top bar: **Any iOS Device (arm64)** — not iPhone Simulator  
+2. **Product → Archive** — not the Run ▶ button  
+
+Simulator **Run** still needs the pod patch above; **Archive** may succeed once pods are patched even if Issues still list old simulator warnings.
 
 ## Xcode Cloud (same failures as local Archive)
 

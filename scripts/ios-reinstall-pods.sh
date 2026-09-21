@@ -6,5 +6,6 @@ cd "$ROOT/ios/App"
 rm -rf Pods
 pod install
 cd "$ROOT"
+node scripts/patch-pods-deployment-target.mjs
 node scripts/verify-ios-pods-deployment.mjs
 echo "Pods reinstalled — open ios/App/App.xcworkspace and Clean Build Folder."
