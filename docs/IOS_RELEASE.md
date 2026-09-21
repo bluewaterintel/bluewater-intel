@@ -56,7 +56,15 @@ If Issues list many Pods at **IPHONEOS_DEPLOYMENT_TARGET 14.0** (simulator range
 cd ios/App && pod install && cd ../..
 ```
 
-The `Podfile` `post_install` hook forces all pods to **15.0** to match the app.
+The `Podfile` `post_install` hook forces all pods (including resource bundles like `RevenueCat-RevenueCat`) to **15.0**. If Xcode still shows 14.0:
+
+```bash
+npm run ios:prepare
+# or a full Pods reset:
+sh scripts/ios-reinstall-pods.sh
+```
+
+Then **Product → Clean Build Folder**. Quit Xcode before `pod install` if the Pods project was open.
 
 ## Xcode Cloud (same failures as local Archive)
 

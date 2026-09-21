@@ -1,4 +1,4 @@
-require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+require_relative 'pod_post_install'
 
 platform :ios, '15.0'
 use_frameworks!
@@ -28,12 +28,5 @@ target 'App' do
 end
 
 post_install do |installer|
-  # Capacitor's assertDeploymentTarget only raises pods to 14.0; Xcode 16+ simulators require ≥ 15.0.
-  minimum_ios = '15.0'
-  installer.pods_project.targets.each do |target|
-    target.build_configurations.each do |config|
-      current = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = minimum_ios if current < minimum_ios.to_f
-    end
-  end
+  patch_all_pod_deployment_targets(installer, MIN_IOS_DEPLOYMENT)
 end
