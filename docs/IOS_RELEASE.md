@@ -23,6 +23,8 @@ bash scripts/mac-store-prep.sh
 
 Then in Xcode: **Any iOS Device (arm64)** → **Clean Build Folder** → **Archive**.
 
+**Xcode 27 + RevenueCat:** If you see `PaywallColor.swift: invalid redeclaration of init(stringRepresentation:)`, run `mac-store-prep.sh` again after pulling latest `main` (updates RevenueCat to 5.51+). Cordova `WKProcessPool` messages are warnings only.
+
 ---
 
 Cloud agents cannot run Xcode on your Mac; they merge fixes to `main`. You run **`mac-store-prep.sh`** locally before Archive.
