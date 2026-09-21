@@ -68,6 +68,7 @@
     "ios:pods:patch-deployment": "node scripts/patch-pods-deployment-target.mjs",
     "ios:revenuecat:patch": "node scripts/patch-revenuecat-paywall-color.mjs",
     "ios:revenuecat:verify": "node scripts/verify-revenuecat-xcode27.mjs",
+    "ios:xcode27": "bash scripts/fix-ios-xcode27.sh",
     "bundle:native": "npm run build:ios && npx cap sync"
   },
   "dependencies": {

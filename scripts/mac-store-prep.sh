@@ -47,6 +47,9 @@ pod install
 cd "$REPO_ROOT"
 node scripts/patch-pods-deployment-target.mjs
 node scripts/patch-revenuecat-paywall-color.mjs
+if command -v ruby >/dev/null 2>&1; then
+  ruby ios/App/patch_revenuecat_paywall_color.rb
+fi
 
 echo "==> Final pod checks..."
 npm run ios:pods:verify-deployment

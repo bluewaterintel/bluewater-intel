@@ -35,7 +35,7 @@ export const PAYWALL_COLOR_STRUCT_INSERT_REPLACEMENT = `    fileprivate var _und
 /** Remove duplicate designated init left under "Private constructors" (5.51.x). */
 export function removeExtensionDesignatedInit(src) {
   return src.replace(
-    /(\/\/ MARK: - Private constructors\n\nprivate extension PaywallColor \{[\s\S]*?)    private init\(stringRepresentation: String, underlyingColor: \(any Sendable\)\?\) \{\n        self\.stringRepresentation = stringRepresentation\n        self\._underlyingColor = underlyingColor\n    \}\n\n/,
+    /(\/\/ MARK: - Private constructors\n\nprivate extension PaywallColor \{[\s\S]*?)    (?:\/\/\/ "Designated" initializer\n    )?private init\(stringRepresentation: String, underlyingColor: \(any Sendable\)\?\) \{\n        self\.stringRepresentation = stringRepresentation\n        self\._underlyingColor = underlyingColor\n    \}\n\n/,
     "$1",
   );
 }
@@ -51,6 +51,10 @@ export function patchPaywallColorSource(src) {
   next = removeExtensionDesignatedInit(next);
   if (!isPaywallColorXcode27Safe(next)) {
     return { error: "patch did not produce Xcode-27-safe PaywallColor.swift" };
+  }
+  const leftover = next.match(/private init\(stringRepresentation: String, underlyingColor:/g) ?? [];
+  if (leftover.length !== 1) {
+    return { error: `expected one designated init, found ${leftover.length}` };
   }
   return { src: next, changed: true };
 }
