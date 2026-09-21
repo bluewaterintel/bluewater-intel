@@ -60,18 +60,13 @@ run("npm", ["run", "build:ios"]);
 run("npx", ["cap", "sync", "ios"]);
 
 if (isDarwin && commandExists("pod")) {
-  console.log("\n--- macOS: pod install (Capacitor plugins / Podfile.lock) ---\n");
+  console.log("\n--- macOS: pod install + patch Pods to iOS 15.0 ---\n");
   run("pod", ["install"], { cwd: iosAppDir });
-  let podsCheck = runCapture("node", [join(root, "scripts/verify-ios-pods-deployment.mjs")]);
+  run("node", [join(root, "scripts/patch-pods-deployment-target.mjs")]);
+  const podsCheck = runCapture("node", [join(root, "scripts/verify-ios-pods-deployment.mjs")]);
   if (podsCheck.status !== 0) {
-    console.warn("\nPods still at iOS 14.x — removing Pods/ and re-running pod install…\n");
-    run("rm", ["-rf", "Pods"], { cwd: iosAppDir });
-    run("pod", ["install"], { cwd: iosAppDir });
-    podsCheck = runCapture("node", [join(root, "scripts/verify-ios-pods-deployment.mjs")]);
-    if (podsCheck.status !== 0) {
-      console.error(podsCheck.stdout + podsCheck.stderr);
-      process.exit(1);
-    }
+    console.error(podsCheck.stdout + podsCheck.stderr);
+    process.exit(1);
   }
 } else if (isDarwin) {
   console.warn("\nwarning: CocoaPods `pod` not found — run: brew install cocoapods\n");

@@ -20,14 +20,12 @@ npm -v
 echo "Installing npm dependencies..."
 npm ci
 
-echo "Applying native-version.json, building www/, syncing Capacitor iOS..."
-npm run ios:prepare
-
-echo "Installing CocoaPods..."
-cd ios/App
 if ! command -v pod >/dev/null 2>&1; then
+  echo "Installing CocoaPods..."
   brew install cocoapods
 fi
-pod install
+
+echo "ios:prepare (www, cap sync, pod install, iOS 15 pod patch)..."
+npm run ios:prepare
 
 echo "ci_post_clone.sh finished."
