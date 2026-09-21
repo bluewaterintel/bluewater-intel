@@ -10,7 +10,7 @@
             ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
             <ActionContent
                title = "Patch RevenueCat PaywallColor for Xcode 27"
-               scriptText = "/usr/bin/ruby &quot;${PROJECT_DIR}/patch_revenuecat_paywall_color.rb&quot;&#10;">
+               scriptText = "PAYWALL=&quot;${PROJECT_DIR}/Pods/RevenueCat/Sources/Paywalls/PaywallColor.swift&quot;&#10;if [ -f &quot;$PAYWALL&quot; ]; then chmod u+w &quot;$PAYWALL&quot; 2&gt;/dev/null || true; chflags nouchg &quot;$PAYWALL&quot; 2&gt;/dev/null || true; fi&#10;/usr/bin/ruby &quot;${PROJECT_DIR}/patch_revenuecat_paywall_color.rb&quot;&#10;">
                <EnvironmentBuildable>
                   <BuildableReference
                      BuildableIdentifier = "primary"

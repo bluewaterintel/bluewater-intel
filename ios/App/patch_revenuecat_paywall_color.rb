@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require 'fileutils'
+require 'tmpdir'
+
 # Xcode 27 + RevenueCat < 5.78: PaywallColor.swift fails with
 #   invalid redeclaration of synthesized memberwise 'init(stringRepresentation:)'
 # Move the private designated init into the struct body (purchases-ios ≥ 5.78).
@@ -57,6 +60,28 @@ def default_paywall_color_path
   File.expand_path('Pods/RevenueCat/Sources/Paywalls/PaywallColor.swift', __dir__)
 end
 
+def make_writable!(path)
+  return unless path && File.exist?(path)
+
+  # CocoaPods installs RevenueCat sources as 0444; the patch must rewrite PaywallColor.swift.
+  system('chflags', 'nouchg', path, out: File::NULL, err: File::NULL) if RUBY_PLATFORM.include?('darwin')
+  File.chmod(File.directory?(path) ? 0o755 : 0o644, path)
+rescue StandardError
+  nil
+end
+
+def write_paywall_color!(path, contents)
+  make_writable!(File.dirname(path))
+  make_writable!(path)
+  File.write(path, contents)
+rescue Errno::EACCES
+  make_writable!(File.dirname(path))
+  make_writable!(path)
+  tmp = File.join(Dir.tmpdir, "PaywallColor-#{Process.pid}-#{File.basename(path)}")
+  File.write(tmp, contents)
+  FileUtils.mv(tmp, path)
+end
+
 def patch_paywall_color_file!(path)
   unless File.exist?(path)
     warn "patch_revenuecat_paywall_color: skip (missing #{path})"
@@ -65,7 +90,7 @@ def patch_paywall_color_file!(path)
   src = File.read(path)
   patched, changed = patch_paywall_color_source(src)
   if changed
-    File.write(path, patched)
+    write_paywall_color!(path, patched)
     puts "patch_revenuecat_paywall_color: patched #{path}"
   else
     puts 'patch_revenuecat_paywall_color: OK (PaywallColor already Xcode-27-safe)'
@@ -89,6 +114,11 @@ def add_revenuecat_paywall_color_build_phase!(installer)
   phase.always_out_of_date = '1'
   phase.shell_script = <<~'SCRIPT'
     set -e
+    PAYWALL="${PODS_ROOT}/RevenueCat/Sources/Paywalls/PaywallColor.swift"
+    if [ -f "$PAYWALL" ]; then
+      chmod u+w "$PAYWALL" 2>/dev/null || true
+      chflags nouchg "$PAYWALL" 2>/dev/null || true
+    fi
     /usr/bin/ruby "${PODS_ROOT}/../patch_revenuecat_paywall_color.rb"
   SCRIPT
 
