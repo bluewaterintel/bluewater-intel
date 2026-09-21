@@ -25,18 +25,20 @@ Then in Xcode: **Any iOS Device (arm64)** → **Clean Build Folder** → **Archi
 
 **Xcode 27 + RevenueCat:** The error `PaywallColor.swift:57 invalid redeclaration of init(stringRepresentation:)` means CocoaPods still has **unpatched** RevenueCat 5.51.1. `WKProcessPool` lines are warnings only.
 
-Quit Xcode, then patch the copy already in `ios/App/Pods` (this is the command that actually fixes the compiler error):
+Quit Xcode (Cmd+Q). CocoaPods ships `PaywallColor.swift` **read-only**; if you saw `EACCES` / `Permission denied`, unlock it first. Run **from the repo root** (if the prompt says `App`, `cd ../..` first):
 
 ```bash
 cd /Users/ronaldnovak/Projects/bluewater-intel
-git fetch origin main
-git reset --hard origin/main
-node scripts/patch-revenuecat-paywall-color.mjs
-# must print: patched PaywallColor.swift for Xcode 27
-# NOT: already Xcode-27-safe  (that message on a failing build means the file was not patched)
+chmod -R u+w ios/App/Pods/RevenueCat
+chflags -R nouchg ios/App/Pods/RevenueCat
+bash scripts/fix-ios-xcode27.sh
+cd /Users/ronaldnovak/Projects/bluewater-intel/ios/App && pod install
+cd /Users/ronaldnovak/Projects/bluewater-intel
+rm -rf ~/Library/Developer/Xcode/DerivedData/App-*
+open /Users/ronaldnovak/Projects/bluewater-intel/ios/App/App.xcworkspace
 ```
 
-Then in Xcode: **Product → Clean Build Folder** → Run.
+`fix-ios-xcode27.sh` **must** print `patched PaywallColor.swift for Xcode 27`. Then in Xcode: **Product → Clean Build Folder** → Run.
 
 `pod install` / `cap sync` restore stock 5.51.1, so the Podfile `post_install` hook and the App scheme pre-action re-apply this patch automatically after you pull this fix. `@revenuecat/purchases-capacitor` 11.3.x still pulls RevenueCat **5.51.1** until Capacitor 8 + purchases-capacitor 13.x.
 

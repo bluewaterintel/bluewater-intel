@@ -45,6 +45,10 @@ cd ios/App
 rm -rf Pods
 pod install
 cd "$REPO_ROOT"
+if [ -d ios/App/Pods/RevenueCat ]; then
+  chmod -R u+w ios/App/Pods/RevenueCat || true
+  chflags -R nouchg ios/App/Pods/RevenueCat 2>/dev/null || true
+fi
 node scripts/patch-pods-deployment-target.mjs
 node scripts/patch-revenuecat-paywall-color.mjs
 if command -v ruby >/dev/null 2>&1; then

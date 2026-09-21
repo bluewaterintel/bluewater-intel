@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,6 +33,7 @@ if (rubyCheck.status === 0) {
   const dir = mkdtempSync(join(tmpdir(), "rc-paywall-"));
   const dest = join(dir, "PaywallColor.swift");
   copyFileSync(fixture, dest);
+  chmodSync(dest, 0o444);
   const r = spawnSync("ruby", [join(root, "ios/App/patch_revenuecat_paywall_color.rb"), dest], {
     encoding: "utf8",
   });
@@ -46,6 +47,20 @@ if (rubyCheck.status === 0) {
   console.log("ruby patch_revenuecat_paywall_color.rb OK");
 } else {
   console.log("ruby not installed — skipped ruby patch test");
+}
+
+{
+  const dir = mkdtempSync(join(tmpdir(), "rc-paywall-node-"));
+  const dest = join(dir, "PaywallColor.swift");
+  copyFileSync(fixture, dest);
+  chmodSync(dest, 0o444);
+  const n = spawnSync("node", [join(root, "scripts/patch-revenuecat-paywall-color.mjs")], {
+    encoding: "utf8",
+    env: { ...process.env, BW_PAYWALL_COLOR_PATH: dest },
+  });
+  assert.equal(n.status, 0, n.stdout + n.stderr);
+  assert.equal(isPaywallColorXcode27Safe(readFileSync(dest, "utf8")), true);
+  console.log("node patch on mode 0444 OK");
 }
 
 const podfile = readFileSync(join(root, "ios/App/Podfile"), "utf8");
