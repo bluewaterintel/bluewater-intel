@@ -1,82 +1,30 @@
 # iOS App Store archive (Mac)
 
-Cloud agents and merges update **`native-version.json`** and the iOS/Android project files. Your Mac only needs pull + one npm script before Archive.
+## One command (use this)
 
-## Every release on your Mac
-
-```bash
-cd bluewater-intel
-git fetch origin
-git pull origin main
-npm ci
-npm run ios:prepare
-open ios/App/App.xcworkspace
-```
-
-In Xcode: **Product → Clean Build Folder**, then **Archive**.
-
-`npm run ios:prepare`:
-
-1. Writes `native-version.json` into `project.pbxproj` and `build.gradle`
-2. Copies the app icon and builds `www/`
-3. Runs `cap sync ios`
-4. On macOS: runs **`pod install`** (Face ID / RevenueCat pods must match `Podfile.lock`)
-5. On macOS: runs **`agvtool`** so the General tab matches the repo
-6. Runs **`xcodebuild -showBuildSettings`** and fails if Version/Build still disagree
-
-## Bump build for App Store Connect
-
-When you need a new build number (must be higher than the last upload):
+Quit Xcode first, then in Terminal:
 
 ```bash
-npm run version:native -- 1.5.2 73
-git add native-version.json android ios
-git commit -m "Bump native release to 1.5.2 (73)"
-git push
+cd /Users/ronaldnovak/Projects/bluewater-intel
+bash scripts/mac-store-prep.sh
 ```
 
-Then on the Mac: `git pull && npm ci && npm run ios:prepare` before Archive.
+That script **stashes** local changes, **resets to `origin/main`** (fixes `Podfile.lock` pull conflicts), runs **`npm ci`**, **`npm run ios:prepare`**, and verifies Pods are on **iOS 15.0+**.
 
-## If Xcode still shows the wrong version
-
-- Open **`ios/App/App.xcworkspace`**, not `App.xcodeproj` and not an old clone path.
-- Run `npm run version:verify` — must print `OK: …`
-- Run `npm run ios:prepare` again on the **Mac** (agvtool only runs on macOS).
-- **Product → Clean Build Folder**, quit and reopen Xcode if the General tab was cached.
-
-## What we cannot do from Cloud Agent
-
-Archive and upload require your Apple ID on a Mac. The agent can merge version bumps and `ios:prepare` logic; you run **`npm run ios:prepare`** locally so Xcode is verified before Archive.
-
-## Xcode 16+ “deployment target 14.0” pod errors
-
-If Issues list many Pods at **IPHONEOS_DEPLOYMENT_TARGET 14.0** (simulator range 15.0–27.x), re-run:
+If the script is missing (old clone), run this once:
 
 ```bash
-cd ios/App && pod install && cd ../..
+cd /Users/ronaldnovak/Projects/bluewater-intel
+git stash push -u -m "pre-app-store"
+git fetch origin main
+git reset --hard origin/main
+bash scripts/mac-store-prep.sh
 ```
 
-The `Podfile` `post_install` hook forces all pods (including resource bundles like `RevenueCat-RevenueCat`) to **15.0**. If Xcode still shows 14.0:
+Then in Xcode: **Any iOS Device (arm64)** → **Clean Build Folder** → **Archive**.
 
-```bash
-npm run ios:prepare
-# or a full Pods reset:
-sh scripts/ios-reinstall-pods.sh
-```
+---
 
-That runs `pod install` then **`patch-pods-deployment-target.mjs`** (rewrites any Pod target still on 14.x).
+Cloud agents cannot run Xcode on your Mac; they merge fixes to `main`. You run **`mac-store-prep.sh`** locally before Archive.
 
-Then **Product → Clean Build Folder**. Quit Xcode before `pod install` if the Pods project was open.
-
-### Archive now (ignore simulator Run errors)
-
-App Store **Archive** uses a **physical device** build, not the simulator. If you only need to upload:
-
-1. Top bar: **Any iOS Device (arm64)** — not iPhone Simulator  
-2. **Product → Archive** — not the Run ▶ button  
-
-Simulator **Run** still needs the pod patch above; **Archive** may succeed once pods are patched even if Issues still list old simulator warnings.
-
-## Xcode Cloud (same failures as local Archive)
-
-If Cloud builds show **16 errors** on builds 93+, open the build → **Errors** tab (actool App Icon or Pods/Manifest.lock are common). After fixes land on `main`, use **Start Build** on latest `main` (not **Re-run** an old commit).
+See also: `native-version.json`, `npm run version:verify`, `npm run ios:pods:patch-deployment`.

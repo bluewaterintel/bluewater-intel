@@ -57,6 +57,7 @@
     "legal:pages": "node scripts/generate-legal-pages.mjs",
     "ios:sync": "npm run cap:sync && npm run cap:open:ios",
     "ios:prepare": "node scripts/prepare-ios-release.mjs",
+    "mac:store-prep": "bash scripts/mac-store-prep.sh",
     "android:sync": "npm run cap:sync:android && npm run cap:open:android",
     "version:native": "node scripts/bump-native-version.mjs",
     "version:verify": "node scripts/verify-native-version.mjs",
