@@ -37,7 +37,8 @@
     "test:nativebilling": "node tests/native-billing-email.test.mjs && node tests/ios-stripe-portal-open.test.mjs",
     "test:nativeversion": "node tests/native-version.test.mjs",
     "test:iospods": "node tests/ios-podfile-lock.test.mjs",
-    "test": "npm run test:freshness && npm run test:wind && npm run test:ocean && npm run test:breaks && npm run test:range && npm run test:bottomtemp && npm run test:pelagic && npm run test:waypoints && npm run test:waypointradius && npm run test:habitat && npm run test:landgate && npm run test:troutsefl && npm run test:methodology && npm run test:coverage && npm run test:dropdowns && npm run test:sstmask && npm run test:altimetry && npm run test:altimetrydate && npm run test:nativebilling && npm run test:nativeversion && npm run test:iospods",
+    "test:revenuecat-xcode27": "node tests/revenuecat-paywall-color-xcode27.test.mjs",
+    "test": "npm run test:freshness && npm run test:wind && npm run test:ocean && npm run test:breaks && npm run test:range && npm run test:bottomtemp && npm run test:pelagic && npm run test:waypoints && npm run test:waypointradius && npm run test:habitat && npm run test:landgate && npm run test:troutsefl && npm run test:methodology && npm run test:coverage && npm run test:dropdowns && npm run test:sstmask && npm run test:altimetry && npm run test:altimetrydate && npm run test:nativebilling && npm run test:nativeversion && npm run test:iospods && npm run test:revenuecat-xcode27",
     "maintenance:storage-dry-run": "node scripts/delete-stale-tile-prefixes.mjs --dry-run",
     "maintenance:storage-prune": "node scripts/delete-stale-tile-prefixes.mjs",
     "maintenance:branches": "node scripts/prune-remote-branches.mjs",
@@ -65,6 +66,8 @@
     "ios:pods:verify": "node scripts/verify-ios-pods.mjs",
     "ios:pods:verify-deployment": "node scripts/verify-ios-pods-deployment.mjs",
     "ios:pods:patch-deployment": "node scripts/patch-pods-deployment-target.mjs",
+    "ios:revenuecat:patch": "node scripts/patch-revenuecat-paywall-color.mjs",
+    "ios:revenuecat:verify": "node scripts/verify-revenuecat-xcode27.mjs",
     "bundle:native": "npm run build:ios && npx cap sync"
   },
   "dependencies": {

@@ -23,7 +23,7 @@ bash scripts/mac-store-prep.sh
 
 Then in Xcode: **Any iOS Device (arm64)** → **Clean Build Folder** → **Archive**.
 
-**Xcode 27 + RevenueCat:** If you see `PaywallColor.swift: invalid redeclaration of init(stringRepresentation:)`, run `mac-store-prep.sh` again after pulling latest `main` (updates RevenueCat to 5.51+). Cordova `WKProcessPool` messages are warnings only.
+**Xcode 27 + RevenueCat:** If you see `PaywallColor.swift: invalid redeclaration of init(stringRepresentation:)`, your Pods were not patched. After `pod install`, run `npm run ios:revenuecat:patch` then `npm run ios:revenuecat:verify`, or re-run **`bash scripts/mac-store-prep.sh`** (it patches PaywallColor automatically). `@revenuecat/purchases-capacitor` 11.3.x still pulls RevenueCat **5.51.1**; the patch is required until you upgrade to Capacitor 8 + purchases-capacitor 13.x. Cordova `WKProcessPool` messages are warnings only.
 
 ---
 
