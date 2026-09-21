@@ -23,7 +23,22 @@ bash scripts/mac-store-prep.sh
 
 Then in Xcode: **Any iOS Device (arm64)** → **Clean Build Folder** → **Archive**.
 
-**Xcode 27 + RevenueCat:** If you see `PaywallColor.swift: invalid redeclaration of init(stringRepresentation:)`, your Pods were not patched. After `pod install`, run `npm run ios:revenuecat:patch` then `npm run ios:revenuecat:verify`, or re-run **`bash scripts/mac-store-prep.sh`** (it patches PaywallColor automatically). `@revenuecat/purchases-capacitor` 11.3.x still pulls RevenueCat **5.51.1**; the patch is required until you upgrade to Capacitor 8 + purchases-capacitor 13.x. Cordova `WKProcessPool` messages are warnings only.
+**Xcode 27 + RevenueCat:** The error `PaywallColor.swift:57 invalid redeclaration of init(stringRepresentation:)` means CocoaPods still has **unpatched** RevenueCat 5.51.1. `WKProcessPool` lines are warnings only.
+
+Quit Xcode, then patch the copy already in `ios/App/Pods` (this is the command that actually fixes the compiler error):
+
+```bash
+cd /Users/ronaldnovak/Projects/bluewater-intel
+git fetch origin main
+git reset --hard origin/main
+node scripts/patch-revenuecat-paywall-color.mjs
+# must print: patched PaywallColor.swift for Xcode 27
+# NOT: already Xcode-27-safe  (that message on a failing build means the file was not patched)
+```
+
+Then in Xcode: **Product → Clean Build Folder** → Run.
+
+`pod install` / `cap sync` restore stock 5.51.1, so the Podfile `post_install` hook and the App scheme pre-action re-apply this patch automatically after you pull this fix. `@revenuecat/purchases-capacitor` 11.3.x still pulls RevenueCat **5.51.1** until Capacitor 8 + purchases-capacitor 13.x.
 
 ---
 

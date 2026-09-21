@@ -1,4 +1,5 @@
 require_relative 'pod_post_install'
+require_relative 'patch_revenuecat_paywall_color'
 
 platform :ios, '15.0'
 use_frameworks!
@@ -29,4 +30,6 @@ end
 
 post_install do |installer|
   patch_all_pod_deployment_targets(installer, MIN_IOS_DEPLOYMENT)
+  patch_revenuecat_paywall_color_pod!(installer)
+  add_revenuecat_paywall_color_build_phase!(installer)
 end
