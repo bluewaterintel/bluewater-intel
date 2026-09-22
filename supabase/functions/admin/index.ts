@@ -21,7 +21,7 @@ import {
   tallyRoster,
   userMatchesFilter,
   userMatchesQuery,
-} from "../_shared/admin-roster.mjs";
+} from "../_shared/admin-roster.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: "2024-06-20" }) : null;
