@@ -125,11 +125,108 @@
     }, { passive: false });
   }
 
+  const LIVE_PAID = { active:1, trialing:1, past_due:1 };
+  function planIntervalLabel(p){
+    if(p && p.subscription_status === "trialing") return "Pro trial";
+    if(p && p.subscription_interval === "year") return "Pro Annual";
+    return "Pro Monthly";
+  }
+  function livePaidSource(p){
+    if(!p) return null;
+    if(p.is_owner) return "owner";
+    const st = p.subscription_status || "none";
+    if(!LIVE_PAID[st]) return null;
+    if(p.billing_source === "stripe" || p.billing_source === "apple" || p.billing_source === "google") return p.billing_source;
+    if(p.stripe_customer_id) return "stripe";
+    return null;
+  }
+  async function loadBillingProfile(){
+    const s = sb();
+    if(!s) return null;
+    const { data } = await s.from("profiles")
+      .select("is_owner, subscription_status, subscription_interval, billing_source, stripe_customer_id")
+      .maybeSingle();
+    return data || null;
+  }
+  function existingPlanCopy(p){
+    const src = livePaidSource(p);
+    const plan = planIntervalLabel(p);
+    if(src === "owner"){
+      return { title:"Owner access", body:"This account already has full access. App Store signup is turned off.", action:null };
+    }
+    if(src === "stripe"){
+      return {
+        title: plan + " — billed on our website",
+        body: "This account already has a website subscription, so App Store signup is turned off. Buying here would charge you a second time. Use Manage Billing to change or cancel. After that plan ends, you can subscribe in the app.",
+        action: "billing",
+      };
+    }
+    if(src === "apple"){
+      return {
+        title: plan + " — billed by Apple",
+        body: "You're already subscribed through the App Store, so another purchase on this screen is turned off. Change or cancel in Subscriptions.",
+        action: "apple",
+      };
+    }
+    if(src === "google"){
+      return {
+        title: plan + " — billed by Google Play",
+        body: "You're already subscribed through Google Play, so another purchase on this screen is turned off. Change or cancel in Google Play.",
+        action: "google",
+      };
+    }
+    return null;
+  }
+  function existingPlanHtml(copy){
+    if(!copy) return "";
+    let btn = "";
+    if(copy.action === "billing"){
+      btn = `<button type="button" onclick="bwManageBilling()" style="width:100%;margin-top:12px;background:#2979b5;border:none;color:#fff;font-weight:700;font-size:14px;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit">Manage Billing</button>`;
+    } else if(copy.action === "apple"){
+      btn = `<button type="button" onclick="bwOpenAppStoreSubscriptions()" style="width:100%;margin-top:12px;background:#2979b5;border:none;color:#fff;font-weight:700;font-size:14px;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit">Manage in App Store</button>`;
+    } else if(copy.action === "google"){
+      btn = `<button type="button" onclick="bwOpenPlaySubscriptions()" style="width:100%;margin-top:12px;background:#2979b5;border:none;color:#fff;font-weight:700;font-size:14px;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit">Manage in Google Play</button>`;
+    }
+    return `<div style="font-size:15px;font-weight:800;color:#f0f6ff;margin-bottom:6px">${copy.title}</div>`
+      + `<div style="font-size:13px;color:#cfe5ff;line-height:1.5">${copy.body}</div>`
+      + btn;
+  }
+  function paintExistingPlan(p){
+    const copy = existingPlanCopy(p);
+    const locked = !!copy;
+    document.documentElement.classList.toggle("bw-block-store-purchase", locked);
+    ["pricing-existing-plan", "plan-gate-existing-plan"].forEach((id) => {
+      const el = document.getElementById(id);
+      if(!el) return;
+      el.innerHTML = locked ? existingPlanHtml(copy) : "";
+      el.style.display = locked ? "block" : "none";
+    });
+    const pricingTitle = document.getElementById("pricing-modal-title");
+    if(pricingTitle) pricingTitle.textContent = locked ? "Your plan" : "Upgrade your access";
+    const gateTitle = document.getElementById("plan-gate-title");
+    if(gateTitle) gateTitle.textContent = locked ? "Your plan" : "Choose your plan";
+    return copy;
+  }
+  window.refreshExistingPlanLock = async function(){
+    try {
+      const p = await loadBillingProfile();
+      return paintExistingPlan(p);
+    } catch(e){
+      console.warn("refreshExistingPlanLock", e);
+      return null;
+    }
+  };
+
   window.bwSubscribe = async function(interval, opts){
     const now = Date.now();
     if(_purchaseBusy || (now - _lastSubscribeAt < 700)) return;
     _lastSubscribeAt = now;
     const msg = document.getElementById("pricing-msg") || document.getElementById("plan-gate-msg");
+    const existing = await window.refreshExistingPlanLock();
+    if(existing){
+      showBillingErr(msg, existing.body);
+      return;
+    }
     if(msg) msg.style.display = "none";
     if(window.BW_NATIVE && window.BW_IAP && window.BW_IAP.available){
       setPurchaseBusy(true, "Opening App Store…");
@@ -154,6 +251,7 @@
   window.openPricing = async function(){
     const m = document.getElementById("pricing-modal"); if(!m) return;
     const msg = document.getElementById("pricing-msg"); if(msg) msg.style.display="none";
+    if(window.refreshExistingPlanLock) await window.refreshExistingPlanLock();
     m.style.display = "flex";
     setPlanScreenOpen(true);
     wireIosBillingTapFallback(m);
@@ -230,6 +328,7 @@
     setPlanScreenOpen(true);
     wireIosBillingTapFallback(g);
     wireIosBillingTapFallback(document.getElementById("pricing-modal"));
+    if(window.refreshExistingPlanLock) window.refreshExistingPlanLock();
     // Show the gate immediately; load StoreKit metadata and pre-warm RevenueCat
     // in the background so a tap never sits on a silent configure() call.
     if(typeof adaptPricingForNative === "function") adaptPricingForNative().catch(() => {});
@@ -1041,6 +1140,7 @@ window.adaptPricingForNative = async function(){
       }
     } catch(e){ /* fall back to static button labels, no trial block */ }
   }
+  if(window.refreshExistingPlanLock) window.refreshExistingPlanLock();
 };
 if(document.readyState === "loading"){
   document.addEventListener("DOMContentLoaded", () => { if(typeof adaptPricingForNative === "function") adaptPricingForNative(); });

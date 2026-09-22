@@ -13,6 +13,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { notifyOwnerAppleSubscriber } from "../_shared/billing-alerts.ts";
 import { isProProduct, mapRcWebhookEvent } from "../_shared/revenuecat.ts";
+import { blocksCrossStoreOverwrite } from "../_shared/billing-source-guard.ts";
 
 const WEBHOOK_AUTH = Deno.env.get("REVENUECAT_WEBHOOK_AUTH") ?? "";
 const admin = createClient(
@@ -51,6 +52,17 @@ Deno.serve(async (req) => {
   if (!appUserId || !/^[0-9a-f-]{36}$/i.test(appUserId)) {
     console.warn("revenuecat-webhook: skip — no valid app_user_id", appUserId);
     return new Response(JSON.stringify({ ok: true, skipped: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const { data: beforeProf } = await admin.from("profiles")
+    .select("billing_source, subscription_status")
+    .eq("id", appUserId)
+    .maybeSingle();
+  if (blocksCrossStoreOverwrite(beforeProf, patch.billing_source)) {
+    console.warn("revenuecat-webhook skipped cross-store overwrite", beforeProf?.billing_source, patch.billing_source);
+    return new Response(JSON.stringify({ ok: true, skipped: "existing_subscription" }), {
       headers: { "Content-Type": "application/json" },
     });
   }

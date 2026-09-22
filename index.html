@@ -975,6 +975,17 @@ html.bw-native #enc-modal .enc-modal-back{
 html.bw-native #enc-modal .enc-modal-close-x{ display:none !important; }
 html.bw-native .bw-native-only{ display:inline !important; }
 html.bw-native .bw-stripe-only{ display:none !important; }
+html.bw-block-store-purchase #pricing-monthly-btn,
+html.bw-block-store-purchase #pricing-annual-btn,
+html.bw-block-store-purchase #plan-gate-monthly-btn,
+html.bw-block-store-purchase #plan-gate-annual-btn,
+html.bw-block-store-purchase .bw-native-trial-block,
+html.bw-block-store-purchase .bw-stripe-trial-block,
+html.bw-block-store-purchase #pricing-restore-link,
+html.bw-block-store-purchase #plan-gate-restore-link,
+html.bw-block-store-purchase .bw-purchase-pitch{
+  display:none !important;
+}
 #layers-toggle, #ruler-toggle, #wpdrop-toggle, #basemap-toggle, #settings-toggle, #catch-log-toggle{
   width:52px;height:52px;
   background:rgba(10,22,40,.92);
@@ -2731,10 +2742,11 @@ body.nav-open .leaflet-control-attribution{
   <div role="dialog" aria-label="Upgrade" style="width:100%;max-width:480px;max-height:90vh;overflow-y:auto;
        background:#0f2444;border:1px solid rgba(107,191,234,.25);border-radius:16px;padding:20px 18px;box-shadow:0 24px 70px rgba(0,0,0,.6)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <div style="font-size:18px;font-weight:800;color:#f0f6ff">Upgrade your access</div>
+      <div id="pricing-modal-title" style="font-size:18px;font-weight:800;color:#f0f6ff">Upgrade your access</div>
       <button type="button" onclick="closePricing()" aria-label="Close" style="background:none;border:none;color:#9ec5e8;font-size:22px;line-height:1;cursor:pointer">&times;</button>
     </div>
     <div id="pricing-msg" style="display:none;font-size:12px;color:#fca5a5;margin-bottom:8px"></div>
+    <div id="pricing-existing-plan" style="display:none;background:rgba(15,40,70,.9);border:1px solid rgba(107,191,234,.35);border-radius:11px;padding:14px;margin-bottom:12px"></div>
 
     <div class="bw-stripe-trial-block" style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:12px;margin-bottom:14px">
       <div style="font-size:10.5px;color:#86efac;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin-bottom:5px">Bluewater Intel Pro — auto-renewing subscription</div>
@@ -2754,7 +2766,7 @@ body.nav-open .leaflet-control-attribution{
       <button class="bw-buy bw-native-trial-btn" type="button" onclick="bwSubscribe('month')" style="width:100%;background:#16a34a;border-color:rgba(134,239,172,.55)">Start free trial</button>
     </div>
 
-    <div id="pricing-sub-title" style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:12px 0 6px">Bluewater Intel Pro — auto-renewing subscription</div>
+    <div id="pricing-sub-title" class="bw-purchase-pitch" style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:12px 0 6px">Bluewater Intel Pro — auto-renewing subscription</div>
     <div style="font-size:11px;color:#9ec5e8;margin-bottom:8px">Full app access including the Bite Map, ocean &amp; wind layers, all charted waypoints for your home port, fishing reports, and up to 2 AI Captain's Briefs per day.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button id="pricing-monthly-btn" class="bw-buy" type="button" onclick="bwSubscribe('month')">Monthly — 1 month · $12.99/mo</button>
@@ -3089,10 +3101,11 @@ body.bw-auth-screen-open .leaflet-container{
   <div role="dialog" aria-label="Choose your plan" style="width:100%;max-width:480px;max-height:94vh;overflow-y:auto;
        background:#0f2444;border:1px solid rgba(107,191,234,.25);border-radius:16px;padding:24px 20px;box-shadow:0 24px 70px rgba(0,0,0,.6)">
     <div style="text-align:center;margin-bottom:6px">
-      <div style="font-size:20px;font-weight:800;color:#f0f6ff">Choose your plan</div>
+      <div id="plan-gate-title" style="font-size:20px;font-weight:800;color:#f0f6ff">Choose your plan</div>
       <div style="font-size:12.5px;color:#9ec5e8;margin-top:5px">Upgrade for the Bite Map, ocean &amp; wind layers, charted waypoints, fishing reports &amp; the AI Captain's Brief.</div>
     </div>
     <div id="plan-gate-msg" style="display:none;font-size:12px;color:#fca5a5;margin:10px 0;text-align:center"></div>
+    <div id="plan-gate-existing-plan" style="display:none;background:rgba(15,40,70,.9);border:1px solid rgba(107,191,234,.35);border-radius:11px;padding:14px;margin:12px 0"></div>
 
     <!-- 7-day trial (web / Stripe only) -->
     <div class="bw-stripe-trial-block" style="background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);border-radius:11px;padding:14px;margin:16px 0 12px">
@@ -3119,7 +3132,7 @@ body.bw-auth-screen-open .leaflet-container{
     </div>
 
     <!-- Subscription (no trial) -->
-    <div style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:14px 0 6px">Bluewater Intel Pro — auto-renewing subscription</div>
+    <div class="bw-purchase-pitch" style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:14px 0 6px">Bluewater Intel Pro — auto-renewing subscription</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button id="plan-gate-monthly-btn" class="bw-buy" type="button" onclick="bwSubscribe('month')">Monthly — 1 month · $12.99/mo</button>
       <button id="plan-gate-annual-btn" class="bw-buy" type="button" onclick="bwSubscribe('year')">Annual — 1 year · $109.99/yr</button>
@@ -3144,7 +3157,7 @@ body.bw-auth-screen-open .leaflet-container{
   </div>
 </div>
 
-<script src="bw-billing.js?v=20260922a"></script>
+<script src="bw-billing.js?v=20260922b"></script>
 
 <!-- HEADER -->
 <div id="hdr">
