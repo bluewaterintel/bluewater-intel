@@ -39,6 +39,19 @@ assert.match(portal, /function portalReturnUrl/);
 assert.match(portal, /billing-return\.html/);
 assert.doesNotMatch(portal, /NATIVE_SCHEME/);
 assert.match(portal, /Couldn't open billing\. Email info@bluewaterintel\.com\./);
+assert.match(billing, /function livePaidSource/);
+assert.match(billing, /bw-block-store-purchase/);
+assert.match(billing, /App Store signup is turned off/);
+assert.match(billing, /charge you a second time/);
+const subscribeFn = billing.slice(
+  billing.indexOf("window.bwSubscribe = async function"),
+  billing.indexOf("window.openPricing"),
+);
+assert.match(subscribeFn, /if\(existing\)/);
+assert.ok(subscribeFn.indexOf("if(existing)") < subscribeFn.indexOf("BW_IAP.purchase"));
+assert.match(readFileSync(join(root, "supabase/functions/_shared/billing-source-guard.ts"), "utf8"), /blocksCrossStoreOverwrite/);
+assert.match(readFileSync(join(root, "supabase/functions/iap-sync/index.ts"), "utf8"), /blocksCrossStoreOverwrite/);
+assert.match(readFileSync(join(root, "supabase/functions/revenuecat-webhook/index.ts"), "utf8"), /blocksCrossStoreOverwrite/);
 assert.doesNotMatch(
   billing,
   /can't be canceled from the App Store or Google Play/,

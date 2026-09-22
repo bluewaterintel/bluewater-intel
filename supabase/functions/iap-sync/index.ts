@@ -17,6 +17,7 @@ import {
   profileEntitled,
 } from "../_shared/billing-alerts.ts";
 import { fetchRcProfilePatch } from "../_shared/revenuecat.ts";
+import { blocksCrossStoreOverwrite } from "../_shared/billing-source-guard.ts";
 
 const RC_SECRET = Deno.env.get("REVENUECAT_SECRET_API_KEY") ?? "";
 const RC_PROJECT = Deno.env.get("REVENUECAT_PROJECT_ID") ?? "";
@@ -58,12 +59,20 @@ Deno.serve(async (req) => {
 
   try {
     const { data: beforeProf } = await admin.from("profiles")
-      .select("subscription_status")
+      .select("subscription_status, billing_source")
       .eq("id", user.id)
       .maybeSingle();
     const beforeStatus = (beforeProf?.subscription_status as string | null) ?? "none";
 
     const patch = await fetchRcProfilePatch(user.id, RC_SECRET, RC_PROJECT);
+    if (blocksCrossStoreOverwrite(beforeProf, patch.billing_source)) {
+      console.warn("iap-sync skipped cross-store overwrite", beforeProf?.billing_source, patch.billing_source);
+      return new Response(JSON.stringify({
+        ok: true,
+        skipped: "existing_subscription",
+        subscription_status: beforeStatus,
+      }), { headers: { "Content-Type": "application/json" } });
+    }
     const { error } = await admin.from("profiles").upsert(patch, { onConflict: "id" });
     if (error) {
       console.error("iap-sync upsert failed", error.message);
