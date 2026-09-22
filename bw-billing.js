@@ -69,6 +69,10 @@
     const origin = (typeof location !== "undefined" && location.origin) ? location.origin : "https://app.bluewaterintel.com";
     return origin + "/?" + q;
   }
+  // Stripe Customer Portal rejects custom URL schemes. Always return https.
+  function stripePortalReturnUrl(){
+    return "https://app.bluewaterintel.com/billing-return.html";
+  }
 
   let _purchaseBusy = false;
   let _lastSubscribeAt = 0;
@@ -554,8 +558,7 @@
     } else if(src === "stripe" && window.BW_NATIVE){
       helpHtml = `<b style="color:#f0f6ff">Billed on our website</b><br>`
         + `You subscribed at bluewaterintel.com, so Apple does not manage this subscription. `
-        + `Tap <b>Manage Billing</b> above to open our secure billing in a web browser — update your card, switch plans, or cancel there. `
-        + `If you have any issues with billing, please reach out to us at <a href="mailto:info@bluewaterintel.com" style="color:#7dd3fc;font-weight:700">info@bluewaterintel.com</a>.`;
+        + `Tap <b>Manage Billing</b> to update your card, switch plans, or cancel in the browser.`;
       noteText = `You have a live website subscription. Deleting your account does not cancel it — use Manage Billing first, or billing continues.`;
     } else if(src === "stripe"){
       helpHtml = `<b style="color:#f0f6ff">Billed by card (Stripe)</b><br>`
@@ -666,7 +669,7 @@
     return document.getElementById("pricing-msg") || document.getElementById("acct-plan-msg");
   }
   async function openStripeBillingPortal(msgEl){
-    const body = { return_url: billingReturnUrl("portal=return") };
+    const body = { return_url: stripePortalReturnUrl() };
     const res = await fetch(`${fnBase()}/stripe-portal`, { method:"POST", headers: await authHeaders(), body: JSON.stringify(body) });
     const j = await res.json().catch(() => ({}));
     if(!res.ok) throw new Error(j.error || "Could not open billing portal.");
@@ -693,10 +696,7 @@
               await openStripeBillingPortal(msg);
               if(msg) msg.style.display = "none";
             } catch(e){
-              showErr(
-                (e.message || "Could not open billing portal.")
-                + " If you have any issues with billing, email info@bluewaterintel.com.",
-              );
+              showErr(e.message || "Couldn't open billing. Email info@bluewaterintel.com.");
             }
             return;
           }
@@ -716,10 +716,7 @@
       await openStripeBillingPortal(msg);
       if(msg) msg.style.display = "none";
     } catch(e){
-      showErr(
-        (e.message || "Could not open billing portal.")
-        + " If you have any issues with billing, email info@bluewaterintel.com.",
-      );
+      showErr(e.message || "Couldn't open billing. Email info@bluewaterintel.com.");
     }
   };
   // Renders the plan status + Upgrade/Manage buttons inside the nav account block.

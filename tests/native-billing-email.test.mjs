@@ -29,7 +29,16 @@ assert.match(billing, /bwBillingSource\(p\) === "stripe"/);
 assert.match(billing, /await openBillingUrl\(j\.url\)/);
 assert.match(billing, /billingStatusEl/);
 assert.match(billing, /wireIosBillingTapFallback\(page\)/);
-assert.match(billing, /Opening billing/);
+assert.match(billing, /function stripePortalReturnUrl/);
+assert.match(billing, /return "https:\/\/app\.bluewaterintel\.com\/billing-return\.html"/);
+assert.match(billing, /return_url: stripePortalReturnUrl\(\)/);
+assert.doesNotMatch(billing, /If you have any issues with billing, email info@bluewaterintel\.com/);
+
+const portal = readFileSync(join(root, "supabase/functions/stripe-portal/index.ts"), "utf8");
+assert.match(portal, /function portalReturnUrl/);
+assert.match(portal, /billing-return\.html/);
+assert.doesNotMatch(portal, /NATIVE_SCHEME/);
+assert.match(portal, /Couldn't open billing\. Email info@bluewaterintel\.com\./);
 assert.doesNotMatch(
   billing,
   /can't be canceled from the App Store or Google Play/,
