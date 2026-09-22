@@ -17,7 +17,6 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20" });
 const APP_URL = (Deno.env.get("APP_URL") ?? "https://app.bluewaterintel.com").replace(/\/$/, "");
-const NATIVE_SCHEME = "com.bluewaterintel.app://";
 const PRICES = {
   monthly: Deno.env.get("STRIPE_PRICE_MONTHLY") ?? "",
   annual: Deno.env.get("STRIPE_PRICE_ANNUAL") ?? "",
@@ -92,11 +91,14 @@ async function ensurePortalConfiguration(): Promise<string> {
   return config.id;
 }
 
-function allowedReturnUrl(url: unknown, fallback: string): string {
-  if (typeof url !== "string" || !url) return fallback;
+// Stripe Billing Portal only accepts an https return_url. A custom scheme
+// (com.bluewaterintel.app://) makes sessions.create fail, which is what iOS
+// Manage Billing was hitting. Rewrite anything else to the hosted return page.
+function portalReturnUrl(url: unknown): string {
+  const fallback = `${APP_URL}/billing-return.html`;
+  if (typeof url !== "string" || !url.trim()) return fallback;
   const trimmed = url.trim();
-  if (APP_URL && trimmed.startsWith(APP_URL)) return trimmed;
-  if (trimmed.startsWith(NATIVE_SCHEME)) return trimmed;
+  if (trimmed === APP_URL || trimmed.startsWith(`${APP_URL}/`)) return trimmed;
   return fallback;
 }
 
@@ -131,7 +133,7 @@ Deno.serve(async (req) => {
 
   try {
     const configuration = await ensurePortalConfiguration();
-    const returnUrl = allowedReturnUrl(body.return_url, APP_URL);
+    const returnUrl = portalReturnUrl(body.return_url);
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
       return_url: returnUrl,
@@ -146,6 +148,6 @@ Deno.serve(async (req) => {
         error: "Billing record not found. If you never subscribed, you can delete your account without canceling billing.",
       }, 404);
     }
-    return json({ error: "Could not open billing portal. Contact info@bluewaterintel.com for help." }, 502);
+    return json({ error: "Couldn't open billing. Email info@bluewaterintel.com." }, 502);
   }
 });
