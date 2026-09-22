@@ -11,10 +11,13 @@ import {
   tallyRoster,
   userMatchesFilter,
   userMatchesQuery,
-} from "../supabase/functions/_shared/admin-roster.mjs";
+} from "../supabase/functions/_shared/admin-roster.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const adminFn = readFileSync(join(root, "supabase/functions/admin/index.ts"), "utf8");
+const revenuecat = readFileSync(join(root, "supabase/functions/_shared/revenuecat.ts"), "utf8");
+const rcSyncDecls = revenuecat.match(/function syncRevenueCatEntitlementForUser/g) ?? [];
+assert.equal(rcSyncDecls.length, 1, "a second declaration makes the admin function fail to boot");
 const core = readFileSync(join(root, "bw-core.js"), "utf8");
 const html = readFileSync(join(root, "index.html"), "utf8");
 
@@ -87,7 +90,8 @@ function normalizeFirst(rows) {
   return hit.billing_source;
 }
 
-assert.match(adminFn, /from "\.\.\/_shared\/admin-roster\.mjs"/);
+assert.match(adminFn, /from "\.\.\/_shared\/admin-roster\.ts"/);
+assert.doesNotMatch(adminFn, /admin-roster\.mjs/);
 assert.match(adminFn, /billing_source:/);
 assert.match(adminFn, /body\.filter/);
 assert.match(adminFn, /body\.sort/);
