@@ -983,7 +983,9 @@ html.bw-block-store-purchase .bw-native-trial-block,
 html.bw-block-store-purchase .bw-stripe-trial-block,
 html.bw-block-store-purchase #pricing-restore-link,
 html.bw-block-store-purchase #plan-gate-restore-link,
-html.bw-block-store-purchase .bw-purchase-pitch{
+html.bw-block-store-purchase .bw-purchase-pitch,
+html.bw-block-store-purchase #pricing-checkout-note,
+html.bw-block-store-purchase #plan-gate-checkout-note{
   display:none !important;
 }
 #layers-toggle, #ruler-toggle, #wpdrop-toggle, #basemap-toggle, #settings-toggle, #catch-log-toggle{
@@ -2767,12 +2769,11 @@ body.nav-open .leaflet-control-attribution{
     </div>
 
     <div id="pricing-sub-title" class="bw-purchase-pitch" style="font-size:11px;color:#6bbfea;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:12px 0 6px">Bluewater Intel Pro — auto-renewing subscription</div>
-    <div style="font-size:11px;color:#9ec5e8;margin-bottom:8px">Full app access including the Bite Map, ocean &amp; wind layers, all charted waypoints for your home port, fishing reports, and up to 2 AI Captain's Briefs per day.</div>
+    <div class="bw-purchase-pitch" style="font-size:13px;color:#cfe5ff;line-height:1.45;margin-bottom:8px">Full app access including the Bite Map, ocean &amp; wind layers, all charted waypoints for your home port, fishing reports, and up to 2 AI Captain's Briefs per day.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button id="pricing-monthly-btn" class="bw-buy" type="button" onclick="bwSubscribe('month')">Monthly — 1 month · $12.99/mo</button>
       <button id="pricing-annual-btn" class="bw-buy" type="button" onclick="bwSubscribe('year')">Annual — 1 year · $109.99/yr</button>
     </div>
-    <div style="font-size:10px;color:#7d9bb8;margin-top:10px;line-height:1.5;text-align:center">Pro includes everything: the Bite Map, ocean &amp; wind layers, all charted waypoints, fishing reports, and up to 2 AI Captain's Briefs per day.</div>
 
     <div style="margin-top:14px;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center">
       <a href="#" id="pricing-restore-link" class="bw-native-only" onclick="event.preventDefault();bwRestorePurchases()" style="display:none;color:#7dd3fc;font-size:12.5px;text-decoration:none">Restore Purchases</a>
@@ -3157,7 +3158,7 @@ body.bw-auth-screen-open .leaflet-container{
   </div>
 </div>
 
-<script src="bw-billing.js?v=20260922b"></script>
+<script src="bw-billing.js?v=20260922c"></script>
 
 <!-- HEADER -->
 <div id="hdr">
