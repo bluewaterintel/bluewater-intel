@@ -16282,7 +16282,18 @@ function applyAdminNavVisibility(){
 // ════════════════════════════════════════════════════════════════════════════
 // OWNER ADMIN — profiles & subscription management (server-gated edge function)
 // ════════════════════════════════════════════════════════════════════════════
-const _adminState = { q: "", users: [], selectedId: null, offset: 0, limit: 40, stats: null, loading: false };
+const _adminState = {
+  q: "",
+  users: [],
+  selectedId: null,
+  offset: 0,
+  limit: 80,
+  total: null,
+  stats: null,
+  loading: false,
+  filter: "all",
+  sort: "newest",
+};
 
 async function adminApi(body){
   const cfg = window.BW_SUPABASE_CONFIG || window.BW_DATA_CONFIG || {};
@@ -16311,6 +16322,24 @@ function adminStatusPill(st, isOwner){
   if(s === "active" || s === "lifetime") return `<span class="admin-pill active">${s.toUpperCase()}</span>`;
   if(s === "trialing") return `<span class="admin-pill trial">TRIAL</span>`;
   return `<span class="admin-pill free">${s === "none" ? "FREE" : s.toUpperCase()}</span>`;
+}
+
+function adminSourcePill(src){
+  const s = (src || "").toLowerCase();
+  if(s === "stripe") return `<span class="admin-pill stripe">STRIPE</span>`;
+  if(s === "apple") return `<span class="admin-pill apple">APPLE</span>`;
+  if(s === "google") return `<span class="admin-pill google">GOOGLE</span>`;
+  return "";
+}
+
+function adminBillingLabel(u){
+  const src = (u && u.billing_source || "").toLowerCase();
+  if(src === "stripe") return "Stripe (website)";
+  if(src === "apple") return "Apple (App Store)";
+  if(src === "google") return "Google Play";
+  const st = (u && u.subscription_status || "none").toLowerCase();
+  if(st === "active" || st === "trialing" || st === "past_due" || st === "lifetime") return "Granted (no store on file)";
+  return "—";
 }
 
 function adminFmtDate(iso){
@@ -16344,7 +16373,8 @@ function adminRenderDetail(){
       <div style="font-size:13px;font-weight:700;color:#f0f6ff;margin-bottom:4px;word-break:break-all">${escapeHtml(u.email || u.id)}</div>
       <div style="font-size:11px;color:#9ec5e8;margin-bottom:12px;line-height:1.45">
         Joined ${adminFmtDate(u.created_at)} · Last sign-in ${adminFmtDate(u.last_sign_in_at)}<br>
-        Briefs today: <b style="color:#7dd3fc">${u.is_owner ? `${u.briefs_today} (unlimited)` : `${u.briefs_today}/2`}</b> · Stripe: ${u.stripe_customer_id ? escapeHtml(u.stripe_customer_id) : "—"}
+        Briefs today: <b style="color:#7dd3fc">${u.is_owner ? `${u.briefs_today} (unlimited)` : `${u.briefs_today}/2`}</b><br>
+        Billed through: <b style="color:#7dd3fc">${escapeHtml(adminBillingLabel(u))}</b> · Stripe customer: ${u.stripe_customer_id ? escapeHtml(u.stripe_customer_id) : "—"}
       </div>
       <div class="admin-actions" style="margin-top:0;margin-bottom:12px">
         <button type="button" class="admin-btn ok" onclick="adminPreset('grant_pro')">Grant Pro (1yr)</button>
@@ -16388,60 +16418,131 @@ function adminRenderDetail(){
 
 function adminRenderList(){
   const el = document.getElementById("admin-user-list");
+  const hdr = document.getElementById("admin-users-hdr");
   if(!el) return;
-  if(_adminState.loading){
+  const total = _adminState.total;
+  const shown = _adminState.users.length;
+  if(hdr){
+    hdr.textContent = total == null ? "Users" : `Users · ${shown} of ${total}`;
+  }
+  if(_adminState.loading && !shown){
     el.innerHTML = `<div class="admin-empty">Loading users…</div>`;
     return;
   }
-  if(!_adminState.users.length){
-    el.innerHTML = `<div class="admin-empty">No users found.</div>`;
+  if(!shown){
+    el.innerHTML = `<div class="admin-empty">No users match this filter.</div>`;
     return;
   }
+  const more = total == null || shown < total;
   el.innerHTML = _adminState.users.map(u => `
     <div class="admin-user-row ${_adminState.selectedId===u.id?"sel":""}" onclick="adminSelectUser('${u.id}')">
       <div style="flex:1;min-width:0">
         <div class="admin-user-email">${escapeHtml(u.email || u.id)}</div>
         <div class="admin-user-meta">
           ${adminStatusPill(u.subscription_status, u.is_owner)}
+          ${adminSourcePill(u.billing_source)}
           ${u.subscription_interval ? `<span>${u.subscription_interval}</span> · ` : ""}
           ${u.display_name ? escapeHtml(u.display_name) + " · " : ""}
           ${u.is_owner ? `briefs ${u.briefs_today} (unlimited) · ` : `briefs ${u.briefs_today}/2 · `}
         </div>
       </div>
-    </div>`).join("");
+    </div>`).join("") + `
+    <div class="admin-list-foot">
+      Showing ${shown}${total == null ? "" : ` of ${total}`}
+      ${more ? `<button type="button" class="admin-btn" onclick="adminLoadMore()" ${_adminState.loading ? "disabled" : ""}>${_adminState.loading ? "Loading…" : "Load more"}</button>` : ""}
+    </div>`;
+}
+
+function adminStatTile(key, value, label){
+  const on = _adminState.filter === key ? " on" : "";
+  return `<button type="button" class="admin-stat${on}" onclick="adminSetFilter('${key}')"><div class="admin-stat-val">${value ?? 0}</div><div class="admin-stat-lbl">${label}</div></button>`;
 }
 
 function adminRenderStats(){
   const el = document.getElementById("admin-stats");
   const s = _adminState.stats;
   if(!el || !s) return;
-  el.innerHTML = `
-    <div class="admin-stat"><div class="admin-stat-val">${s.total_auth_users ?? "—"}</div><div class="admin-stat-lbl">Auth users</div></div>
-    <div class="admin-stat"><div class="admin-stat-val">${s.active ?? 0}</div><div class="admin-stat-lbl">Active Pro</div></div>
-    <div class="admin-stat"><div class="admin-stat-val">${s.trialing ?? 0}</div><div class="admin-stat-lbl">Trialing</div></div>
-    <div class="admin-stat"><div class="admin-stat-val">${s.free ?? 0}</div><div class="admin-stat-lbl">Free</div></div>
-    <div class="admin-stat"><div class="admin-stat-val">${s.owners ?? 0}</div><div class="admin-stat-lbl">Owners</div></div>`;
+  const tiles = [
+    ["all", s.total_auth_users ?? "—", "All accounts"],
+    ["active", s.active ?? 0, "Active Pro"],
+    ["trialing", s.trialing ?? 0, "Trialing"],
+    ["past_due", s.past_due ?? 0, "Past due"],
+    ["lifetime", s.lifetime ?? 0, "Lifetime"],
+    ["canceled", s.canceled ?? 0, "Canceled"],
+    ["free", s.free ?? 0, "Free"],
+    ["owners", s.owners ?? 0, "Owners"],
+    ["stripe", s.stripe ?? 0, "Stripe"],
+    ["apple", s.apple ?? 0, "Apple"],
+    ["google", s.google ?? 0, "Google"],
+    ["granted", s.granted ?? 0, "Granted"],
+  ];
+  el.innerHTML = tiles.map(([key, value, label]) => adminStatTile(key, value, label)).join("")
+    + `<div class="admin-stat-note">Tap a tile to filter the list. Stripe, Apple, and Google count accounts that are billed right now (active, trial, past due, or lifetime). Granted is paid access with no store on file.</div>`;
 }
 
+let _adminLoadGen = 0;
 async function adminLoadUsers(resetOffset){
-  if(resetOffset) _adminState.offset = 0;
+  const gen = ++_adminLoadGen;
+  if(resetOffset){
+    _adminState.offset = 0;
+    _adminState.users = [];
+    _adminState.total = null;
+  }
   _adminState.loading = true;
   adminRenderList();
   try {
-    const data = await adminApi({ action: "list", q: _adminState.q, limit: _adminState.limit, offset: _adminState.offset });
-    _adminState.users = data.users || [];
+    const data = await adminApi({
+      action: "list",
+      q: _adminState.q,
+      limit: _adminState.limit,
+      offset: _adminState.offset,
+      filter: _adminState.filter || "all",
+      sort: _adminState.sort || "newest",
+    });
+    if(gen !== _adminLoadGen) return;
+    const batch = data.users || [];
+    if(resetOffset) _adminState.users = batch;
+    else {
+      const seen = new Set(_adminState.users.map(u => u.id));
+      for(const u of batch) if(!seen.has(u.id)) _adminState.users.push(u);
+    }
+    _adminState.total = typeof data.total === "number" ? data.total : _adminState.users.length;
+    _adminState.offset = _adminState.users.length;
     if(!_adminState.selectedId && _adminState.users.length) _adminState.selectedId = _adminState.users[0].id;
     else if(_adminState.selectedId && !_adminState.users.some(u => u.id === _adminState.selectedId)){
       _adminState.selectedId = _adminState.users[0] ? _adminState.users[0].id : null;
     }
   } catch(e){
+    if(gen !== _adminLoadGen) return;
     adminShowMsg(e.message || "Could not load users", false);
-    _adminState.users = [];
+    if(resetOffset){
+      _adminState.users = [];
+      _adminState.total = 0;
+    }
   } finally {
+    if(gen !== _adminLoadGen) return;
     _adminState.loading = false;
     adminRenderList();
     adminRenderDetail();
   }
+}
+
+function adminLoadMore(){
+  if(_adminState.loading) return;
+  if(_adminState.total != null && _adminState.users.length >= _adminState.total) return;
+  adminLoadUsers(false);
+}
+
+function adminSetFilter(key){
+  const next = String(key || "all");
+  _adminState.filter = _adminState.filter === next && next !== "all" ? "all" : next;
+  adminRenderStats();
+  adminLoadUsers(true);
+}
+
+function adminSetSort(value){
+  _adminState.sort = value || "newest";
+  adminLoadUsers(true);
 }
 
 async function adminLoadStats(){
@@ -16592,6 +16693,10 @@ function openAdmin(){
   if(!ov) return;
   ov.style.display = "block";
   document.body.style.overflow = "hidden";
+  _adminState.filter = "all";
+  _adminState.sort = "newest";
+  const sortEl = document.getElementById("admin-sort");
+  if(sortEl) sortEl.value = "newest";
   adminShowMsg("", true);
   adminLoadStats();
   adminLoadUsers(true);

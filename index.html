@@ -2206,9 +2206,11 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 /* Owner admin panel */
 #admin-overlay{color:#e8f4ff;font-family:'Segoe UI',system-ui,Arial,sans-serif}
 .admin-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:14px 20px}
-.admin-stat{padding:10px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.18);border-radius:10px}
+.admin-stat{padding:10px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.18);border-radius:10px;text-align:left;font-family:inherit;color:inherit;cursor:pointer;width:100%}
+.admin-stat.on{background:rgba(56,189,248,.18);border-color:rgba(125,211,252,.75);box-shadow:0 0 0 1px rgba(125,211,252,.35)}
 .admin-stat-val{font-size:20px;font-weight:800;color:#f0f6ff;line-height:1.1}
 .admin-stat-lbl{font-size:9px;color:#9ec5e8;letter-spacing:.08em;text-transform:uppercase;margin-top:4px;font-weight:700}
+.admin-stat-note{grid-column:1 / -1;font-size:11px;color:#9ec5e8;line-height:1.45;padding:2px 2px 0}
 .admin-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:0 20px 12px;align-items:center}
 .admin-search{flex:1;min-width:180px;padding:10px 12px;border-radius:9px;border:1px solid rgba(125,211,252,.28);background:rgba(255,255,255,.06);color:#f0f6ff;font-family:inherit;font-size:13px}
 .admin-btn{padding:9px 12px;border-radius:9px;border:1px solid rgba(125,211,252,.35);background:rgba(56,189,248,.12);color:#7dd3fc;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
@@ -2229,6 +2231,10 @@ body.explainer-dragging{cursor:grabbing !important;user-select:none}
 .admin-pill.trial{background:rgba(168,85,247,.15);color:#c084fc;border:1px solid rgba(168,85,247,.35)}
 .admin-pill.free{background:rgba(255,255,255,.06);color:#9ec5e8;border:1px solid rgba(255,255,255,.12)}
 .admin-pill.owner{background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.35)}
+.admin-pill.stripe{background:rgba(99,102,241,.16);color:#c7d2fe;border:1px solid rgba(129,140,248,.4)}
+.admin-pill.apple{background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.4)}
+.admin-pill.google{background:rgba(52,211,153,.14);color:#6ee7b7;border:1px solid rgba(52,211,153,.4)}
+.admin-list-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;font-size:12px;color:#9ec5e8}
 .admin-form{padding:14px}
 .admin-field{margin-bottom:10px}
 .admin-field label{display:block;font-size:10px;color:#9ec5e8;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
@@ -4232,7 +4238,7 @@ body.bw-auth-screen-open .leaflet-container{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20260916k"></script>
+<script src="bw-core.js?v=20260922d"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
@@ -4999,12 +5005,18 @@ body.bw-auth-screen-open .leaflet-container{
 
   <div class="admin-toolbar">
     <input id="admin-search" class="admin-search" type="search" placeholder="Search email, name, or user ID…" oninput="adminOnSearch(this.value)">
-    <button type="button" class="admin-btn" onclick="adminLoadUsers(true)">Refresh</button>
+    <select id="admin-sort" class="admin-search" style="flex:0 0 160px;min-width:140px" onchange="adminSetSort(this.value)">
+      <option value="newest">Sort: Newest</option>
+      <option value="plan">Sort: Plan</option>
+      <option value="billing">Sort: Billing</option>
+      <option value="email">Sort: Email</option>
+    </select>
+    <button type="button" class="admin-btn" onclick="adminLoadStats();adminLoadUsers(true)">Refresh</button>
   </div>
 
   <div class="admin-layout">
     <div class="admin-card">
-      <div class="admin-card-hdr">Users</div>
+      <div class="admin-card-hdr" id="admin-users-hdr">Users</div>
       <div id="admin-user-list"></div>
     </div>
     <div class="admin-card">
