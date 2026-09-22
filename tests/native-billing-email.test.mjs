@@ -43,6 +43,9 @@ assert.match(billing, /function livePaidSource/);
 assert.match(billing, /bw-block-store-purchase/);
 assert.match(billing, /App Store signup is turned off/);
 assert.match(billing, /charge you a second time/);
+const indexHtml = readFileSync(join(root, "index.html"), "utf8");
+assert.match(indexHtml, /bw-block-store-purchase #pricing-checkout-note/);
+assert.doesNotMatch(indexHtml, /Pro includes everything/);
 const subscribeFn = billing.slice(
   billing.indexOf("window.bwSubscribe = async function"),
   billing.indexOf("window.openPricing"),
