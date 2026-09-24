@@ -404,6 +404,9 @@
       msg.style.display = "block";
       msg.textContent = text;
       msg.style.color = ok ? "#86efac" : "#fca5a5";
+      msg.style.fontSize = "16px";
+      msg.style.fontWeight = "600";
+      msg.style.lineHeight = "1.55";
     };
     if(!email){ show("Missing email address. Go back and create your account again.", false); return; }
     if(!window.BW_AUTH || !window.BW_AUTH.resendSignupConfirmation){
@@ -413,7 +416,7 @@
     if(btn){ btn.disabled = true; btn.textContent = "Sending…"; }
     try {
       await window.BW_AUTH.resendSignupConfirmation(email);
-      show("Verification email sent — check your inbox and spam folder.", true);
+      show("Verification email sent. Check your inbox — and your Spam or Junk folder (and Promotions) if you don't see it within a minute.", true);
     } catch(e){
       const m = e?.message || String(e);
       if(/rate limit|too many|after \d+ seconds/i.test(m)){
@@ -500,7 +503,7 @@
           if(gmsg){
             gmsg.style.display = "block";
             gmsg.style.color = "#86efac";
-            gmsg.textContent = `Account created! Check your email (${email}) for a verification link, then sign in.`;
+            gmsg.textContent = `Account created! We sent a verification link to ${email}. Check your inbox — and your Spam or Junk folder if you don't see it — then sign in.`;
           }
         }
         return;

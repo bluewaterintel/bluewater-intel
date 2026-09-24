@@ -44,6 +44,9 @@ assert.match(billing, /bw-block-store-purchase/);
 assert.match(billing, /App Store signup is turned off/);
 assert.match(billing, /charge you a second time/);
 const indexHtml = readFileSync(join(root, "index.html"), "utf8");
+assert.match(indexHtml, /Check your Spam or Junk folder/);
+assert.match(indexHtml, /id="verify-email-msg" style="display:none;font-size:16px/);
+assert.match(billing, /Verification email sent\. Check your inbox — and your Spam or Junk folder/);
 assert.match(indexHtml, /bw-block-store-purchase #pricing-checkout-note/);
 assert.doesNotMatch(indexHtml, /Pro includes everything/);
 const subscribeFn = billing.slice(
