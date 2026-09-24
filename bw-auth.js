@@ -110,7 +110,7 @@ window.BW_SUPABASE_CONFIG = window.BW_SUPABASE_CONFIG || {
     if (data.user && !isEmailConfirmed(data.user)) {
       try { await client.auth.signOut(); } catch (e) { /* ignore */ }
       const err = new Error(
-        "Please confirm your email before signing in. Check your inbox, Spam or Junk folder (and Promotions), or tap Resend verification email on the signup screen.",
+        "Confirm your email first. Check your inbox, Spam, Junk, or Promotions, or resend from the signup screen.",
       );
       err.code = "EMAIL_NOT_CONFIRMED";
       throw err;

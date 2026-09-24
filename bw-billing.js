@@ -416,7 +416,7 @@
     if(btn){ btn.disabled = true; btn.textContent = "Sending…"; }
     try {
       await window.BW_AUTH.resendSignupConfirmation(email);
-      show("Verification email sent. Check your inbox — and your Spam or Junk folder (and Promotions) if you don't see it within a minute.", true);
+      show("Sent again.", true);
     } catch(e){
       const m = e?.message || String(e);
       if(/rate limit|too many|after \d+ seconds/i.test(m)){
@@ -503,7 +503,7 @@
           if(gmsg){
             gmsg.style.display = "block";
             gmsg.style.color = "#86efac";
-            gmsg.textContent = `Account created! We sent a verification link to ${email}. Check your inbox — and your Spam or Junk folder if you don't see it — then sign in.`;
+            gmsg.textContent = `Account created. Check ${email}, including Spam or Junk, then sign in.`;
           }
         }
         return;

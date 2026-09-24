@@ -2959,8 +2959,7 @@ body.bw-auth-screen-open .leaflet-container{
     <div style="text-align:center">
       <a href="#" onclick="event.preventDefault();closeCreateAccount()" style="color:#9ec5e8;font-size:14px;text-decoration:none">Already have an account? Sign in</a>
     </div>
-    <div style="font-size:15px;color:#cfe5ff;margin-top:20px;line-height:1.6;text-align:center">After you create your account, we'll email you a verification link. Confirm your email, then sign in to choose a plan (Free or Pro).</div>
-    <div style="font-size:15px;color:#9ec5e8;margin-top:12px;line-height:1.55;text-align:center;font-weight:600">If you don't see it within a few minutes, check your <strong style="color:#f0f6ff">Spam</strong> or <strong style="color:#f0f6ff">Junk</strong> folder.</div>
+    <div style="font-size:15px;color:#cfe5ff;margin-top:20px;line-height:1.6;text-align:center">We'll email a verification link after you create your account.</div>
   </div>
 </div>
 
@@ -2995,14 +2994,9 @@ body.bw-auth-screen-open .leaflet-container{
       <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="#86efac" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
     </div>
     <div style="font-size:24px;font-weight:800;color:#f0f6ff;margin-bottom:12px">Welcome to Bluewater Intel!</div>
-    <div style="font-size:15px;color:#cfe5ff;line-height:1.6;margin-bottom:8px">Please check your email for a verification link to complete registration.</div>
-    <div id="verify-email-addr" style="font-size:15px;color:#86efac;font-weight:700;margin-bottom:20px;word-break:break-all"></div>
-    <div id="verify-email-msg" style="display:none;font-size:16px;font-weight:600;margin-bottom:16px;line-height:1.55;padding:12px 14px;border-radius:10px;background:rgba(10,22,40,.45)"></div>
-    <div style="font-size:15px;color:#cfe5ff;line-height:1.6;margin-bottom:16px">Once you confirm your email, sign in to choose your plan (Free or Pro) and start fishing.</div>
-    <div style="max-width:360px;margin:0 auto 28px;padding:14px 16px;border-radius:12px;border:1px solid rgba(125,211,252,.4);background:rgba(41,121,181,.14);text-align:left">
-      <div style="font-size:17px;font-weight:800;color:#f0f6ff;line-height:1.35;margin-bottom:8px">Check your Spam or Junk folder</div>
-      <div style="font-size:16px;color:#dbeafe;line-height:1.55">Verification emails often land in <strong style="color:#f0f6ff">Spam</strong>, <strong style="color:#f0f6ff">Junk</strong>, or <strong style="color:#f0f6ff">Promotions</strong> instead of your inbox. After you tap <strong style="color:#f0f6ff">Resend verification email</strong>, wait a minute and search those folders for Bluewater Intel.</div>
-    </div>
+    <div id="verify-email-addr" style="font-size:16px;color:#86efac;font-weight:700;margin-bottom:18px;word-break:break-all"></div>
+    <div id="verify-email-msg" style="display:none;font-size:16px;font-weight:700;margin-bottom:14px;line-height:1.45;color:#86efac"></div>
+    <div style="font-size:17px;color:#f0f6ff;line-height:1.55;margin-bottom:28px;max-width:420px;margin-left:auto;margin-right:auto">We sent a verification link to this address. Confirm it, then sign in and choose Free or Pro. If it isn't in your inbox, check <strong>Spam</strong>, <strong>Junk</strong>, or <strong>Promotions</strong>.</div>
     <button type="button" onclick="verifyEmailContinue()" style="width:100%;max-width:280px;padding:13px;border:none;border-radius:10px;background:#2979b5;color:#fff;font-weight:700;font-size:16px;cursor:pointer;font-family:inherit;margin-bottom:14px">Continue to Sign In</button>
     <button id="verify-email-resend" type="button" onclick="resendVerificationEmail()" style="width:100%;max-width:280px;padding:11px;border:1px solid rgba(107,191,234,.35);border-radius:10px;background:transparent;color:#9ec5e8;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit">Resend verification email</button>
   </div>
