@@ -58,6 +58,7 @@ if (!verify.ok) {
 run("npm", ["run", "ios:icon"]);
 run("npm", ["run", "build:ios"]);
 run("npx", ["cap", "sync", "ios"]);
+run("node", [join(root, "scripts/verify-ios-web-bundle.mjs")]);
 
 if (isDarwin && commandExists("pod")) {
   console.log("\n--- macOS: pod install + patch Pods to iOS 15.0 ---\n");

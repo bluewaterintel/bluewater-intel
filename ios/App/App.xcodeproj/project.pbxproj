@@ -209,13 +209,17 @@
 			files = (
 			);
 			inputPaths = (
+				"$(SRCROOT)/../../bw-data-species.js",
+				"$(SRCROOT)/../../index.html",
 			);
 			name = "Sync Capacitor Web Assets";
 			outputPaths = (
+				"$(SRCROOT)/App/public/bw-data-species.js",
+				"$(SRCROOT)/App/public/index.html",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nexport PATH=\"/usr/local/bin:/opt/homebrew/bin:$PATH\"\n# Capacitor must run from the repo root (where capacitor.config.json lives).\nROOT=\"${SRCROOT}\"\nwhile [ ! -f \"${ROOT}/capacitor.config.json\" ] && [ \"${ROOT}\" != \"/\" ]; do\n  ROOT=\"$(dirname \"${ROOT}\")\"\ndone\nif [ ! -f \"${ROOT}/capacitor.config.json\" ]; then\n  echo \"error: could not find repo root (capacitor.config.json). Run from bluewater-intel/: npm run build:ios && npx cap copy ios\"\n  exit 1\nfi\ncd \"${ROOT}\"\nif ! command -v npm >/dev/null 2>&1; then\n  echo \"warning: npm not in PATH — ios/App/App/public may be stale. From repo root run: npm run build:ios && npx cap copy ios\"\n  exit 0\nfi\nnpm run build:ios\nnpx cap copy ios\n";
+			shellScript = "set -e\nexport PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\"\nif [ -s \"$HOME/.nvm/nvm.sh\" ]; then . \"$HOME/.nvm/nvm.sh\"\nfi\nROOT=\"${SRCROOT}\"\nwhile [ ! -f \"${ROOT}/capacitor.config.json\" ] && [ \"${ROOT}\" != \"/\" ]; do\n  ROOT=\"$(dirname \"${ROOT}\")\"\ndone\nif [ ! -f \"${ROOT}/capacitor.config.json\" ]; then\n  echo \"error: could not find repo root (capacitor.config.json).\"\n  exit 1\nfi\ncd \"${ROOT}\"\nif ! command -v npm >/dev/null 2>&1; then\n  echo \"error: npm not in PATH when Xcode built — ios/App/App/public was NOT refreshed.\"\n  echo \"Open Terminal, cd to the repo, run: npm run build:ios && npx cap copy ios && npm run verify:iosbundle\"\n  echo \"Or launch Xcode from Terminal: open ios/App/App.xcworkspace\"\n  exit 1\nfi\nnpm run build:ios\nnpx cap copy ios\nnode scripts/verify-ios-web-bundle.mjs\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */

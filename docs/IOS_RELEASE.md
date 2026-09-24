@@ -30,7 +30,17 @@ grep "California Halibut" ios/App/App/public/bw-data-species.js
 grep "California Halibut" ios/App/App/public/bw-data-encyclopedia.js
 ```
 
-Both should match. Then **delete the app** from the simulator, **Product → Clean Build Folder**, and Run again. The species menu is port-filtered — pick a **California** port (e.g. San Diego) to see Pacific fish in the dropdown; the encyclopedia lists every species.
+Both should match. Then **delete the app** from the simulator, **Product → Clean Build Folder**, and Run again.
+
+**Verify bundle (must pass before Run in Xcode):**
+
+```bash
+npm run build:ios && npx cap copy ios && npm run verify:iosbundle
+```
+
+In the Xcode **Report navigator**, open the latest build → expand **Sync Capacitor Web Assets**. If you see `error: npm not in PATH`, Xcode skipped the copy and the simulator is still on old JavaScript. Fix: run the three commands above in Terminal, then build again — or quit Xcode and run `open ios/App/App.xcworkspace` from that same Terminal window.
+
+**UI checks:** Species dropdown is port-filtered — pick **San Diego, CA** (not Stuart or Venice). Encyclopedia: tap **All** (not only Offshore). Search **halibut**. In Safari Web Inspector (simulator), `window.BW_DATA_CONFIG.webBundle` should show `halibut: true` and `cacheTag: "20260924b"`.
 
 **Xcode 27 + RevenueCat:** The error `PaywallColor.swift:57 invalid redeclaration of init(stringRepresentation:)` means CocoaPods still has **unpatched** RevenueCat 5.51.1. `WKProcessPool` lines are warnings only.
 

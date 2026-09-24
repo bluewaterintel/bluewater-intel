@@ -67,6 +67,7 @@
     "version:native": "node scripts/bump-native-version.mjs",
     "version:verify": "node scripts/verify-native-version.mjs",
     "version:apply": "node scripts/apply-native-version.mjs",
+    "verify:iosbundle": "node scripts/verify-ios-web-bundle.mjs",
     "ios:pods:verify": "node scripts/verify-ios-pods.mjs",
     "ios:pods:verify-deployment": "node scripts/verify-ios-pods-deployment.mjs",
     "ios:pods:patch-deployment": "node scripts/patch-pods-deployment-target.mjs",
