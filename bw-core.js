@@ -5713,6 +5713,11 @@ const SPECIES_HABITAT = {
   cayellowtail:  ["nearshore", "offshore"],         // SoCal banks, kelp edges, hard bottom, paddies
   lingcod:       ["nearshore", "offshore"],         // rocky reefs and pinnacles, 33-394 ft
   calicobass:    ["nearshore", "inshore"],          // kelp line and shallow hard bottom
+  // Beach, bay, and nearshore sand. "bay" is geometric, so it has to be
+  // listed here or harbor halibut never show in an inshore brief.
+  halibut:       ["bay", "inshore", "nearshore"],
+  // Kelp and hard bottom, plus the spring spawn inside the bays.
+  whiteseabass:  ["nearshore", "inshore", "bay"],
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -6145,6 +6150,8 @@ const SPECIES_LAT_RANGE = {
   // California water.
   lingcod:       {atlantic: null, gulf: null},
   calicobass:    {atlantic: null, gulf: null},
+  halibut:       {atlantic: null, gulf: null},
+  whiteseabass:  {atlantic: null, gulf: null},
   // Everything else (yellowfin, blue marlin, mahi, wahoo, sailfish, etc.)
   // has no entry — they range coast-wide.
 };
@@ -6167,7 +6174,7 @@ const SPECIES_LAT_RANGE = {
 const PACIFIC_SPECIES = {
   bluefin:      [28.0, 42.0],   // Pacific bluefin — Baja/SoCal through central CA
   cayellowtail: [28.0, 36.5],   // California yellowtail — SoCal banks/kelp; strays to Monterey
-  yellowfin:    [28.0, 35.5],   // warm-water/warm-year SoCal yellowfin
+  yellowfin:    [28.0, 34.6],   // San Diego through Santa Barbara; Morro Bay is out
   bonito:       [28.0, 40.0],   // Pacific bonito — abundant off SoCal
   mahi:         [28.0, 34.5],   // dorado — warm months off SoCal/Baja
   // Lingcod run the whole coast and are strongest from Point Conception north —
@@ -6178,6 +6185,11 @@ const PACIFIC_SPECIES = {
   // thinning fast north of Point Conception (34.45°N). 35.8 reaches Morro Bay
   // and Port San Luis without claiming a Monterey fishery that isn't there.
   calicobass:   [28.0, 35.8],
+  // California halibut are a real Monterey Bay fishery, not a SoCal-only one.
+  halibut:      [28.0, 42.0],
+  // White seabass are a SoCal and Channel Islands fish. 35.8 reaches Morro
+  // Bay on warm years and stops short of a Monterey fishery.
+  whiteseabass: [28.0, 35.8],
 };
 
 // ── Pacific habitat overrides (West-Coast tuning pass) ──────────────────────
@@ -6466,6 +6478,32 @@ function briefRunMetaFromPort(portObj, lat, lng){
   return { runFromPortNm: nm, runCompass, bearingDeg };
 }
 
+// Encyclopedia + habitat the Captain's Brief should use for this fish.
+// Pacific overrides win in Pacific water so a San Diego brief does not quote
+// Atlantic temperature bands.
+function briefSpeciesProfile(speciesId, lat, lng){
+  const enc = (typeof ENC_SPECIES !== "undefined")
+    ? ENC_SPECIES.find(s => s.id === speciesId) : null;
+  let prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
+  if(lat != null && lng != null && typeof isPacificContext === "function" && isPacificContext(lat, lng)
+     && typeof PACIFIC_SPECIES_PREFS !== "undefined" && PACIFIC_SPECIES_PREFS[speciesId]){
+    prefs = PACIFIC_SPECIES_PREFS[speciesId];
+  }
+  if(!enc && !prefs) return null;
+  const depthBandsFt = (prefs && prefs.depthBands)
+    ? prefs.depthBands.map(b => [Math.round(b[0] * 3.281), Math.round(b[1] * 3.281)])
+    : null;
+  return {
+    habitat: enc && enc.where ? enc.where : null,
+    tempIdealF: prefs ? prefs.tempIdeal : null,
+    tempWorkingF: prefs ? prefs.tempWorking : null,
+    depthBandsFt,
+    seasonNote: enc && enc.facts ? enc.facts.season : null,
+    baits: enc && Array.isArray(enc.bait) ? enc.bait.slice(0, 4) : null,
+    tips: enc && Array.isArray(enc.tips) ? enc.tips.slice(0, 3) : null,
+  };
+}
+
 function briefEnrichSpeciesSpot(entry, portObj){
   if(!entry || entry.scoredAtLat == null) return entry;
   const meta = briefRunMetaFromPort(portObj, entry.scoredAtLat, entry.scoredAtLng);
@@ -6627,6 +6665,7 @@ const SPECIES_RUN_NM = {
   // Fluke are a genuine offshore day-boat fishery in the Mid-Atlantic once the
   // cold pool sets up — the Triangle Wrecks off Virginia Beach are 29-31 nm out.
   flounder: 40,
+  halibut: 40,                          // CA beaches and bays, not the tuna range
   striper: 35, bluefish: 35,   // NE rips and shoals: Block Is., Montauk, Nantucket
 
   // ── Nearshore: beach through mid-shelf structure ──
@@ -6636,6 +6675,7 @@ const SPECIES_RUN_NM = {
   tautog: 40, spadefish: 40, hogfish: 40,   // incl. winter offshore blackfish wrecks
   porgy: 45,                                 // NE party-boat rockpiles + fall wrecks
   calicobass: 65,                            // SoCal kelp line out to Catalina (22) / San Clemente (55)
+  whiteseabass: 70,                      // kelp, islands, San Clemente (~55 nm from San Diego)
   muttonsnap: 45, lanesnap: 45, yellowtail: 45,
   kingmack: 55,                              // SKA tournament boats run 40-70
   triggerfish: 60,
@@ -18952,6 +18992,8 @@ async function runBrief(){
           }
           if(best){
             delete best._score;
+            const profile = briefSpeciesProfile(id, best.scoredAtLat, best.scoredAtLng);
+            if(profile) best.speciesProfile = profile;
             scored.push(briefEnrichSpeciesSpot(best, portObj));
           }
         }

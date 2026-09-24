@@ -62,7 +62,9 @@ const SPECIES=[
   // ── PACIFIC / CALIFORNIA SPECIES ────────────────────────────────────
   {id:"cayellowtail",name:"California Yellowtail",color:"#d9a520",cat:"nearshore"},
   {id:"lingcod",     name:"Lingcod",        color:"#3f6b52",cat:"nearshore"},
-  {id:"calicobass",  name:"Calico Bass",    color:"#7d8a3a",cat:"nearshore"}];
+  {id:"calicobass",  name:"Calico Bass",    color:"#7d8a3a",cat:"nearshore"},
+  {id:"halibut",     name:"California Halibut",color:"#6a7f48",cat:"inshore"},
+  {id:"whiteseabass",name:"White Seabass",  color:"#8e9eae",cat:"nearshore"}];
 
 const PREDICT_SPECIES_PREFS = {
   // Blue marlin band starts at 150 m (≈80 fathoms): a large share of Atlantic
@@ -237,6 +239,18 @@ const PREDICT_SPECIES_PREFS = {
   // nearshoreReef weight profile (structure/tide/pressure) instead of chasing
   // surface thermal fronts and chlorophyll edges that mean nothing in a kelp bed.
   calicobass:   {tempIdeal:[62,72], tempWorking:[57,76], chlorPref:"high",    depthBands:[[3,40]],     breakPref:"stable", demersal:true },
+  // California halibut (Paralichthys californicus) — a sand and bay flatfish,
+  // not the Atlantic fluke. Summer fish hold on open beaches and inside the
+  // bays in about 10-80 ft; winter fish slide to 100-200 ft sand outside.
+  // They like productive green water and a stable bottom, not a temperature
+  // break. Ideal is the mid-50s to high-60s the California Current actually
+  // runs on the beach.
+  halibut:      {tempIdeal:[58,68], tempWorking:[52,72], chlorPref:"high",    depthBands:[[3,60]],     breakPref:"stable", demersal:true },
+  // White seabass (Atractoscion nobilis) — kelp edges, hard bottom, and the
+  // island reefs. Spring squid-spawn fish are shallow; summer and fall fish
+  // hold the kelp and the 100-250 ft rock. Demersal, so structure and tide
+  // matter more than a surface front.
+  whiteseabass: {tempIdeal:[58,68], tempWorking:[54,74], chlorPref:"high",    depthBands:[[5,30],[30,80]], breakPref:"stable", demersal:true },
   // Porgy / scup — Northeast and Mid-Atlantic bottom staple. Same cold-pool
   // reasoning as black sea bass: with bottom temp modeled, the summer wreck and
   // rockpile grounds off RI/NY/NJ read 50-62°F, which is where the fishery
@@ -356,11 +370,14 @@ const REGIONAL_SEASONS = {
     {centerLat: 27.5, centerLng: -93.5, radiusNm: 280, label: "Western Gulf (TX)",
      seasons:{Jan:3,Feb:3,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:3}},
     // ── PACIFIC — Southern California ──────────────────────────────────
-    // SoCal yellowfin (San Diego banks up through the bight): a warm-season
-    // fishery building in summer, best mid-summer through fall, gone in winter.
-    // Without this region the out-of-range guard would suppress every CA cell.
-    {centerLat: 32.8, centerLng: -118.5, radiusNm: 340, label: "Southern California",
+    // September peak is the San Diego-to-Los Angeles bight (through Marina
+    // del Rey). Santa Barbara and Ventura are a shoulder, not that peak, and
+    // Morro Bay is outside both circles. The old 340 nm disc painted all of
+    // them as a September 3.
+    {centerLat: 33.20, centerLng: -117.95, radiusNm: 65, label: "Southern California bight (San Diego → LA)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 34.32, centerLng: -119.48, radiusNm: 40, label: "Santa Barbara / Ventura",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:1,Jul:2,Aug:2,Sep:2,Oct:1,Nov:1,Dec:0}},
   ],
 
   // ── BLACKFIN TUNA ────────────────────────────────────────────────────
@@ -686,8 +703,13 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
     {centerLat: 27.5, centerLng: -93.5, radiusNm: 280, label: "Western Gulf",
      seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
-    {centerLat: 32.8, centerLng: -118.5, radiusNm: 340, label: "Southern California (dorado)",
+    // Same split as yellowfin: September dorado peak is San Diego through LA.
+    // Santa Barbara and Ventura are a shoulder. Morro stays out via the
+    // Pacific latitude cap. Do not restore the 340 nm September-3 disc.
+    {centerLat: 33.20, centerLng: -117.95, radiusNm: 65, label: "SoCal bight dorado (San Diego → LA)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 34.32, centerLng: -119.48, radiusNm: 40, label: "Santa Barbara / Ventura dorado",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:1,Jul:2,Aug:2,Sep:2,Oct:1,Nov:1,Dec:0}},
   ],
 
   // ── WAHOO ──────────────────────────────────────────────────────────────
@@ -802,6 +824,11 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:1,Jul:2,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
     {centerLat: 36.3, centerLng: -75.4, radiusNm: 190, label: "NC / VA",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:2,Nov:1,Dec:0}},
+    // Pacific bonito (Sarda chiliensis) — the SoCal fish, not the Atlantic
+    // run above. San Diego through the Channel Islands, summer and fall.
+    // Tight enough that Monterey and Morro stay out of range.
+    {centerLat: 33.40, centerLng: -118.60, radiusNm: 100, label: "Southern California (Pacific bonito)",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
   ],
 
   // ── FALSE ALBACORE (little tunny) ────────────────────────────────────────────
@@ -988,6 +1015,29 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 34.9, centerLng: -120.7, radiusNm: 110, label: "Central coast (Pt. Conception → Morro Bay)",
      seasons:{Jan:0,Feb:0,Mar:1,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
+  ],
+
+  // ── CALIFORNIA HALIBUT ─────────────────────────────────────────────────
+  // Paralichthys californicus. A resident sand and bay fish from northern
+  // Baja through central California, including Monterey Bay. September is
+  // still the beach and bay season. Not Atlantic fluke — that id stays
+  // "flounder".
+  halibut: [
+    {centerLat: 33.5, centerLng: -118.4, radiusNm: 180, label: "Southern California beaches & bays",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 36.0, centerLng: -121.6, radiusNm: 160, label: "Central California (Morro Bay → Monterey)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+  ],
+
+  // ── WHITE SEABASS ──────────────────────────────────────────────────────
+  // Atractoscion nobilis. The spawn on squid (March–June) is the peak.
+  // September is a solid kelp and island bite, not that peak. SoCal through
+  // the Channel Islands; Morro Bay is a thin warm-year edge, not Monterey.
+  whiteseabass: [
+    {centerLat: 33.40, centerLng: -118.60, radiusNm: 120, label: "Southern California kelp & islands",
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 35.25, centerLng: -120.80, radiusNm: 40, label: "Point Conception to Morro Bay",
+     seasons:{Jan:0,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:1,Aug:1,Sep:1,Oct:1,Nov:1,Dec:0}},
   ],
 
   // ── LONGBILL SPEARFISH ───────────────────────────────────────────────────
