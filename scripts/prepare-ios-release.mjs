@@ -115,6 +115,7 @@ if (isDarwin && existsSync(workspace)) {
     const marketing = text.match(/MARKETING_VERSION = (.+)/)?.[1]?.trim();
     const current = text.match(/CURRENT_PROJECT_VERSION = (.+)/)?.[1]?.trim();
     console.log("\n--- xcodebuild Release settings (what Archive uses) ---");
+    console.log(`  native-version.json → ${expected.versionName} (${expected.versionCode})`);
     console.log(`  MARKETING_VERSION = ${marketing ?? "?"}`);
     console.log(`  CURRENT_PROJECT_VERSION = ${current ?? "?"}`);
     if (marketing !== expected.versionName || current !== String(expected.versionCode)) {
