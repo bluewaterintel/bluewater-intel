@@ -538,8 +538,8 @@
     const paid = (typeof BW_PREMIUM !== "undefined") && BW_PREMIUM === true;
     const badgeStyle = "flex:1;text-align:center;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.45);color:#86efac;font-size:12px;font-weight:700;padding:10px 12px;border-radius:8px";
     if(label && detail && actions){
-      let planLabel = "Free", planDetail = "You're on the free version — maps, ports, catches, and your own waypoints. Upgrade to Pro to unlock the Bite Map, ocean intel, waypoints, and the AI Captain's Brief.";
-      let actionsHtml = `<button class="bw-buy" type="button" style="flex:1;background:#16a34a;border-color:rgba(134,239,172,.55)" onclick="closeAccountPage();openPricing()">Upgrade to Pro</button>`;
+      let planLabel = "Free", planDetail = "You're on the free version — maps, ports, catches, and your own waypoints. You can still start the 7-day Pro trial, then continue on a membership if you want to keep Pro.";
+      let actionsHtml = `<button class="bw-buy" type="button" style="flex:1;background:#16a34a;border-color:rgba(134,239,172,.55)" onclick="closeAccountPage();openPricing()">Start 7-day free trial</button>`;
       const refreshBtn = `<button class="bw-buy" type="button" style="flex:1;background:transparent;border:1px solid rgba(107,191,234,.35);color:#9ec5e8" onclick="bwRefreshStripeSubscription()">Refresh subscription</button>`;
       const manageBtn = (p) => {
         const l = bwManageBillingLabel(p);
@@ -981,15 +981,16 @@ function applyNativeTrialBlock(products){
   const price = bwPriceString(monthly);
   const perMonth = price ? `${price}/month` : "the monthly price";
   const SUB_NAME = "Bluewater Intel Pro — auto-renewing subscription";
-  // Only promise a free trial when the store says this account can still use the
-  // introductory offer. Otherwise the purchase sheet charges immediately and the
-  // "no charge today" copy would be a lie.
+  // Hide the trial only when the store has no introductory offer, or this
+  // Apple/Google account already used it. "unknown" still shows the button:
+  // choosing Free must not remove the trial, and the store sheet states the
+  // real price before anyone is charged.
   if(!trial || eligibility === "none"){
     blocks.forEach(el => { el.style.display = "none"; });
     return;
   }
   const dur = trial.duration;
-  if(eligibility === "ineligible" || eligibility === "unknown"){
+  if(eligibility === "ineligible"){
     blocks.forEach(el => {
       const title = el.querySelector(".bw-native-trial-title");
       const terms = el.querySelector(".bw-native-trial-terms");
@@ -1000,9 +1001,7 @@ function applyNativeTrialBlock(products){
       if(title){ title.style.color = "#9ec5e8"; title.textContent = SUB_NAME; }
       if(terms) terms.textContent = `${perMonth}, billed today`;
       if(desc){
-        desc.textContent = eligibility === "ineligible"
-          ? `The ${dur ? dur + " " : ""}free trial has already been used by the ${android ? "Google account" : "Apple ID"} signed in on this device, so a new subscription is billed ${perMonth} today and renews automatically each month until you cancel. Choose Monthly or Annual below.`
-          : `We couldn't confirm free-trial eligibility for the ${android ? "Google account" : "Apple ID"} on this device. If the trial does not apply, you are billed ${perMonth} today and the subscription renews automatically each month until you cancel. ${android ? "Google Play" : "Apple"} shows the exact terms on the confirmation screen before you are charged.`;
+        desc.textContent = `The ${dur ? dur + " " : ""}free trial has already been used by the ${android ? "Google account" : "Apple ID"} signed in on this device, so a new subscription is billed ${perMonth} today and renews automatically each month until you cancel. Choose Monthly or Annual below.`;
       }
       if(btn) btn.style.display = "none";
       el.style.display = "";
@@ -1019,7 +1018,10 @@ function applyNativeTrialBlock(products){
     if(desc){
       desc.textContent = `Full app — the Bite Map, ocean and wind layers, forecasts and all charted waypoints for your home port. `
         + `After the ${dur ? dur + " " : ""}free trial ends, Bluewater Intel Pro renews automatically at ${perMonth} until you cancel. `
-        + `Cancel at least 24 hours before the trial ends in ${android ? "Google Play → Payments & subscriptions" : "Settings → [your name] → Subscriptions"}.`;
+        + `Cancel at least 24 hours before the trial ends in ${android ? "Google Play → Payments & subscriptions" : "Settings → [your name] → Subscriptions"}.`
+        + (eligibility === "unknown"
+          ? ` ${android ? "Google Play" : "Apple"} confirms whether this account still has the free trial before you are charged.`
+          : "");
     }
     if(btn){
       btn.style.display = "";

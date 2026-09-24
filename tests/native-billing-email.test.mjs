@@ -63,6 +63,12 @@ assert.doesNotMatch(
 
 // Native manage label should read Manage Billing (actionable) on the Account page.
 assert.match(billing, /if\(src === "stripe" && window\.BW_NATIVE\) return "Manage Billing"/);
+assert.match(billing, /Start 7-day free trial/);
+assert.match(billing, /choosing Free must not remove the trial/);
+assert.doesNotMatch(
+  billing.slice(billing.indexOf("function applyNativeTrialBlock"), billing.indexOf("function applyNativeProductLabels")),
+  /eligibility === "unknown"[\s\S]{0,400}btn\.style\.display = "none"/,
+);
 
 // Menu plan card must not include a Manage Billing shortcut (Account page only).
 const navPlanFn = billing.slice(billing.indexOf("window.renderNavPlan = async function"));
