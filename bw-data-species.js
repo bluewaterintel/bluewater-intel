@@ -385,6 +385,10 @@ const REGIONAL_SEASONS = {
     {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Gulf of Mexico",
      // Rigs/canyons — year-round resident, warm-season best.
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 27.8, centerLng: -95.2, radiusNm: 280, label: "Western Gulf (TX/W LA)",
+     // Same rig fishery. The eastern circle dies at Cameron, which dropped
+     // blackfin off Galveston, Freeport, and Port Aransas.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
   ],
 
   // ── BLUELINE TILEFISH ────────────────────────────────────────────────
@@ -419,6 +423,9 @@ const REGIONAL_SEASONS = {
     {centerLat: 28.5, centerLng: -88.5, radiusNm: 300, label: "Gulf deep ledges",
      // No closed season in the Gulf. Radius reaches the TX shelf edge and the
      // shelf edge west of Tampa, both of which the old 220 nm circle missed.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 27.6, centerLng: -95.6, radiusNm: 200, label: "Western Gulf shelf edge (TX)",
+     // Galveston through Port Isabel sit outside the 300 nm eastern circle.
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
   ],
 
@@ -468,9 +475,12 @@ const REGIONAL_SEASONS = {
      // fishery, and winter is the easy-weather half of it down here.
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:3,Dec:3}},
     {centerLat: 28.0, centerLng: -90.0, radiusNm: 360, label: "Gulf of Mexico deep mud",
-     // Wide enough to reach the TX shelf edge off Galveston and the shelf edge
-     // west of Tampa; stops well short of the FL Atlantic side.
-     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+     // Niche deep-drop, not a headline equal to yellowfin. Capped at 2.
+     // Wide enough to reach the shelf edge west of Tampa; the TX circle below
+     // covers Galveston through Port Isabel.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 27.6, centerLng: -95.6, radiusNm: 200, label: "Western Gulf deep mud (TX)",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
   ],
 
   // ── BLUEFISH ─────────────────────────────────────────────────────────
@@ -540,6 +550,13 @@ const REGIONAL_SEASONS = {
     {centerLat: 29.5, centerLng: -84.0, radiusNm: 180, label: "FL Panhandle/Gulf",
      // Panhandle tarpon: peak Jun-Aug
      seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 29.4, centerLng: -90.3, radiusNm: 170, label: "N. Gulf (Grand Isle / Venice)",
+     // Passes and beaches. Late summer is the run; the Panhandle circle
+     // stops a hundred miles east of Venice.
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 28.4, centerLng: -96.2, radiusNm: 200, label: "Western Gulf (TX jetties)",
+     // Sabine through Port Aransas. September jetties and passes.
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 31.5, centerLng: -81.0, radiusNm: 200, label: "GA/SC summer push",
      // Northern stragglers — peak Jun-Aug, short season
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
@@ -581,7 +598,8 @@ const REGIONAL_SEASONS = {
     {centerLat: 28.0, centerLng: -86.5, radiusNm: 260, label: "Eastern Gulf",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
     {centerLat: 27.5, centerLng: -93.5, radiusNm: 280, label: "Western Gulf",
-     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+     // Weedline bonus, not a September primary. Cap stays under yellowfin.
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
   ],
 
   // ── BLUE MARLIN ────────────────────────────────────────────────────────
@@ -799,8 +817,12 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:1,Jul:1,Aug:1,Sep:2,Oct:3,Nov:3,Dec:2}},
     {centerLat: 27.8, centerLng: -84.0, radiusNm: 220, label: "Gulf FL west coast",
      seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:1,Jul:1,Aug:1,Sep:2,Oct:3,Nov:3,Dec:2}},
-    {centerLat: 28.5, centerLng: -91.0, radiusNm: 320, label: "N. Gulf (LA→TX)",
-     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:1}},
+    {centerLat: 28.5, centerLng: -91.0, radiusNm: 240, label: "N. Gulf (LA→TX)",
+     // Present, not a headline nearshore fishery. Cap at 1.
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:1,Dec:1}},
+    {centerLat: 27.0, centerLng: -97.1, radiusNm: 120, label: "South Texas",
+     // Port Aransas through Port Isabel sit just outside the 320 nm circle.
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:1,Dec:1}},
   ],
 
   // ── FLOUNDER (summer flounder north / southern flounder south) ───────────────
@@ -1019,6 +1041,9 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Gulf of Mexico",
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+    {centerLat: 27.8, centerLng: -95.2, radiusNm: 280, label: "Western Gulf (TX/W LA)",
+     // Same circle as blackfin — skipjack ride the same Texas rigs.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
   ],
 
   // ── RED SNAPPER ──────────────────────────────────────────────────────────
@@ -1035,9 +1060,11 @@ const REGIONAL_SEASONS = {
     {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
     {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf (Panhandle/LA)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
+     // Bite presence, not the federal season window. Fish stay on the reefs
+     // into the fall; October tapers instead of going to zero.
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
   ],
 
   // ── GAG GROUPER ────────────────────────────────────────────────────────────
@@ -1052,10 +1079,12 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
     {centerLat: 29.0, centerLng: -85.5, radiusNm: 180, label: "FL Panhandle",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
-    {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf (LA/MS/AL)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 29.3, centerLng: -90.0, radiusNm: 180, label: "N. Gulf (LA)",
+     // Thin west of Florida. Present, not a peak target next to snapper.
+     // Centered on Venice so this does not pull the Florida Panhandle down.
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:1,Dec:0}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:1,Dec:0}},
   ],
 
   // ── GREATER AMBERJACK ────────────────────────────────────────────────────

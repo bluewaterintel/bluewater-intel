@@ -6096,7 +6096,7 @@ const SPECIES_LAT_RANGE = {
   pompano:       [25.0, 36.5],   // FL through NC beaches
   gaggrouper:    [25.0, 34.5],   // Gulf + FL east + GA/SC
   cobia:         [25.0, 40.5],   // FL through Chesapeake/DelMarVa up to NJ (summer)
-  spanishmack:   [27.0, 41.0],   // FL through NJ
+  spanishmack:   [25.8, 41.0],   // South Texas (Port Isabel) through NJ
   // Blackfin: a warm-water / subtropical tuna. Common FL, Gulf, and the SE
   // Atlantic; Hatteras/Lookout is the northern stronghold. 35.6°N keeps the
   // Hatteras Stream in range and drops Oregon Inlet / VA so the stray northern
@@ -6281,6 +6281,18 @@ function speciesAllowedAtLat(speciesId, lat, lng){
   return inBand(range);
 }
 
+// Species the port menu and trip picker should offer. Latitude-blocked fish
+// stay hidden, and so do fish whose regional map does not cover this port
+// (the bite map already treats those as out of range).
+function speciesOfferedAt(speciesId, lat, lng){
+  if(lat == null || lng == null) return true;
+  if(typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(speciesId, lat, lng)) return false;
+  const regions = (typeof REGIONAL_SEASONS !== "undefined") ? REGIONAL_SEASONS[speciesId] : null;
+  if(!regions || !regions.length) return true;
+  if(typeof getRegionalSeasons !== "function") return true;
+  return !!getRegionalSeasons(speciesId, lat, lng);
+}
+
 // Species valid for a brief run zone (inshore includes bay fish).
 // Deliberately uses the CURATED mask, not effectiveSpeciesHabitat(): this drives
 // a UI picker with no depth to score against, so the depth-derived union would
@@ -6359,7 +6371,7 @@ function briefSpeciesForSpot(){
   const zoneWt = (wt === "bay") ? "inshore" : wt;
   return SPECIES.filter(s => {
     if(s.id === "all") return false;
-    if(typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(s.id, lat, lng)) return false;
+    if(typeof speciesOfferedAt === "function" && !speciesOfferedAt(s.id, lat, lng)) return false;
     if(!speciesAllowedInBriefZone(s.id, zoneWt)) return false;
     return true;
   });
@@ -19165,9 +19177,12 @@ function buildSpDropdown(){
   // time (picking "all" produced an empty map). Other tabs keep their own "All"
   // filter; here the captain always chooses a concrete target.
   const cats=["offshore","nearshore","inshore"];
+  const portObj = (typeof activePort !== "undefined" && activePort && PORTS[activePort])
+    ? PORTS[activePort] : null;
   let html="";
   cats.forEach(cat=>{
-    const items=SPECIES.filter(s=>s.cat===cat && s.id!=="all")
+    const items=SPECIES.filter(s=>s.cat===cat && s.id!=="all"
+      && (!portObj || speciesOfferedAt(s.id, portObj.lat, portObj.lng)))
       .slice().sort((a,b)=>a.name.localeCompare(b.name, undefined, {sensitivity:"base"}));
     html+=`<div class="sc-lbl">${cat.toUpperCase()}</div>`;
     items.forEach(sp=>{
@@ -19785,6 +19800,14 @@ function selectPort(name, opts){
   // current zoom and only zoom IN to frame the port when the user is currently
   // more zoomed out than the default home view — we never zoom OUT on them.
   const p = PORTS[name];
+  if(activeSpId && p && !speciesOfferedAt(activeSpId, p.lat, p.lng)){
+    activeSpId = null;
+    const dot=document.getElementById("sp-dot");
+    const nameEl=document.getElementById("sp-name");
+    if(dot) dot.style.opacity="0";
+    if(nameEl){ nameEl.textContent="Select species…"; nameEl.style.opacity=".6"; }
+  }
+  buildSpDropdown();
   if (p && MAP) {
     const curZoom = MAP.getZoom();
     // Login / explicit home frame: always open at HOME_PORT_ZOOM so local
