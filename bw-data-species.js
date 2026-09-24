@@ -345,7 +345,8 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 33.0, centerLng: -77.5, radiusNm: 160, label: "Carolinas shelf/Stream",
      seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
-    {centerLat: 26.5, centerLng: -79.5, radiusNm: 170, label: "SE FL / Keys",
+    {centerLat: 26.5, centerLng: -79.5, radiusNm: 210, label: "SE FL / Keys",
+     // 170 nm put Key West on the rim and dropped yellowfin. Same September peak.
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Eastern Gulf (LA/MS/AL)",
      // Trophy timing is inverted from the Atlantic. Midnight Lump winter
@@ -537,13 +538,17 @@ const REGIONAL_SEASONS = {
   // Stuart/Vero inherited the Keys/Boca Grande tables (Sep=1) and painted
   // the mullet-run month as "off".
   tarpon: [
-    {centerLat: 27.4, centerLng: -80.15, radiusNm: 100, label: "SE FL Atlantic (Canaveral–Palm Beach)",
+    {centerLat: 27.4, centerLng: -80.15, radiusNm: 70, label: "SE FL Atlantic (Canaveral–Palm Beach)",
      // Treasure Coast / Jupiter beaches: spring push Mar-Jun, then the
      // Aug-Oct mullet run. September on this shore is peak, not dead.
      seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 25.5, centerLng: -80.5, radiusNm: 150, label: "South FL/Keys",
      // Migration through Florida Bay, Keys — peak Mar-Jun
      seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:1,Sep:1,Oct:1,Nov:1,Dec:1}},
+    {centerLat: 26.8, centerLng: -78.2, radiusNm: 75, label: "Northern Bahamas (Abaco / West End)",
+     // Keeps the Stuart mullet-run circle on the Florida beach. September
+     // here is good, not that peak. Bimini and Chub stay on the Keys curve.
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:1}},
     {centerLat: 27.0, centerLng: -82.5, radiusNm: 150, label: "Gulf FL Boca Grande",
      // The famous Boca Grande Pass tarpon fishery — peak May-Jul
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:2,Sep:1,Oct:1,Nov:1,Dec:1}},
@@ -885,8 +890,12 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 30.0, centerLng: -81.2, radiusNm: 160, label: "NE FL Atlantic",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
-    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 160, label: "Gulf FL west coast",
+     // 200 nm reached Florida Bay and scored the Keys like a Gulf September peak.
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 24.7, centerLng: -81.1, radiusNm: 90, label: "Florida Bay / Keys",
+     // Backcountry fish are here year-round. September is good, not the headline.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
     {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf (LA/MS/AL)",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
@@ -910,8 +919,11 @@ const REGIONAL_SEASONS = {
     // Sep:3 on the northern curve made mid-September 88°F water read "peak".
     {centerLat: 27.15, centerLng: -80.25, radiusNm: 85, label: "Treasure Coast / south IRL",
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:3,Dec:3}},
-    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 160, label: "Gulf FL west coast",
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 24.7, centerLng: -81.1, radiusNm: 90, label: "Florida Bay / Keys",
+     // Cool-season fish. September is the doldrums, same idea as the Treasure Coast.
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:2,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:3}},
     {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
@@ -1103,6 +1115,8 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX rigs)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
+    {centerLat: 26.4, centerLng: -78.3, radiusNm: 130, label: "Bahamas bank",
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:2,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
   ],
 
   // ── VERMILION SNAPPER (BEELINER) ─────────────────────────────────────────
@@ -1188,6 +1202,8 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 290, label: "Western Gulf (TX)",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 26.4, centerLng: -78.3, radiusNm: 130, label: "Bahamas bank",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
   ],
 
   // ── SHEEPSHEAD ───────────────────────────────────────────────────────────
@@ -1233,6 +1249,8 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 26.4, centerLng: -78.3, radiusNm: 130, label: "Bahamas bank",
+     seasons:{Jan:1,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
   ],
 
   // ── HOGFISH ────────────────────────────────────────────────────────────────
@@ -1241,7 +1259,8 @@ const REGIONAL_SEASONS = {
   // fishery.
   hogfish: [
     {centerLat: 24.8, centerLng: -81.0, radiusNm: 140, label: "Florida Keys reefs",
-     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:3}},
+     // September fish are on the patch reefs. Winter stays the peak.
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:1,Jun:1,Jul:1,Aug:1,Sep:2,Oct:1,Nov:2,Dec:3}},
     {centerLat: 26.5, centerLng: -79.5, radiusNm: 120, label: "SE FL Atlantic reefs",
      seasons:{Jan:2,Feb:3,Mar:3,Apr:3,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:2}},
     {centerLat: 26.0, centerLng: -78.0, radiusNm: 170, label: "Bahamas",
@@ -1279,6 +1298,8 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 290, label: "Western Gulf (TX)",
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 26.4, centerLng: -78.3, radiusNm: 130, label: "Bahamas bank",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
   ],
 
   // ── YELLOWTAIL SNAPPER (KEYS) ────────────────────────────────────────────
@@ -1355,6 +1376,21 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:1,Feb:0,Mar:0,Apr:3,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:3,Nov:3,Dec:2}},
     {centerLat: 35.0, centerLng: -75.5, radiusNm: 120, label: "NC / OBX (southern edge)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:2,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:2,Nov:2,Dec:1}},
+  ],
+
+  // ── ATLANTIC CROAKER ─────────────────────────────────────────────────────
+  // No regional table meant the generic summer curve offered croaker in the
+  // Keys. Real range is the Mid-Atlantic, Carolinas, and the Gulf.
+  croaker: [
+    {centerLat: 38.2, centerLng: -75.2, radiusNm: 240, label: "Mid-Atlantic / Chesapeake",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 34.8, centerLng: -76.6, radiusNm: 180, label: "NC sounds",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 28.5, centerLng: -91.5, radiusNm: 360, label: "Gulf (TX through the Panhandle)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 29.8, centerLng: -81.2, radiusNm: 110, label: "NE Florida Atlantic",
+     // Stops short of Miami and the Keys.
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
   ],
 };
 

@@ -6095,8 +6095,8 @@ const SPECIES_LAT_RANGE = {
   tripletail:    [25.0, 35.0],   // Gulf + FL east + occasional NC/VA in summer
   pompano:       [25.0, 36.5],   // FL through NC beaches
   gaggrouper:    [25.0, 34.5],   // Gulf + FL east + GA/SC
-  cobia:         [25.0, 40.5],   // FL through Chesapeake/DelMarVa up to NJ (summer)
-  spanishmack:   [25.8, 41.0],   // South Texas (Port Isabel) through NJ
+  cobia:         [24.0, 40.5],   // Keys through Chesapeake/DelMarVa up to NJ (summer)
+  spanishmack:   [24.0, 41.0],   // Keys and South Texas through NJ
   // Blackfin: a warm-water / subtropical tuna. Common FL, Gulf, and the SE
   // Atlantic; Hatteras/Lookout is the northern stronghold. 35.6°N keeps the
   // Hatteras Stream in range and drops Oregon Inlet / VA so the stray northern
@@ -6117,7 +6117,7 @@ const SPECIES_LAT_RANGE = {
   //  - Gulf: northern/eastern Gulf hard bottom, TX shelf edge through FL.
   bluelinetile:  {atlantic: [28.0, 40.5], gulf: [25.0, 30.5]},
   bonito:        [33.0, 44.5],   // Mid-Atlantic + New England
-  falsealbacore: [25.0, 44.0],   // FL through New England — Cape Cod albie run to Carolinas/FL
+  falsealbacore: [24.0, 44.0],   // Keys through New England — Cape Cod albie run to Carolinas/FL
   // Bluefin tuna: TWO disconnected populations.
   //  - Atlantic: NC (Morehead/Hatteras winter blitz) up to Maine
   //  - Gulf: spring spawning grounds — Mississippi/Desoto/East Breaks canyons
@@ -6237,6 +6237,7 @@ const BAHAMAS_EXCLUDE_BOX = { latMin: 22.0, latMax: 27.6, lngMin: -79.6, lngMax:
 // hogfish, cero/king mackerel, and the pelagics — those are intentionally absent.)
 const NOT_IN_BAHAMAS = new Set([
   "redfish", "snook", "speckledtrout", "flounder", "sheepshead", "croaker",
+  "pompano",
 ]);
 
 // Returns true if the species can be found at this lat/lng. Handles both
