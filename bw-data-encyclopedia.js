@@ -1464,6 +1464,79 @@ const ENC_SPECIES = [
       "Mostly a catch-and-release fishery now — they grow very slowly, so a big bull is decades old"],
   },
   {
+    id:"halibut", name:"California Halibut", color:"#6a7f48", cat:"inshore",
+    snippet:"The California sand and bay flatfish — not Atlantic fluke. They lie on open sand off the beach and inside the bays and eat a drifted live bait. A year-round fishery from San Diego through Monterey Bay.",
+    ident:{
+      marks:[
+        "Both eyes on the left side — a left-eyed flounder, mouth large and toothy",
+        "The lateral line arches sharply over the pectoral fin",
+        "Brown or olive on the eyed side, white and unmarked underneath",
+        "A long, oval body; keepers start at 22 inches and a 20-pounder is a trophy",
+        "The mouth reaches back to or past the eye, unlike the small-mouthed sanddabs"],
+      confusedWith:[
+        {species:"Pacific Sanddab", tell:"Sanddabs are much smaller, right-eyed or left-eyed, with a small mouth that does not reach the eye and a nearly straight lateral line. A legal California halibut has the big mouth and the high arch in the lateral line."},
+        {species:"Starry Flounder", tell:"Starry flounder are right-eyed or left-eyed and carry bold black and yellow bars on the fins. California halibut fins are plain."},
+        {species:"Pacific Halibut", tell:"Pacific halibut (Hippoglossus) are a different, right-eyed northern fish with a short season and a tiny California catch. The everyday SoCal and Monterey Bay fish is the left-eyed California halibut."}]
+    },
+    facts:{ size:"5-15 lbs common on the beach; 20-30 lbs from the bays and outside sand", record:"~67 lbs (CA)", legal:"CA: 22\" minimum. Bag is 5 south of Point Sur and 2 north of Point Sur. Open year-round — verify current CDFW regs", season:"California beaches and bays year-round. Best April through September; September is still a strong beach and bay bite. A Pacific-only fish — not Atlantic flounder." },
+    seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2},
+    where:"Sand bottom and bay flats in about 10-200 ft — deeper in winter, shallower in summer. Silver Strand and Imperial Beach, Mission Bay and San Diego Bay, Newport and Huntington sand, Santa Monica Bay, the Ventura and Santa Barbara beaches, Morro Bay, and the Monterey Bay sand. Not a kelp fish, and not present on the Atlantic or Gulf.",
+    tackle:[
+      "7-8 ft medium or medium-heavy rod with a soft tip so a live bait can swim",
+      "20-40 lb braid and a 15-25 lb fluorocarbon leader",
+      "Sliding-sinker rig or a Carolina rig with a 1-4 oz egg sinker so the bait holds the bottom in the drift",
+      "Live-bait hooks 1/0-4/0, or a 1-3 oz leadhead for swimbaits"],
+    bait:[
+      "Live anchovy or sardine drifted on the sand — the everyday bait",
+      "Live jacksmelt or mackerel for the larger fish",
+      "A 5-7 in white or sardine swimbait crawled on the bottom",
+      "Dead squid or a strip when live bait is scarce, fished right on the sand"],
+    tips:[
+      "Drift the sand, do not anchor on a reef — they are not in the kelp",
+      "Keep the bait on the bottom. If you are not ticking sand, you are too high",
+      "Summer fish are shallow, often 20-60 ft on the beach and inside the bays; winter fish slide outside toward 100-200 ft",
+      "A moving tide fishes better than slack. Work the edges of channels inside the bays",
+      "They short-strike. Give a live bait a second, then a firm sweep",
+      "This is not summer flounder. The Atlantic fluke rigs and seasons do not apply here"],
+  },
+  {
+    id:"whiteseabass", name:"White Seabass", color:"#8e9eae", cat:"nearshore",
+    snippet:"Southern California's ghost of the kelp. A long, silver croaker that shows on the squid spawn in spring and on the island hard bottom the rest of the warm season. Not Atlantic weakfish.",
+    ident:{
+      marks:[
+        "Long, bass-shaped silver body with a dark back and a squared or slightly concave tail",
+        "No yellow on the tail — that is a yellowtail, which is a jack",
+        "Juveniles carry a black spot at the base of the pectoral fin; adults lose it",
+        "A raised ridge along the belly, and a chin pore that marks it as a croaker",
+        "Keepers are 28 inches. A 30-40 lb fish is the one the kelp fleet is looking for"],
+      confusedWith:[
+        {species:"Shortfin Corvina", tell:"Corvina are smaller bay fish with a more rounded tail and no raised belly ridge. A legal white seabass is a much longer, heavier fish and is rarely inside a harbor except on the spring spawn."},
+        {species:"California Yellowtail", tell:"Yellowtail have a bright yellow tail and a yellow stripe, and they are a jack. White seabass are plain silver with a dark tail."},
+        {species:"White Weakfish", tell:"Atlantic weakfish are an East Coast fish. White seabass do not occur in the Atlantic or the Gulf."}]
+    },
+    facts:{ size:"10-25 lbs common; 30-50 lbs on the islands and banks", record:"~83 lbs (CA)", legal:"CA: 28\" total length (or 20\" alternate). Bag 3, but only 1 south of Point Conception from March 15 through June 15. Open year-round — verify current CDFW regs. The spring bag cut is not a closed season.", season:"Southern California. The squid spawn (March–June) is the peak. Summer and September are a good kelp and island bite, not that peak. Thin north of Point Conception." },
+    seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:1},
+    where:"Kelp edges and hard bottom in about 20-250 ft, and the bays during the spring spawn. Point Loma and La Jolla kelp, Catalina and San Clemente, Farnsworth Bank, Santa Barbara Island, Anacapa, and Santa Cruz Island. Cortes Bank on the long run. Occasional fish to Morro Bay in warm years — not a Monterey target. Pacific only.",
+    tackle:[
+      "7-8 ft medium-heavy live-bait or swimbait rod",
+      "30-50 lb braid and a 20-40 lb fluorocarbon leader — they see heavy line in the kelp",
+      "Live-bait hooks 2/0-5/0 for squid and sardines",
+      "1-3 oz leadheads for 7-10 in swimbaits on the night and kelp bite",
+      "A sliding sinker when the squid are on the bottom in spring"],
+    bait:[
+      "Live squid on the spring spawn — the bait the fishery is built on",
+      "Live sardine or mackerel fly-lined along the kelp edge at grey light",
+      "Big swimbaits (white, sardine, brown) worked slow at night and at first light",
+      "A dead squid or a strip on the bottom when the live squid are gone"],
+    tips:[
+      "Grey light and night outfish the middle of the day. The first hour and the last hour are the bite",
+      "On the spawn, fish the squid schools on the sand and the hard bottom, not the middle of the kelp canopy",
+      "The rest of the year, work the outside edge of the kelp and the island boiler rocks",
+      "They are line-shy. Lengthen the fluorocarbon before you change baits",
+      "A hooked fish runs for the stringers — turn the head before it wraps",
+      "September is worth fishing. It is past the spawn peak, so do not expect March numbers"],
+  },
+  {
     id:"porgy", name:"Porgy (Scup)", color:"#b07a8a", cat:"nearshore",
     snippet:"The Northeast's most dependable bottom fish. Scup swarm rockpiles, mussel beds and wrecks from May through October, and the big fall 'humpbacks' are a genuinely strong pull on light tackle.",
     ident:{

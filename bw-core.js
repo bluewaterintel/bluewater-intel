@@ -5713,6 +5713,11 @@ const SPECIES_HABITAT = {
   cayellowtail:  ["nearshore", "offshore"],         // SoCal banks, kelp edges, hard bottom, paddies
   lingcod:       ["nearshore", "offshore"],         // rocky reefs and pinnacles, 33-394 ft
   calicobass:    ["nearshore", "inshore"],          // kelp line and shallow hard bottom
+  // Beach, bay, and nearshore sand. "bay" is geometric, so it has to be
+  // listed here or harbor halibut never show in an inshore brief.
+  halibut:       ["bay", "inshore", "nearshore"],
+  // Kelp and hard bottom, plus the spring spawn inside the bays.
+  whiteseabass:  ["nearshore", "inshore", "bay"],
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -6095,8 +6100,8 @@ const SPECIES_LAT_RANGE = {
   tripletail:    [25.0, 35.0],   // Gulf + FL east + occasional NC/VA in summer
   pompano:       [25.0, 36.5],   // FL through NC beaches
   gaggrouper:    [25.0, 34.5],   // Gulf + FL east + GA/SC
-  cobia:         [25.0, 40.5],   // FL through Chesapeake/DelMarVa up to NJ (summer)
-  spanishmack:   [27.0, 41.0],   // FL through NJ
+  cobia:         [24.0, 40.5],   // Keys through Chesapeake/DelMarVa up to NJ (summer)
+  spanishmack:   [24.0, 41.0],   // Keys and South Texas through NJ
   // Blackfin: a warm-water / subtropical tuna. Common FL, Gulf, and the SE
   // Atlantic; Hatteras/Lookout is the northern stronghold. 35.6°N keeps the
   // Hatteras Stream in range and drops Oregon Inlet / VA so the stray northern
@@ -6117,7 +6122,7 @@ const SPECIES_LAT_RANGE = {
   //  - Gulf: northern/eastern Gulf hard bottom, TX shelf edge through FL.
   bluelinetile:  {atlantic: [28.0, 40.5], gulf: [25.0, 30.5]},
   bonito:        [33.0, 44.5],   // Mid-Atlantic + New England
-  falsealbacore: [25.0, 44.0],   // FL through New England — Cape Cod albie run to Carolinas/FL
+  falsealbacore: [24.0, 44.0],   // Keys through New England — Cape Cod albie run to Carolinas/FL
   // Bluefin tuna: TWO disconnected populations.
   //  - Atlantic: NC (Morehead/Hatteras winter blitz) up to Maine
   //  - Gulf: spring spawning grounds — Mississippi/Desoto/East Breaks canyons
@@ -6145,6 +6150,8 @@ const SPECIES_LAT_RANGE = {
   // California water.
   lingcod:       {atlantic: null, gulf: null},
   calicobass:    {atlantic: null, gulf: null},
+  halibut:       {atlantic: null, gulf: null},
+  whiteseabass:  {atlantic: null, gulf: null},
   // Everything else (yellowfin, blue marlin, mahi, wahoo, sailfish, etc.)
   // has no entry — they range coast-wide.
 };
@@ -6167,7 +6174,7 @@ const SPECIES_LAT_RANGE = {
 const PACIFIC_SPECIES = {
   bluefin:      [28.0, 42.0],   // Pacific bluefin — Baja/SoCal through central CA
   cayellowtail: [28.0, 36.5],   // California yellowtail — SoCal banks/kelp; strays to Monterey
-  yellowfin:    [28.0, 35.5],   // warm-water/warm-year SoCal yellowfin
+  yellowfin:    [28.0, 34.6],   // San Diego through Santa Barbara; Morro Bay is out
   bonito:       [28.0, 40.0],   // Pacific bonito — abundant off SoCal
   mahi:         [28.0, 34.5],   // dorado — warm months off SoCal/Baja
   // Lingcod run the whole coast and are strongest from Point Conception north —
@@ -6178,6 +6185,11 @@ const PACIFIC_SPECIES = {
   // thinning fast north of Point Conception (34.45°N). 35.8 reaches Morro Bay
   // and Port San Luis without claiming a Monterey fishery that isn't there.
   calicobass:   [28.0, 35.8],
+  // California halibut are a real Monterey Bay fishery, not a SoCal-only one.
+  halibut:      [28.0, 42.0],
+  // White seabass are a SoCal and Channel Islands fish. 35.8 reaches Morro
+  // Bay on warm years and stops short of a Monterey fishery.
+  whiteseabass: [28.0, 35.8],
 };
 
 // ── Pacific habitat overrides (West-Coast tuning pass) ──────────────────────
@@ -6237,6 +6249,7 @@ const BAHAMAS_EXCLUDE_BOX = { latMin: 22.0, latMax: 27.6, lngMin: -79.6, lngMax:
 // hogfish, cero/king mackerel, and the pelagics — those are intentionally absent.)
 const NOT_IN_BAHAMAS = new Set([
   "redfish", "snook", "speckledtrout", "flounder", "sheepshead", "croaker",
+  "pompano",
 ]);
 
 // Returns true if the species can be found at this lat/lng. Handles both
@@ -6279,6 +6292,18 @@ function speciesAllowedAtLat(speciesId, lat, lng){
   }
   // Flat array format: [minLat, maxLat] (+ optional lng bounds)
   return inBand(range);
+}
+
+// Species the port menu and trip picker should offer. Latitude-blocked fish
+// stay hidden, and so do fish whose regional map does not cover this port
+// (the bite map already treats those as out of range).
+function speciesOfferedAt(speciesId, lat, lng){
+  if(lat == null || lng == null) return true;
+  if(typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(speciesId, lat, lng)) return false;
+  const regions = (typeof REGIONAL_SEASONS !== "undefined") ? REGIONAL_SEASONS[speciesId] : null;
+  if(!regions || !regions.length) return true;
+  if(typeof getRegionalSeasons !== "function") return true;
+  return !!getRegionalSeasons(speciesId, lat, lng);
 }
 
 // Species valid for a brief run zone (inshore includes bay fish).
@@ -6359,7 +6384,7 @@ function briefSpeciesForSpot(){
   const zoneWt = (wt === "bay") ? "inshore" : wt;
   return SPECIES.filter(s => {
     if(s.id === "all") return false;
-    if(typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(s.id, lat, lng)) return false;
+    if(typeof speciesOfferedAt === "function" && !speciesOfferedAt(s.id, lat, lng)) return false;
     if(!speciesAllowedInBriefZone(s.id, zoneWt)) return false;
     return true;
   });
@@ -6451,6 +6476,32 @@ function briefRunMetaFromPort(portObj, lat, lng){
     runCompass = bwiCompass16(bearingDeg);
   }
   return { runFromPortNm: nm, runCompass, bearingDeg };
+}
+
+// Encyclopedia + habitat the Captain's Brief should use for this fish.
+// Pacific overrides win in Pacific water so a San Diego brief does not quote
+// Atlantic temperature bands.
+function briefSpeciesProfile(speciesId, lat, lng){
+  const enc = (typeof ENC_SPECIES !== "undefined")
+    ? ENC_SPECIES.find(s => s.id === speciesId) : null;
+  let prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
+  if(lat != null && lng != null && typeof isPacificContext === "function" && isPacificContext(lat, lng)
+     && typeof PACIFIC_SPECIES_PREFS !== "undefined" && PACIFIC_SPECIES_PREFS[speciesId]){
+    prefs = PACIFIC_SPECIES_PREFS[speciesId];
+  }
+  if(!enc && !prefs) return null;
+  const depthBandsFt = (prefs && prefs.depthBands)
+    ? prefs.depthBands.map(b => [Math.round(b[0] * 3.281), Math.round(b[1] * 3.281)])
+    : null;
+  return {
+    habitat: enc && enc.where ? enc.where : null,
+    tempIdealF: prefs ? prefs.tempIdeal : null,
+    tempWorkingF: prefs ? prefs.tempWorking : null,
+    depthBandsFt,
+    seasonNote: enc && enc.facts ? enc.facts.season : null,
+    baits: enc && Array.isArray(enc.bait) ? enc.bait.slice(0, 4) : null,
+    tips: enc && Array.isArray(enc.tips) ? enc.tips.slice(0, 3) : null,
+  };
 }
 
 function briefEnrichSpeciesSpot(entry, portObj){
@@ -6614,6 +6665,7 @@ const SPECIES_RUN_NM = {
   // Fluke are a genuine offshore day-boat fishery in the Mid-Atlantic once the
   // cold pool sets up — the Triangle Wrecks off Virginia Beach are 29-31 nm out.
   flounder: 40,
+  halibut: 40,                          // CA beaches and bays, not the tuna range
   striper: 35, bluefish: 35,   // NE rips and shoals: Block Is., Montauk, Nantucket
 
   // ── Nearshore: beach through mid-shelf structure ──
@@ -6623,6 +6675,7 @@ const SPECIES_RUN_NM = {
   tautog: 40, spadefish: 40, hogfish: 40,   // incl. winter offshore blackfish wrecks
   porgy: 45,                                 // NE party-boat rockpiles + fall wrecks
   calicobass: 65,                            // SoCal kelp line out to Catalina (22) / San Clemente (55)
+  whiteseabass: 70,                      // kelp, islands, San Clemente (~55 nm from San Diego)
   muttonsnap: 45, lanesnap: 45, yellowtail: 45,
   kingmack: 55,                              // SKA tournament boats run 40-70
   triggerfish: 60,
@@ -18939,6 +18992,8 @@ async function runBrief(){
           }
           if(best){
             delete best._score;
+            const profile = briefSpeciesProfile(id, best.scoredAtLat, best.scoredAtLng);
+            if(profile) best.speciesProfile = profile;
             scored.push(briefEnrichSpeciesSpot(best, portObj));
           }
         }
@@ -19165,9 +19220,12 @@ function buildSpDropdown(){
   // time (picking "all" produced an empty map). Other tabs keep their own "All"
   // filter; here the captain always chooses a concrete target.
   const cats=["offshore","nearshore","inshore"];
+  const portObj = (typeof activePort !== "undefined" && activePort && PORTS[activePort])
+    ? PORTS[activePort] : null;
   let html="";
   cats.forEach(cat=>{
-    const items=SPECIES.filter(s=>s.cat===cat && s.id!=="all")
+    const items=SPECIES.filter(s=>s.cat===cat && s.id!=="all"
+      && (!portObj || speciesOfferedAt(s.id, portObj.lat, portObj.lng)))
       .slice().sort((a,b)=>a.name.localeCompare(b.name, undefined, {sensitivity:"base"}));
     html+=`<div class="sc-lbl">${cat.toUpperCase()}</div>`;
     items.forEach(sp=>{
@@ -19785,6 +19843,14 @@ function selectPort(name, opts){
   // current zoom and only zoom IN to frame the port when the user is currently
   // more zoomed out than the default home view — we never zoom OUT on them.
   const p = PORTS[name];
+  if(activeSpId && p && !speciesOfferedAt(activeSpId, p.lat, p.lng)){
+    activeSpId = null;
+    const dot=document.getElementById("sp-dot");
+    const nameEl=document.getElementById("sp-name");
+    if(dot) dot.style.opacity="0";
+    if(nameEl){ nameEl.textContent="Select species…"; nameEl.style.opacity=".6"; }
+  }
+  buildSpDropdown();
   if (p && MAP) {
     const curZoom = MAP.getZoom();
     // Login / explicit home frame: always open at HOME_PORT_ZOOM so local

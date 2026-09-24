@@ -372,19 +372,20 @@ const CANYONS=[
   // ══════════════════════════════════════════════════════════════════════════
   // SOUTHERN CALIFORNIA — major fishing areas (San Diego → Santa Barbara)
   // Well-known banks, kelp beds, and island grounds for the SoCal fleet:
-  // yellowtail, Pacific bluefin, dorado (mahi) and bonito, plus calico bass and
-  // white seabass on the hard-bottom/kelp spots. Species chips use the app's
-  // Pacific species IDs (cayellowtail, bluefin, yellowfin, bonito, mahi,
-  // lingcod, calicobass).
+  // yellowtail, Pacific bluefin, dorado (mahi) and bonito, plus calico bass,
+  // white seabass, and lingcod on the hard-bottom/kelp spots. Halibut are on
+  // the sand pins, not the reefs. Species chips use the app's Pacific IDs
+  // (cayellowtail, bluefin, yellowfin, bonito, mahi, lingcod, calicobass,
+  // whiteseabass, halibut).
   // Coordinates are approximate area references — NOT for navigation.
   // ══════════════════════════════════════════════════════════════════════════
   // ── SAN DIEGO ──
   {name:"Point Loma Kelp", type:"reef", color:"#16a34a", lat:32.667, lng:-117.267,
    desc:"The classic San Diego inshore kelp line off Point Loma, ~40-120ft. Yellowtail, calico bass, bonito and barracuda in the stringers; white seabass at first light, and lingcod on the deeper hard bottom outside the kelp. Reference only — not for navigation.",
-   fish:["cayellowtail","calicobass","lingcod","bonito","yellowfin"]},
+   fish:["cayellowtail","calicobass","lingcod","bonito","yellowfin","whiteseabass"]},
   {name:"La Jolla Kelp / Canyon Edge", type:"ledge", color:"#1e63c0", lat:32.85, lng:-117.29,
    desc:"Kelp beds and the head of La Jolla Canyon just off the beach. Yellowtail, calico bass and white seabass on the hard bottom, lingcod on the canyon-rim rock; bluefin and yellowfin push in over the canyon on warm years. Note the La Jolla SMR closure just north — check the boundary. Reference only — not for navigation.",
-   fish:["cayellowtail","calicobass","lingcod","bluefin","yellowfin"]},
+   fish:["cayellowtail","calicobass","lingcod","bluefin","yellowfin","whiteseabass"]},
   {name:"Los Coronados Islands", type:"rock", color:"#16a34a", lat:32.417, lng:-117.258,
    desc:"Island group ~18nm S of San Diego (Mexican waters — Mexican fishing license required). Yellowtail on the hard-bottom high spots, bonito and calico bass in the boiler rocks, lingcod on the deeper rock. Reference only — not for navigation.",
    fish:["cayellowtail","calicobass","lingcod","bonito"]},
@@ -404,32 +405,44 @@ const CANYONS=[
   // ── OFFSHORE BANKS & ISLANDS ──
   {name:"San Clemente Island", type:"rock", color:"#16a34a", lat:32.90, lng:-118.49,
    desc:"Offshore island ~55nm off San Diego. Yellowtail and white seabass on the hard bottom and boiler rocks, calico bass in the kelp, lingcod on the deep rock, bonito on top. Reference only — not for navigation.",
-   fish:["cayellowtail","calicobass","lingcod","bonito"]},
+   fish:["cayellowtail","calicobass","lingcod","bonito","whiteseabass"]},
   {name:"Tanner Bank", type:"lump", color:"#0ea5a5", lat:32.72, lng:-119.12,
    desc:"Offshore seamount NW of San Clemente Island. Big yellowtail on the structure, trophy lingcod on the hard bottom, and bluefin over the top in season — a long run for quality fish. Reference only — not for navigation.",
    fish:["cayellowtail","lingcod","bluefin","yellowfin"]},
   {name:"Cortes Bank", type:"lump", color:"#0ea5a5", lat:32.45, lng:-119.18,
    desc:"Legendary offshore bank ~100nm off San Diego rising near the surface (Bishop Rock). Trophy yellowtail, bluefin and white seabass over the seamount, with big lingcod and calico bass on the shallow crown. Reference only — not for navigation.",
-   fish:["cayellowtail","calicobass","lingcod","bluefin","yellowfin"]},
+   fish:["cayellowtail","calicobass","lingcod","bluefin","yellowfin","whiteseabass"]},
   {name:"Santa Catalina Island", type:"rock", color:"#16a34a", lat:33.35, lng:-118.42,
    desc:"Island ~22nm off the LA coast. Yellowtail and calico bass on the front-side kelp and hard bottom, lingcod on the back-side rock, bonito on the surface; marlin and dorado offshore in late summer. Reference only — not for navigation.",
-   fish:["cayellowtail","calicobass","lingcod","bonito","mahi"]},
+   fish:["cayellowtail","calicobass","lingcod","bonito","mahi","whiteseabass"]},
   {name:"Farnsworth Bank", type:"lump", color:"#0ea5a5", lat:33.34, lng:-118.52,
    desc:"Pinnacle bank off the west end of Catalina. Yellowtail and white seabass over the structure, calico bass on the reef and lingcod on the pinnacle tops; bluefin over the top on warm years. Reference only — not for navigation.",
-   fish:["cayellowtail","calicobass","lingcod","bluefin"]},
+   fish:["cayellowtail","calicobass","lingcod","bluefin","whiteseabass"]},
   {name:"Horseshoe Kelp", type:"reef", color:"#16a34a", lat:33.68, lng:-118.23,
    desc:"Hard-bottom reef complex off the LA/Long Beach breakwater. Yellowtail, calico and sand bass, bonito and barracuda — the classic close-in LA grounds, with lingcod on the deeper edges. Reference only — not for navigation.",
-   fish:["cayellowtail","calicobass","lingcod","bonito"]},
+   fish:["cayellowtail","calicobass","lingcod","bonito","whiteseabass"]},
   // ── CHANNEL ISLANDS (Santa Barbara / Ventura) ──
   {name:"Santa Barbara Island", type:"rock", color:"#16a34a", lat:33.475, lng:-119.04,
    desc:"Small offshore island SW of the LA basin. Yellowtail and white seabass on the hard bottom, calico bass and bonito in the kelp, lingcod on the deep rock. Reference only — not for navigation.",
-   fish:["cayellowtail","calicobass","lingcod","bonito"]},
+   fish:["cayellowtail","calicobass","lingcod","bonito","whiteseabass"]},
   {name:"Anacapa Island", type:"reef", color:"#16a34a", lat:34.01, lng:-119.42,
    desc:"Eastern Channel Islands reef and kelp off Ventura/Oxnard. Calico bass, yellowtail and white seabass on the reefs, lingcod on the hard bottom off the ends; a reliable inshore island run. Several MPAs ring the island — check CDFW boundaries. Reference only — not for navigation.",
-   fish:["cayellowtail","calicobass","lingcod","bonito"]},
+   fish:["cayellowtail","calicobass","lingcod","bonito","whiteseabass"]},
   {name:"Santa Cruz Island", type:"reef", color:"#16a34a", lat:34.02, lng:-119.75,
    desc:"Largest Channel Island, off Santa Barbara. Kelp and hard-bottom grounds for calico bass, yellowtail and white seabass; lingcod on the reefs and pinnacles, bonito on top. Several MPAs ring the island — check CDFW boundaries. Reference only — not for navigation.",
-   fish:["cayellowtail","calicobass","lingcod","bonito"]},
+   fish:["cayellowtail","calicobass","lingcod","bonito","whiteseabass"]},
+
+  // Sand, not kelp. California halibut score structure only where the pin's
+  // fish list includes them, so these are the beach and bay grounds.
+  {name:"Silver Strand Sand", type:"sand", color:"#c4a35a", lat:32.63, lng:-117.15,
+   desc:"Open sand off Imperial Beach and the Silver Strand, the everyday San Diego halibut drift in 20-80 ft. Summer fish are shallow; winter fish slide outside. Reference only — not for navigation.",
+   fish:["halibut"]},
+  {name:"Newport / Huntington Sand", type:"sand", color:"#c4a35a", lat:33.60, lng:-117.98,
+   desc:"Beach sand off Newport and Huntington, 20-70 ft. The local halibut drift on a moving tide. Reference only — not for navigation.",
+   fish:["halibut"]},
+  {name:"Santa Monica Bay Sand", type:"sand", color:"#c4a35a", lat:33.95, lng:-118.50,
+   desc:"Broad sand inside Santa Monica Bay. Halibut on the flats and along the channel edges, inshore in summer. Reference only — not for navigation.",
+   fish:["halibut"]},
 
   // ══════════════════════════════════════════════════════════════════════════
   // CENTRAL CALIFORNIA — Monterey / Moss Landing / Morro Bay / Port San Luis
@@ -451,12 +464,15 @@ const CANYONS=[
   {name:"Monterey Canyon Head", type:"ledge", color:"#16a34a", lat:36.80, lng:-121.82,
    desc:"The head of the Monterey Submarine Canyon, which comes within a mile of the Moss Landing harbor mouth — deep water closer to the beach than anywhere else on the coast. Lingcod and rockfish hold on the canyon-rim rock; the Portuguese Ledge and Soquel Canyon SMCAs lie offshore of here and prohibit take of non-pelagic finfish. Reference only — not for navigation.",
    fish:["lingcod"]},
+  {name:"Monterey Bay Sand", type:"sand", color:"#c4a35a", lat:36.72, lng:-121.88,
+   desc:"The sand inside Monterey Bay, the central coast's classic halibut grounds. Drift the flats in 30-90 ft on a moving tide; the canyon-rim rock next door is lingcod, not halibut. Reference only — not for navigation.",
+   fish:["halibut"]},
   {name:"Point Pinos Outer Reefs", type:"reef", color:"#16a34a", lat:36.645, lng:-121.955,
    desc:"Rock and pinnacle ground on the open-bay side of Point Pinos, outside the shoreline reserves off Pacific Grove and Asilomar. The everyday Monterey lingcod and rockfish run — high-relief rock in 150-250ft with strong upwelling. Check CDFW MPA boundaries inshore. Reference only — not for navigation.",
    fish:["lingcod"]},
   {name:"Estero Bay & Cayucos Reefs", type:"reef", color:"#16a34a", lat:35.44, lng:-120.92,
    desc:"Rocky nearshore reefs and kelp between Morro Rock and Point Estero, 30-80ft. Lingcod, cabezon and rockfish in the structure; the semi-protected bay stays fishable when the open coast is rough, so it is Morro Bay's foul-weather standby. Reference only — not for navigation.",
-   fish:["lingcod","calicobass"]},
+   fish:["lingcod","calicobass","halibut"]},
   {name:"Santa Rosa Reef", type:"reef", color:"#16a34a", lat:35.16, lng:-120.79,
    desc:"Tabletop reef in San Luis Obispo Bay off Port San Luis — a 20-30ft crown with a sheer wall dropping into 60-70ft, wrapped in kelp. Lingcod, kelp greenling and rockfish on the edges; a short run from Avila. Reference only — not for navigation.",
    fish:["lingcod","calicobass"]},

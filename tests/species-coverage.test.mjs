@@ -57,8 +57,8 @@ const {
 
 const { check, done } = makeChecker();
 
-const NEW_SPECIES = ["lingcod", "calicobass", "porgy"];
-const PACIFIC_NEW = ["lingcod", "calicobass"];
+const NEW_SPECIES = ["lingcod", "calicobass", "porgy", "halibut", "whiteseabass"];
+const PACIFIC_NEW = ["lingcod", "calicobass", "halibut", "whiteseabass"];
 
 // Real grounds, used as the "must score here" coordinates.
 const CA_GROUNDS = {

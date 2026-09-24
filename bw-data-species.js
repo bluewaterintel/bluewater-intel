@@ -62,7 +62,9 @@ const SPECIES=[
   // ── PACIFIC / CALIFORNIA SPECIES ────────────────────────────────────
   {id:"cayellowtail",name:"California Yellowtail",color:"#d9a520",cat:"nearshore"},
   {id:"lingcod",     name:"Lingcod",        color:"#3f6b52",cat:"nearshore"},
-  {id:"calicobass",  name:"Calico Bass",    color:"#7d8a3a",cat:"nearshore"}];
+  {id:"calicobass",  name:"Calico Bass",    color:"#7d8a3a",cat:"nearshore"},
+  {id:"halibut",     name:"California Halibut",color:"#6a7f48",cat:"inshore"},
+  {id:"whiteseabass",name:"White Seabass",  color:"#8e9eae",cat:"nearshore"}];
 
 const PREDICT_SPECIES_PREFS = {
   // Blue marlin band starts at 150 m (≈80 fathoms): a large share of Atlantic
@@ -237,6 +239,18 @@ const PREDICT_SPECIES_PREFS = {
   // nearshoreReef weight profile (structure/tide/pressure) instead of chasing
   // surface thermal fronts and chlorophyll edges that mean nothing in a kelp bed.
   calicobass:   {tempIdeal:[62,72], tempWorking:[57,76], chlorPref:"high",    depthBands:[[3,40]],     breakPref:"stable", demersal:true },
+  // California halibut (Paralichthys californicus) — a sand and bay flatfish,
+  // not the Atlantic fluke. Summer fish hold on open beaches and inside the
+  // bays in about 10-80 ft; winter fish slide to 100-200 ft sand outside.
+  // They like productive green water and a stable bottom, not a temperature
+  // break. Ideal is the mid-50s to high-60s the California Current actually
+  // runs on the beach.
+  halibut:      {tempIdeal:[58,68], tempWorking:[52,72], chlorPref:"high",    depthBands:[[3,60]],     breakPref:"stable", demersal:true },
+  // White seabass (Atractoscion nobilis) — kelp edges, hard bottom, and the
+  // island reefs. Spring squid-spawn fish are shallow; summer and fall fish
+  // hold the kelp and the 100-250 ft rock. Demersal, so structure and tide
+  // matter more than a surface front.
+  whiteseabass: {tempIdeal:[58,68], tempWorking:[54,74], chlorPref:"high",    depthBands:[[5,30],[30,80]], breakPref:"stable", demersal:true },
   // Porgy / scup — Northeast and Mid-Atlantic bottom staple. Same cold-pool
   // reasoning as black sea bass: with bottom temp modeled, the summer wreck and
   // rockpile grounds off RI/NY/NJ read 50-62°F, which is where the fishery
@@ -345,7 +359,8 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 33.0, centerLng: -77.5, radiusNm: 160, label: "Carolinas shelf/Stream",
      seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
-    {centerLat: 26.5, centerLng: -79.5, radiusNm: 170, label: "SE FL / Keys",
+    {centerLat: 26.5, centerLng: -79.5, radiusNm: 210, label: "SE FL / Keys",
+     // 170 nm put Key West on the rim and dropped yellowfin. Same September peak.
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Eastern Gulf (LA/MS/AL)",
      // Trophy timing is inverted from the Atlantic. Midnight Lump winter
@@ -355,11 +370,14 @@ const REGIONAL_SEASONS = {
     {centerLat: 27.5, centerLng: -93.5, radiusNm: 280, label: "Western Gulf (TX)",
      seasons:{Jan:3,Feb:3,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:3}},
     // ── PACIFIC — Southern California ──────────────────────────────────
-    // SoCal yellowfin (San Diego banks up through the bight): a warm-season
-    // fishery building in summer, best mid-summer through fall, gone in winter.
-    // Without this region the out-of-range guard would suppress every CA cell.
-    {centerLat: 32.8, centerLng: -118.5, radiusNm: 340, label: "Southern California",
+    // September peak is the San Diego-to-Los Angeles bight (through Marina
+    // del Rey). Santa Barbara and Ventura are a shoulder, not that peak, and
+    // Morro Bay is outside both circles. The old 340 nm disc painted all of
+    // them as a September 3.
+    {centerLat: 33.20, centerLng: -117.95, radiusNm: 65, label: "Southern California bight (San Diego → LA)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 34.32, centerLng: -119.48, radiusNm: 40, label: "Santa Barbara / Ventura",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:1,Jul:2,Aug:2,Sep:2,Oct:1,Nov:1,Dec:0}},
   ],
 
   // ── BLACKFIN TUNA ────────────────────────────────────────────────────
@@ -384,6 +402,10 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:3,Dec:3}},
     {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Gulf of Mexico",
      // Rigs/canyons — year-round resident, warm-season best.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 27.8, centerLng: -95.2, radiusNm: 280, label: "Western Gulf (TX/W LA)",
+     // Same rig fishery. The eastern circle dies at Cameron, which dropped
+     // blackfin off Galveston, Freeport, and Port Aransas.
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
   ],
 
@@ -419,6 +441,9 @@ const REGIONAL_SEASONS = {
     {centerLat: 28.5, centerLng: -88.5, radiusNm: 300, label: "Gulf deep ledges",
      // No closed season in the Gulf. Radius reaches the TX shelf edge and the
      // shelf edge west of Tampa, both of which the old 220 nm circle missed.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 27.6, centerLng: -95.6, radiusNm: 200, label: "Western Gulf shelf edge (TX)",
+     // Galveston through Port Isabel sit outside the 300 nm eastern circle.
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
   ],
 
@@ -468,9 +493,12 @@ const REGIONAL_SEASONS = {
      // fishery, and winter is the easy-weather half of it down here.
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:3,Nov:3,Dec:3}},
     {centerLat: 28.0, centerLng: -90.0, radiusNm: 360, label: "Gulf of Mexico deep mud",
-     // Wide enough to reach the TX shelf edge off Galveston and the shelf edge
-     // west of Tampa; stops well short of the FL Atlantic side.
-     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+     // Niche deep-drop, not a headline equal to yellowfin. Capped at 2.
+     // Wide enough to reach the shelf edge west of Tampa; the TX circle below
+     // covers Galveston through Port Isabel.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 27.6, centerLng: -95.6, radiusNm: 200, label: "Western Gulf deep mud (TX)",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
   ],
 
   // ── BLUEFISH ─────────────────────────────────────────────────────────
@@ -527,19 +555,30 @@ const REGIONAL_SEASONS = {
   // Stuart/Vero inherited the Keys/Boca Grande tables (Sep=1) and painted
   // the mullet-run month as "off".
   tarpon: [
-    {centerLat: 27.4, centerLng: -80.15, radiusNm: 100, label: "SE FL Atlantic (Canaveral–Palm Beach)",
+    {centerLat: 27.4, centerLng: -80.15, radiusNm: 70, label: "SE FL Atlantic (Canaveral–Palm Beach)",
      // Treasure Coast / Jupiter beaches: spring push Mar-Jun, then the
      // Aug-Oct mullet run. September on this shore is peak, not dead.
      seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 25.5, centerLng: -80.5, radiusNm: 150, label: "South FL/Keys",
      // Migration through Florida Bay, Keys — peak Mar-Jun
      seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:1,Sep:1,Oct:1,Nov:1,Dec:1}},
+    {centerLat: 26.8, centerLng: -78.2, radiusNm: 75, label: "Northern Bahamas (Abaco / West End)",
+     // Keeps the Stuart mullet-run circle on the Florida beach. September
+     // here is good, not that peak. Bimini and Chub stay on the Keys curve.
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:1}},
     {centerLat: 27.0, centerLng: -82.5, radiusNm: 150, label: "Gulf FL Boca Grande",
      // The famous Boca Grande Pass tarpon fishery — peak May-Jul
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:2,Sep:1,Oct:1,Nov:1,Dec:1}},
     {centerLat: 29.5, centerLng: -84.0, radiusNm: 180, label: "FL Panhandle/Gulf",
      // Panhandle tarpon: peak Jun-Aug
      seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
+    {centerLat: 29.4, centerLng: -90.3, radiusNm: 170, label: "N. Gulf (Grand Isle / Venice)",
+     // Passes and beaches. Late summer is the run; the Panhandle circle
+     // stops a hundred miles east of Venice.
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 28.4, centerLng: -96.2, radiusNm: 200, label: "Western Gulf (TX jetties)",
+     // Sabine through Port Aransas. September jetties and passes.
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 31.5, centerLng: -81.0, radiusNm: 200, label: "GA/SC summer push",
      // Northern stragglers — peak Jun-Aug, short season
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
@@ -581,7 +620,8 @@ const REGIONAL_SEASONS = {
     {centerLat: 28.0, centerLng: -86.5, radiusNm: 260, label: "Eastern Gulf",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
     {centerLat: 27.5, centerLng: -93.5, radiusNm: 280, label: "Western Gulf",
-     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+     // Weedline bonus, not a September primary. Cap stays under yellowfin.
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
   ],
 
   // ── BLUE MARLIN ────────────────────────────────────────────────────────
@@ -663,8 +703,13 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
     {centerLat: 27.5, centerLng: -93.5, radiusNm: 280, label: "Western Gulf",
      seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
-    {centerLat: 32.8, centerLng: -118.5, radiusNm: 340, label: "Southern California (dorado)",
+    // Same split as yellowfin: September dorado peak is San Diego through LA.
+    // Santa Barbara and Ventura are a shoulder. Morro stays out via the
+    // Pacific latitude cap. Do not restore the 340 nm September-3 disc.
+    {centerLat: 33.20, centerLng: -117.95, radiusNm: 65, label: "SoCal bight dorado (San Diego → LA)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 34.32, centerLng: -119.48, radiusNm: 40, label: "Santa Barbara / Ventura dorado",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:1,Jul:2,Aug:2,Sep:2,Oct:1,Nov:1,Dec:0}},
   ],
 
   // ── WAHOO ──────────────────────────────────────────────────────────────
@@ -779,6 +824,11 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:1,Jul:2,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
     {centerLat: 36.3, centerLng: -75.4, radiusNm: 190, label: "NC / VA",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:2,Nov:1,Dec:0}},
+    // Pacific bonito (Sarda chiliensis) — the SoCal fish, not the Atlantic
+    // run above. San Diego through the Channel Islands, summer and fall.
+    // Tight enough that Monterey and Morro stay out of range.
+    {centerLat: 33.40, centerLng: -118.60, radiusNm: 100, label: "Southern California (Pacific bonito)",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
   ],
 
   // ── FALSE ALBACORE (little tunny) ────────────────────────────────────────────
@@ -799,8 +849,12 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:1,Jul:1,Aug:1,Sep:2,Oct:3,Nov:3,Dec:2}},
     {centerLat: 27.8, centerLng: -84.0, radiusNm: 220, label: "Gulf FL west coast",
      seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:1,Jul:1,Aug:1,Sep:2,Oct:3,Nov:3,Dec:2}},
-    {centerLat: 28.5, centerLng: -91.0, radiusNm: 320, label: "N. Gulf (LA→TX)",
-     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:1}},
+    {centerLat: 28.5, centerLng: -91.0, radiusNm: 240, label: "N. Gulf (LA→TX)",
+     // Present, not a headline nearshore fishery. Cap at 1.
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:1,Dec:1}},
+    {centerLat: 27.0, centerLng: -97.1, radiusNm: 120, label: "South Texas",
+     // Port Aransas through Port Isabel sit just outside the 320 nm circle.
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:1,Dec:1}},
   ],
 
   // ── FLOUNDER (summer flounder north / southern flounder south) ───────────────
@@ -863,8 +917,12 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 30.0, centerLng: -81.2, radiusNm: 160, label: "NE FL Atlantic",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
-    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 160, label: "Gulf FL west coast",
+     // 200 nm reached Florida Bay and scored the Keys like a Gulf September peak.
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 24.7, centerLng: -81.1, radiusNm: 90, label: "Florida Bay / Keys",
+     // Backcountry fish are here year-round. September is good, not the headline.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
     {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf (LA/MS/AL)",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
@@ -888,8 +946,11 @@ const REGIONAL_SEASONS = {
     // Sep:3 on the northern curve made mid-September 88°F water read "peak".
     {centerLat: 27.15, centerLng: -80.25, radiusNm: 85, label: "Treasure Coast / south IRL",
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:3,Dec:3}},
-    {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
+    {centerLat: 27.4, centerLng: -83.1, radiusNm: 160, label: "Gulf FL west coast",
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 24.7, centerLng: -81.1, radiusNm: 90, label: "Florida Bay / Keys",
+     // Cool-season fish. September is the doldrums, same idea as the Treasure Coast.
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:2,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:3}},
     {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
@@ -956,6 +1017,29 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:1,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
   ],
 
+  // ── CALIFORNIA HALIBUT ─────────────────────────────────────────────────
+  // Paralichthys californicus. A resident sand and bay fish from northern
+  // Baja through central California, including Monterey Bay. September is
+  // still the beach and bay season. Not Atlantic fluke — that id stays
+  // "flounder".
+  halibut: [
+    {centerLat: 33.5, centerLng: -118.4, radiusNm: 180, label: "Southern California beaches & bays",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:2}},
+    {centerLat: 36.0, centerLng: -121.6, radiusNm: 160, label: "Central California (Morro Bay → Monterey)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+  ],
+
+  // ── WHITE SEABASS ──────────────────────────────────────────────────────
+  // Atractoscion nobilis. The spawn on squid (March–June) is the peak.
+  // September is a solid kelp and island bite, not that peak. SoCal through
+  // the Channel Islands; Morro Bay is a thin warm-year edge, not Monterey.
+  whiteseabass: [
+    {centerLat: 33.40, centerLng: -118.60, radiusNm: 120, label: "Southern California kelp & islands",
+     seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 35.25, centerLng: -120.80, radiusNm: 40, label: "Point Conception to Morro Bay",
+     seasons:{Jan:0,Feb:1,Mar:2,Apr:2,May:2,Jun:2,Jul:1,Aug:1,Sep:1,Oct:1,Nov:1,Dec:0}},
+  ],
+
   // ── LONGBILL SPEARFISH ───────────────────────────────────────────────────
   // Rare Atlantic billfish raised in white-marlin spreads. Same broad geography
   // but much lower abundance — peaks scaled down vs white marlin.
@@ -1019,6 +1103,9 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 28.0, centerLng: -88.0, radiusNm: 260, label: "Gulf of Mexico",
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
+    {centerLat: 27.8, centerLng: -95.2, radiusNm: 280, label: "Western Gulf (TX/W LA)",
+     // Same circle as blackfin — skipjack ride the same Texas rigs.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
   ],
 
   // ── RED SNAPPER ──────────────────────────────────────────────────────────
@@ -1035,9 +1122,11 @@ const REGIONAL_SEASONS = {
     {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
     {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf (Panhandle/LA)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
+     // Bite presence, not the federal season window. Fish stay on the reefs
+     // into the fall; October tapers instead of going to zero.
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
   ],
 
   // ── GAG GROUPER ────────────────────────────────────────────────────────────
@@ -1052,10 +1141,12 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
     {centerLat: 29.0, centerLng: -85.5, radiusNm: 180, label: "FL Panhandle",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
-    {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf (LA/MS/AL)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 29.3, centerLng: -90.0, radiusNm: 180, label: "N. Gulf (LA)",
+     // Thin west of Florida. Present, not a peak target next to snapper.
+     // Centered on Venice so this does not pull the Florida Panhandle down.
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:1,Dec:0}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:1,Dec:0}},
   ],
 
   // ── GREATER AMBERJACK ────────────────────────────────────────────────────
@@ -1074,6 +1165,8 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX rigs)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
+    {centerLat: 26.4, centerLng: -78.3, radiusNm: 130, label: "Bahamas bank",
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:2,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
   ],
 
   // ── VERMILION SNAPPER (BEELINER) ─────────────────────────────────────────
@@ -1159,6 +1252,8 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 290, label: "Western Gulf (TX)",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    {centerLat: 26.4, centerLng: -78.3, radiusNm: 130, label: "Bahamas bank",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
   ],
 
   // ── SHEEPSHEAD ───────────────────────────────────────────────────────────
@@ -1204,6 +1299,8 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+    {centerLat: 26.4, centerLng: -78.3, radiusNm: 130, label: "Bahamas bank",
+     seasons:{Jan:1,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
   ],
 
   // ── HOGFISH ────────────────────────────────────────────────────────────────
@@ -1212,7 +1309,8 @@ const REGIONAL_SEASONS = {
   // fishery.
   hogfish: [
     {centerLat: 24.8, centerLng: -81.0, radiusNm: 140, label: "Florida Keys reefs",
-     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:3}},
+     // September fish are on the patch reefs. Winter stays the peak.
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:1,Jun:1,Jul:1,Aug:1,Sep:2,Oct:1,Nov:2,Dec:3}},
     {centerLat: 26.5, centerLng: -79.5, radiusNm: 120, label: "SE FL Atlantic reefs",
      seasons:{Jan:2,Feb:3,Mar:3,Apr:3,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:2}},
     {centerLat: 26.0, centerLng: -78.0, radiusNm: 170, label: "Bahamas",
@@ -1250,6 +1348,8 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 290, label: "Western Gulf (TX)",
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
+    {centerLat: 26.4, centerLng: -78.3, radiusNm: 130, label: "Bahamas bank",
+     seasons:{Jan:2,Feb:2,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
   ],
 
   // ── YELLOWTAIL SNAPPER (KEYS) ────────────────────────────────────────────
@@ -1326,6 +1426,21 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:1,Feb:0,Mar:0,Apr:3,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:3,Nov:3,Dec:2}},
     {centerLat: 35.0, centerLng: -75.5, radiusNm: 120, label: "NC / OBX (southern edge)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:2,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:2,Nov:2,Dec:1}},
+  ],
+
+  // ── ATLANTIC CROAKER ─────────────────────────────────────────────────────
+  // No regional table meant the generic summer curve offered croaker in the
+  // Keys. Real range is the Mid-Atlantic, Carolinas, and the Gulf.
+  croaker: [
+    {centerLat: 38.2, centerLng: -75.2, radiusNm: 240, label: "Mid-Atlantic / Chesapeake",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 34.8, centerLng: -76.6, radiusNm: 180, label: "NC sounds",
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 28.5, centerLng: -91.5, radiusNm: 360, label: "Gulf (TX through the Panhandle)",
+     seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
+    {centerLat: 29.8, centerLng: -81.2, radiusNm: 110, label: "NE Florida Atlantic",
+     // Stops short of Miami and the Keys.
+     seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
   ],
 };
 
