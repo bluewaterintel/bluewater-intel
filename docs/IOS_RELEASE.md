@@ -40,7 +40,7 @@ npm run build:ios && npx cap copy ios && npm run verify:iosbundle
 
 In the Xcode **Report navigator**, open the latest build → expand **Sync Capacitor Web Assets**. If you see `error: npm not in PATH`, Xcode skipped the copy and the simulator is still on old JavaScript. Fix: run the three commands above in Terminal, then build again — or quit Xcode and run `open ios/App/App.xcworkspace` from that same Terminal window.
 
-**UI checks:** Species dropdown is port-filtered — pick **San Diego, CA** (not Stuart or Venice). Encyclopedia: tap **All** (not only Offshore). Search **halibut**. In Safari Web Inspector (simulator), `window.BW_DATA_CONFIG.webBundle` should show `halibut: true` and `cacheTag: "20260924b"`.
+**UI checks:** Species dropdown is port-filtered — pick **San Diego, CA** (not Stuart or Venice). Encyclopedia: tap **All** (not only Offshore). Search **halibut**. In Safari Web Inspector (simulator), `window.BW_DATA_CONFIG.webBundle` should show `halibut: true`. Bundled `index.html` uses native cache bust `?v=b{androidVersionCode}` on all `bw-*.js` scripts (see `scripts/build-ios-www.mjs`).
 
 **Xcode 27 + RevenueCat:** The error `PaywallColor.swift:57 invalid redeclaration of init(stringRepresentation:)` means CocoaPods still has **unpatched** RevenueCat 5.51.1. `WKProcessPool` lines are warnings only.
 

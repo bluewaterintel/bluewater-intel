@@ -8,6 +8,13 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+function readAndroidVersionCode() {
+  const gradlePath = join(root, "android/app/build.gradle");
+  if (!existsSync(gradlePath)) return "";
+  const m = readFileSync(gradlePath, "utf8").match(/versionCode\s+(\d+)/);
+  return m ? m[1] : "";
+}
 const pub = join(root, "ios/App/App/public");
 const species = join(pub, "bw-data-species.js");
 const enc = join(pub, "bw-data-encyclopedia.js");
@@ -43,11 +50,28 @@ const corePub = join(pub, "bw-core.js");
 if (existsSync(corePub) && !read(corePub, "bw-core.js").includes("function speciesDisplayName")) {
   errors.push("ios/App/App/public/bw-core.js missing speciesDisplayName (Pacific Bonito labels)");
 }
-if (ix && !ix.includes("bw-core.js?v=20260925a")) {
-  errors.push("ios/App/App/public/index.html is missing bw-core cache bust ?v=20260925a");
-}
-if (ix && !ix.includes("bw-data-species.js?v=20260925b")) {
-  errors.push("ios/App/App/public/index.html is missing species cache bust ?v=20260925b (stale index.html in the iOS bundle)");
+const buildCode = readAndroidVersionCode();
+const nativeCacheQ = buildCode ? `?v=b${buildCode}` : "";
+if (ix && nativeCacheQ) {
+  if (!ix.includes(`bw-core.js${nativeCacheQ}`)) {
+    errors.push(
+      `ios/App/App/public/index.html is missing bw-core native cache bust ${nativeCacheQ} (run npm run build:ios — stale or web-only index.html)`
+    );
+  }
+  if (!ix.includes(`bw-data-species.js${nativeCacheQ}`)) {
+    errors.push(
+      `ios/App/App/public/index.html is missing species native cache bust ${nativeCacheQ} (stale index.html in the iOS bundle)`
+    );
+  }
+  const bwScriptTags = [...ix.matchAll(/src="(bw-[^"?]+\.js)(\?[^"]*)?"/g)];
+  const mismatched = bwScriptTags.filter((m) => m[2] !== nativeCacheQ);
+  if (bwScriptTags.length && mismatched.length) {
+    errors.push(
+      `index.html has ${mismatched.length} bw-*.js script(s) without ${nativeCacheQ} — native bundle cache bust is inconsistent`
+    );
+  }
+} else if (ix) {
+  errors.push("Could not read android/app/build.gradle versionCode for native cache bust check");
 }
 
 const rootSp = join(root, "bw-data-species.js");
