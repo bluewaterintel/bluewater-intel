@@ -601,6 +601,9 @@
     if(window.BW_BIOMETRIC && window.BW_BIOMETRIC.renderAccountToggle){
       window.BW_BIOMETRIC.renderAccountToggle().catch(() => {});
     }
+    if(window.BW_NATIVE && window.BW_paintNativeBuildStamp){
+      window.BW_paintNativeBuildStamp().catch(() => {});
+    }
     page.style.display = "block";
   };
   // Where the subscription was bought decides who can cancel it. Apple's rules
@@ -955,19 +958,55 @@ function bwPriceString(p){
   return p.priceString || p.localizedPriceString || p.price_string || null;
 }
 
-// A free trial on iOS is an App Store *introductory offer* with a zero price.
-// Returns {label, period, duration} when the monthly product carries one, else
-// null. `duration` is null when StoreKit does not report a usable period.
+function bwTrialDurationFromUnits(n, unitRaw){
+  const unit = String(unitRaw || "").toLowerCase().replace(/s$/, "");
+  if(!n || !unit) return null;
+  return `${n} ${unit}${n === 1 ? "" : "s"}`;
+}
+
+function bwTrialDurationFromIso(iso){
+  const m = String(iso || "").match(/^P(\d+)(D|W|M|Y)$/i);
+  if(!m) return null;
+  const map = { D: "day", W: "week", M: "month", Y: "year" };
+  return bwTrialDurationFromUnits(Number(m[1]), map[m[2].toUpperCase()]);
+}
+
+function bwGoogleFreeTrialDuration(product){
+  const opt = product && (product.defaultOption || product.default_option);
+  const phase = opt && (opt.freePhase || opt.freeTrialPhase || opt.free_trial_phase);
+  if(!phase) return null;
+  const price = phase.price || {};
+  const micros = Number(price.amountMicros ?? price.amount_micros);
+  if(Number.isFinite(micros) && micros > 0) return null;
+  const bp = phase.billingPeriod || phase.billing_period;
+  if(typeof bp === "string") return bwTrialDurationFromIso(bp);
+  if(bp){
+    const n = Number(bp.value ?? bp.periodNumberOfUnits ?? bp.period_number_of_units) || 0;
+    const unit = bp.unit ?? bp.periodUnit ?? bp.period_unit;
+    return bwTrialDurationFromUnits(n, unit);
+  }
+  return null;
+}
+
+// Free trial: App Store introductory offer (introPrice) or Google Play freePhase on defaultOption.
+// Returns {label, period, duration} when the monthly product carries one, else null.
 function bwIntroTrial(product){
   const intro = product && (product.introPrice || product.intro_price);
-  if(!intro) return null;
-  const price = Number(intro.price);
-  if(!Number.isFinite(price) || price > 0) return null;
-  const n = Number(intro.periodNumberOfUnits ?? intro.period_number_of_units) || 0;
-  const unit = String(intro.periodUnit || intro.period_unit || "").toLowerCase().replace(/s$/, "");
-  if(!n || !unit) return { label: "Free trial", period: "free trial", duration: null };
-  const duration = `${n} ${unit}${n === 1 ? "" : "s"}`;
-  return { label: `${n}-${unit} free trial`, period: `${duration} free`, duration };
+  if(intro){
+    const price = Number(intro.price);
+    if(Number.isFinite(price) && price <= 0){
+      const n = Number(intro.periodNumberOfUnits ?? intro.period_number_of_units) || 0;
+      const unit = String(intro.periodUnit || intro.period_unit || "").toLowerCase().replace(/s$/, "");
+      if(!n || !unit) return { label: "Free trial", period: "free trial", duration: null };
+      const duration = bwTrialDurationFromUnits(n, unit);
+      return { label: `${n}-${unit} free trial`, period: `${duration} free`, duration };
+    }
+  }
+  const googleDur = bwGoogleFreeTrialDuration(product);
+  if(googleDur){
+    return { label: `${googleDur} free trial`, period: `${googleDur} free`, duration: googleDur };
+  }
+  return null;
 }
 
 // Guideline 3.1.2(c): the billed amount must be at least as clear and

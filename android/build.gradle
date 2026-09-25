@@ -22,6 +22,11 @@ allprojects {
         google()
         mavenCentral()
     }
+    configurations.configureEach {
+        resolutionStrategy {
+            force 'com.android.billingclient:billing:8.0.0'
+        }
+    }
 }
 
 task clean(type: Delete) {

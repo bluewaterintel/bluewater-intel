@@ -9,6 +9,13 @@
     annual: "com.bluewaterintel.app.pro.annual",
   };
 
+  /** Google Play Billing 5+ often returns `subscriptionId:basePlanId`. */
+  function storeProductMatches(productId, expected) {
+    if (!productId || !expected) return false;
+    if (productId === expected) return true;
+    return productId.startsWith(`${expected}:`);
+  }
+
   let configured = false;
   let configuredUserId = null;
   let Purchases = null;
@@ -163,7 +170,10 @@
       const { products } = await plugin.getProducts({ productIdentifiers: ids });
       const byId = {};
       for (const p of products || []) {
-        if (p && p.identifier) byId[p.identifier] = p;
+        if (!p || !p.identifier) continue;
+        byId[p.identifier] = p;
+        if (storeProductMatches(p.identifier, PRODUCT.monthly)) byId[PRODUCT.monthly] = p;
+        if (storeProductMatches(p.identifier, PRODUCT.annual)) byId[PRODUCT.annual] = p;
       }
       const eligibility = await trialEligibility(ids);
       return {
@@ -221,7 +231,7 @@
         "Could not load subscription options. Try again.",
       );
       const pkg = offerings?.current?.availablePackages?.find(
-        (p) => p.product && p.product.identifier === productId,
+        (p) => p.product && storeProductMatches(p.product.identifier, productId),
       ) || offerings?.current?.availablePackages?.[0];
       if (pkg) {
         const { customerInfo } = await withTimeout(
@@ -246,7 +256,7 @@
         ? "Could not load Google Play products. Try again in a moment."
         : "Could not load App Store products. Try again in a moment.",
     );
-    const product = products && products.find((p) => p.identifier === productId);
+    const product = products && products.find((p) => storeProductMatches(p.identifier, productId));
     if (!product) {
       throw new Error(
         isAndroid()
