@@ -1,5 +1,6 @@
 import { NetCDFReader } from "npm:netcdfjs";
 import { ERDDAP_HEADERS, ERDDAP_POLARWATCH, fetchNoaa } from "../_shared/erddap.ts";
+import { pickPointWeather } from "./pick-point-weather.ts";
 
 // ============================================================================
 // Bluewater Intel — Milestone 4: ocean data proxy
@@ -143,6 +144,9 @@ const BUOYS: { id: string; lat: number; lng: number }[] = [
   { id: "44065", lat: 40.37, lng: -73.70 }, // NY Harbor entrance
   { id: "44009", lat: 38.46, lng: -74.70 }, // Delaware Bay
   { id: "44100", lat: 36.26, lng: -75.59 }, // Duck, NC (Outer Banks)
+  { id: "44095", lat: 35.75, lng: -75.33 }, // Oregon Inlet, NC
+  { id: "41120", lat: 35.258, lng: -75.285 }, // Cape Hatteras East, NC
+  { id: "41025", lat: 35.026, lng: -75.40 }, // Diamond Shoals, NC
   { id: "44014", lat: 36.61, lng: -74.84 }, // Virginia Beach
   { id: "41001", lat: 34.72, lng: -72.32 }, // E of Cape Hatteras
   { id: "41002", lat: 31.76, lng: -74.84 }, // S Hatteras
@@ -363,14 +367,6 @@ async function fetchModelMarine(lat: number, lng: number, hoursAhead = 0): Promi
   })();
   marineCache.set(k, { atMs: now, p });
   return p;
-}
-
-function pickWaves(
-  buoyWaves: { value: number | null; periodS?: number | null; observedAtMs: number | null } | null | undefined,
-  marine: MarineRec,
-) {
-  if (buoyWaves?.value != null) return buoyWaves;
-  return marine.waves;
 }
 
 // ── Gridded wind field for a bounding box (Open-Meteo bulk, ONE request) ──────
@@ -957,24 +953,56 @@ async function fetchBuoy(lat: number, lng: number) {
     .sort((a, b) => a.nm - b.nm); // nearest first
   if (!recs.length) return null;
   const nullField = { value: null as number | null, observedAtMs: null as number | null };
-  // Wind: take the nearest buoy that has both speed and direction.
-  let wind: BuoyRec["wind"] | null = null;
-  for (const { rec } of recs) { if (rec.wind && rec.wind.value != null && rec.wind.dir != null) { wind = rec.wind; break; } }
-  // Other fields: nearest buoy reporting a value.
-  const pick = (sel: (r: BuoyRec) => { value: number | null }) => {
-    for (const { rec } of recs) { const f = sel(rec); if (f && f.value != null) return f; }
+  // Nearest station that actually reports the field. Distance and age are
+  // applied later in pickPointWeather — a July reading 140 nm away must not win.
+  const pick = <T extends { value: number | null }>(sel: (r: BuoyRec) => T | null | undefined) => {
+    for (const { rec, nm } of recs) {
+      const f = sel(rec);
+      if (f && f.value != null) return { field: f, nm, id: rec.id };
+    }
     return null;
   };
+  const wind = pick((r) => (r.wind?.value != null && r.wind.dir != null ? r.wind : null));
+  const waves = pick((r) => r.waves);
+  const waterTemp = pick((r) => r.waterTemp);
+  const airTemp = pick((r) => r.airTemp);
+  const pressure = pick((r) => r.pressure);
+  const barometer = pick((r) => r.barometer);
   return {
     buoyId: recs[0].rec.id, buoyNm: Math.round(recs[0].nm),
     observedAtMs: recs[0].rec.observedAtMs,
-    wind: wind ?? { value: null, dir: null, observedAtMs: null },
-    waves: pick((r) => r.waves) ?? nullField,
-    waterTemp: pick((r) => r.waterTemp) ?? nullField,
-    airTemp: pick((r) => r.airTemp) ?? nullField,
-    pressure: pick((r) => r.pressure) ?? nullField,
-    barometer: pick((r) => r.barometer) ?? nullField,
+    wind: wind?.field ?? { value: null, dir: null, observedAtMs: null },
+    windNm: wind?.nm ?? null,
+    waves: waves?.field ?? nullField,
+    waveNm: waves?.nm ?? null,
+    waveId: waves?.id ?? null,
+    waterTemp: waterTemp?.field ?? nullField,
+    airTemp: airTemp?.field ?? nullField,
+    pressure: pressure?.field ?? nullField,
+    pressureNm: pressure?.nm ?? null,
+    barometer: barometer?.field ?? nullField,
   };
+}
+
+function weatherAtPoint(
+  buoy: Awaited<ReturnType<typeof fetchBuoy>>,
+  model: ModelWindRec,
+  marine: MarineRec,
+) {
+  return pickPointWeather({
+    nowMs: Date.now(),
+    buoyWind: buoy?.wind ?? null,
+    buoyWindNm: buoy?.windNm ?? null,
+    buoyWaves: buoy?.waves ?? null,
+    buoyWaveNm: buoy?.waveNm ?? null,
+    buoyPressure: buoy?.pressure ?? null,
+    buoyPressureNm: buoy?.pressureNm ?? null,
+    buoyBarometer: buoy?.barometer ?? null,
+    modelWind: model.wind,
+    modelPressure: model.pressure,
+    modelBarometer: model.barometer,
+    marineWaves: marine.waves,
+  });
 }
 
 // ── Distance- & freshness-weighted SST blend (grid base + buoy correction) ───
@@ -1077,7 +1105,7 @@ async function fetchGridPoint(
   try {
     // Some NOAA ERDDAP hosts (e.g. coastwatch.noaa.gov) reject requests that lack
     // a conventional User-Agent (the default Deno UA gets a 403), so set one.
-    const r = await fetchNoaa(url, 9000);
+    const r = await fetchNoaa(url, 28000);
     if (!r || !r.ok) return { value: null, observedAtMs: null };
     const d = await r.json();
     const cols: string[] = d?.table?.columnNames ?? [];
@@ -1285,19 +1313,20 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
   const buoySst = nearestBuoySst(lat, lng, buoyTemps);
   const sstF = blendSst(gridSstF, buoySst);
   const wx = useForecast && model ? forecastWeatherFields(model, marine, hoursAhead) : null;
-  const waves = wx ? wx.waves : pickWaves(buoy?.waves, marine);
+  const live = wx ? null : weatherAtPoint(buoy, model, marine);
+  const waves = wx ? wx.waves : live!.waves;
   return {
     point: { lat, lng },
     fetchedAtMs: Date.now(),
     ...(wx ? { forecastHour: wx.forecastHour } : {}),
     sst: sstF,
     chlor: { value: chlorRaw.value, observedAtMs: chlorRaw.observedAtMs },
-    wind: wx ? wx.wind : (buoy?.wind ?? { value: null, observedAtMs: null }),
+    wind: wx ? wx.wind : live!.wind,
     waves,
     waterTemp: wx ? wx.waterTemp : (buoy?.waterTemp ?? { value: null, observedAtMs: null }),
-    airTemp: wx ? wx.airTemp : (buoy?.airTemp ?? { value: null, observedAtMs: null }),
-    pressure: wx ? wx.pressure : (buoy?.pressure ?? { value: null, observedAtMs: null }),
-    barometer: wx ? wx.barometer : (buoy?.barometer ?? { value: null, observedAtMs: null }),
+    airTemp: wx ? wx.airTemp : (buoy?.airTemp?.value != null ? buoy.airTemp : model.airTemp),
+    pressure: wx ? wx.pressure : live!.pressure,
+    barometer: wx ? wx.barometer : live!.barometer,
     tide: tidePayload(tide),
     current,
     sources: {
@@ -1306,7 +1335,7 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
       chlor: CHL_DATASET,
       buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
       tide: tide.station,
-      waves: buoy?.waves?.value != null ? `NDBC ${buoy.buoyId}` : marine.source,
+      waves: wx ? (marine.source) : (live!.wavesFrom === "buoy" && buoy?.waveId ? `NDBC ${buoy.waveId}` : marine.source),
       current: current ? "RTOFS ESPC-D-V02" : null,
       ...(wx?.sources ?? {}),
     },
@@ -1361,7 +1390,7 @@ async function fetchSstRows(
     + `?${SST_VAR}${timeIdx}${altIdx}`
     + `%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
   const timeoutMs = Math.max(5000, Math.min(60000,
-    (typeof opts.timeoutMs === "number" && isFinite(opts.timeoutMs)) ? opts.timeoutMs : 20000));
+    (typeof opts.timeoutMs === "number" && isFinite(opts.timeoutMs)) ? opts.timeoutMs : 35000));
   const retries = Math.max(0, Math.min(2, opts.retries ?? 0));
   try {
     let r: Response | null = null;
@@ -1420,28 +1449,28 @@ async function assembleConditions(lat: number, lng: number, hoursAhead = 0) {
     gridSstF = { value: Math.round((c * 9 / 5 + 32) * 10) / 10, observedAtMs: sst.observedAtMs };
   }
   const wx = useForecast && model ? forecastWeatherFields(model, marine, hoursAhead) : null;
-  const waves = wx ? wx.waves : pickWaves(buoy?.waves, marine);
+  const live = wx ? null : weatherAtPoint(buoy, model, marine);
   return {
     point: { lat, lng },
     fetchedAtMs: Date.now(),
     ...(wx ? { forecastHour: wx.forecastHour } : {}),
     sst: gridSstF,
     chlor: { value: null, observedAtMs: null },
-    wind: wx ? wx.wind : (buoy?.wind ?? model.wind ?? { value: null, observedAtMs: null }),
-    waves,
+    wind: wx ? wx.wind : live!.wind,
+    waves: wx ? wx.waves : live!.waves,
     waterTemp: wx ? wx.waterTemp : (buoy?.waterTemp ?? { value: null, observedAtMs: null }),
-    airTemp: wx ? wx.airTemp : (buoy?.airTemp ?? model.airTemp ?? { value: null, observedAtMs: null }),
-    pressure: wx ? wx.pressure : (buoy?.pressure ?? model.pressure ?? { value: null, observedAtMs: null }),
-    barometer: wx ? wx.barometer : (buoy?.barometer ?? model.barometer ?? { value: null, observedAtMs: null }),
+    airTemp: wx ? wx.airTemp : (buoy?.airTemp?.value != null ? buoy.airTemp : model.airTemp),
+    pressure: wx ? wx.pressure : live!.pressure,
+    barometer: wx ? wx.barometer : live!.barometer,
     tide: tidePayload(tide),
     current: null,
     sources: {
       sst: gridSstF.value != null ? SST_DATASET : null,
       buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
       tide: tide.station,
-      waves: buoy?.waves?.value != null ? `NDBC ${buoy.buoyId}` : marine.source,
+      waves: wx ? marine.source : (live!.wavesFrom === "buoy" && buoy?.waveId ? `NDBC ${buoy.waveId}` : marine.source),
       ...(wx?.sources ?? {}),
-      ...(!wx && !buoy?.wind?.value && model.wind.value != null ? { wind: model.source } : {}),
+      ...(!wx && live!.windFrom === "model" ? { wind: model.source } : {}),
     },
   };
 }
@@ -1472,26 +1501,29 @@ async function assembleFieldPoint(lat: number, lng: number, hoursAhead = 0) {
       sources: { ...wx.sources, tide: tide.station },
     };
   }
-  const [buoy, marine, tide] = await Promise.all([
+  const [buoy, marine, model, tide] = await Promise.all([
     fetchBuoy(lat, lng),
     fetchModelMarine(lat, lng, 0),
+    fetchModelWind(lat, lng, 0),
     fetchTide(lat, lng, hoursAhead),
   ]);
+  const live = weatherAtPoint(buoy, model, marine);
   return {
     point: { lat, lng },
     fetchedAtMs: Date.now(),
     sst: { value: null, observedAtMs: null },
     chlor: { value: null, observedAtMs: null },
-    wind: buoy?.wind ?? { value: null, observedAtMs: null },
-    waves: pickWaves(buoy?.waves, marine),
+    wind: live.wind,
+    waves: live.waves,
     waterTemp: buoy?.waterTemp ?? { value: null, observedAtMs: null },
-    airTemp: buoy?.airTemp ?? { value: null, observedAtMs: null },
-    pressure: buoy?.pressure ?? { value: null, observedAtMs: null },
-    barometer: buoy?.barometer ?? { value: null, observedAtMs: null },
+    airTemp: buoy?.airTemp?.value != null ? buoy.airTemp : model.airTemp,
+    pressure: live.pressure,
+    barometer: live.barometer,
     tide: tidePayload(tide),
     sources: {
       buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
-      waves: buoy?.waves?.value != null ? `NDBC ${buoy.buoyId}` : marine.source,
+      waves: live.wavesFrom === "buoy" && buoy?.waveId ? `NDBC ${buoy.waveId}` : marine.source,
+      wind: live.windFrom === "model" ? model.source : (buoy ? `NDBC ${buoy.buoyId}` : model.source),
       tide: tide.station,
     },
   };
@@ -1646,7 +1678,7 @@ async function fetchEtopoRows(latMin: number, latMax: number, lngMin: number, ln
   const url = `${ETOPO_ERDDAP}/${ETOPO_DATASET}.json`
     + `?altitude%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(12000), headers: ERDDAP_HEADERS });
+    const r = await fetch(url, { signal: AbortSignal.timeout(28000), headers: ERDDAP_HEADERS });
     if (!r.ok) return { stepDeg: strideIdx * ETOPO_STEP_DEG, rows: [] as unknown[][], source: "ETOPO" };
     const d = await r.json();
     const cols: string[] = d?.table?.columnNames ?? [];

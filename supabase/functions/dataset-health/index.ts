@@ -142,10 +142,11 @@ async function probeErddapPoint(cfg: {
   id: string; label: string; category: "core" | "supporting";
   base: string; dataset: string; varName: string; hasAltitude: boolean;
   amberAfter: number; redAfter: number; scale?: (v: number) => number;
+  timeoutMs?: number;
 }): Promise<Probe> {
   const altIdx = cfg.hasAltitude ? "%5B(0.0)%5D" : "";
   const url = `${cfg.base}/${cfg.dataset}.json?${cfg.varName}%5B(last)%5D${altIdx}%5B(${PROBE_LAT})%5D%5B(${PROBE_LNG})%5D`;
-  const { res, ms } = await timedFetch(url);
+  const { res, ms } = await timedFetch(url, cfg.timeoutMs ?? 12000);
   const httpOk = !!res && res.ok;
   let value: number | null = null;
   let obsAt: string | null = null;
@@ -183,7 +184,7 @@ async function probeErddapPoint(cfg: {
 // ── ETOPO relief probe (static — reachability + a real depth only) ───────────
 async function probeEtopo(): Promise<Probe> {
   const url = `${ETOPO_ERDDAP}/${ETOPO_DATASET}.json?altitude%5B(${PROBE_LAT})%5D%5B(${PROBE_LNG})%5D`;
-  const { res, ms } = await timedFetch(url);
+  const { res, ms } = await timedFetch(url, 28000);
   const httpOk = !!res && res.ok;
   let value: number | null = null;
   if (httpOk) {
@@ -344,7 +345,7 @@ async function runAllProbes(): Promise<Probe[]> {
     probeErddapPoint({
       id: "sst", label: "Sea-surface temperature — MUR (jplMURSST41)", category: "core",
       base: SST_ERDDAP, dataset: SST_DATASET, varName: SST_VAR, hasAltitude: SST_HAS_ALTITUDE,
-      amberAfter: 72, redAfter: 144, scale: sstScale,
+      amberAfter: 72, redAfter: 144, scale: sstScale, timeoutMs: 28000,
     }),
     probeErddapPoint({
       id: "chlor", label: "Chlorophyll — VIIRS DINEOF NRT", category: "core",
