@@ -312,6 +312,37 @@ console.log("\nsnook stays on inlets and beaches, not mid-shelf wrecks:");
   check("Vero September snook stays in season", blended.Sep >= 2.5);
 }
 
+console.log("\nMid-Atlantic / OBX mahi stay in season through late September:");
+{
+  function seasonOn(lat, lng, monthIndex) {
+    const curve = getRegionalSeasons("mahi", lat, lng);
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const m0 = Math.floor(monthIndex);
+    const frac = monthIndex - m0;
+    const v = (curve[months[m0]] || 0) * (1 - frac) + (curve[months[(m0 + 1) % 12]] || 0) * frac;
+    return v / 3;
+  }
+  // Sep 25 ≈ month index 8 + 24/30
+  const lateSep = 8 + 24 / 30;
+  const oi = PORTS["Oregon Inlet, NC"];
+  const vb = PORTS["Virginia Beach, VA"];
+  const canyon = { lat: 35.903, lng: -74.760 };
+  for (const [name, lat, lng] of [
+    ["Oregon Inlet", oi.lat, oi.lng],
+    ["Virginia Beach", vb.lat, vb.lng],
+    ["Washington Canyon cell", canyon.lat, canyon.lng],
+  ]) {
+    const s = seasonOn(lat, lng, lateSep);
+    check(`${name} late-September mahi is not off`, seasonAlignmentLabel(s) !== "off");
+    check(`${name} September table is peak`, getRegionalSeasons("mahi", lat, lng).Sep >= 2.5);
+  }
+  const sd = PORTS["San Diego, CA"];
+  check("San Diego September dorado stays peak", getRegionalSeasons("mahi", sd.lat, sd.lng).Sep >= 2.5);
+  const kw = PORTS["Key West, FL"];
+  check("Key West May stays the bigger month than a random fall bump",
+    getRegionalSeasons("mahi", kw.lat, kw.lng).May >= getRegionalSeasons("mahi", kw.lat, kw.lng).Sep);
+}
+
 console.log("\nKeys/SE FL mahi stay findable on weeds in late summer; NC stays cooler:");
 {
   const kw = PORTS["Key West, FL"];

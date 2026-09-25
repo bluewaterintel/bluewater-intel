@@ -674,17 +674,20 @@ const REGIONAL_SEASONS = {
   ],
 
   // ── MAHI (DOLPHINFISH) ─────────────────────────────────────────────────
-  // NC/Mid-Atlantic late-spring–summer (peak May–Jul off NC); FL spring peak
-  // and near year-round in the south; NE mid-summer; Gulf spring–fall; plus a
-  // SoCal (dorado) summer/fall paddy fishery that MUST be covered or the
-  // out-of-range guard would suppress every California cell.
+  // NC/OBX and the Mid-Atlantic canyons: spring arrival, then a real fall
+  // weedline peak (Aug–Sep, still good in October). Do not drop October to 1 —
+  // late September interpolates toward October, and a 2→1 slide was labeling
+  // Oregon Inlet / Virginia Beach "off" during limit weeks. FL spring peak
+  // and a long tail in the south; NE canyons are good but not a limit fishery;
+  // Gulf spring–fall; SoCal (dorado) summer/fall paddies MUST stay covered or
+  // the out-of-range guard suppresses every California cell.
   mahi: [
     {centerLat: 40.5, centerLng: -70.0, radiusNm: 230, label: "New England canyons",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:1,Jul:2,Aug:2,Sep:2,Oct:1,Nov:0,Dec:0}},
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:1,Jul:2,Aug:2,Sep:2,Oct:2,Nov:0,Dec:0}},
     {centerLat: 38.3, centerLng: -73.3, radiusNm: 200, label: "Mid-Atlantic canyons",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:2,Sep:2,Oct:1,Nov:0,Dec:0}},
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
     {centerLat: 35.3, centerLng: -75.0, radiusNm: 160, label: "NC / OBX",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:3,Jun:3,Jul:3,Aug:2,Sep:2,Oct:1,Nov:0,Dec:0}},
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 32.8, centerLng: -77.8, radiusNm: 200, label: "Carolinas",
      seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:1,Nov:1,Dec:0}},
     {centerLat: 30.0, centerLng: -80.0, radiusNm: 200, label: "GA / NE Florida",

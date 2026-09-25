@@ -46,8 +46,8 @@ if (existsSync(corePub) && !read(corePub, "bw-core.js").includes("function speci
 if (ix && !ix.includes("bw-core.js?v=20260925a")) {
   errors.push("ios/App/App/public/index.html is missing bw-core cache bust ?v=20260925a");
 }
-if (ix && !ix.includes("bw-data-species.js?v=20260924b")) {
-  errors.push("ios/App/App/public/index.html is missing species cache bust ?v=20260924b (stale index.html in the iOS bundle)");
+if (ix && !ix.includes("bw-data-species.js?v=20260925b")) {
+  errors.push("ios/App/App/public/index.html is missing species cache bust ?v=20260925b (stale index.html in the iOS bundle)");
 }
 
 const rootSp = join(root, "bw-data-species.js");
