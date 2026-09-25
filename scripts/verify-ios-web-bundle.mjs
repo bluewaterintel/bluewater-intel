@@ -36,6 +36,16 @@ if (sp && !sp.includes('id:"whiteseabass"')) {
 if (en && !en.includes("California Halibut")) {
   errors.push("ios/App/App/public/bw-data-encyclopedia.js has no California Halibut entry");
 }
+if (en && !en.includes('id:"pacificbonito"')) {
+  errors.push("ios/App/App/public/bw-data-encyclopedia.js has no Pacific Bonito entry");
+}
+const corePub = join(pub, "bw-core.js");
+if (existsSync(corePub) && !read(corePub, "bw-core.js").includes("function speciesDisplayName")) {
+  errors.push("ios/App/App/public/bw-core.js missing speciesDisplayName (Pacific Bonito labels)");
+}
+if (ix && !ix.includes("bw-core.js?v=20260925a")) {
+  errors.push("ios/App/App/public/index.html is missing bw-core cache bust ?v=20260925a");
+}
 if (ix && !ix.includes("bw-data-species.js?v=20260924b")) {
   errors.push("ios/App/App/public/index.html is missing species cache bust ?v=20260924b (stale index.html in the iOS bundle)");
 }

@@ -437,6 +437,7 @@ const TB_TACKLE = [
 
   // ── ATLANTIC BONITO ───────────────────────────────────────────────────
   {id:"bn-deadly-dick",name:"Deadly Dick / Epoxy Jig",icon:"⚡",cat:"Casting Lure",
+   atlanticBonitoOnly:true,
    species:["bonito","falsealbacore","bluefish","striper"],technique:["casting"],
    waterClarity:["clear","green"],light:["bright","overcast","lowlight"],
    speed:[0,0],sizeIn:3,
@@ -445,6 +446,7 @@ const TB_TACKLE = [
    tip:"Cast AHEAD of moving schools — bonito are fast and won't double back. Burn the retrieve. Small profiles win when fish are picky."},
 
   {id:"bn-sand-eel-jig",name:"Sand Eel Soft Plastic",icon:"🪱",cat:"Soft Plastic",
+   atlanticBonitoOnly:true,
    species:["bonito","falsealbacore","bluefish","striper"],technique:["casting"],
    waterClarity:["clear","green"],light:["lowlight","overcast"],
    speed:[0,0],sizeIn:4,
@@ -1320,6 +1322,43 @@ const TB_TACKLE = [
   // ══════════════════════════════════════════════════════════════════════════
   // PACIFIC / CALIFORNIA
   // ══════════════════════════════════════════════════════════════════════════
+  // ── PACIFIC BONITO (SoCal / Baja) ───────────────────────────────────────
+  {id:"bn-pac-surface-iron",name:"Small Surface Iron (Tady 45 / Salas 7X Light)",icon:"🥄",cat:"Casting Lure",
+   species:["bonito"],technique:["casting"],
+   priority:{bonito:1},
+   waterClarity:["clear","green"],light:["lowlight","overcast","bright"],
+   speed:[0,0],sizeIn:6,
+   colors:["Blue/White","Scrambled Egg","Sardine","Chrome"],
+   bestTemp:[62,74],bestSeason:["spring","summer","fall"],
+   tip:"Long cast past the boil, rod tip low, steady fast wind. Pacific bonito want speed — the bite usually dies once the sun gets high on clear days."},
+
+  {id:"bn-pac-fly-anchovy",name:"Fly-Lined Live Anchovy",icon:"🐠",cat:"Live Bait",
+   species:["bonito"],technique:["livebait"],
+   priority:{bonito:1},
+   waterClarity:["clear","green"],light:["bright","overcast","lowlight"],
+   speed:[0,0],sizeIn:5,
+   colors:["Natural"],
+   bestTemp:[62,74],bestSeason:["spring","summer","fall"],
+   tip:"Collar-hook a lively anchovy, no weight, and cast into the edge of the school. Let it swim away from the boat — bonito often eat the free-swimming bait when they ignore metal."},
+
+  {id:"bn-pac-burned-spoon",name:"Burned Chrome Spoon / Colt Sniper",icon:"🥄",cat:"Casting Lure",
+   species:["bonito"],technique:["casting"],
+   priority:{bonito:2},
+   waterClarity:["clear","green"],light:["bright","overcast","lowlight"],
+   speed:[0,0],sizeIn:4,
+   colors:["Chrome","Blue/Chrome","Nickel"],
+   bestTemp:[62,74],bestSeason:["spring","summer","fall"],
+   tip:"Small profile, maximum retrieve speed. Cast ahead of moving birds and burn it back — match the frantic bait, not a lazy Atlantic sand-eel twitch."},
+
+  {id:"bn-pac-search-feather",name:"Small Search Feather / Mini Cedar",icon:"🪶",cat:"Trolling Lure",
+   species:["bonito"],technique:["trolling","casting"],
+   priority:{bonito:2},
+   waterClarity:["any"],light:["bright","overcast","lowlight"],
+   speed:[4,7],sizeIn:5,
+   colors:["Green/Yellow","Blue/White","Bonito","Natural"],
+   bestTemp:[62,74],bestSeason:["spring","summer","fall"],
+   tip:"Slow-troll a small feather or mini cedar behind the boat when schools are scattered. Drop to 4-5 kt when fish are finicky; bump speed when they want a faster pass."},
+
   // ── CALIFORNIA YELLOWTAIL ────────────────────────────────────────────────
   {id:"cayt-live-sardine",name:"Fly-Lined Live Sardine",icon:"🐠",cat:"Live Bait",
    species:["cayellowtail","calicobass","bonito","yellowfin"],technique:["livebait"],

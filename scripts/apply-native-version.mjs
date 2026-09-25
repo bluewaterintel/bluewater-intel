@@ -16,13 +16,17 @@ export function loadNativeVersion() {
   if (!versionName || !Number.isFinite(versionCode) || versionCode < 1) {
     throw new Error(`Invalid ${versionPath}: need versionName and versionCode`);
   }
-  return { versionName, versionCode };
+  const androidVersionCode = raw.androidVersionCode != null
+    ? parseInt(String(raw.androidVersionCode), 10)
+    : versionCode;
+  return { versionName, versionCode, androidVersionCode };
 }
 
-export function applyNativeVersion({ versionName, versionCode }) {
+export function applyNativeVersion({ versionName, versionCode, androidVersionCode }) {
+  const androidCode = androidVersionCode ?? versionCode;
   const gradlePath = join(root, "android/app/build.gradle");
   let gradle = readFileSync(gradlePath, "utf8");
-  gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${versionCode}`);
+  gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${androidCode}`);
   gradle = gradle.replace(/versionName\s+"[^"]+"/, `versionName "${versionName}"`);
   writeFileSync(gradlePath, gradle);
 

@@ -26,6 +26,9 @@ function readAndroidVersions(gradlePath) {
 
 export function verifyNativeVersion() {
   const expected = loadNativeVersion();
+  const androidCodeExpected = String(
+    expected.androidVersionCode ?? expected.versionCode,
+  );
   const pbxPath = join(root, "ios/App/App.xcodeproj/project.pbxproj");
   const gradlePath = join(root, "android/app/build.gradle");
   const ios = readIosVersions(pbxPath);
@@ -50,8 +53,8 @@ export function verifyNativeVersion() {
   if (android.versionName !== expected.versionName) {
     errors.push(`Android versionName: expected ${expected.versionName}, found ${android.versionName}`);
   }
-  if (android.versionCode !== String(expected.versionCode)) {
-    errors.push(`Android versionCode: expected ${expected.versionCode}, found ${android.versionCode}`);
+  if (android.versionCode !== androidCodeExpected) {
+    errors.push(`Android versionCode: expected ${androidCodeExpected}, found ${android.versionCode}`);
   }
 
   return { ok: errors.length === 0, expected, errors, ios, android };

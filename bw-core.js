@@ -4039,7 +4039,9 @@ function scoreCell(lat, lng, speciesId){
   let _seasonGateActive = false;   // only gate when a real seasonal curve exists
   let _seasonOutOfRange = false;   // species has a regional map but cell is outside it
   if(typeof ENC_SPECIES !== "undefined"){
-    const spEnc = ENC_SPECIES.find(s => s.id === speciesId);
+    const encId = (typeof encyclopediaEntryId === "function")
+      ? encyclopediaEntryId(speciesId, lat, lng) : speciesId;
+    const spEnc = ENC_SPECIES.find(s => s.id === encId);
     if(spEnc && spEnc.seasons){
       const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
       const now = new Date();
@@ -4604,6 +4606,31 @@ function isGulfContext(lat, lng){
 // longitude, so this can never trigger for an East Coast/Gulf location.
 function isPacificContext(lat, lng){
   return lng != null && lng <= -116.5 && lat >= 28.0 && lat <= 42.5;
+}
+
+// Display name + encyclopedia routing: bonito id stays "bonito" everywhere; Pacific
+// ports label the fish Pacific Bonito and pull the pacificbonito encyclopedia entry.
+function speciesDisplayName(speciesId, lat, lng){
+  const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
+  if(!sp) return speciesId;
+  if(speciesId === "bonito" && lat != null && lng != null
+     && typeof isPacificContext === "function" && isPacificContext(lat, lng)){
+    return "Pacific Bonito";
+  }
+  return sp.name;
+}
+function encyclopediaEntryId(speciesId, lat, lng){
+  if(speciesId === "bonito" && lat != null && lng != null
+     && typeof isPacificContext === "function" && isPacificContext(lat, lng)){
+    return "pacificbonito";
+  }
+  return speciesId;
+}
+function activePortSpeciesDisplayName(speciesId){
+  const portObj = (typeof activePort !== "undefined" && activePort && PORTS[activePort])
+    ? PORTS[activePort] : null;
+  if(!portObj) return speciesDisplayName(speciesId, null, null);
+  return speciesDisplayName(speciesId, portObj.lat, portObj.lng);
 }
 
 // ── Florida peninsula coast constraint ──────────────────────────────────────
@@ -6482,8 +6509,10 @@ function briefRunMetaFromPort(portObj, lat, lng){
 // Pacific overrides win in Pacific water so a San Diego brief does not quote
 // Atlantic temperature bands.
 function briefSpeciesProfile(speciesId, lat, lng){
+  const encId = (typeof encyclopediaEntryId === "function")
+    ? encyclopediaEntryId(speciesId, lat, lng) : speciesId;
   const enc = (typeof ENC_SPECIES !== "undefined")
-    ? ENC_SPECIES.find(s => s.id === speciesId) : null;
+    ? ENC_SPECIES.find(s => s.id === encId) : null;
   let prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
   if(lat != null && lng != null && typeof isPacificContext === "function" && isPacificContext(lat, lng)
      && typeof PACIFIC_SPECIES_PREFS !== "undefined" && PACIFIC_SPECIES_PREFS[speciesId]){
@@ -19229,8 +19258,11 @@ function buildSpDropdown(){
       .slice().sort((a,b)=>a.name.localeCompare(b.name, undefined, {sensitivity:"base"}));
     html+=`<div class="sc-lbl">${cat.toUpperCase()}</div>`;
     items.forEach(sp=>{
+      const label = portObj
+        ? speciesDisplayName(sp.id, portObj.lat, portObj.lng)
+        : sp.name;
       html+=`<button class="sp-opt ${sp.id===activeSpId?"sel":""}" onclick="selectSp('${sp.id}')">
-        <div class="sdot" style="background:${sp.color}"></div>${sp.name}
+        <div class="sdot" style="background:${sp.color}"></div>${label}
         ${sp.id===activeSpId?`<span style="margin-left:auto;color:${sp.color}">✓</span>`:""}
       </button>`;
     });
@@ -19348,7 +19380,7 @@ function updateEmptyState(){
     }
     if(textEl){
       textEl.innerHTML =
-        `<b>${sp ? sp.name : activeSpId}</b> aren't typically caught from <b>${portShort}</b>.<br>` +
+        `<b>${sp ? activePortSpeciesDisplayName(activeSpId) : activeSpId}</b> aren't typically caught from <b>${portShort}</b>.<br>` +
         `Try a port within the species' range, or pick a different target.`;
     }
   } else {
@@ -19704,7 +19736,11 @@ function selectSp(id){
   const name=document.getElementById("sp-name");
   dot.style.background=sp.color;
   dot.style.opacity="1";
-  name.textContent=sp.name;
+  const portObj = (typeof activePort !== "undefined" && activePort && PORTS[activePort])
+    ? PORTS[activePort] : null;
+  name.textContent = portObj
+    ? speciesDisplayName(sp.id, portObj.lat, portObj.lng)
+    : sp.name;
   name.style.opacity="1";
   closeDd();
   updateLegend();
@@ -19851,6 +19887,14 @@ function selectPort(name, opts){
     if(nameEl){ nameEl.textContent="Select species…"; nameEl.style.opacity=".6"; }
   }
   buildSpDropdown();
+  if(activeSpId && p){
+    const sp = SPECIES.find(s => s.id === activeSpId);
+    const nameEl = document.getElementById("sp-name");
+    if(sp && nameEl){
+      nameEl.textContent = speciesDisplayName(sp.id, p.lat, p.lng);
+      nameEl.style.opacity = "1";
+    }
+  }
   if (p && MAP) {
     const curZoom = MAP.getZoom();
     // Login / explicit home frame: always open at HOME_PORT_ZOOM so local

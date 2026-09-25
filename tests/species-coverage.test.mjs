@@ -293,7 +293,9 @@ console.log("\nno species reference dangles (every tackle/encyclopedia id resolv
   const ids = new Set(SPECIES.map(s => s.id));
   check("porgy now resolves — it was referenced by a tackle entry before it existed",
     ids.has("porgy"));
-  const encOrphans = ENC_SPECIES.filter(e => !ids.has(e.id)).map(e => e.id);
+  // Pacific Bonito shares picker id "bonito"; encyclopedia uses pacificbonito off the West Coast.
+  const encOnlyAliases = new Set(["pacificbonito"]);
+  const encOrphans = ENC_SPECIES.filter(e => !ids.has(e.id) && !encOnlyAliases.has(e.id)).map(e => e.id);
   check(`no encyclopedia entry for a non-existent species (${encOrphans.join(", ") || "none"})`,
     encOrphans.length === 0);
   const noPrefs = SPECIES.filter(s => s.id !== "all" && !PREDICT_SPECIES_PREFS[s.id]).map(s => s.id);

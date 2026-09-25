@@ -711,6 +711,39 @@ const ENC_SPECIES = [
       "Often mixed with false albacore — both fight similarly, both excellent eating fresh"],
   },
   {
+    id:"pacificbonito", name:"Pacific Bonito", color:"#2a7080", cat:"nearshore",
+    snippet:"Sarda chiliensis — the SoCal and Baja inshore blitz fish. Hard-charging schools under terns and kelp edges from San Diego to Point Conception; excellent fresh when bled and iced.",
+    ident:{
+      marks:[
+        "Dark slanting stripes on the back and upper sides (same genus look as Atlantic bonito)",
+        "Compact tuna body, usually 2-8 lbs off California; larger fish possible",
+        "Small but visible teeth; forked tail built for speed",
+        "Often mixed with Pacific mackerel, barracuda, and yellowtail in surface feeds"],
+      confusedWith:[
+        {species:"Pacific Mackerel", tell:"Mackerel have a more pronounced spotted pattern and a thinner body. Bonito stripes are cleaner and the fight is heavier for the size."},
+        {species:"Yellowtail", tell:"Yellowtail are much heavier-bodied with a yellow tail and lateral line. Bonito are smaller, stripe-backed, and run in tighter surface schools."}]
+    },
+    facts:{ size:"2-10 lbs common", record:"~22 lbs (CA)", legal:"CA: no size limit for Pacific bonito; verify current CDFW bag/aggregate rules before you keep fish", season:"Southern & Central California — peak spring through fall; San Diego and LA often best April–October" },
+    seasons:{Jan:0,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0},
+    where:"Kelp edges, inshore banks, and nearshore temperature breaks from San Diego through the Channel Islands and Santa Barbara — Horseshoe Kelp, Catalina front side, San Clemente, and the 60–150 ft banks outside LA and OC. Schools push bait to the surface under birds.",
+    tackle:[
+      "7-8 ft medium-light spinning, 3000-5000 reel, 20-30 lb braid",
+      "25-40 lb fluorocarbon leader for clear SoCal water",
+      "Small surface iron (Tady 45 / light Salas) for grey-light boils",
+      "Fly-lined live anchovy or sardine when they won't eat metal"],
+    bait:[
+      "Small surface iron — blue/white, scrambled egg, sardine",
+      "Fly-lined live anchovy or sardine (no weight)",
+      "Burned chrome spoon or small colt sniper",
+      "Mini cedar plug / small search feather behind the boat in a slow troll"],
+    tips:[
+      "Watch terns and gulls — bonito push bait up in tight, fast-moving schools",
+      "Cast ahead of the school and burn metals; they rarely double back to a lure behind the boat",
+      "Grey light and overcast mornings beat mid-day sun on the surface iron bite",
+      "Bleed and ice immediately — flesh quality drops fast in a warm bilge",
+      "Always confirm current California Department of Fish and Wildlife regulations before keeping fish"],
+  },
+  {
     id:"falsealbacore", name:"False Albacore", color:"#3a8fa0", cat:"nearshore",
     snippet:"Also called 'albies' or little tunny. Blistering drag-screaming runs on light tackle — the premier light-line and fly target of the fall run. Not prime table fare (dark, strong flesh), so most are released.",
     ident:{
