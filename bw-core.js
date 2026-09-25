@@ -17784,7 +17784,7 @@ function bindPlatformRedraw(){
   });
 }
 
-// ── Weather / research buoys (NDBC + IOOS partners) within BUOY_RADIUS_NM ──
+// ── Moored weather buoys NOAA still lists as deployed, within BUOY_RADIUS_NM ──
 let buoyLayerGroup = null;
 let _buoyInRangeCache = null;
 let _buoyInRangePort = null;

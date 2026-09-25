@@ -29,7 +29,7 @@
 <script src="bw-waypoints.js?v=20260813a"></script>
 <!-- Gulf of Mexico federal OCS platforms (BSEE active surface structures). Rebuild: npm run build:platforms -->
 <script src="bw-platforms-gom.js"></script>
-<script src="bw-data-buoys.js"></script>
+<script src="bw-data-buoys.js?v=20260925c"></script>
 <script src="bw-data-ports.js"></script>
 <script src="bw-tide-stations.js?v=20260717c"></script>
 <script src="bw-data-species.js?v=20260925b"></script>
@@ -3839,7 +3839,7 @@ body.bw-auth-screen-open .leaflet-container{
       </span>
       <span class="lyr-toggle"></span>
     </label>
-    <label class="layer-row" title="Weather and research buoys (NDBC + IOOS partners) within 150 nm of your home port. Buoys can hold bait and fish — tap a marker for station details. Informational only — not for navigation.">
+    <label class="layer-row" title="Moored weather and ocean buoys NOAA currently lists as deployed (NDBC and IOOS partners, including University of South Florida COMPS), within 150 nm of your home port. A buoy can be on station with a dead sensor. Tap a marker for station details. Informational only — not for navigation.">
       <input type="checkbox" id="chk-buoys" onchange="toggleLayer('buoys')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:#eab308;width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 2px rgba(234,179,8,.4)"></span>
