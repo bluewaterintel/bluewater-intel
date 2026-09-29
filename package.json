@@ -53,6 +53,7 @@
     "maintenance:storage-prune": "node scripts/delete-stale-tile-prefixes.mjs",
     "maintenance:branches": "node scripts/prune-remote-branches.mjs",
     "deploy:functions": "node scripts/deploy-m3-m4-functions.mjs",
+    "brief:model": "node scripts/show-brief-model-config.mjs",
     "deploy:health": "node scripts/deploy-health.mjs",
     "deploy:stripe": "node scripts/deploy-stripe-functions.mjs",
     "sync:stripe-user": "node scripts/sync-stripe-user-by-email.mjs",
