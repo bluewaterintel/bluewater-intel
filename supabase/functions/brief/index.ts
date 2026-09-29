@@ -34,16 +34,17 @@
 // ============================================================================
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { briefAnthropicRequest, isSonnet55 } from "../_shared/brief-anthropic.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-// Deployed default: Claude Haiku 4.5 — fast + low-cost, ample quality for tactical briefs.
-// Override via BRIEF_MODEL secret (e.g. claude-sonnet-5) for a heavier model.
-const BRIEF_FN_VERSION = "20260715a";
-const MODEL_RAW = Deno.env.get("BRIEF_MODEL") ?? "claude-haiku-4-5";
-const MODEL = MODEL_RAW.trim() || "claude-haiku-4-5";
+// Deployed default: Claude Sonnet 5.5 — best speed/intelligence for tactical briefs.
+// Override via BRIEF_MODEL secret (e.g. claude-haiku-4-5 for lower cost).
+const BRIEF_FN_VERSION = "20260929a";
+const MODEL_RAW = Deno.env.get("BRIEF_MODEL") ?? "claude-sonnet-5-5";
+const MODEL = MODEL_RAW.trim() || "claude-sonnet-5-5";
 
 // Reflect the caller's Origin (fallback to configured list / "*"). Strict
 // matching returned the apex domain for www./mobile-webview callers, which the
@@ -95,20 +96,6 @@ function extractBriefText(d: Record<string, unknown>): string | null {
     }
   }
   return parts.length ? parts.join("\n") : null;
-}
-
-function isAdaptiveThinkingModel(model: string): boolean {
-  return /sonnet-5|sonnet-4-6|opus-4-[78]|fable-5|mythos/i.test(model);
-}
-
-// Sonnet 5 defaults to adaptive thinking; disable for fast tactical briefs.
-// max_tokens is shared between thinking + text on those models — keep headroom.
-function briefAnthropicRequest(model: string): { max_tokens: number; thinking?: { type: string } } {
-  const adaptive = isAdaptiveThinkingModel(model);
-  return {
-    max_tokens: adaptive ? 4096 : 2000,
-    ...(adaptive ? { thinking: { type: "disabled" } } : {}),
-  };
 }
 
 Deno.serve(async (req) => {
@@ -295,7 +282,9 @@ ${JSON.stringify(payloadForModel)}`;
       if (stopReason === "refusal") {
         msg = "Brief was declined by the model safety filter. Try a different spot or species.";
       } else if (blockTypes.includes("thinking")) {
-        msg = `Brief returned no text — ${MODEL} used thinking tokens only. Redeploy brief function ${BRIEF_FN_VERSION} (thinking disabled for Sonnet 5) or set BRIEF_MODEL=claude-haiku-4-5.`;
+        msg = isSonnet55(MODEL)
+          ? `Brief returned no text — ${MODEL} returned thinking blocks only. Try again or set BRIEF_MODEL=claude-haiku-4-5.`
+          : `Brief returned no text — ${MODEL} used thinking tokens only. Redeploy brief function ${BRIEF_FN_VERSION} (thinking disabled for Sonnet 5) or set BRIEF_MODEL=claude-haiku-4-5.`;
       } else if (stopReason === "max_tokens") {
         msg = "Brief was truncated before any text was returned. Increase max_tokens or use a lighter model.";
       } else if (!blockTypes) {
