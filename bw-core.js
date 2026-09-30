@@ -5277,6 +5277,15 @@ function fishableBaySoundDepthM(lat, lng){
     const [latMin, latMax, lngMin, lngMax] = bay.b;
     if(lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax) return bay.depth;
   }
+  // BAY_BOXES is the habitat list. Boxes that were never copied here (most
+  // Gulf bays) stayed "land" under the coarse coastline, so redfish and
+  // sheepshead never painted Choctawhatchee, Pensacola, or St. Andrews.
+  if(typeof BAY_BOXES !== "undefined"){
+    for(let i = 0; i < BAY_BOXES.length; i += 4){
+      if(lat >= BAY_BOXES[i] && lat <= BAY_BOXES[i + 1] &&
+         lng >= BAY_BOXES[i + 2] && lng <= BAY_BOXES[i + 3]) return 4;
+    }
+  }
   return null;
 }
 function isFishableBaySound(lat, lng){
@@ -5473,8 +5482,14 @@ const BAY_BOXES = new Float64Array([
   27.55, 28.05, -82.75, -82.45,
   28.50, 29.20, -82.85, -82.60,
   29.65, 29.85, -85.10, -84.70,
-  30.15, 30.45, -86.60, -86.30,
-  30.30, 30.55, -87.30, -86.95,
+  // St. Andrews Bay (Panama City) — behind the beach, not the gulf shelf.
+  30.08, 30.27, -85.80, -85.56,
+  // Choctawhatchee Bay (Destin). South edge stays on the bay side of Santa
+  // Rosa Island. The old 30.15 edge reached ~12 nm into the open Gulf and
+  // labeled that water "bay", which is where sheepshead hotspots landed.
+  30.38, 30.50, -86.62, -86.10,
+  // Pensacola Bay + Santa Rosa Sound. South edge stays inside the barrier.
+  30.35, 30.52, -87.32, -86.85,
   30.20, 30.65, -88.20, -87.50,
   30.10, 30.45, -88.95, -88.40,
   30.05, 30.25, -89.60, -89.05,

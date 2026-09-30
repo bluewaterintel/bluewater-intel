@@ -156,7 +156,11 @@ const PREDICT_SPECIES_PREFS = {
   tilefish:     {tempIdeal:[48,60], tempWorking:[42,64], chlorPref:"any",     depthBands:[[75,140],[175,420]], breakPref:"any", bottom:true },
   snapper:      {tempIdeal:[68,78], tempWorking:[62,82], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
   grouper:      {tempIdeal:[64,76], tempWorking:[58,80], chlorPref:"any",     depthBands:[[30,200]],   breakPref:"any", demersal:true },
-  sheepshead:   {tempIdeal:[60,76], tempWorking:[55,82], chlorPref:"high",    depthBands:[[2,30]],     breakPref:"stable"},
+  // Sheepshead hold on pilings, jetties, and bay structure, almost all of it
+  // inside 30 ft. A 30 m ceiling (~98 ft) unioned the nearshore bucket into
+  // the habitat mask, so the bite map painted the open Gulf shelf off Destin
+  // instead of Choctawhatchee Bay and East Pass.
+  sheepshead:   {tempIdeal:[60,76], tempWorking:[55,82], chlorPref:"high",    depthBands:[[1.5,9]],   breakPref:"stable"},
   // ── NEW ENGLAND / NORTHEAST SPECIES ───────────────────────────────────
   // Striper — also multimodal. Surf + back-bay (shallow) AND offshore
   // bunker schools (40-80m) in summer/fall.
