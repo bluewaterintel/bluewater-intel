@@ -13401,7 +13401,7 @@ function prefLoad(){
     if(!raw) return;
     const saved = JSON.parse(raw);
     if(saved && typeof saved === "object"){
-      if("defaultPort" in saved)    USER_PREFS.defaultPort    = saved.defaultPort;
+      if("defaultPort" in saved)    USER_PREFS.defaultPort    = canonicalPortName(saved.defaultPort);
       if("defaultSpecies" in saved) USER_PREFS.defaultSpecies = saved.defaultSpecies;
       if("defaultBaseMap" in saved){
         USER_PREFS.defaultBaseMap = saved.defaultBaseMap || "satellite";
@@ -19796,7 +19796,7 @@ function selectSp(id){
 // ════════════════════════════════════════════════════════════════════════════
 const PORT_GROUPS = [
   {label:"New England", ports:["Stonington, ME","Jonesport, ME","Portland, ME","Kennebunkport, ME","Portsmouth, NH","Gloucester, MA","Boston, MA","Cape Cod, MA","Point Judith, RI"]},
-  {label:"Mid-Atlantic", ports:["Long Beach, NY","Freeport, NY","Montauk, NY","Toms River, NJ","Atlantic City, NJ","Cape May, NJ","Ocean City, MD","Chincoteague, VA","Virginia Beach, VA"]},
+  {label:"Mid-Atlantic", ports:["Sandy Hook, NJ","Freeport, NY","Montauk, NY","Toms River, NJ","Atlantic City, NJ","Cape May, NJ","Ocean City, MD","Chincoteague, VA","Virginia Beach, VA"]},
   {label:"Chesapeake & Delaware Bay", ports:["Cape Charles, VA","Reedville, VA","Coles Point, VA","Solomons, MD","Colonial Beach, VA","Annapolis, MD","Baltimore, MD","Delaware City, DE"]},
   {label:"Carolinas", ports:["Oregon Inlet, NC","Hatteras, NC","Morehead City, NC","Oak Island, NC","Myrtle Beach, SC","Murrells Inlet, SC","Charleston, SC"]},
   {label:"South Atlantic", ports:["Savannah, GA","Brunswick, GA","St. Augustine, FL","Jacksonville, FL","Daytona Beach, FL","Port Canaveral, FL","Melbourne, FL","Vero Beach, FL"]},
@@ -20637,7 +20637,7 @@ window.bwOnSignedIn = async function (user) {
       try {
         const acct = JSON.parse(profile.prefs_json);
         if(acct && typeof acct === "object"){
-          if("defaultPort"    in acct) USER_PREFS.defaultPort    = acct.defaultPort;
+          if("defaultPort"    in acct) USER_PREFS.defaultPort    = canonicalPortName(acct.defaultPort);
           if("defaultSpecies" in acct) USER_PREFS.defaultSpecies = acct.defaultSpecies;
           if("defaultBaseMap" in acct){
             USER_PREFS.defaultBaseMap = acct.defaultBaseMap || "satellite";
@@ -20662,17 +20662,19 @@ window.bwOnSignedIn = async function (user) {
     // prefer it, then fall back to the on-device default, then the hard
     // fallback. This deliberately OVERRIDES any transient session selection so
     // a fresh login always starts at the configured default port.
+    const homePort = (profile && profile.home_port) ? canonicalPortName(profile.home_port) : null;
     const loginDefault =
-      (profile && profile.home_port && PORTS[profile.home_port] && profile.home_port) ||
+      (homePort && PORTS[homePort] && homePort) ||
       (USER_PREFS.defaultPort && PORTS[USER_PREFS.defaultPort] && USER_PREFS.defaultPort) ||
       null;
     // Keep USER_PREFS.defaultPort in sync with the account default so the
-    // Settings dropdown and the in-app label agree after login.
-    if(profile && profile.home_port && PORTS[profile.home_port]){
-      USER_PREFS.defaultPort = profile.home_port;
+    // Settings dropdown and the in-app label agree after login. A retired
+    // name (Long Beach, NY) is rewritten to its replacement on this save.
+    if(homePort && PORTS[homePort]){
+      USER_PREFS.defaultPort = homePort;
       if(typeof prefSave === "function") prefSave();
       const pp = document.getElementById("pref-port");
-      if(pp) pp.value = profile.home_port;
+      if(pp) pp.value = homePort;
     }
     // Refresh the Settings modal controls so the synced values are reflected.
     if(typeof refreshSettingsModal === "function") refreshSettingsModal();

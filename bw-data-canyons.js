@@ -300,7 +300,7 @@ const CANYONS=[
     {name:"The Lump / Blocks (Venice)", type:"reef", color:"#16a34a", lat:28.85, lng:-89.30,
    desc:"Oil platform clusters & rigs off Venice LA. The rigs hold everything — tuna, cobia, mangrove snapper, AJ.",
    fish:["yellowfin","cobia","snapper","amberjack","wahoo","mahi","blackfin"]},
-  // ── LONG ISLAND SOUTH SHORE (Long Beach / Freeport, NY) ───────────────
+  // ── NY BIGHT (Freeport, NY / Sandy Hook, NJ) ──────────────────────────
   {name:"The Mud Hole",      type:"ledge", color:"#16a34a", lat:40.22, lng:-73.70,
    desc:"Glacial trough ~20-25nm SE of Jones/East Rockaway Inlet. Summer/fall fluke, sea bass, and bluefish staging; migratory striped bass on the edges. Reference only — not for navigation.",
    fish:["flounder","blackseabass","porgy","bluefish","striper"]},
@@ -308,7 +308,7 @@ const CANYONS=[
    desc:"Classic live-bottom rise ~18nm off the south shore. Sea bass, porgy, and summer cod; bluefish and bonito on bait. Reference only — not for navigation.",
    fish:["blackseabass","porgy","bluefish","bonito","cod"]},
   {name:"Atlantic Beach Reef", type:"reef", color:"#16a34a", lat:40.535, lng:-73.715,
-   desc:"NYSDEC artificial reef off East Rockaway Inlet. Sea bass, tautog, and fluke over the structure; close-to-home grounds for Long Beach & Freeport fleets. Reference only — not for navigation.",
+   desc:"NYSDEC artificial reef off East Rockaway Inlet. Sea bass, tautog, and fluke over the structure; close-to-home grounds for the Freeport fleet, and inside a Sandy Hook run. Reference only — not for navigation.",
    fish:["blackseabass","tautog","porgy","flounder"]},
   // ── CENTRAL NJ (Toms River / Barnegat) ────────────────────────────────
   {name:"Barnegat Ridge",    type:"reef", color:"#16a34a", lat:39.78, lng:-73.95,
