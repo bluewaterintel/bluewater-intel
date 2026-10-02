@@ -3437,17 +3437,25 @@ function isPredictWater(lat, lng){
   return (typeof isFishableWater === "function") ? isFishableWater(lat, lng) : false;
 }
 
-// Same land/habitat gates the async grid uses — shared with the heat canvas bake
-// so numbered badges never land where the painted field is masked off.
+// Land stays blank. Water the species would rather not fish (too deep, wrong
+// coast) is still painted — habitatScoreScale pulls that score into the green
+// — so a bay mouth is a color, not a hole the fish have to swim through.
 function predictHeatCellVisible(lat, lng, speciesId){
   if(typeof isPredictWater === "function" && !isPredictWater(lat, lng)) return false;
-  if(speciesId && typeof classifyWaterType === "function" && typeof speciesAllowedInWater === "function"){
-    if(!speciesAllowedInWater(speciesId, classifyWaterType(lat, lng), lat, lng)) return false;
-  }
-  if(speciesId && typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(speciesId, lat, lng)){
-    return false;
-  }
   return true;
+}
+
+// 1 on preferred water. About 0.2 on water inside the run that the species
+// can cross but should not be a hotspot (deeper than the habitat mask, or
+// outside the lat range). Applied to the already-normalized score so the
+// cell lands in the green band instead of being dropped.
+function habitatScoreScale(speciesId, lat, lng){
+  if(!speciesId || speciesId === "all") return 1;
+  if(typeof speciesAllowedAtLat === "function" && !speciesAllowedAtLat(speciesId, lat, lng)) return 0.2;
+  if(typeof classifyWaterType === "function" && typeof speciesAllowedInWater === "function"){
+    if(!speciesAllowedInWater(speciesId, classifyWaterType(lat, lng), lat, lng)) return 0.2;
+  }
+  return 1;
 }
 
 function decimateOceanPts(pts, max){
@@ -4334,6 +4342,12 @@ function scoreCell(lat, lng, speciesId){
     }
   }
 
+  // Headline percent is this blend: weighted factors after the real gates
+  // (temp, depth, season, salinity). The structure bonus and the contrast
+  // stretch below change where the map is red and which pin is #1. They must
+  // not turn a 70% blend into a 100% headline.
+  let headlineScore = Math.max(0, Math.min(1, finalScore));
+
   // ── STRUCTURE-PROXIMITY BONUS (structure-oriented species) ─────────────────
   // Open flat bay/sound bottom was scoring as well as nearby ledges, rips, and
   // shoals. For structure-oriented fish (those whose breakPref is "stable" —
@@ -4378,6 +4392,7 @@ function scoreCell(lat, lng, speciesId){
     vermilionGate = vermilionLatitudeGate(lat, depth, tempForScore);
     if(vermilionGate.penalty < 1){
       finalScore *= vermilionGate.penalty;
+      headlineScore = Math.max(0, Math.min(1, headlineScore * vermilionGate.penalty));
     }
   }
 
@@ -4547,6 +4562,7 @@ function scoreCell(lat, lng, speciesId){
 
   return {
     score: Math.max(0, Math.min(1, finalScore)),
+    headlineScore: Math.max(0, Math.min(1, headlineScore)),
     rawScore: Math.max(0, Math.min(1, rawScoreBeforeNorm)),
     confidence,
     freshnessAnnotations,
@@ -7129,21 +7145,25 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
 
   // Score one point with the SAME water/species/range/penalty rules as the grid,
   // so micro-grid scores are directly comparable to the cell being refined.
+  const rangeFadeEnd = maxRange * 1.12;
   function scoreWithPenalty(la, ln){
     if(!isPredictWater(la, ln)) return null;
-    if(!speciesAllowedInWater(speciesId, classifyWaterType(la, ln), la, ln)) return null;
-    if(!speciesAllowedAtLat(speciesId, la, ln)) return null;
     if(port && !reachableFromPort(port, la, ln)) return null;  // stay on the port's coast
     let d = 0;
     if(port){
       d = nmBetween(port.lat, port.lng, la, ln);
-      if(d > maxRange) return null;
+      if(d > rangeFadeEnd) return null;
     }
     const r = scoreCell(la, ln, speciesId);
     if(!r) return null;
-    if(port && d > penaltyStart){
+    r.score *= habitatScoreScale(speciesId, la, ln);
+    if(port && d > penaltyStart && d <= maxRange){
       const penalty = ((d - penaltyStart) / (maxRange - penaltyStart)) * 0.15;
       r.score = r.score * (1 - penalty);
+    }
+    if(port && d > maxRange){
+      const t = (d - maxRange) / (rangeFadeEnd - maxRange);
+      r.score *= Math.max(0, 1 - t);
     }
     return { result: r, distNm: Math.round(d) };
   }
@@ -7181,20 +7201,23 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
           let distNm = 0;
           if(port){
             distNm = nmBetween(port.lat, port.lng, lat, lng);
-            if(distNm > maxRange) continue;
+            if(distNm > rangeFadeEnd) continue;
           }
           if(!isPredictWater(lat, lng)) continue;
-          const waterType = classifyWaterType(lat, lng);
-          if(!speciesAllowedInWater(speciesId, waterType, lat, lng)) continue;
-          if(!speciesAllowedAtLat(speciesId, lat, lng)) continue;
           // Keep the bite map on the port's coast — don't recommend Atlantic spots
           // for a Gulf port (or vice-versa) across the FL peninsula.
           if(port && !reachableFromPort(port, lat, lng)) continue;
           const result = scoreCell(lat, lng, speciesId);
           if(!result) continue;
-          if(port && distNm > penaltyStart){
+          // Wrong depth/habitat stays on the map in green instead of a hole.
+          result.score *= habitatScoreScale(speciesId, lat, lng);
+          if(port && distNm > penaltyStart && distNm <= maxRange){
             const penalty = ((distNm - penaltyStart) / (maxRange - penaltyStart)) * 0.15;
             result.score = result.score * (1 - penalty);
+          }
+          if(port && distNm > maxRange){
+            const t = (distNm - maxRange) / (rangeFadeEnd - maxRange);
+            result.score *= Math.max(0, 1 - t);
           }
           if(result.score < PREDICT_HEAT_SCORE_MIN) continue;
           const cell = {lat, lng, distNm: Math.round(distNm), ...result};
@@ -10302,13 +10325,14 @@ function bindPredictInteractionHandlers(){
       if(!cell){ MAP.closeTooltip(_predictTooltip); return; }
       const sp = _predictSpecies;
       const top = cell.factors[0];
-      const color = biteVerdict(Math.round(cell.score * 100)).color;
+      const shown = (typeof cell.headlineScore === "number") ? cell.headlineScore : cell.score;
+      const color = biteVerdict(Math.round(shown * 100)).color;
       _predictTooltip
         .setLatLng([cell.lat, cell.lng])
         .setContent(
           `<div style="font-family:'Segoe UI',Arial,sans-serif;min-width:200px">
             <div style="font-weight:bold;color:${color};font-size:15px;margin-bottom:5px">
-              ${sp.name} · ${Math.round(cell.score*100)}%
+              ${sp.name} · ${Math.round(shown*100)}%
             </div>
             <div style="font-size:12.5px;color:#cfe5ff;line-height:1.6">
               ${cell.lat.toFixed(2)}°N ${Math.abs(cell.lng).toFixed(2)}°W<br>
@@ -10791,16 +10815,18 @@ function renderExplainerMain(){
   const {cell, species} = _explainerState;
   const savedBriefCount = briefViewAllowed() ? briefHistoryLoad().length : 0;
 
+  const weightSum = cell.factors.reduce((s, f) => s + (Number(f.weight) || 0), 0) || 1;
   const factorBars = cell.factors.map(f => {
-    // Bar reflects this factor's OWN strength here (0–100%), so a "peak" season
-    // or "MAJOR" solunar reads as a full bar. (It's not the weighted share of the
-    // total — factors are already ordered by that, biggest driver first.)
-    const q = (typeof f.quality === "number") ? f.quality : (f.score / 0.30);
+    // Bar length is this factor's own favorability (peak fills it, off season
+    // empties it). Weight is the small share beside the name. Order is already
+    // by quality × weight, so the factors that moved the score lead.
+    const q = (typeof f.quality === "number") ? f.quality : (f.score / Math.max(0.0001, f.weight || 0.30));
     const w = Math.min(100, Math.max(0, Math.round(q * 100)));
+    const share = Math.round(((Number(f.weight) || 0) / weightSum) * 100);
     return `
       <div style="margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;margin-bottom:3px">
-          <span style="color:#cfe5ff;font-weight:600;white-space:nowrap;flex-shrink:0">${f.name}</span>
+          <span style="color:#cfe5ff;font-weight:600;white-space:nowrap;flex-shrink:0">${f.name} <span style="color:#6b8eab;font-weight:600;font-size:11px">· ${share}%</span></span>
           <span style="color:#9ec5e8;font-weight:600;text-align:right;white-space:nowrap">${f.raw}</span>
         </div>
         <div style="height:5px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden">
@@ -10810,10 +10836,12 @@ function renderExplainerMain(){
     `;
   }).join("");
 
+  const shownScore = (typeof cell.headlineScore === "number") ? cell.headlineScore : cell.score;
+
   // When the headline score is notably worse than the *best* individual factors
   // suggest, find the single biggest drag so the score feels explained.
   let limitingFactorHtml = "";
-  if(!cell.outOfRange && Array.isArray(cell.factors) && cell.score < 0.5){
+  if(!cell.outOfRange && Array.isArray(cell.factors) && shownScore < 0.5){
     const withQuality = cell.factors.map(f => ({
       name: f.name,
       raw: f.raw,
@@ -10837,7 +10865,7 @@ function renderExplainerMain(){
     }
   }
 
-  const verdict = biteVerdict(Math.round(cell.score * 100));
+  const verdict = biteVerdict(Math.round(shownScore * 100));
   let verdictText = verdict.text;
   let gateBanner = "";
   if(cell.outOfRange){
@@ -10855,11 +10883,7 @@ function renderExplainerMain(){
     gateBanner = `<div style="margin-bottom:10px;padding:8px 11px;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);border-radius:8px;font-size:12px;color:#fecaca;line-height:1.5"><b>North of Cape Hatteras</b> — vermilion are not a fishery north of 35.4°N.</div>`;
   }
 
-  const scorePct = Math.round(cell.score * 100);
-  const rawPct = cell.rawScore != null ? Math.round(cell.rawScore * 100) : null;
-  const scoreFootnote = (rawPct != null && Math.abs(rawPct - scorePct) >= 4)
-    ? `raw ${rawPct}% · stretched for map contrast`
-    : "ranking unchanged · scores stretched for contrast";
+  const scorePct = Math.round(shownScore * 100);
 
   // Forecast time: Now / +12h / +24h only. Captains already know when they fish —
   // no "better window" nudge (it scanned odd hours then snapped to a different
@@ -10903,7 +10927,6 @@ function renderExplainerMain(){
       <div style="flex-shrink:0">
         <div style="font-size:32px;font-weight:bold;color:${verdict.color};line-height:1">${scorePct}<span style="font-size:14px;font-weight:normal">%</span></div>
         <div style="font-size:9px;color:#9ec5e8;letter-spacing:.08em;text-transform:uppercase;margin-top:3px;font-weight:700">Bite Score</div>
-        <div style="font-size:9.5px;color:#7a9ec0;margin-top:2px;font-style:italic">${scoreFootnote}</div>
       </div>
       <div style="flex-shrink:0;padding-left:14px;border-left:1px solid rgba(107,191,234,.15)">
         <div style="font-size:22px;font-weight:bold;color:#cfe5ff;line-height:1">${cell.confidence}<span style="font-size:12px;font-weight:normal">%</span></div>
@@ -10936,6 +10959,7 @@ function renderExplainerMain(){
     ${limitingFactorHtml}
     <div style="font-size:11px;color:#6bbfea;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:8px">Contributing Factors</div>
     ${factorBars}
+    <div style="font-size:11px;color:#7a9ec0;line-height:1.45;margin-top:2px">Bar length is how favorable this is. The list is ordered by how much it moved the score. The percent beside each name is that factor's share of the blend.</div>
 
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(107,191,234,.12)">
       <div style="font-size:11px;color:#6bbfea;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:8px">Get more detail</div>
