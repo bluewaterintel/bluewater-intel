@@ -21,7 +21,7 @@ const CANYONS=[
   {name:"Jordan Basin",     color:"#7c2d8e", lat:43.50,  lng:-67.85,
    desc:"43°30N 67°51W — Eastern Gulf of Maine basin ~900 ft. Summer swordfish and bluefin over the deep hole, east of Cashes.",
    fish:["swordfish","bluefin"]},
-  {name:"Block Canyon",     color:"#1a4fa8", lat:39.78,  lng:-71.7,
+  {name:"Block Canyon",     color:"#1a4fa8", lat:39.9971,  lng:-71.3253,
    desc:"39°47N 71°30W — 80nm S of Block Island. Yellowfin, bigeye, white/blue marlin in summer. Tilefish on the canyon walls.",
    fish:["yellowfin","bigeye","whitemarlin","bluemarlin","tilefish"]},
   {name:"Atlantis Canyon",  color:"#1a4fa8", lat:39.99,  lng:-70.20,
