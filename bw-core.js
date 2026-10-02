@@ -10815,18 +10815,15 @@ function renderExplainerMain(){
   const {cell, species} = _explainerState;
   const savedBriefCount = briefViewAllowed() ? briefHistoryLoad().length : 0;
 
-  const weightSum = cell.factors.reduce((s, f) => s + (Number(f.weight) || 0), 0) || 1;
   const factorBars = cell.factors.map(f => {
     // Bar length is this factor's own favorability (peak fills it, off season
-    // empties it). Weight is the small share beside the name. Order is already
-    // by quality × weight, so the factors that moved the score lead.
+    // empties it). Sort order is strongest signals first — no blend weights shown.
     const q = (typeof f.quality === "number") ? f.quality : (f.score / Math.max(0.0001, f.weight || 0.30));
     const w = Math.min(100, Math.max(0, Math.round(q * 100)));
-    const share = Math.round(((Number(f.weight) || 0) / weightSum) * 100);
     return `
       <div style="margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;margin-bottom:3px">
-          <span style="color:#cfe5ff;font-weight:600;white-space:nowrap;flex-shrink:0">${f.name} <span style="color:#6b8eab;font-weight:600;font-size:11px">· ${share}%</span></span>
+          <span style="color:#cfe5ff;font-weight:600;white-space:nowrap;flex-shrink:0">${f.name}</span>
           <span style="color:#9ec5e8;font-weight:600;text-align:right;white-space:nowrap">${f.raw}</span>
         </div>
         <div style="height:5px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden">
@@ -10959,7 +10956,7 @@ function renderExplainerMain(){
     ${limitingFactorHtml}
     <div style="font-size:11px;color:#6bbfea;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:8px">Contributing Factors</div>
     ${factorBars}
-    <div style="font-size:11px;color:#7a9ec0;line-height:1.45;margin-top:2px">Bar length is how favorable this is. The list is ordered by how much it moved the score. The percent beside each name is that factor's share of the blend.</div>
+    <div style="font-size:11px;color:#7a9ec0;line-height:1.45;margin-top:2px">Bar length is how favorable each factor is right now — peak season fills the bar, off season empties it.</div>
 
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(107,191,234,.12)">
       <div style="font-size:11px;color:#6bbfea;letter-spacing:.1em;font-weight:700;text-transform:uppercase;margin-bottom:8px">Get more detail</div>
@@ -19796,7 +19793,7 @@ function selectSp(id){
 // ════════════════════════════════════════════════════════════════════════════
 const PORT_GROUPS = [
   {label:"New England", ports:["Stonington, ME","Jonesport, ME","Portland, ME","Kennebunkport, ME","Portsmouth, NH","Gloucester, MA","Boston, MA","Cape Cod, MA","Point Judith, RI"]},
-  {label:"Mid-Atlantic", ports:["Sandy Hook, NJ","Freeport, NY","Montauk, NY","Toms River, NJ","Atlantic City, NJ","Cape May, NJ","Ocean City, MD","Chincoteague, VA","Virginia Beach, VA"]},
+  {label:"Mid-Atlantic", ports:["Sandy Hook, NJ","Freeport, NY","Montauk, NY","Manasquan Inlet, NJ","Atlantic City, NJ","Cape May, NJ","Ocean City, MD","Chincoteague, VA","Virginia Beach, VA"]},
   {label:"Chesapeake & Delaware Bay", ports:["Cape Charles, VA","Reedville, VA","Coles Point, VA","Solomons, MD","Colonial Beach, VA","Annapolis, MD","Baltimore, MD","Delaware City, DE"]},
   {label:"Carolinas", ports:["Oregon Inlet, NC","Hatteras, NC","Morehead City, NC","Oak Island, NC","Myrtle Beach, SC","Murrells Inlet, SC","Charleston, SC"]},
   {label:"South Atlantic", ports:["Savannah, GA","Brunswick, GA","St. Augustine, FL","Jacksonville, FL","Daytona Beach, FL","Port Canaveral, FL","Melbourne, FL","Vero Beach, FL"]},

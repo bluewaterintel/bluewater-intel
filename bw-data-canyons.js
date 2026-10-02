@@ -316,7 +316,7 @@ const CANYONS=[
   {name:"Atlantic Beach Reef", type:"reef", color:"#16a34a", lat:40.535, lng:-73.715,
    desc:"NYSDEC artificial reef off East Rockaway Inlet. Sea bass, tautog, and fluke over the structure; close-to-home grounds for the Freeport fleet, and inside a Sandy Hook run. Reference only — not for navigation.",
    fish:["blackseabass","tautog","porgy","flounder"]},
-  // ── CENTRAL NJ (Toms River / Barnegat) ────────────────────────────────
+  // ── CENTRAL NJ (Manasquan / Barnegat) ─────────────────────────────────
   {name:"Barnegat Ridge",    type:"reef", color:"#16a34a", lat:39.78, lng:-73.95,
    desc:"Bottom rise ~20nm off Barnegat Inlet. Bonito, false albacore, and bluefish in late summer; sea bass and scup on the structure. Reference only — not for navigation.",
    fish:["bonito","bluefish","blackseabass","porgy","falsealbacore"]},

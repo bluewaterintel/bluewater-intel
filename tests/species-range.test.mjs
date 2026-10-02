@@ -68,8 +68,8 @@ console.log("\nlong-run nearshore fisheries keep enough reach:");
   check("gag grouper from Clearwater reaches the shelf (>=80 nm)",
     rangeAt("Clearwater, FL", "gaggrouper") >= 80);
   // Mid-Atlantic winter wrecks are 40-70 nm out.
-  check("black sea bass from Toms River reaches winter wrecks (>=60 nm)",
-    rangeAt("Toms River, NJ", "blackseabass") >= 60);
+  check("black sea bass from Manasquan Inlet reaches winter wrecks (>=60 nm)",
+    rangeAt("Manasquan Inlet, NJ", "blackseabass") >= 60);
   // SoCal islands/banks: San Clemente ~55 nm.
   check("CA yellowtail from San Diego reaches the islands (>=60 nm)",
     rangeAt("San Diego, CA", "cayellowtail") >= 60);

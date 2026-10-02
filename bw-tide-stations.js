@@ -17,6 +17,7 @@ const COOPS_REF_TIDE_STATIONS = [
   { id: "8510512", lat: 41.048, lng: -71.925 },   // Montauk, NY
   { id: "8518750", lat: 40.700, lng: -74.014 },   // The Battery, NY
   { id: "8531680", lat: 40.467, lng: -74.009 },   // Sandy Hook, NJ
+  { id: "8532591", lat: 40.102, lng: -74.035 },   // Manasquan Inlet, NJ
   { id: "8534720", lat: 39.355, lng: -74.418 },   // Atlantic City, NJ
   { id: "8536110", lat: 38.967, lng: -74.960 },   // Cape May, NJ
   { id: "8570280", lat: 38.327, lng: -75.083 },   // Ocean City Fishing Pier, MD

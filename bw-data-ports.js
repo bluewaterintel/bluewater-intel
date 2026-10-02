@@ -24,7 +24,9 @@ const PORTS={
   // 0.05° north and east of this point (ocean side of the Hook).
   "Sandy Hook, NJ":    {lat:40.419, lng:-74.034, short:"Sandy Hook"},
   "Freeport, NY":      {lat:40.59,  lng:-73.575, short:"Freeport"},
-  "Toms River, NJ":    {lat:39.945, lng:-74.165, short:"Toms River"},
+  // Manasquan Inlet fleet basin (Point Pleasant / Brielle side). Replaces
+  // Toms River, which duplicated the Barnegat Bay inshore reach.
+  "Manasquan Inlet, NJ": {lat:40.102, lng:-74.035, short:"Manasquan"},
   "Atlantic City, NJ": {lat:39.355, lng:-74.418, short:"Atlantic City"},
   "Cape May, NJ":      {lat:38.93,  lng:-74.91,  short:"Cape May"},
   "Ocean City, MD":    {lat:38.33,  lng:-75.08,  short:"Ocean City"},
@@ -135,5 +137,6 @@ const PORTS={
 // the account profile load so an old default still opens on the new harbor.
 function canonicalPortName(name){
   if(name === "Long Beach, NY") return "Sandy Hook, NJ";
+  if(name === "Toms River, NJ") return "Manasquan Inlet, NJ";
   return name;
 }

@@ -54,6 +54,8 @@ for (const group of PORT_GROUPS) {
     check("Mid-Atlantic starts with Atlantic City", names[0] === "Atlantic City, NJ");
     check("Mid-Atlantic lists Sandy Hook", names.includes("Sandy Hook, NJ"));
     check("Mid-Atlantic no longer lists Long Beach, NY", !names.includes("Long Beach, NY"));
+    check("Mid-Atlantic lists Manasquan Inlet", names.includes("Manasquan Inlet, NJ"));
+    check("Mid-Atlantic no longer lists Toms River", !names.includes("Toms River, NJ"));
   }
 }
 
@@ -62,6 +64,7 @@ for (const name of Object.keys(PORTS)) {
   check(`${name} is in a port dropdown group`, grouped.has(name));
 }
 check("Long Beach, NY is not a port", !PORTS["Long Beach, NY"]);
+check("Toms River, NJ is not a port", !PORTS["Toms River, NJ"]);
 
 const hook = PORTS["Sandy Hook, NJ"];
 const freeport = PORTS["Freeport, NY"];
@@ -72,7 +75,18 @@ check("Sandy Hook is a separate hub from Freeport",
   hook && freeport && nmBetween(hook.lat, hook.lng, freeport.lat, freeport.lng) > 15);
 check("saved Long Beach default opens Sandy Hook",
   canonicalPortName("Long Beach, NY") === "Sandy Hook, NJ");
+check("saved Toms River default opens Manasquan Inlet",
+  canonicalPortName("Toms River, NJ") === "Manasquan Inlet, NJ");
 check("other port names are unchanged", canonicalPortName("Freeport, NY") === "Freeport, NY");
+
+const manasquan = PORTS["Manasquan Inlet, NJ"];
+check("Manasquan Inlet short label", manasquan && manasquan.short === "Manasquan");
+check("Manasquan tides use the inlet station",
+  manasquan && nearestCoopsTideStation(manasquan.lat, manasquan.lng, 120) === "8532591");
+const mqWxLat = manasquan.lat + 0.05;
+const mqWxLng = manasquan.lng + 0.05;
+check("Manasquan header weather sample is water",
+  manasquan && isPredictWater(mqWxLat, mqWxLng) && !isOnLand(mqWxLat, mqWxLng));
 
 const wxLat = hook.lat + 0.05;
 const wxLng = hook.lng + 0.05;
