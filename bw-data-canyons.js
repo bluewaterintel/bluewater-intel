@@ -30,6 +30,12 @@ const CANYONS=[
   {name:"Veatch Canyon",    color:"#1a4fa8", lat:39.93,  lng:-69.60,
    desc:"39°56N 69°36W — 100nm S of Nantucket. Excellent bigeye and yellowfin grounds. Lobster boats / longliners mark the edge.",
    fish:["bigeye","yellowfin","swordfish"]},
+  {name:"Alvin Canyon",     color:"#1a4fa8", lat:40.02604, lng:-70.48691,
+   desc:"40°01.6N 70°29.2W — Georges Bank shelf-edge canyon between Atlantis and the eastward ledge. Bigeye at night, yellowfin and white marlin in summer; tilefish on the walls. Reference only — not for navigation.",
+   fish:["bigeye","yellowfin","whitemarlin","bluemarlin","tilefish","swordfish"]},
+  {name:"The Dip",          color:"#1a4fa8", lat:39.81434, lng:-71.74896,
+   desc:"39°48.9N 71°44.9W — Steep shelf break and canyon head SE of Block Island / south of Montauk. Classic tuna and marlin troll between Hudson and Block when blue water pushes onto the wall. Reference only — not for navigation.",
+   fish:["yellowfin","bigeye","whitemarlin","bluemarlin","wahoo","mahi"]},
   // ── MID-ATLANTIC CANYONS ─────────────────────────────────────────────
   {name:"Hudson Canyon",     color:"#1a4fa8", lat:39.665, lng:-72.474,
    desc:"Largest canyon on the East Coast — 400mi long, comparable to the Grand Canyon. Premier tilefish (250-400ft) and swordfish grounds. Head 100nm SE of NY Harbor.",
