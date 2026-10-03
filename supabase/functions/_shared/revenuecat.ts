@@ -59,8 +59,22 @@ function msToIso(ms: number | null | undefined): string | null {
   return new Date(ms).toISOString();
 }
 
-function billingSourceFromRcStore(store: string | undefined): string {
-  if (store === "play_store") return "google";
+/** Map RevenueCat store (V2 API, webhooks: PLAY_STORE / APP_STORE, etc.) → profiles.billing_source */
+export function billingSourceFromRcStore(store: string | undefined): string {
+  const s = String(store ?? "").trim().toLowerCase().replace(/-/g, "_");
+  if (s === "play_store" || s === "google_play") return "google";
+  if (s === "stripe") return "stripe";
+  return "apple";
+}
+
+export function billingSourceFromRcWebhook(
+  store: unknown,
+  originalTransactionId: string | null | undefined,
+): string {
+  const fromStore = billingSourceFromRcStore(String(store ?? ""));
+  if (fromStore !== "apple") return fromStore;
+  const tx = String(originalTransactionId ?? "").trim();
+  if (tx.startsWith("GPA.")) return "google";
   return "apple";
 }
 
@@ -177,14 +191,22 @@ async function fetchRcProfilePatchV1(appUserId: string, secretKey: string) {
     throw new Error(`RevenueCat API ${res.status}: ${text.slice(0, 200)}`);
   }
   const body = JSON.parse(text) as RcSubscriber;
+  const subs = body.subscriber?.subscriptions ?? {};
   const ent = body.subscriber?.entitlements?.[PRO_ENTITLEMENT];
   if (ent && entitlementActive(ent.expires_date)) {
     const productId = ent.product_identifier ?? "";
     const periodType = String(ent.period_type ?? "").toUpperCase();
     const isTrial = periodType === "TRIAL" || periodType === "INTRO";
+    let billingSource = "apple";
+    for (const sub of Object.values(subs)) {
+      if (entitlementActive(sub.expires_date)) {
+        billingSource = billingSourceFromRcStore(sub.store);
+        break;
+      }
+    }
     return {
       id: appUserId,
-      billing_source: "apple",
+      billing_source: billingSource,
       subscription_status: isTrial ? "trialing" : "active",
       subscription_interval: /annual|year/i.test(productId) ? "year" : "month",
       current_period_end: ent.expires_date ?? null,
@@ -192,7 +214,6 @@ async function fetchRcProfilePatchV1(appUserId: string, secretKey: string) {
     };
   }
 
-  const subs = body.subscriber?.subscriptions ?? {};
   for (const [productId, sub] of Object.entries(subs)) {
     if (!isProProduct(productId)) continue;
     if (!entitlementActive(sub.expires_date)) continue;
@@ -200,7 +221,7 @@ async function fetchRcProfilePatchV1(appUserId: string, secretKey: string) {
     const isTrial = periodType === "TRIAL" || periodType === "INTRO";
     return {
       id: appUserId,
-      billing_source: "apple",
+      billing_source: billingSourceFromRcStore(sub.store),
       subscription_status: isTrial ? "trialing" : "active",
       subscription_interval: /annual|year/i.test(productId) ? "year" : "month",
       current_period_end: sub.expires_date ?? null,
@@ -264,11 +285,13 @@ export function mapRcWebhookEvent(event: Record<string, unknown>) {
 
   if (!status) return null;
 
+  const billingSource = billingSourceFromRcWebhook(event.store, originalTx);
+
   return {
     appUserId,
     patch: {
       id: appUserId,
-      billing_source: "apple",
+      billing_source: billingSource,
       subscription_status: status,
       subscription_interval: status === "canceled" ? null : interval,
       current_period_end: expires,

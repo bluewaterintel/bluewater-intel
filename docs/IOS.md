@@ -247,6 +247,8 @@ supabase functions deploy iap-sync
 
 Use a **V2** secret key with **Customer information → Read** (V1 keys and V2 keys are not interchangeable with the REST paths we call). Copy **Project ID** (`proj_…`) from RevenueCat → **Project settings → General**.
 
+**Android + troubleshooting:** see **`docs/REVENUECAT-SUPABASE.md`** (same secrets; `iap-sync` and owner **Sync RevenueCat** require `REVENUECAT_PROJECT_ID`).
+
 Webhook URL:
 ```
 https://YOURPROJECT.supabase.co/functions/v1/revenuecat-webhook

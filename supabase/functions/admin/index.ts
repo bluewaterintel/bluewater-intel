@@ -26,6 +26,7 @@ import {
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: "2024-06-20" }) : null;
 const rcSecret = Deno.env.get("REVENUECAT_SECRET_API_KEY") ?? "";
+const rcProject = Deno.env.get("REVENUECAT_PROJECT_ID") ?? "";
 
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 const ADMIN_EMAILS = new Set(
@@ -287,9 +288,14 @@ Deno.serve(async (req) => {
       if (!rcSecret || rcSecret.includes("YOUR_")) {
         return json({ error: "RevenueCat secret key not configured." }, 503);
       }
+      if (!rcProject || rcProject.includes("YOUR_")) {
+        return json({
+          error: "REVENUECAT_PROJECT_ID not configured (required for V2 secret keys).",
+        }, 503);
+      }
       const { data: { user }, error } = await admin.auth.admin.getUserById(userId);
       if (error || !user) return json({ error: "User not found" }, 404);
-      const result = await syncRevenueCatEntitlementForUser(admin, userId, rcSecret);
+      const result = await syncRevenueCatEntitlementForUser(admin, userId, rcSecret, rcProject);
       const profile = await profileForUser(admin, userId);
       const { data: usage } = await admin.from("user_brief_usage").select("count")
         .eq("user_id", userId).eq("day", todayUtc()).maybeSingle();
