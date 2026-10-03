@@ -47,6 +47,27 @@ if (!cliEnv.SUPABASE_ACCESS_TOKEN) {
 }
 
 run(SUPABASE, ["link", "--project-ref", PROJECT_REF], cliEnv);
+
+const rcSecrets = [];
+if (envFile.REVENUECAT_SECRET_API_KEY) {
+  rcSecrets.push(`REVENUECAT_SECRET_API_KEY=${envFile.REVENUECAT_SECRET_API_KEY}`);
+}
+if (envFile.REVENUECAT_PROJECT_ID) {
+  rcSecrets.push(`REVENUECAT_PROJECT_ID=${envFile.REVENUECAT_PROJECT_ID}`);
+}
+if (envFile.REVENUECAT_WEBHOOK_AUTH) {
+  rcSecrets.push(`REVENUECAT_WEBHOOK_AUTH=${envFile.REVENUECAT_WEBHOOK_AUTH}`);
+}
+if (rcSecrets.length) {
+  console.log("→ Setting RevenueCat Supabase secrets from .env");
+  run(SUPABASE, ["secrets", "set", ...rcSecrets], cliEnv);
+} else {
+  console.warn(
+    "⚠ REVENUECAT_SECRET_API_KEY / REVENUECAT_PROJECT_ID not in .env — skip secrets set.\n" +
+      "  See docs/REVENUECAT-SUPABASE.md",
+  );
+}
+
 run(SUPABASE, ["functions", "deploy", "stripe-checkout", "--no-verify-jwt"], cliEnv);
 run(SUPABASE, ["functions", "deploy", "stripe-portal", "--no-verify-jwt"], cliEnv);
 run(SUPABASE, ["functions", "deploy", "stripe-webhook", "--no-verify-jwt"], cliEnv);
