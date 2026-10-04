@@ -3047,6 +3047,16 @@ function normalizeScore(raw){
   return raw;  // unreachable (raw < 1 handled above)
 }
 
+// Same curve as normalizeScore, but continued past 1.0 along the top anchor
+// segment's slope instead of clamping, so two cells that both paint 100% still
+// rank by how far past the cap their structure/conditions pushed them.
+function rankScoreFromRaw(raw){
+  if(!(raw > 0)) return 0;
+  if(raw <= 1) return normalizeScore(raw);
+  const [x0, y0] = _SCORE_ANCHORS[_SCORE_ANCHORS.length - 2];
+  return 1 + (raw - 1) * ((1 - y0) / (1 - x0));
+}
+
 // Real ocean field cache for the current heatmap render (coarse grid prefetch).
 let OCEAN_FIELD = { samples: [], builtAtMs: 0 };
 
@@ -4415,7 +4425,9 @@ function scoreCell(lat, lng, speciesId){
   }
 
   // Cap at 1.0 so we don't exceed the heat-map's full-intensity range (the
-  // structure-proximity bonus above can push slightly past 1.0).
+  // structure-proximity bonus above can push slightly past 1.0). rankRaw keeps
+  // the uncapped value so hotspot pins can still tell maxed-out cells apart.
+  let rankRaw = finalScore;
   finalScore = Math.min(1.0, finalScore);
 
   // Vermilion (beeliner): rare north of Cape Hatteras in shallow water. Structure
@@ -4427,6 +4439,7 @@ function scoreCell(lat, lng, speciesId){
     vermilionGate = vermilionLatitudeGate(lat, depth, tempForScore);
     if(vermilionGate.penalty < 1){
       finalScore *= vermilionGate.penalty;
+      rankRaw *= vermilionGate.penalty;
       headlineScore = Math.max(0, Math.min(1, headlineScore * vermilionGate.penalty));
     }
   }
@@ -4600,6 +4613,7 @@ function scoreCell(lat, lng, speciesId){
 
   return {
     score: Math.max(0, Math.min(1, finalScore)),
+    rankScore: rankScoreFromRaw(rankRaw),
     headlineScore: Math.max(0, Math.min(1, headlineScore)),
     rawScore: Math.max(0, Math.min(1, rawScoreBeforeNorm)),
     confidence,
@@ -6259,6 +6273,10 @@ const SPECIES_LAT_RANGE = {
   // Vermilion (beeliner): Gulf year-round; South Atlantic ledges only as far
   // north as Cape Hatteras (35.4°N). They are not a Mid-Atlantic / VA fishery.
   vermilion:     {atlantic: [24.0, 35.4], gulf: [24.5, 30.5]},
+  // Red snapper: South Atlantic north to Cape Hatteras, and the whole Gulf.
+  // Not a VA / Mid-Atlantic fishery — the NC season region's radius alone
+  // reached Virginia Beach.
+  snapper:       {atlantic: [24.0, 35.4], gulf: [24.0, 31.0]},
   // ── MID-ATLANTIC + NEW ENGLAND ───────────────────────────────────────
   // Blueline tilefish: TWO populations, and the flat [33.0, 40.5] band this
   // replaces silently excluded one of them. That band hard-excluded everything
@@ -6401,11 +6419,37 @@ const NOT_IN_BAHAMAS = new Set([
   "pompano",
 ]);
 
+// Ocean bottom fish that are not a Chesapeake Bay fishery, even though their
+// latitude band and season regions cover the Bay ports.
+const NOT_IN_CHESAPEAKE = new Set(["porgy"]);
+
+// Chesapeake Bay and its shoreline ports (Solomons, Reedville, Cape Charles,
+// Annapolis…), west of the Bay's eastern shore traced in CHESAPEAKE_BAY_WATER.
+// The ocean side (Virginia Beach, Chincoteague, Ocean City) is outside.
+function inChesapeakeBayRegion(lat, lng){
+  if(lat == null || lng == null) return false;
+  if(lat < 36.95 || lat > 39.65 || lng < -77.5) return false;
+  if(typeof CHESAPEAKE_BAY_WATER === "undefined") return false;
+  const head = CHESAPEAKE_BAY_WATER.findIndex(p => p[0] >= 39.31);
+  const east = CHESAPEAKE_BAY_WATER.slice(head + 1);  // head → mouth
+  // Above the traced head (Susquehanna flats / Elk River) the Bay runs east to ~-76.0.
+  let shore = lat > east[0][0] ? -76.0 : east[east.length - 1][1];
+  for(let i = 1; i < east.length; i++){
+    const [la0, ln0] = east[i - 1], [la1, ln1] = east[i];
+    if(lat <= la0 && lat >= la1){
+      shore = la0 === la1 ? Math.max(ln0, ln1) : ln0 + (ln1 - ln0) * (la0 - lat) / (la0 - la1);
+      break;
+    }
+  }
+  return lng <= shore + 0.05;
+}
+
 // Returns true if the species can be found at this lat/lng. Handles both
 // the simple flat-array format and the per-region object format. Species
 // without any entry are allowed everywhere (safe default for coast-wide
 // species like tuna, mahi, marlin).
 function speciesAllowedAtLat(speciesId, lat, lng){
+  if(NOT_IN_CHESAPEAKE.has(speciesId) && inChesapeakeBayRegion(lat, lng)) return false;
   // Hard-exclude US-coastal-only species from Bahamian water.
   if(lng != null && NOT_IN_BAHAMAS.has(speciesId)
      && lat >= BAHAMAS_EXCLUDE_BOX.latMin && lat <= BAHAMAS_EXCLUDE_BOX.latMax
@@ -6921,9 +6965,21 @@ function hotspotRankScore(cell){
 
 // Deterministic hotspot ordering — lat/lng break near-ties so badge pins don't
 // shuffle when scores are within a fraction of a point.
+// Uncapped rank score when the cell carries one, else the painted score.
+function hotspotSortScore(cell){
+  if(!cell) return 0;
+  const r = Number(cell.rankScore);
+  return Number.isFinite(r) ? r : (Number(cell.score) || 0);
+}
+
 function cmpHotspotStable(a, b){
-  const ds = (Number(b.score) || 0) - (Number(a.score) || 0);
+  const ds = hotspotSortScore(b) - hotspotSortScore(a);
   if(Math.abs(ds) > 1e-9) return ds;
+  // Then the percent the user is shown, so a pin never outranks an equal cell
+  // that reads higher on hover.
+  const shownA = typeof a.headlineScore === "number" ? a.headlineScore : (Number(a.score) || 0);
+  const shownB = typeof b.headlineScore === "number" ? b.headlineScore : (Number(b.score) || 0);
+  if(Math.abs(shownB - shownA) > 1e-9) return shownB - shownA;
   const dr = hotspotRankScore(b) - hotspotRankScore(a);
   if(Math.abs(dr) > 1e-9) return dr;
   const dLat = (Number(a.lat) || 0) - (Number(b.lat) || 0);
@@ -7238,6 +7294,19 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   // Score one point with the SAME water/species/range/penalty rules as the grid,
   // so micro-grid scores are directly comparable to the cell being refined.
   const rangeFadeEnd = maxRange * 1.12;
+  // Habitat scale + run-distance penalty, applied to the painted score and the
+  // uncapped rank score alike so pins rank on the same terms the map paints.
+  function applyRunScale(r, la, ln, d){
+    let f = habitatScoreScale(speciesId, la, ln);
+    if(port && d > penaltyStart && d <= maxRange){
+      f *= 1 - ((d - penaltyStart) / (maxRange - penaltyStart)) * 0.15;
+    }
+    if(port && d > maxRange){
+      f *= Math.max(0, 1 - (d - maxRange) / (rangeFadeEnd - maxRange));
+    }
+    r.score *= f;
+    if(typeof r.rankScore === "number") r.rankScore *= f;
+  }
   function scoreWithPenalty(la, ln){
     if(!isPredictWater(la, ln)) return null;
     if(port && !reachableFromPort(port, la, ln)) return null;  // stay on the port's coast
@@ -7248,28 +7317,21 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
     }
     const r = scoreCell(la, ln, speciesId);
     if(!r) return null;
-    r.score *= habitatScoreScale(speciesId, la, ln);
-    if(port && d > penaltyStart && d <= maxRange){
-      const penalty = ((d - penaltyStart) / (maxRange - penaltyStart)) * 0.15;
-      r.score = r.score * (1 - penalty);
-    }
-    if(port && d > maxRange){
-      const t = (d - maxRange) / (rangeFadeEnd - maxRange);
-      r.score *= Math.max(0, 1 - t);
-    }
+    applyRunScale(r, la, ln, d);
     return { result: r, distNm: Math.round(d) };
   }
   // Re-score a micro-grid around a hotspot and return a NEW cell at the local
   // peak (a fresh object, so the shared heatGrid copy is left untouched).
   function refinePeak(cell){
-    let bestScore = cell.score, best = null;
+    let bestScore = hotspotSortScore(cell), best = null;
     for(let di = -REFINE_HALF; di <= REFINE_HALF; di++){
       for(let dj = -REFINE_HALF; dj <= REFINE_HALF; dj++){
         if(di === 0 && dj === 0) continue;  // center is the cell we already have
         const la = cell.lat + di * REFINE_STEP;
         const ln = cell.lng + dj * REFINE_STEP;
         const s = scoreWithPenalty(la, ln);
-        if(s && s.result.score > bestScore){ bestScore = s.result.score; best = { la, ln, s }; }
+        const sv = s ? hotspotSortScore(s.result) : -1;
+        if(sv > bestScore){ bestScore = sv; best = { la, ln, s }; }
       }
     }
     if(!best) return cell;  // already the local peak — keep its coordinate
@@ -7302,15 +7364,7 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
           const result = scoreCell(lat, lng, speciesId);
           if(!result) continue;
           // Wrong depth/habitat stays on the map in green instead of a hole.
-          result.score *= habitatScoreScale(speciesId, lat, lng);
-          if(port && distNm > penaltyStart && distNm <= maxRange){
-            const penalty = ((distNm - penaltyStart) / (maxRange - penaltyStart)) * 0.15;
-            result.score = result.score * (1 - penalty);
-          }
-          if(port && distNm > maxRange){
-            const t = (distNm - maxRange) / (rangeFadeEnd - maxRange);
-            result.score *= Math.max(0, 1 - t);
-          }
+          applyRunScale(result, lat, lng, distNm);
           if(result.score < PREDICT_HEAT_SCORE_MIN) continue;
           const cell = {lat, lng, distNm: Math.round(distNm), ...result};
           heatGrid.push(cell);

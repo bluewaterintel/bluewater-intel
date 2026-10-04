@@ -147,8 +147,8 @@ const PREDICT_SPECIES_PREFS = {
   // hold the biggest fish, and the NJ/NY winter deep-wreck run out to ~400 ft.
   // Floor 18 m (~59 ft) so a 40-50 ft tower does not score as well as the
   // 60-90 ft Triangle Wrecks. 200 m was also tripping the canyon-edge bonus.
-  blackseabass: {tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high",    depthBands:[[18,130]],   breakPref:"stable", demersal:true },
-  tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable", demersal:true },
+  blackseabass: {tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high",    depthBands:[[18,130]],   breakPref:"stable", demersal:true, reefStructure:true },
+  tautog:       {tempIdeal:[44,58], tempWorking:[40,62], chlorPref:"high",    depthBands:[[10,80]],    breakPref:"stable", demersal:true, reefStructure:true },
   // Golden tilefish — two fisheries, not canyon-gated. Mid-Atlantic canyon mud
   // (MAFMC 250-450 ft ≈ 75-140 m) and a deeper shelf-edge / Gulf band (~575-1,380 ft
   // ≈ 175-420 m). The old [[150,500]] floor (~492 ft) zeroed classic canyon mud and
@@ -171,9 +171,9 @@ const PREDICT_SPECIES_PREFS = {
   // Striper — also multimodal. Surf + back-bay (shallow) AND offshore
   // bunker schools (40-80m) in summer/fall.
   striper:      {tempIdeal:[55,68], tempWorking:[48,72], chlorPref:"high",    salinityPref:"moderate", depthBands:[[1,15],[20,80]], breakPref:"stable"},
-  cod:          {tempIdeal:[40,52], tempWorking:[36,58], chlorPref:"high",    depthBands:[[50,300]],   breakPref:"stable", demersal:true },
+  cod:          {tempIdeal:[40,52], tempWorking:[36,58], chlorPref:"high",    depthBands:[[50,300]],   breakPref:"stable", demersal:true, reefStructure:true },
   haddock:      {tempIdeal:[42,52], tempWorking:[38,58], chlorPref:"high",    depthBands:[[60,250]],   breakPref:"stable", demersal:true },
-  pollock:      {tempIdeal:[44,54], tempWorking:[40,60], chlorPref:"high",    depthBands:[[80,300]],   breakPref:"stable", demersal:true },
+  pollock:      {tempIdeal:[44,54], tempWorking:[40,60], chlorPref:"high",    depthBands:[[80,300]],   breakPref:"stable", demersal:true, reefStructure:true },
   bonito:       {tempIdeal:[64,72], tempWorking:[60,76], chlorPref:"edge",    depthBands:[[10,80]],    breakPref:"any"  },
   bluefish:     {tempIdeal:[60,72], tempWorking:[55,78], chlorPref:"high",    salinityPref:"moderate", depthBands:[[1,60]],     breakPref:"stable"},
   // Bigeye band starts at 180 m (100-fathom line): Mid-Atlantic/canyon bigeye
@@ -184,7 +184,7 @@ const PREDICT_SPECIES_PREFS = {
   // Speckled trout — cooler-preferring than redfish/snook, but still fishable
   // into the mid/upper 80s in FL summer (they compress into low-light/tide windows).
   speckledtrout:{tempIdeal:[62,82], tempWorking:[52,88], chlorPref:"high",    salinityPref:"moderate", depthBands:[[2,20]],     breakPref:"stable", warmAdapted:true },
-  spadefish:    {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[6,80]],     breakPref:"any"  },
+  spadefish:    {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[6,80]],     breakPref:"any", reefStructure:true },
   croaker:      {tempIdeal:[60,75], tempWorking:[55,82], chlorPref:"high",    depthBands:[[2,60]],     breakPref:"stable"},
   spanishmack:  {tempIdeal:[68,80], tempWorking:[62,84], chlorPref:"edge",    depthBands:[[5,40]],     breakPref:"any", warmAdapted:true },
   kingmack:     {tempIdeal:[70,82], tempWorking:[66,85], chlorPref:"edge",    depthBands:[[15,80]],    breakPref:"any", warmAdapted:true },
@@ -267,7 +267,7 @@ const PREDICT_SPECIES_PREFS = {
   // actually happens, so the ideal band is built around that rather than the
   // 70s°F surface. Band runs 4-90 m (13-295 ft) to cover inshore summer
   // rockpiles through the deep fall "humpback" wrecks.
-  porgy:        {tempIdeal:[52,70], tempWorking:[45,76], chlorPref:"high",    depthBands:[[4,90]],     breakPref:"stable", demersal:true },
+  porgy:        {tempIdeal:[52,70], tempWorking:[45,76], chlorPref:"high",    depthBands:[[4,90]],     breakPref:"stable", demersal:true, reefStructure:true },
 };
 
 const MIGRATION_PHASE = {
@@ -1471,10 +1471,10 @@ const NE_SPECIES_PREFS = {
   // GOM / Cape Cod sea bass: summer-fall wrecks and rocky bottom ~40-150 ft,
   // not the 400 ft basin. The national [[18,130]] m table is the NJ/NY winter
   // deep-wreck run and must not light 400 ft water off Portland as excellent.
-  blackseabass: { tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high", depthBands:[[10,46]], breakPref:"stable", demersal:true },
+  blackseabass: { tempIdeal:[52,72], tempWorking:[45,78], chlorPref:"high", depthBands:[[10,46]], breakPref:"stable", demersal:true, reefStructure:true },
   // GOM pollock: Jeffreys / Cashes / Platts ledges, not the whole basin as
   // "excellent" and not the beach. National [[80,300]] m painted 1000 ft water.
-  pollock: { tempIdeal:[44,54], tempWorking:[40,60], chlorPref:"high", depthBands:[[50,160]], breakPref:"stable", demersal:true },
+  pollock: { tempIdeal:[44,54], tempWorking:[40,60], chlorPref:"high", depthBands:[[50,160]], breakPref:"stable", demersal:true, reefStructure:true },
   // GOM swordfish: Wilkinson / Jordan / Georges basins at ~100-150 fathoms
   // (600-900 ft), including the historic summer harpoon bite. The national
   // [[250,2000]] m table is Hudson / Hatteras / Miami canyon walls (1,000-
