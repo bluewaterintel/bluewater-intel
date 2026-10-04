@@ -18714,6 +18714,11 @@ function topBriefHotspots(limit){
 // engine as the Bite Map). Deliberately lean — the run plan adds spots to ONE
 // model call, so we send only what distinguishes each spot, not a duplicate
 // conditions block (nearby spots share the same area weather).
+function biteDisplayPercent(cell){
+  if(!cell) return null;
+  const shown = (typeof cell.headlineScore === "number") ? cell.headlineScore : cell.score;
+  return shown != null ? Math.round(shown * 100) : null;
+}
 function briefSpotSummary(spotLL, spIds, portObj, rank){
   let depthFt = null;
   try { if(typeof realDepthAt === "function"){ const m = realDepthAt(spotLL.lat, spotLL.lng); if(m != null) depthFt = Math.round(m * 3.281); } } catch(e){}
@@ -18727,7 +18732,7 @@ function briefSpotSummary(spotLL, spIds, portObj, rank){
       if(!r && typeof scoreCell === "function") r = scoreCell(spotLL.lat, spotLL.lng, id);
       if(r) bite.push({
         species: (typeof SPECIES !== "undefined" && SPECIES.find(s=>s.id===id)?.name) || id,
-        score: r.score != null ? Math.round(r.score*100) : null,
+        score: biteDisplayPercent(r),
         // scoreCell already returns confidence as 0–100.
         confidence: r.confidence != null ? Math.round(r.confidence) : null,
         topFactor: r.topFactor || null,
@@ -19040,7 +19045,7 @@ async function runBrief(){
                 _score: Number(mapped.score) || 0,
                 speciesId: id,
                 species: SPECIES.find(s=>s.id===id)?.name || id,
-                score: Math.round((Number(mapped.score) || 0) * 100),
+                score: biteDisplayPercent(mapped),
                 topFactor: mapped.topFactor || null,
                 topFactors: Array.isArray(mapped.topFactors) ? mapped.topFactors : null,
                 confidence: mapped.confidence != null ? Math.round(mapped.confidence) : null,
@@ -19064,7 +19069,7 @@ async function runBrief(){
                   _score: score,
                   speciesId: id,
                   species: SPECIES.find(s=>s.id===id)?.name || id,
-                  score: Math.round(score * 100),
+                  score: biteDisplayPercent(r),
                   topFactor: r.topFactor || null,
                   topFactors: Array.isArray(r.topFactors) ? r.topFactors : null,
                   confidence: r.confidence != null ? Math.round(r.confidence) : null,
