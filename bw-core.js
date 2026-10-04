@@ -4381,7 +4381,18 @@ function scoreCell(lat, lng, speciesId){
   // open Nantucket Sound). We give a smooth bonus that decays with distance to
   // the nearest mapped structure of interest, capped so it shapes — not
   // dominates — the field.
-  if((prefs.breakPref === "stable" || prefs.structureProx) && typeof nearestMappedStructure === "function"){
+  let reefStructureNm = null;
+  if(prefs.reefStructure && typeof nearestMappedStructure === "function"){
+    // Exact lookup, not the grid-snapped cache: hotspot refinement re-scores a
+    // ~1 nm micro-grid and needs real distances to walk the pin onto the reef.
+    const hit = nearestStructureFromSpatialIndex(lat, lng) || nearestMappedStructure(lat, lng, speciesId);
+    reefStructureNm = hit && hit.nm != null ? hit.nm : Infinity;
+    const before = finalScore;
+    finalScore = reefStructureAdjust(finalScore, reefStructureNm, _predictStructureCharted);
+    // Open-bottom cap is a habitat call, so the tapped percent follows it down;
+    // the near-structure lift does not inflate the headline.
+    if(before > 0 && finalScore < before) headlineScore *= finalScore / before;
+  } else if((prefs.breakPref === "stable" || prefs.structureProx) && typeof nearestMappedStructure === "function"){
     const hit = nearestMappedStructure(lat, lng, speciesId);
     if(hit && hit.nm != null){
       // Full bonus within ~2nm of structure, fading to none by ~12nm.
@@ -4533,7 +4544,10 @@ function scoreCell(lat, lng, speciesId){
   const droppedKeys = new Set((fr?.droppedFactors || []).map(f => f.key));
   const allFactors = [
     {key:"temp", name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: (_isBottom || _isDemersal) ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
-    {key:"depth", name: ((W.structure || 0) === 0 && (speciesId === "mahi" || speciesId === "sailfish" || speciesId === "skipjack" || speciesId === "wahoo")) ? "Water depth" : "Depth/structure",    weight:W.depthStruct,   score:depthScore,       raw:`${Math.round(depth * 3.28084)} ft`},
+    {key:"depth", name: ((W.structure || 0) === 0 && (speciesId === "mahi" || speciesId === "sailfish" || speciesId === "skipjack" || speciesId === "wahoo")) ? "Water depth" : "Depth/structure",    weight:W.depthStruct,   score:depthScore,
+     raw: `${Math.round(depth * 3.28084)} ft` + (reefStructureNm == null ? ""
+       : isFinite(reefStructureNm) && reefStructureNm <= 20 ? ` · ${reefStructureNm.toFixed(1)} nm to charted structure`
+       : " · no charted structure nearby")},
     {key:"structure", name:"Bottom structure",   weight:(W.structure||0), score:structureScore,
      raw: structureScore > 0.05 ? `${Math.round(structureScore*100)}% · edge/slope` : "flat bottom"},
     {key:"pres", name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
@@ -5966,6 +5980,7 @@ const PREDICT_BOTTOM_STRUCTURE_TYPES = new Set(["wk", "rf", "st", "ld", "rk", "h
 const PREDICT_PELAGIC_STRUCTURE_TYPES = new Set(["cy", "pf", "rg", "tw"]);
 let _predictStructureNear = null;   // Map "lat,lng" (grid-snapped) → { nm, canyon }
 let _predictStructureSpatial = null; // { binDeg, originLat, originLng, bins: Map }
+let _predictStructureCharted = false; // charted wrecks/reefs/rigs loaded for the current run
 
 // Charted wreck/reef positions for bite-map scoring (not map display). Gated the
 // same way as the Waypoints layer — Bite Map itself is already Pro-only.
@@ -5979,7 +5994,7 @@ function predictChartedStructureAllowed(){
 
 function predictStructureTypeSet(speciesId){
   const prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
-  if(prefs && prefs.structureProx){
+  if(prefs && (prefs.structureProx || prefs.reefStructure)){
     return new Set([...PREDICT_BOTTOM_STRUCTURE_TYPES, ...PREDICT_PELAGIC_STRUCTURE_TYPES]);
   }
   const sp = (typeof SPECIES !== "undefined") ? SPECIES.find(s => s.id === speciesId) : null;
@@ -5988,18 +6003,35 @@ function predictStructureTypeSet(speciesId){
   return PREDICT_BOTTOM_STRUCTURE_TYPES;
 }
 
+// Scoring always reads the full charted database, never the Waypoints layer's
+// filtered view: the layer's type filter and 60 nm radius only decide what is
+// DRAWN, and must not make charted reefs score as open bottom. The layer cache
+// is used only when the embedded database is missing.
 function chartedStructureRowsNearPort(port, radiusNm, typeSet){
   if(!port || !typeSet || !typeSet.size) return [];
   let rows = [];
-  if(Array.isArray(_wpInRangeCache) && _wpInRangeCache.length){
-    rows = _wpInRangeCache.filter(w => w && typeSet.has(w.t));
-  } else if(typeof window !== "undefined" && window.BW_WAYPOINTS && Array.isArray(window.BW_WAYPOINTS.wp)){
+  if(typeof window !== "undefined" && window.BW_WAYPOINTS && Array.isArray(window.BW_WAYPOINTS.wp)){
     for(const row of window.BW_WAYPOINTS.wp){
       if(!Array.isArray(row) || row.length < 4) continue;
       const t = row[3];
       if(!typeSet.has(t)) continue;
       rows.push({ name: row[0], lat: row[1], lng: row[2], t });
     }
+  } else if(Array.isArray(_wpInRangeCache) && _wpInRangeCache.length){
+    rows = _wpInRangeCache.filter(w => w && typeSet.has(w.t));
+  }
+  return filterWaypointsForPortAndRadius(port, rows, radiusNm);
+}
+
+// BSEE Gulf platforms (bw-platforms-gom.js) for reef-structure species — the
+// waypoint database carries only a handful of rigs, and Gulf snapper/AJ/grouper
+// stack on them.
+function gulfPlatformRowsNearPort(port, radiusNm){
+  if(!port || typeof window === "undefined" || !Array.isArray(window.BW_GOM_PLATFORMS)) return [];
+  const rows = [];
+  for(const row of window.BW_GOM_PLATFORMS){
+    if(!Array.isArray(row) || row.length < 3) continue;
+    rows.push({ name: row[0], lat: row[1], lng: row[2], t: "pf" });
   }
   return filterWaypointsForPortAndRadius(port, rows, radiusNm);
 }
@@ -6015,14 +6047,23 @@ function collectPredictStructureCandidates(port, radiusNm, speciesId){
       out.push({ lat: c.lat, lng: c.lng, canyon: c });
     }
   }
+  _predictStructureCharted = false;
   if(predictChartedStructureAllowed()){
     const types = predictStructureTypeSet(speciesId);
-    for(const w of chartedStructureRowsNearPort(port, radiusNm, types)){
+    const prefs = (typeof PREDICT_SPECIES_PREFS !== "undefined") ? PREDICT_SPECIES_PREFS[speciesId] : null;
+    const reef = !!(prefs && prefs.reefStructure);
+    // Reef species: reach past the run range by the fade distance so a cell at
+    // the edge of range still sees the structure just beyond it.
+    const rowRadius = reef ? radiusNm + REEF_STRUCTURE_FADE_NM : radiusNm;
+    const rows = chartedStructureRowsNearPort(port, rowRadius, types);
+    if(reef) rows.push(...gulfPlatformRowsNearPort(port, rowRadius));
+    for(const w of rows){
       out.push({
         lat: w.lat, lng: w.lng,
         canyon: { name: w.name || "Charted structure", type: w.t, lat: w.lat, lng: w.lng, fish: [] },
       });
     }
+    _predictStructureCharted = rows.length > 0;
   }
   return out;
 }
@@ -6077,15 +6118,41 @@ function nearestStructureFromSpatialIndex(lat, lng){
 
 function precomputePredictStructureNear(latMin, latMax, lngMin, lngMax, step, originLat, originLng, candidates){
   _predictStructureNear = new Map();
+  _predictStructureSpatial = null;
   if(!candidates.length) return;
   buildPredictStructureSpatialIndex(candidates, originLat, originLng);
   for(let la = latMin; la <= latMax + 1e-9; la += step){
     for(let ln = lngMin; ln <= lngMax + 1e-9; ln += step){
       if(typeof isPredictWater === "function" && !isPredictWater(la, ln)) continue;
-      const hit = nearestStructureAmongCandidates(la, ln, candidates);
+      const hit = nearestStructureFromSpatialIndex(la, ln) || nearestStructureAmongCandidates(la, ln, candidates);
       if(hit) _predictStructureNear.set(_structureSnapKey(la, ln, step, originLat, originLng), hit);
     }
   }
+}
+
+// ── Reef-structure scoring (prefs.reefStructure: snapper, grouper, AJ, …) ────
+// Reef fish live ON hard bottom, so distance to charted structure shapes the
+// score far more tightly than the generic 2→12 nm proximity bonus: full lift
+// within REEF_STRUCTURE_FULL_NM, fading out by REEF_STRUCTURE_FADE_NM. Beyond
+// that the cell is open bottom and its raw score is capped at
+// REEF_OPEN_BOTTOM_CAP (top of "fair" after normalizeScore) — not "poor",
+// because uncharted live bottom exists. The cap only applies when charted
+// structure was loaded for the run; without it every cell would read open.
+const REEF_STRUCTURE_FULL_NM = 1.5;
+const REEF_STRUCTURE_FADE_NM = 5;
+const REEF_STRUCTURE_LIFT = 0.35;
+const REEF_OPEN_BOTTOM_CAP = 0.46;
+
+function reefStructureAdjust(score, nm, charted){
+  const d = (nm != null && isFinite(nm)) ? nm : Infinity;
+  const prox = Math.max(0, Math.min(1,
+    (REEF_STRUCTURE_FADE_NM - d) / (REEF_STRUCTURE_FADE_NM - REEF_STRUCTURE_FULL_NM)));
+  let out = score * (1 + REEF_STRUCTURE_LIFT * prox);
+  if(charted && d > REEF_STRUCTURE_FULL_NM){
+    const cap = 1 - (1 - REEF_OPEN_BOTTOM_CAP) * (1 - prox);
+    out = Math.min(out, cap);
+  }
+  return out;
 }
 
 // Nearest mapped structure (reef/wreck/lump/shoal/ledge) to a point, in nm,
@@ -7150,6 +7217,7 @@ function computePredictionGridAsync(speciesId, onProgress, onDone){
   } else {
     _predictStructureNear = null;
     _predictStructureSpatial = null;
+    _predictStructureCharted = false;
   }
 
   const heatGrid = [];

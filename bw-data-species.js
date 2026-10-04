@@ -157,8 +157,11 @@ const PREDICT_SPECIES_PREFS = {
   // Red snapper working top 85°F: the fall SAB shelf is well mixed and Gulf
   // 60-100 ft reefs run low-to-mid 80s on the bottom, and the fish bite there.
   // An 82°F top marked down every 60-100 ft South Atlantic reef in October.
-  snapper:      {tempIdeal:[68,78], tempWorking:[62,85], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
-  grouper:      {tempIdeal:[64,76], tempWorking:[58,80], chlorPref:"any",     depthBands:[[30,200]],   breakPref:"any", demersal:true },
+  // reefStructure: the fish live ON hard bottom, so the bite map scores distance
+  // to charted wrecks/reefs/ledges/rigs (bw-core.js reefStructureAdjust) — open
+  // sand at the right depth is capped at "fair" instead of painting excellent.
+  snapper:      {tempIdeal:[68,78], tempWorking:[62,85], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true, reefStructure:true },
+  grouper:      {tempIdeal:[64,76], tempWorking:[58,80], chlorPref:"any",     depthBands:[[30,200]],   breakPref:"any", demersal:true, reefStructure:true },
   // Sheepshead hold on pilings, jetties, and bay structure, almost all of it
   // inside 30 ft. A 30 m ceiling (~98 ft) unioned the nearshore bucket into
   // the habitat mask, so the bite map painted the open Gulf shelf off Destin
@@ -185,7 +188,7 @@ const PREDICT_SPECIES_PREFS = {
   croaker:      {tempIdeal:[60,75], tempWorking:[55,82], chlorPref:"high",    depthBands:[[2,60]],     breakPref:"stable"},
   spanishmack:  {tempIdeal:[68,80], tempWorking:[62,84], chlorPref:"edge",    depthBands:[[5,40]],     breakPref:"any", warmAdapted:true },
   kingmack:     {tempIdeal:[70,82], tempWorking:[66,85], chlorPref:"edge",    depthBands:[[15,80]],    breakPref:"any", warmAdapted:true },
-  triggerfish:  {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
+  triggerfish:  {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true, reefStructure:true },
   // ── FLORIDA / TROPICAL SPECIES ──────────────────────────────────────────
   // Heat-tolerant FL/Gulf inshore: peak season IS hot water. Keep idealHi high
   // enough that normal summer SST (~86–88°F) is not a drag, and mark warmAdapted
@@ -202,15 +205,15 @@ const PREDICT_SPECIES_PREFS = {
   bonefish:     {tempIdeal:[74,88], tempWorking:[70,92], chlorPref:"high",    depthBands:[[1,6]],      breakPref:"stable", warmAdapted:true },
   permit:       {tempIdeal:[74,88], tempWorking:[70,92], chlorPref:"high",    depthBands:[[2,80]],     breakPref:"stable", warmAdapted:true },
   ceromack:     {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"edge",    depthBands:[[10,80]],    breakPref:"any", warmAdapted:true },
-  hogfish:      {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[10,40]],    breakPref:"any", demersal:true },
-  muttonsnap:   {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
+  hogfish:      {tempIdeal:[70,80], tempWorking:[66,84], chlorPref:"any",     depthBands:[[10,40]],    breakPref:"any", demersal:true, reefStructure:true },
+  muttonsnap:   {tempIdeal:[72,82], tempWorking:[68,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true, reefStructure:true },
   // ── GULF COAST + DEEP REEF SPECIES ─────────────────────────────────
   // Blueline tilefish — hard-bottom ledges ~240-820 ft (70-250 m). Canyons are hot
   // spots but not required; the old [[120,700]] floor (~394 ft) kept 300-400 ft
   // shelf ledges cold on the bite map.
   bluelinetile: {tempIdeal:[55,68], tempWorking:[50,72], chlorPref:"any",     depthBands:[[70,250]],  breakPref:"any", bottom:true },
-  gaggrouper:   {tempIdeal:[66,76], tempWorking:[60,82], chlorPref:"any",     depthBands:[[20,150]],   breakPref:"any", demersal:true },
-  amberjack:    {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
+  gaggrouper:   {tempIdeal:[66,76], tempWorking:[60,82], chlorPref:"any",     depthBands:[[20,150]],   breakPref:"any", demersal:true, reefStructure:true },
+  amberjack:    {tempIdeal:[68,80], tempWorking:[64,84], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true, reefStructure:true },
   tripletail:   {tempIdeal:[72,88], tempWorking:[68,92], chlorPref:"any",     depthBands:[[2,40]],     breakPref:"any", warmAdapted:true },
   pompano:      {tempIdeal:[68,84], tempWorking:[62,88], chlorPref:"any",     depthBands:[[2,15]],     breakPref:"stable", warmAdapted:true },
   // Vermilion (beeliner): hard-bottom / live-bottom schools in ~100-300 ft
@@ -223,9 +226,9 @@ const PREDICT_SPECIES_PREFS = {
   // cells north of 35.0°N in <120 ft are also habitat-gated — beeliners hold
   // 150-250 ft ledges there, not 98 ft under the summer surface layer. Depth
   // cap is 300 ft to match the encyclopedia / Gulf beeliner grounds.
-  vermilion:    {tempIdeal:[64,72], tempWorking:[58,78], chlorPref:"any",     depthBands:[[30,91]],    breakPref:"any", demersal:true },
-  lanesnap:     {tempIdeal:[70,82], tempWorking:[66,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true },
-  yellowtail:   {tempIdeal:[74,84], tempWorking:[68,86], chlorPref:"low",     depthBands:[[10,40]],    breakPref:"any", demersal:true },
+  vermilion:    {tempIdeal:[64,72], tempWorking:[58,78], chlorPref:"any",     depthBands:[[30,91]],    breakPref:"any", demersal:true, reefStructure:true },
+  lanesnap:     {tempIdeal:[70,82], tempWorking:[66,86], chlorPref:"any",     depthBands:[[20,80]],    breakPref:"any", demersal:true, reefStructure:true },
+  yellowtail:   {tempIdeal:[74,84], tempWorking:[68,86], chlorPref:"low",     depthBands:[[10,40]],    breakPref:"any", demersal:true, reefStructure:true },
   // ── PACIFIC / SOUTHERN CALIFORNIA ───────────────────────────────────
   // California yellowtail (Seriola lalandi) — a structure-oriented pelagic jack
   // that stacks on offshore banks, hard bottom, kelp edges and paddies from the
