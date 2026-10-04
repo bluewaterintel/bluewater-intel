@@ -33,7 +33,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { esc, ownerEmailShell, sendOwnerEmail } from "../_shared/email.ts";
-import { ERDDAP_HEADERS, ERDDAP_POLARWATCH, fetchNoaa } from "../_shared/erddap.ts";
+import { ERDDAP_COASTWATCH, ERDDAP_HEADERS, fetchNoaa } from "../_shared/erddap.ts";
 
 // ── CORS (public GET) ────────────────────────────────────────────────────────
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -56,7 +56,7 @@ const SST_DATASET = Deno.env.get("SST_DATASET") ?? "jplMURSST41";
 const SST_VAR = Deno.env.get("SST_VAR") ?? "analysed_sst";
 const SST_HAS_ALTITUDE = (Deno.env.get("SST_HAS_ALTITUDE") ?? "false") === "true";
 
-const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? ERDDAP_POLARWATCH;
+const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? ERDDAP_COASTWATCH;
 const CHL_DATASET = Deno.env.get("CHL_DATASET") ?? "noaacwNPPN20VIIRSDINEOFDaily";
 const CHL_VAR = Deno.env.get("CHL_VAR") ?? "chlor_a";
 const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true";
@@ -64,7 +64,7 @@ const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true"
 const ETOPO_ERDDAP = Deno.env.get("ETOPO_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
 const ETOPO_DATASET = Deno.env.get("ETOPO_DATASET") ?? "etopo180";
 
-const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP") ?? ERDDAP_POLARWATCH;
+const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP") ?? ERDDAP_COASTWATCH;
 const ALTIMETRY_SSH_DATASET = "noaacwBLENDEDsshDaily";
 const ALTIMETRY_CUR_DATASET = "noaacwBLENDEDNRTcurrentsDaily";
 const H = 3600 * 1000;
@@ -350,17 +350,17 @@ async function runAllProbes(): Promise<Probe[]> {
     probeErddapPoint({
       id: "chlor", label: "Chlorophyll — VIIRS DINEOF NRT", category: "core",
       base: CHL_ERDDAP, dataset: CHL_DATASET, varName: CHL_VAR, hasAltitude: CHL_HAS_ALTITUDE,
-      amberAfter: 120, redAfter: 240,
+      amberAfter: 120, redAfter: 240, timeoutMs: 22000,
     }),
     probeErddapPoint({
       id: "ssh", label: "Altimetry SSH / eddies — BLENDED", category: "core",
       base: ALTIMETRY_ERDDAP, dataset: ALTIMETRY_SSH_DATASET, varName: "sla", hasAltitude: false,
-      amberAfter: 96, redAfter: 192,
+      amberAfter: 96, redAfter: 192, timeoutMs: 22000,
     }),
     probeErddapPoint({
       id: "altcurrents", label: "Geostrophic currents — BLENDED", category: "core",
       base: ALTIMETRY_ERDDAP, dataset: ALTIMETRY_CUR_DATASET, varName: "u_current", hasAltitude: false,
-      amberAfter: 96, redAfter: 192,
+      amberAfter: 96, redAfter: 192, timeoutMs: 22000,
     }),
     probeRtofs(),
     probeEtopo(),
