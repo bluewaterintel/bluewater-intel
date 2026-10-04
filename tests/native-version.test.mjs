@@ -3,8 +3,8 @@ import { verifyNativeVersion } from "../scripts/verify-native-version.mjs";
 
 const result = verifyNativeVersion();
 assert.equal(result.ok, true, result.errors.join("; "));
-assert.equal(result.expected.versionName, "1.6.1");
-assert.equal(result.expected.versionCode, 85);
-assert.equal(result.expected.androidVersionCode, 85);
+assert.equal(result.expected.versionName, "1.6.2");
+assert.equal(result.expected.versionCode, 86);
+assert.equal(result.expected.androidVersionCode, 86);
 
 console.log("native-version.test.mjs OK");

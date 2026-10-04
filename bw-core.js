@@ -8972,7 +8972,7 @@ function applySstForecastGrid(data){
     source: data.source || "RTOFS",
     daysBack: (typeof data.daysBack === "number" && isFinite(data.daysBack))
       ? data.daysBack
-      : ((typeof satCurrentDaysBack === "function") ? satCurrentDaysBack() : null),
+      : (satDayOffset > 0 ? satDayOffset : 0),
   };
 }
 
@@ -9369,8 +9369,8 @@ const SstForecastLayer = L.Layer.extend({
     const want = _sstStepForZoom(this._map.getZoom());
     // Refetch when zoom wants a meaningfully denser/coarser grid.
     if(g._requestStep != null && Math.abs(g._requestStep - want) > 0.005) return false;
-    const wantBack = (typeof satCurrentDaysBack === "function") ? satCurrentDaysBack() : 0;
-    if(g.daysBack != null && g.daysBack !== wantBack) return false;
+    const wantMur = satDayOffset > 0 ? satDayOffset : 0;
+    if(g.daysBack != null && g.daysBack !== wantMur) return false;
     return true;
   },
   _reset: function(){
@@ -9432,9 +9432,8 @@ const SstForecastLayer = L.Layer.extend({
     // only costs resolution. Retry at the same step with a short backoff, and
     // fall back to tiles only once the retries are spent.
     const stepDeg = _sstStepForBox(bx, z);
-    const sstDaysBack = (hours <= 0 && typeof satCurrentDaysBack === "function")
-      ? satCurrentDaysBack()
-      : null;
+    const reqSatOffset = satDayOffset;
+    const sstDaysBack = (hours <= 0) ? sstMurDaysBackParam() : null;
     // Pacific SST has no coastline polygons — CUDEM is the land mask. Load it
     // in the background (same pattern as currents) and rebuild the canvas when
     // it arrives so inland SoCal doesn't stay washed in MUR land temperatures.
@@ -9464,8 +9463,7 @@ const SstForecastLayer = L.Layer.extend({
       BW_OCEAN.fetchSstGrid(bx.s, bx.n, bx.w, bx.e, hours, stepDeg, sstDaysBack).then(data => {
         if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
         if((typeof oceanOverlayForecastHour === "function" ? oceanOverlayForecastHour() : 0) !== hours) return;
-        if(hours <= 0 && sstDaysBack != null && typeof satCurrentDaysBack === "function"
-          && satCurrentDaysBack() !== sstDaysBack) return;
+        if(hours <= 0 && reqSatOffset !== satDayOffset) return;
         applySstForecastGrid(data);
         if(!SST_FORECAST_GRID){
           if(triesLeft > 0){ setTimeout(() => attempt(triesLeft - 1), 900); return; }
@@ -11448,6 +11446,13 @@ function satCurrentDaysBack(){
     else if(layerVis.chlor) base = SAT_FRESH_BACK.chlor;
   }
   return base + satDayOffset;
+}
+// Canvas MUR uses ERDDAP [last-N] relative to the dataset's latest granule.
+// GIBS/chlor use calendar days via gibsRecentDate(SAT_FRESH_BACK + satDayOffset).
+// At slider offset 0, omit daysBack so the server composes the freshest slice;
+// at offset N>0, request exactly [last-N] for historical days.
+function sstMurDaysBackParam(){
+  return satDayOffset > 0 ? satDayOffset : null;
 }
 function satDateLabel(){
   const d = new Date();
