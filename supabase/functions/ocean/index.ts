@@ -1369,7 +1369,7 @@ async function fetchSstRows(
   latMax: number,
   lngMin: number,
   lngMax: number,
-  opts: { targetDeg?: number; lookback?: number; timeoutMs?: number; retries?: number } = {},
+  opts: { targetDeg?: number; lookback?: number; timeoutMs?: number; retries?: number; daysBack?: number } = {},
 ) {
   const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
   const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
@@ -1381,8 +1381,13 @@ async function fetchSstRows(
   const envLookback = Math.max(0, Number(Deno.env.get("SSTGRID_LOOKBACK") ?? "4"));
   const lookback = Math.max(0, Math.min(6,
     (typeof opts.lookback === "number" && isFinite(opts.lookback)) ? opts.lookback : envLookback));
+  const singleDayBack = (typeof opts.daysBack === "number" && isFinite(opts.daysBack))
+    ? Math.max(0, Math.min(14, Math.round(opts.daysBack)))
+    : null;
   const altIdx = SST_HAS_ALTITUDE ? "%5B(0.0)%5D" : "";
-  const timeIdx = lookback > 0 ? `%5Blast-${lookback}:last%5D` : "%5B(last)%5D";
+  const timeIdx = singleDayBack != null
+    ? `%5Blast-${singleDayBack}%5D`
+    : (lookback > 0 ? `%5Blast-${lookback}:last%5D` : "%5B(last)%5D");
   const url = `${SST_ERDDAP}/${SST_DATASET}.json`
     + `?${SST_VAR}${timeIdx}${altIdx}`
     + `%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
@@ -1404,7 +1409,8 @@ async function fetchSstRows(
     const cols: string[] = d?.table?.columnNames ?? [];
     const rawRows: unknown[][] = d?.table?.rows ?? [];
     const ti = cols.indexOf("time"), li = cols.indexOf("latitude"), gi = cols.indexOf("longitude"), vi = cols.indexOf(SST_VAR);
-    // Freshest non-fill value per cell across the lookback window.
+    // Freshest non-fill value per cell across the lookback window (map overlay
+    // default). Historical slider requests a single daily slice via daysBack.
     const best = new Map<string, { lat: number; lng: number; f: number; ms: number }>();
     for (const row of rawRows) {
       let c = num(row[vi]);
@@ -1416,7 +1422,11 @@ async function fetchSstRows(
       const ms = ti >= 0 && typeof row[ti] === "string" ? Date.parse(row[ti] as string) : 0;
       const k = `${la.toFixed(3)},${ln.toFixed(3)}`;
       const cur = best.get(k);
-      if (!cur || ms > cur.ms) best.set(k, { lat: la, lng: ln, f, ms });
+      if (singleDayBack != null) {
+        if (!cur) best.set(k, { lat: la, lng: ln, f, ms });
+      } else if (!cur || ms > cur.ms) {
+        best.set(k, { lat: la, lng: ln, f, ms });
+      }
     }
     const rows = [...best.values()].map((c) =>
       [Math.round(c.lat * 1000) / 1000, Math.round(c.lng * 1000) / 1000, c.f, c.ms || null]);
@@ -1883,7 +1893,11 @@ export const handler = async (req: Request): Promise<Response> => {
       // Map overlay may request denser stepDeg when zoomed; lookback=2 keeps
       // the ERDDAP pull light so pans stay snappy (scoring still uses default 4).
       const reqStep = num(u.searchParams.get("stepDeg"));
-      const ck = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${reqStep ?? "auto"}`;
+      const daysBackRaw = num(u.searchParams.get("daysBack"));
+      const histBack = daysBackRaw != null
+        ? Math.max(0, Math.min(14, Math.round(daysBackRaw)))
+        : null;
+      const ck = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${reqStep ?? "auto"}:${histBack ?? "fresh"}`;
       const cached = sstGridCache.get(ck);
       if (cached && Date.now() - cached.atMs < SSTGRID_TTL_MS) {
         return new Response(JSON.stringify(cached.body), {
@@ -1892,7 +1906,8 @@ export const handler = async (req: Request): Promise<Response> => {
       }
       const mur = await fetchSstRows(latMin, latMax, lngMin, lngMax, {
         targetDeg: reqStep ?? undefined,
-        lookback: 4,
+        lookback: histBack != null ? 0 : 4,
+        daysBack: histBack ?? undefined,
         // MUR is daily and this host routinely needs 14–30 s; a 20 s abort was
         // discarding good pulls and the overlay then had nothing to draw.
         timeoutMs: 45000,
@@ -1909,6 +1924,7 @@ export const handler = async (req: Request): Promise<Response> => {
         forecastHour: 0,
         source: SST_DATASET,
         _forecast: false,
+        ...(histBack != null ? { daysBack: histBack } : {}),
       };
       // Warm instances then serve pans over the same water instantly, which
       // matters a lot when a cold pull costs half a minute.

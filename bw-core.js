@@ -8970,6 +8970,9 @@ function applySstForecastGrid(data){
     observedAtMs: freshest || null,
     forecastHour: data.forecastHour || FORECAST_HOUR_OFFSET,
     source: data.source || "RTOFS",
+    daysBack: (typeof data.daysBack === "number" && isFinite(data.daysBack))
+      ? data.daysBack
+      : ((typeof satCurrentDaysBack === "function") ? satCurrentDaysBack() : null),
   };
 }
 
@@ -9366,6 +9369,8 @@ const SstForecastLayer = L.Layer.extend({
     const want = _sstStepForZoom(this._map.getZoom());
     // Refetch when zoom wants a meaningfully denser/coarser grid.
     if(g._requestStep != null && Math.abs(g._requestStep - want) > 0.005) return false;
+    const wantBack = (typeof satCurrentDaysBack === "function") ? satCurrentDaysBack() : 0;
+    if(g.daysBack != null && g.daysBack !== wantBack) return false;
     return true;
   },
   _reset: function(){
@@ -9427,6 +9432,9 @@ const SstForecastLayer = L.Layer.extend({
     // only costs resolution. Retry at the same step with a short backoff, and
     // fall back to tiles only once the retries are spent.
     const stepDeg = _sstStepForBox(bx, z);
+    const sstDaysBack = (hours <= 0 && typeof satCurrentDaysBack === "function")
+      ? satCurrentDaysBack()
+      : null;
     // Pacific SST has no coastline polygons — CUDEM is the land mask. Load it
     // in the background (same pattern as currents) and rebuild the canvas when
     // it arrives so inland SoCal doesn't stay washed in MUR land temperatures.
@@ -9453,9 +9461,11 @@ const SstForecastLayer = L.Layer.extend({
     };
     const attempt = (triesLeft) => {
       if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
-      BW_OCEAN.fetchSstGrid(bx.s, bx.n, bx.w, bx.e, hours, stepDeg).then(data => {
+      BW_OCEAN.fetchSstGrid(bx.s, bx.n, bx.w, bx.e, hours, stepDeg, sstDaysBack).then(data => {
         if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
         if((typeof oceanOverlayForecastHour === "function" ? oceanOverlayForecastHour() : 0) !== hours) return;
+        if(hours <= 0 && sstDaysBack != null && typeof satCurrentDaysBack === "function"
+          && satCurrentDaysBack() !== sstDaysBack) return;
         applySstForecastGrid(data);
         if(!SST_FORECAST_GRID){
           if(triesLeft > 0){ setTimeout(() => attempt(triesLeft - 1), 900); return; }
@@ -11384,6 +11394,9 @@ function rebuildSatelliteLayers(){
   // Crossfading GIBS SST here used to win a race against syncSstOverlayMode —
   // ensureFreshestSatDates / the date slider would drop global-palette tiles on
   // top of the canvas and the legend would freeze at the 74–88°F defaults.
+  if(layerVis.sst && typeof window.buildSstLayer === "function"){
+    sstLayer = window.buildSstLayer(satDayOffset);
+  }
   if(layerVis.sst && typeof syncSstOverlayMode === "function"){
     syncSstOverlayMode();
   }
@@ -11481,6 +11494,12 @@ function setSatDayOffset(days){
   const v = Math.max(0, Math.min(SAT_MAX_DAYS_BACK, days|0));
   if(v === satDayOffset){ updateSatDateDisplay(); return; }
   satDayOffset = v;
+  // Canvas MUR is keyed to satDayOffset — drop cached grid so the slider refetches.
+  if(layerVis.sst){
+    SST_FORECAST_GRID = null;
+    _sstFcFetchSeq++;
+    if(sstForecastLayer) sstForecastLayer._smallFor = null;
+  }
   rebuildSatelliteLayers();
 }
 // Show the satellite date control only when SST or chlorophyll is visible.

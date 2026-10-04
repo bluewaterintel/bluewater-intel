@@ -39,6 +39,7 @@
     "test:canyons": "node tests/canyon-catalog.test.mjs",
     "test:biteexplainer": "node tests/bite-explainer-ui.test.mjs",
     "test:sstmask": "node tests/sst-pacific-mask.test.mjs",
+    "test:ssthistslider": "node tests/sst-history-slider.test.mjs",
     "test:altimetry": "node tests/altimetry-dataset.test.mjs",
     "test:altimetrydate": "node tests/altimetry-date-age.test.mjs",
     "test:nativebilling": "node tests/native-billing-email.test.mjs && node tests/ios-stripe-portal-open.test.mjs",
