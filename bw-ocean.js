@@ -386,8 +386,8 @@
       if (typeof stepDeg === "number" && isFinite(stepDeg)) {
         params.set("stepDeg", String(stepDeg));
       }
-      if (fh <= 0 && daysBack != null && isFinite(daysBack)) {
-        params.set("daysBack", String(Math.max(0, Math.min(14, daysBack | 0))));
+      if (fh <= 0 && daysBack != null && isFinite(daysBack) && daysBack > 0) {
+        params.set("daysBack", String(Math.max(1, Math.min(14, daysBack | 0))));
       }
       // MUR pulls off this ERDDAP host measure 14–30 s and the edge function now
       // waits up to 45 s for them, so a 30 s client budget would abort the very
