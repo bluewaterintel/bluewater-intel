@@ -1,5 +1,5 @@
 import { NetCDFReader } from "npm:netcdfjs";
-import { ERDDAP_HEADERS, ERDDAP_POLARWATCH, fetchNoaa } from "../_shared/erddap.ts";
+import { ERDDAP_COASTWATCH, ERDDAP_HEADERS, fetchNoaa } from "../_shared/erddap.ts";
 import { pickPointWeather } from "./pick-point-weather.ts";
 
 // ============================================================================
@@ -55,9 +55,9 @@ const json = (body: unknown, cors: Record<string, string>, status = 200) =>
 // coastwatch.noaa.gov for some products. Point each dataset at its canonical host
 // directly so we don't depend on redirects.
 const SST_ERDDAP = Deno.env.get("SST_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
-// coastwatch.noaa.gov 403s Deno's User-Agent (instant empty overlay). PolarWatch
-// serves the same CoastWatch griddap IDs and allows the edge runtime.
-const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? ERDDAP_POLARWATCH;
+// Same griddap ids on coastwatch.noaa.gov and polarwatch.noaa.gov. Prefer
+// coastwatch (valid TLS); fetchNoaa falls back to PolarWatch on 403 / errors.
+const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? ERDDAP_COASTWATCH;
 // SST: JPL MUR, daily, global ~1km — reliable coverage, ~1-day latency.
 // (The previous default, nesdisGeoPolarSSTN5SQNRT, has been retired from CoastWatch
 // ERDDAP and now 404s, which returned null SST for every point and left the heat
@@ -105,11 +105,8 @@ const CUDEM_MAX_TILES = Number(Deno.env.get("CUDEM_MAX_TILES") ?? "64");
 // Two sibling datasets on the same 0.25° grid: sla (m) from the SSH product,
 // u_current/v_current (m/s geostrophic) from the currents product. The older
 // nesdisSSH1day (pfeg host) stopped updating in March 2026 — do not use it.
-// Live check 2026-09-09: both IDs resolve on polarwatch.noaa.gov (same granules
-// as coastwatch.noaa.gov). coastwatch.noaa.gov 403s Deno/x so the overlay
-// returned empty rows in <1s and painted UNAVAILABLE with no visible spinner.
-// time_coverage_end=2026-09-07 (normal NRT lag), sample sla at 35N/75W = 0.26 m.
-const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP") ?? ERDDAP_POLARWATCH;
+// BLENDED SSH + geostrophic currents — same hosts as chlorophyll (see CHL_ERDDAP).
+const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP") ?? ERDDAP_COASTWATCH;
 const ALTIMETRY_SSH_DATASET = "noaacwBLENDEDsshDaily";
 const ALTIMETRY_CUR_DATASET = "noaacwBLENDEDNRTcurrentsDaily";
 const ALTIMETRY_STEP = 0.25;

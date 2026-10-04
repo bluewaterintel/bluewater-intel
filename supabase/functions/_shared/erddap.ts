@@ -1,8 +1,7 @@
-// NOAA CoastWatch ERDDAP (coastwatch.noaa.gov) 403s the default Deno
-// User-Agent that Supabase Edge sends — even when we set a custom one,
-// some runtimes still identify as Deno/x. PolarWatch hosts the same
-// griddap datasets and allows that UA. Prefer PolarWatch; if a caller
-// still hits coastwatch.noaa.gov and gets 403, retry there.
+// NOAA CoastWatch ERDDAP hosts mirror the same griddap dataset ids.
+// PolarWatch (polarwatch.noaa.gov) was the default fallback when
+// coastwatch.noaa.gov 403'd Deno's User-Agent. As of Oct 2026 PolarWatch's
+// TLS cert can expire while coastwatch remains valid — fetchNoaa tries both.
 
 export const ERDDAP_POLARWATCH = "https://polarwatch.noaa.gov/erddap/griddap";
 export const ERDDAP_COASTWATCH = "https://coastwatch.noaa.gov/erddap/griddap";
@@ -15,6 +14,11 @@ export const ERDDAP_HEADERS = {
 function polarwatchMirror(url: string): string | null {
   if (!url.includes("://coastwatch.noaa.gov/erddap")) return null;
   return url.replace("://coastwatch.noaa.gov/erddap", "://polarwatch.noaa.gov/erddap");
+}
+
+function coastwatchMirror(url: string): string | null {
+  if (!url.includes("://polarwatch.noaa.gov/erddap")) return null;
+  return url.replace("://polarwatch.noaa.gov/erddap", "://coastwatch.noaa.gov/erddap");
 }
 
 export async function fetchNoaa(
@@ -33,10 +37,19 @@ export async function fetchNoaa(
   };
   let r = await attempt(url);
   if (r && r.ok) return r;
-  const mirror = polarwatchMirror(url);
-  if (mirror && (!r || r.status === 403)) {
-    const r2 = await attempt(mirror);
-    if (r2) return r2;
+
+  const cw = coastwatchMirror(url);
+  if (cw) {
+    const rCw = await attempt(cw);
+    if (rCw && rCw.ok) return rCw;
+    if (rCw) r = rCw;
+  }
+
+  const pw = polarwatchMirror(url);
+  if (pw && (!r || r.status === 403)) {
+    const rPw = await attempt(pw);
+    if (rPw && rPw.ok) return rPw;
+    if (rPw) r = rPw;
   }
   return r;
 }

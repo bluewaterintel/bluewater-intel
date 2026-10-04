@@ -2121,10 +2121,18 @@ function gibsRecentDate(daysBack){
 // date whose tile actually exists. Nothing is fabricated: if the freshest real
 // imagery is still a couple days old, that real date is what we resolve + display.
 const _gibsDateCache = {}; // layerId -> { date, daysBack, atMs }
+// VIIRS chlor "today" on GIBS is often a partial swath (tiny PNG + horizontal
+// streaks). A complete daily composite is usually ≥ ~8 KB at the z2 probe tile.
+const CHL_GIBS_MIN_PROBE_BYTES = 8000;
+// Map overlay only: GIBS stamps calendar "today" before the daily composite
+// finishes (coastal tiles show swath streaks). Scoring uses ERDDAP DINEOF, not this.
+const CHL_GIBS_MIN_DAYS_BACK = 1;
+function gibsProbeTileUrl(layerId, tileSet, ext, date){
+  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layerId}/default/${date}/${tileSet}/2/1/1.${ext}`;
+}
 function probeGibsTile(layerId, tileSet, ext, date){
   return new Promise((resolve) => {
-    // A low-zoom (z2) tile so any published date returns a real (200) tile.
-    const url = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layerId}/default/${date}/${tileSet}/2/1/1.${ext}`;
+    const url = gibsProbeTileUrl(layerId, tileSet, ext, date);
     const img = new Image();
     let settled = false;
     const done = (ok) => { if(settled) return; settled = true; resolve(ok); };
@@ -2134,18 +2142,31 @@ function probeGibsTile(layerId, tileSet, ext, date){
     img.src = url;
   });
 }
+async function probeGibsTileBytes(layerId, tileSet, ext, date, minBytes){
+  const url = gibsProbeTileUrl(layerId, tileSet, ext, date);
+  try {
+    const res = await fetch(url, { mode: "cors", cache: "no-store", signal: AbortSignal.timeout(4500) });
+    if(!res.ok) return false;
+    const buf = await res.arrayBuffer();
+    return buf.byteLength >= (minBytes || 0);
+  } catch { return false; }
+}
 // Resolve the freshest published date for one layer, trying today..maxBack days
 // back. Cached ~30 min. Returns { date, daysBack, atMs }; atMs===0 means the
 // probe could not confirm anything (e.g. offline) and the caller should keep its
-// conservative default.
-async function resolveFreshestGibsDate(layerId, tileSet, ext, maxBack){
+// conservative default. minTileBytes rejects placeholder/partial granules (chlor).
+async function resolveFreshestGibsDate(layerId, tileSet, ext, maxBack, opts){
   const cap = (typeof maxBack === "number") ? maxBack : 3;
+  const minTileBytes = opts && typeof opts.minTileBytes === "number" ? opts.minTileBytes : 0;
+  const startBack = opts && typeof opts.minDaysBack === "number" ? opts.minDaysBack : 0;
   const hit = _gibsDateCache[layerId];
   if(hit && Date.now() - hit.atMs < 30 * 60 * 1000) return hit;
-  for(let b = 0; b <= cap; b++){
+  for(let b = startBack; b <= cap; b++){
     const date = gibsRecentDate(b);
     /* eslint-disable no-await-in-loop */
-    const ok = await probeGibsTile(layerId, tileSet, ext, date);
+    const ok = minTileBytes
+      ? await probeGibsTileBytes(layerId, tileSet, ext, date, minTileBytes)
+      : await probeGibsTile(layerId, tileSet, ext, date);
     if(ok){
       const res = { date, daysBack: b, atMs: Date.now() };
       _gibsDateCache[layerId] = res;
@@ -2179,7 +2200,10 @@ async function ensureFreshestSatDates(){
   try {
     const [sst, chl] = await Promise.all([
       resolveFreshestGibsDate("GHRSST_L4_MUR_Sea_Surface_Temperature", "GoogleMapsCompatible_Level7", "png", 3),
-      resolveFreshestGibsDate("VIIRS_NOAA20_Chlorophyll_a", "GoogleMapsCompatible_Level7", "png", 3),
+      resolveFreshestGibsDate("VIIRS_NOAA20_Chlorophyll_a", "GoogleMapsCompatible_Level7", "png", 3, {
+        minDaysBack: CHL_GIBS_MIN_DAYS_BACK,
+        minTileBytes: CHL_GIBS_MIN_PROBE_BYTES,
+      }),
     ]);
     let sstChanged = false, chlChanged = false;
     if(sst && sst.atMs){ sstChanged = SAT_FRESH_BACK.sst   !== sst.daysBack; SAT_FRESH_BACK.sst   = sst.daysBack; SAT_FRESH_DATE.sst   = sst.date; }
