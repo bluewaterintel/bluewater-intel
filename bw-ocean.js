@@ -366,11 +366,14 @@
   }
 
   const sstGridCache = new Map();
-  async function fetchSstGrid(latMin, latMax, lngMin, lngMax, hours = 0, stepDeg = null) {
+  async function fetchSstGrid(latMin, latMax, lngMin, lngMax, hours = 0, stepDeg = null, daysBack = null) {
     const fh = normalizeOceanHours(hours);
     const stepKey = (typeof stepDeg === "number" && isFinite(stepDeg))
       ? stepDeg.toFixed(3) : "auto";
-    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${fh}:${stepKey}`;
+    const backKey = (fh <= 0 && daysBack != null && isFinite(daysBack))
+      ? String(Math.max(0, daysBack | 0))
+      : "fresh";
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${fh}:${stepKey}:${backKey}`;
     const hit = sstGridCache.get(k);
     if (hit && Date.now() - hit.atMs < 2 * 60 * 60 * 1000) return hit.data;
     try {
@@ -382,6 +385,9 @@
       });
       if (typeof stepDeg === "number" && isFinite(stepDeg)) {
         params.set("stepDeg", String(stepDeg));
+      }
+      if (fh <= 0 && daysBack != null && isFinite(daysBack)) {
+        params.set("daysBack", String(Math.max(0, Math.min(14, daysBack | 0))));
       }
       // MUR pulls off this ERDDAP host measure 14–30 s and the edge function now
       // waits up to 45 s for them, so a 30 s client budget would abort the very
