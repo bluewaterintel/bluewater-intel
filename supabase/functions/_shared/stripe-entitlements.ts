@@ -105,7 +105,7 @@ export async function syncStripeEntitlementForUser(
 ) {
   const { data: prof } = await admin
     .from("profiles")
-    .select("stripe_customer_id")
+    .select("stripe_customer_id, subscription_status, current_period_end, billing_source")
     .eq("id", userId)
     .maybeSingle();
 
@@ -141,6 +141,20 @@ export async function syncStripeEntitlementForUser(
       synced: true,
       subscription_status: applied?.subscription_status ?? "active",
       subscription_interval: applied?.subscription_interval ?? null,
+    };
+  }
+
+  // Owner comp / manual grant (billing_source null) — do not wipe because Stripe
+  // shows no sub (e.g. user never finished checkout but has stripe_customer_id).
+  const st = String(prof?.subscription_status ?? "none");
+  const endMs = prof?.current_period_end ? Date.parse(String(prof.current_period_end)) : NaN;
+  const compGrant = prof?.billing_source == null || prof?.billing_source === "";
+  if (compGrant && ["active", "trialing", "lifetime"].includes(st)
+    && Number.isFinite(endMs) && endMs > Date.now()) {
+    return {
+      ok: true,
+      synced: false,
+      subscription_status: st as "active" | "trialing" | "lifetime",
     };
   }
 
