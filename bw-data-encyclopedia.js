@@ -409,13 +409,9 @@ const ENC_SPECIES = [
   },
   {
     id:"bluelinetile", name:"Blueline Tilefish", color:"#3a6080", cat:"offshore",
-    snippet:"The 'other' tilefish — smaller, shallower, harder-fighting cousin of the golden. 240-820 ft on hard-bottom ledges along the shelf edge. The NC/VA summer deep-drop target.",
-    facts:{ size:"3-25 lbs", record:"26 lbs (NC)", legal:"No size limit; 2/angler South Atlantic, 3-7/angler Mid-Atlantic depending on vessel permit — hard closed season, check SAFMC/MAFMC", season:"May-Aug south of the NC/VA line; May 15-Nov 14 north" },
-    // Hard recreational closures, and they differ by council: SAFMC (Oregon
-    // Inlet/Hatteras south) is open May 1-Aug 31 only; MAFMC (Norfolk Canyon and
-    // north) May 15-Nov 14. This national bar shows the union; REGIONAL_SEASONS
-    // splits it at the NC/VA border for scoring.
-    seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:3,Jun:3,Jul:3,Aug:3,Sep:2,Oct:2,Nov:1,Dec:0},
+    snippet:"The 'other' tilefish — smaller, shallower, harder-fighting cousin of the golden. 240-820 ft on hard-bottom ledges along the shelf edge. The NC/VA deep-drop target.",
+    facts:{ size:"3-25 lbs", record:"26 lbs (NC)", legal:"No size limit; 2/angler South Atlantic, 3-7/angler Mid-Atlantic depending on vessel permit — hard closed season, check SAFMC/MAFMC", season:"Year-round resident of the shelf-edge ledges — strongest Apr-Nov, a step slower in winter" },
+    seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2},
     where:"Hard-bottom ledges 240-820 ft along the shelf edge — canyon lips are hot spots but not required. Strongest fishery is Hatteras / Norfolk shelf breaks and out to ~50 miles. Also Gulf coast deep ledges.",
     tackle:[
       "Lighter than golden tilefish — they don't live as deep",
@@ -463,9 +459,9 @@ const ENC_SPECIES = [
   {
     id:"snapper", name:"Red Snapper", color:"#991010", cat:"nearshore",
     snippet:"Reef and wreck fish off the Carolinas and Georgia. Tightly regulated — short federal seasons but a phenomenal catch when open.",
-    facts:{ size:"5-30 lbs", record:"50 lbs 4 oz (LA)", legal:"20\" total length; 1 fish bag (federal); season usually 1-2 weeks/year", season:"Regional — Gulf federal season peak Jun–Aug; South Atlantic (NC/SC/GA) brief Jul window. Not a NE or Pacific fishery." },
-    seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:0,Jul:3,Aug:1,Sep:0,Oct:0,Nov:0,Dec:0},
-    where:"Gulf reefs and federal waters off TX/LA/FL Panhandle (summer season), plus live bottom off SC, GA, and NC (short July window). Charleston Bump, Georgetown Hole, and western Gulf platforms.",
+    facts:{ size:"5-30 lbs", record:"50 lbs 4 oz (LA)", legal:"20\" total length; 1 fish bag (federal); season usually 1-2 weeks/year", season:"Year-round reef resident in the Gulf and South Atlantic — strongest spring through fall, a little deeper and slower in winter. Not a NE or Pacific fishery." },
+    seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2},
+    where:"Gulf reefs, rigs, and federal waters off TX/LA/FL, plus live bottom off NE Florida, GA, SC, and NC. Charleston Bump, Georgetown Hole, and western Gulf platforms.",
     tackle:[
       "Heavy 30-50 lb conventional or spinning",
       "30-50 class lever-drag conventional reels with 65-80 lb braid",

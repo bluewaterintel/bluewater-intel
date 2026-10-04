@@ -154,7 +154,10 @@ const PREDICT_SPECIES_PREFS = {
   // ≈ 175-420 m). The old [[150,500]] floor (~492 ft) zeroed classic canyon mud and
   // most shelf ledges via the steep shallow-side decay.
   tilefish:     {tempIdeal:[48,60], tempWorking:[42,64], chlorPref:"any",     depthBands:[[75,140],[175,420]], breakPref:"any", bottom:true },
-  snapper:      {tempIdeal:[68,78], tempWorking:[62,82], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
+  // Red snapper working top 85°F: the fall SAB shelf is well mixed and Gulf
+  // 60-100 ft reefs run low-to-mid 80s on the bottom, and the fish bite there.
+  // An 82°F top marked down every 60-100 ft South Atlantic reef in October.
+  snapper:      {tempIdeal:[68,78], tempWorking:[62,85], chlorPref:"any",     depthBands:[[20,100]],   breakPref:"any", demersal:true },
   grouper:      {tempIdeal:[64,76], tempWorking:[58,80], chlorPref:"any",     depthBands:[[30,200]],   breakPref:"any", demersal:true },
   // Sheepshead hold on pilings, jetties, and bay structure, almost all of it
   // inside 30 ft. A 30 m ceiling (~98 ft) unioned the nearshore bucket into
@@ -414,36 +417,26 @@ const REGIONAL_SEASONS = {
   ],
 
   // ── BLUELINE TILEFISH ────────────────────────────────────────────────
-  // Blueline is the one deep-drop species on this coast with a HARD recreational
-  // season, and the season differs either side of the NC/VA border (~36°33'N),
-  // which is the boundary between the two councils that manage it:
-  //   • South of the line (SAFMC — Oregon Inlet, Hatteras, Carolinas):
-  //     open May 1 – Aug 31, closed Sep 1 – Apr 30.  50 CFR 622.183(b)(7)
-  //   • North of the line (MAFMC — Norfolk Canyon, VA/MD/DE/NJ/NY):
-  //     open May 15 – Nov 14, closed Nov 15 – May 14.  50 CFR 648.296(b)
-  //   • Gulf: no seasonal closure, year-round hard-bottom fishery.
-  // The previous single VA/NC region had this inverted — it peaked blueline
-  // Nov-Apr and scored Jun-Sep at 1 ("slow"), so out of Oregon Inlet the app
-  // read FAIR during the four months the fishery is actually open and EXCELLENT
-  // during the months it is illegal to keep one. Regions are split at the border
-  // and sized so the nearest one dominates the inverse-distance blend.
+  // Presence, not the council harvest seasons (which move year to year). Blueline
+  // are year-round residents of the 240-820 ft shelf-edge ledges, where the
+  // bottom stays thermally stable; activity is strongest Apr-Nov and a step
+  // lower in winter. Regions are sized so the nearest one dominates the
+  // inverse-distance blend.
   bluelinetile: [
-    {centerLat: 35.2, centerLng: -75.0, radiusNm: 85, label: "Hatteras / Oregon Inlet ledges (SAFMC)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:3,Jun:3,Jul:3,Aug:3,Sep:0,Oct:0,Nov:0,Dec:0}},
-    {centerLat: 33.4, centerLng: -76.8, radiusNm: 170, label: "Carolinas shelf edge (SAFMC)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:3,Jun:3,Jul:3,Aug:3,Sep:0,Oct:0,Nov:0,Dec:0}},
-    {centerLat: 37.4, centerLng: -74.7, radiusNm: 110, label: "Norfolk Canyon / VA-MD shelf (MAFMC)",
-     // May and Nov are half-months either side of the May 15 / Nov 14 dates.
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
-    {centerLat: 39.2, centerLng: -73.2, radiusNm: 160, label: "NJ / NY canyon lips (MAFMC)",
-     // Same season, thinner fishery — blueline are a bycatch-grade target this
-     // far north, so the ceiling is "good" rather than "peak".
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:1,Dec:0}},
-    {centerLat: 30.0, centerLng: -80.2, radiusNm: 200, label: "GA / FL east shelf edge (SAFMC)",
-     // Same May-Aug SAFMC season, thinner than the NC ledges.
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:2,Jun:2,Jul:2,Aug:2,Sep:0,Oct:0,Nov:0,Dec:0}},
+    {centerLat: 35.2, centerLng: -75.0, radiusNm: 85, label: "Hatteras / Oregon Inlet ledges",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 33.4, centerLng: -76.8, radiusNm: 170, label: "Carolinas shelf edge",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 37.4, centerLng: -74.7, radiusNm: 110, label: "Norfolk Canyon / VA-MD shelf",
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
+    {centerLat: 39.2, centerLng: -73.2, radiusNm: 160, label: "NJ / NY canyon lips",
+     // Thinner population this far north, so the ceiling is "good" rather than "peak".
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:1}},
+    {centerLat: 30.0, centerLng: -80.2, radiusNm: 200, label: "GA / FL east shelf edge",
+     // Present year-round, thinner than the NC ledges.
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
     {centerLat: 28.5, centerLng: -88.5, radiusNm: 300, label: "Gulf deep ledges",
-     // No closed season in the Gulf. Radius reaches the TX shelf edge and the
+     // Radius reaches the TX shelf edge and the
      // shelf edge west of Tampa, both of which the old 220 nm circle missed.
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
     {centerLat: 27.6, centerLng: -95.6, radiusNm: 200, label: "Western Gulf shelf edge (TX)",
@@ -1116,38 +1109,41 @@ const REGIONAL_SEASONS = {
   ],
 
   // ── RED SNAPPER ──────────────────────────────────────────────────────────
-  // Federally managed — Gulf summer season (Jun–Aug) vs South Atlantic's brief
-  // July window. The old flat Jul:3 curve scored red snapper off Maine and
-  // California. NE and SoCal intentionally uncovered.
+  // Presence on the reef, not the harvest window. Red snapper are year-round
+  // residents of South Atlantic live bottom and Gulf reefs/rigs; federal and
+  // state open dates move every year and must not drive the bite map. Winter
+  // fish slide a little deeper and the weather limits runs, so Dec-Mar sit at 2
+  // instead of 3. NC is the northern margin (Cape Lookout south), so it peaks
+  // later and cools off sooner. The old flat Jul:3 curve scored red snapper off
+  // Maine and California; NE and SoCal stay intentionally uncovered.
   snapper: [
     {centerLat: 32.5, centerLng: -79.5, radiusNm: 180, label: "SC / GA / Charleston Bump",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:1,Jul:3,Aug:1,Sep:0,Oct:0,Nov:0,Dec:0}},
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 34.5, centerLng: -76.5, radiusNm: 160, label: "NC offshore",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:1,Jul:3,Aug:1,Sep:0,Oct:0,Nov:0,Dec:0}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:2,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:2,Dec:1}},
     {centerLat: 28.5, centerLng: -80.5, radiusNm: 150, label: "FL Atlantic",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:1,Jul:2,Aug:1,Sep:0,Oct:0,Nov:0,Dec:0}},
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:2}},
     {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
     {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf (Panhandle/LA)",
-     // Bite presence, not the federal season window. Fish stay on the reefs
-     // into the fall; October tapers instead of going to zero.
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+     seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
   ],
 
   // ── GAG GROUPER ────────────────────────────────────────────────────────────
-  // Gulf signature grouper — peak fall (Sep–Nov) on hard bottom; Feb–Mar harvest
-  // closures in the Gulf. Also a FL Atlantic reef fishery; thin NC/SC presence.
+  // Gulf signature grouper — peak fall (Sep–Nov) on hard bottom. Also a FL
+  // Atlantic reef fishery; thin NC/SC presence. Winter is presence (1), not the
+  // spawning-season harvest closure — gag stay on the reefs all winter.
   gaggrouper: [
     {centerLat: 34.0, centerLng: -77.5, radiusNm: 150, label: "NC / SC offshore",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:0}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:2,Jul:2,Aug:2,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 28.5, centerLng: -80.5, radiusNm: 160, label: "FL Atlantic",
-     seasons:{Jan:1,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
     {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
     {centerLat: 29.0, centerLng: -85.5, radiusNm: 180, label: "FL Panhandle",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
     {centerLat: 29.3, centerLng: -90.0, radiusNm: 180, label: "N. Gulf (LA)",
      // Thin west of Florida. Present, not a peak target next to snapper.
      // Centered on Venice so this does not pull the Florida Panhandle down.
@@ -1163,7 +1159,8 @@ const REGIONAL_SEASONS = {
     {centerLat: 36.3, centerLng: -75.5, radiusNm: 140, label: "NC / VA offshore towers",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
     {centerLat: 32.5, centerLng: -79.5, radiusNm: 170, label: "SC / GA offshore",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:2,Oct:1,Nov:0,Dec:0}},
+     // AJ hold on SC/GA wrecks and ledges well into the fall.
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 28.0, centerLng: -80.5, radiusNm: 150, label: "FL Atlantic reefs",
      seasons:{Jan:1,Feb:1,Mar:1,Apr:2,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
     {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
@@ -1291,35 +1288,36 @@ const REGIONAL_SEASONS = {
   // Generic grouper picker covers live-bottom fish on SE Atlantic ledges and
   // Gulf reefs. The flat May–Aug curve scored grouper off New England and
   // California. Gag has its own ID (gaggrouper); this table guards the rest.
+  // Presence, not the Jan–Apr spawning closure: grouper stay on the ledges all
+  // winter (deeper and weather-limited), so winter is 1, never 0.
   grouper: [
     {centerLat: 34.0, centerLng: -77.5, radiusNm: 150, label: "NC / SC ledges",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
     {centerLat: 32.5, centerLng: -79.5, radiusNm: 170, label: "Charleston Bump / GA",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:0,Dec:0}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
     {centerLat: 28.5, centerLng: -80.5, radiusNm: 160, label: "FL Atlantic reefs",
-     seasons:{Jan:1,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 27.4, centerLng: -83.1, radiusNm: 200, label: "Gulf FL west coast",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
     {centerLat: 29.0, centerLng: -85.5, radiusNm: 180, label: "FL Panhandle",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
     {centerLat: 29.5, centerLng: -88.0, radiusNm: 250, label: "N. Gulf",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
     {centerLat: 27.8, centerLng: -95.5, radiusNm: 270, label: "Western Gulf (TX)",
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:2,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:1}},
     {centerLat: 26.4, centerLng: -78.3, radiusNm: 130, label: "Bahamas bank",
-     seasons:{Jan:1,Feb:0,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+     seasons:{Jan:1,Feb:1,Mar:1,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
   ],
 
   // ── HOGFISH ────────────────────────────────────────────────────────────────
-  // Keys/SE FL/Bahamas reef specialty. Atlantic harvest closed May–Oct but
-  // fish are present year-round on patch reefs. No north-coast or Pacific
-  // fishery.
+  // Keys/SE FL/Bahamas reef specialty. Fish are present year-round on patch
+  // reefs, so summer is scored on presence (2), not the harvest closure.
+  // Winter stays the peak. No north-coast or Pacific fishery.
   hogfish: [
     {centerLat: 24.8, centerLng: -81.0, radiusNm: 140, label: "Florida Keys reefs",
-     // September fish are on the patch reefs. Winter stays the peak.
-     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:1,Jun:1,Jul:1,Aug:1,Sep:2,Oct:1,Nov:2,Dec:3}},
+     seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:3}},
     {centerLat: 26.5, centerLng: -79.5, radiusNm: 120, label: "SE FL Atlantic reefs",
-     seasons:{Jan:2,Feb:3,Mar:3,Apr:3,May:1,Jun:1,Jul:1,Aug:1,Sep:1,Oct:1,Nov:2,Dec:2}},
+     seasons:{Jan:2,Feb:3,Mar:3,Apr:3,May:2,Jun:2,Jul:2,Aug:2,Sep:2,Oct:2,Nov:2,Dec:2}},
     {centerLat: 26.0, centerLng: -78.0, radiusNm: 170, label: "Bahamas",
      seasons:{Jan:3,Feb:3,Mar:3,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3}},
     {centerLat: 27.4, centerLng: -83.1, radiusNm: 180, label: "Gulf FL west coast",

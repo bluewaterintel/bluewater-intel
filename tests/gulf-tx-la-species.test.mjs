@@ -45,6 +45,6 @@ const pcb = PORTS["Panama City, FL"];
 check("Panama City gag stays a peak", getRegionalSeasons("gaggrouper", pcb.lat, pcb.lng).Sep === 3);
 check("Panama City false albacore keeps the Florida curve", getRegionalSeasons("falsealbacore", pcb.lat, pcb.lng).Sep >= 2);
 const clearwater = PORTS["Clearwater, FL"];
-check("Clearwater September snapper stays on the Florida season", getRegionalSeasons("snapper", clearwater.lat, clearwater.lng).Sep < 1.5);
+check("Clearwater September snapper is present on the shelf", getRegionalSeasons("snapper", clearwater.lat, clearwater.lng).Sep >= 2.5);
 
 done();
