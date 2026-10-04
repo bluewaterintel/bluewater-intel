@@ -310,10 +310,12 @@ Deno.serve(async (req) => {
       let patch: Record<string, unknown> = { updated_at: now.toISOString() };
       if (preset === "grant_pro") {
         const end = new Date(now); end.setFullYear(end.getFullYear() + 1);
-        patch = { ...patch, subscription_status: "active", subscription_interval: "year", current_period_end: end.toISOString(), trial_end: null };
+        // billing_source null = owner comp (not Stripe/Apple/Google) so stripe-sync
+        // won't revoke when an abandoned checkout left stripe_customer_id set.
+        patch = { ...patch, subscription_status: "active", subscription_interval: "year", current_period_end: end.toISOString(), trial_end: null, billing_source: null };
       } else if (preset === "grant_trial") {
         const end = new Date(now); end.setDate(end.getDate() + 7);
-        patch = { ...patch, subscription_status: "trialing", subscription_interval: "month", trial_end: end.toISOString() };
+        patch = { ...patch, subscription_status: "trialing", subscription_interval: "month", trial_end: end.toISOString(), billing_source: null };
       } else if (preset === "revoke") {
         patch = { ...patch, subscription_status: "canceled", subscription_interval: null, current_period_end: null, trial_end: null, is_owner: false };
       } else if (preset === "grant_owner") {
