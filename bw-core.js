@@ -6296,7 +6296,7 @@ const SPECIES_LAT_RANGE = {
   // S. FL Atlantic in between has no bluefin (water too warm year-round).
   bluefin:       {atlantic: [32.5, 45.0], gulf: [26.0, 30.5]},
   striper:       [33.0, 45.0],   // NC north; some FL strays in winter
-  tautog:        [37.5, 43.0],   // NJ to MA
+  tautog:        [36.4, 43.0],   // Virginia Beach / CBBT to MA
   // Scup: Cape Cod down to the Chesapeake mouth. They occur to Hatteras but are
   // not a fishery south of the Bay, and the Gulf has none at all — the explicit
   // null Gulf band keeps them off the Gulf shelf, which shares these latitudes.
@@ -6419,9 +6419,9 @@ const NOT_IN_BAHAMAS = new Set([
   "pompano",
 ]);
 
-// Ocean bottom fish that are not a Chesapeake Bay fishery, even though their
+// Ocean fish that are not a Chesapeake Bay fishery, even though their
 // latitude band and season regions cover the Bay ports.
-const NOT_IN_CHESAPEAKE = new Set(["porgy"]);
+const NOT_IN_CHESAPEAKE = new Set(["porgy", "bluelinetile", "amberjack"]);
 
 // Chesapeake Bay and its shoreline ports (Solomons, Reedville, Cape Charles,
 // Annapolis…), west of the Bay's eastern shore traced in CHESAPEAKE_BAY_WATER.

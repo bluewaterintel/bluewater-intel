@@ -9,13 +9,13 @@ const {
   REEF_OPEN_BOTTOM_CAP, predictStructureTypeSet, chartedStructureRowsNearPort,
   collectPredictStructureCandidates, buildPredictStructureSpatialIndex,
   nearestStructureFromSpatialIndex, NE_SPECIES_PREFS, rankScoreFromRaw, cmpHotspotStable,
-  speciesOfferedAt, inChesapeakeBayRegion,
+  speciesOfferedAt, inChesapeakeBayRegion, getRegionalSeasons,
 } = loadBw([
   "window", "PORTS", "PREDICT_SPECIES_PREFS", "normalizeScore", "reefStructureAdjust",
   "REEF_OPEN_BOTTOM_CAP", "predictStructureTypeSet", "chartedStructureRowsNearPort",
   "collectPredictStructureCandidates", "buildPredictStructureSpatialIndex",
   "nearestStructureFromSpatialIndex", "NE_SPECIES_PREFS", "rankScoreFromRaw", "cmpHotspotStable",
-  "speciesOfferedAt", "inChesapeakeBayRegion",
+  "speciesOfferedAt", "inChesapeakeBayRegion", "getRegionalSeasons",
 ], [
   "bw-data-ports.js", "bw-data-species.js", "bw-data-encyclopedia.js",
   "bw-data-canyons.js", "bw-data-bathy.js", "bw-data-closures.js",
@@ -78,6 +78,16 @@ console.log("\nspecies ranges for VA and the Chesapeake:");
   }
   for (const name of ["Ocean City, MD", "Chincoteague, VA", "Virginia Beach, VA", "Montauk, NY"]) {
     check(`porgy still offered at ${name} (ocean side)`, at("porgy", name));
+  }
+  check("tautog offered at Virginia Beach", at("tautog", "Virginia Beach, VA"));
+  check("Virginia Beach tautog winter (Jan) is near peak", (() => {
+    const p = PORTS["Virginia Beach, VA"]; const c = getRegionalSeasons("tautog", p.lat, p.lng);
+    return c && c.Jan >= 2.5 && c.Feb >= 1.5;
+  })());
+  check("tautog not offered south of the NC/VA line at Morehead City", !at("tautog", "Morehead City, NC"));
+  for (const id of ["bluelinetile", "amberjack"]) {
+    check(`${id} not offered at Solomons`, !at(id, "Solomons, MD"));
+    check(`${id} still offered at Virginia Beach`, at(id, "Virginia Beach, VA"));
   }
   check("Delaware Bay is not treated as the Chesapeake", !inChesapeakeBayRegion(39.575, -75.588));
   check("mid-Bay water is inside the Chesapeake region", inChesapeakeBayRegion(38.0, -76.1));

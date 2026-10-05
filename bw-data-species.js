@@ -1431,7 +1431,9 @@ const REGIONAL_SEASONS = {
     {centerLat: 39.2, centerLng: -73.8, radiusNm: 200, label: "Mid-Atlantic (NY/NJ)",
      seasons:{Jan:1,Feb:0,Mar:0,Apr:3,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:3,Nov:3,Dec:3}},
     {centerLat: 37.0, centerLng: -76.0, radiusNm: 130, label: "VA / CBBT",
-     seasons:{Jan:1,Feb:0,Mar:0,Apr:3,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:3,Nov:3,Dec:2}},
+     // Presence: Virginia's winter tog bite on the ocean wrecks runs Dec-Mar,
+     // then the CBBT/rock spring run. Summer fish stay on the structure, slower.
+     seasons:{Jan:3,Feb:2,Mar:2,Apr:3,May:2,Jun:1,Jul:1,Aug:1,Sep:1,Oct:2,Nov:3,Dec:3}},
     {centerLat: 35.0, centerLng: -75.5, radiusNm: 120, label: "NC / OBX (southern edge)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:2,May:2,Jun:0,Jul:0,Aug:0,Sep:1,Oct:2,Nov:2,Dec:1}},
   ],
