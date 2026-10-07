@@ -10,8 +10,10 @@
 //                      before: nesdisGeoPolarSSTN5SQNRT, nesdisSSH1day).
 //     • SOFT drift  — the dataset still responds but its newest observation is
 //                     older than its expected latency (a stalled feed).
-//   Results are written to public.dataset_health and, when the overall state
-//   worsens (or stays degraded for a day), the owner is emailed via Resend.
+//   Results are written to public.dataset_health. pg_cron runs this every
+//   2 hours. The owner is emailed via Resend when status worsens, when it
+//   recovers, or once a day while it stays degraded. A 2-hour probe is the
+//   outage gate: the first scheduled check that finds a feed down sends mail.
 //
 // ENDPOINTS
 //   GET  /dataset-health            → public JSON snapshot (for the in-app
@@ -392,7 +394,8 @@ async function maybeAlert(
   const recovered = overall === "green" && SEV_RANK[prev] > SEV_RANK["green"];
   const degraded = overall === "amber" || overall === "red";
   const stale = Date.now() - lastAlertAt > 24 * H;
-  // Notify on: getting worse, first recovery, or a daily reminder while degraded.
+  // Checks run every 2 hours. Mail on the first degraded check (worsened),
+  // on recovery, or as a once-a-day reminder if it stays down.
   const shouldEmail = worsened || recovered || (degraded && stale);
   if (!shouldEmail) return { emailed: false, reason: `no change (prev=${prev}, now=${overall})` };
 

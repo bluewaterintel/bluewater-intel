@@ -106,9 +106,18 @@ const cronSql = `-- Run once in Supabase Dashboard → SQL Editor
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
+do $$
+declare r record;
+begin
+  for r in select jobid from cron.job where jobname in ('dataset-health-6h', 'dataset-health-2h')
+  loop
+    perform cron.unschedule(r.jobid);
+  end loop;
+end $$;
+
 select cron.schedule(
-  'dataset-health-6h',
-  '0 */6 * * *',
+  'dataset-health-2h',
+  '0 */2 * * *',
   $$
   select net.http_post(
     url     := 'https://${PROJECT_REF}.supabase.co/functions/v1/dataset-health',
@@ -124,4 +133,5 @@ console.log("\n✓ Secrets set; dataset-health + stripe-webhook + stripe-sync de
 console.log("\nNext steps:");
 console.log("  1. npx supabase db push");
 console.log("  2. Paste supabase-fixes/dataset-health-cron.sql into Supabase → SQL Editor → Run");
+console.log("     (replaces any dataset-health-6h job; probes every 2 hours)");
 console.log("  3. In the app: Menu → User Admin → System Health → Run check now");
