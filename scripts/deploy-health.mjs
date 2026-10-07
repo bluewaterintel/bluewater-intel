@@ -122,7 +122,8 @@ select cron.schedule(
   select net.http_post(
     url     := 'https://${PROJECT_REF}.supabase.co/functions/v1/dataset-health',
     headers := jsonb_build_object('Content-Type','application/json','x-cron-secret','${cronSecret}'),
-    body    := jsonb_build_object('action','run')
+    body    := jsonb_build_object('action','run'),
+    timeout_milliseconds := 90000
   );
   $$
 );
