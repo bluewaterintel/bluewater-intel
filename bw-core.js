@@ -11609,6 +11609,14 @@ function satDateLabel(){
   d.setUTCDate(d.getUTCDate() - satCurrentDaysBack());
   return d.toLocaleDateString(undefined, {month:"short", day:"numeric"});
 }
+function sstOverlaySourceHint(){
+  if(oceanOverlayForecastHour() > 0 && layerVis.sst) return "NOAA RTOFS model · ~9 km";
+  if(layerVis.chlor && !layerVis.sst) return "NASA GIBS · VIIRS observed";
+  if(SST_FORECAST_GRID && SST_FORECAST_GRID.source === "open-meteo-marine-sst"){
+    return "Open-Meteo model SST · local scale (MUR unavailable)";
+  }
+  return "MUR L4 · local scale";
+}
 function updateSatDateDisplay(){
   const el = document.getElementById("sat-date-display");
   if(el){
@@ -11671,9 +11679,9 @@ function updateSatDateControlVisibility(){
     const chlorOnly = layerVis.chlor && !layerVis.sst;
     const label = chlorOnly ? "Chlorophyll" : "SST";
     if(titleEl) titleEl.textContent = label;
-    if(hintEl) hintEl.textContent = (oceanOverlayForecastHour() > 0 && layerVis.sst)
-      ? "NOAA RTOFS model · ~9 km"
-      : (chlorOnly ? "NASA GIBS · VIIRS observed" : "MUR L4 · local scale");
+    if(hintEl) hintEl.textContent = chlorOnly
+      ? "NASA GIBS · VIIRS observed"
+      : sstOverlaySourceHint();
     const row = box.querySelector(".map-time-pill-row");
     const footer = box.querySelector(".map-time-pill-footer");
     const forecastLocked = oceanOverlayForecastHour() > 0 && layerVis.sst;
@@ -15145,7 +15153,11 @@ function updateOceanLegend(){
       && (typeof _sstScaleMode !== "undefined" && _sstScaleMode === "global");
     const lo = sstGlobal ? 50 : ((typeof _sstColorLo === "number") ? _sstColorLo : 74);
     const hi = sstGlobal ? 86 : ((typeof _sstColorHi === "number") ? _sstColorHi : 88);
-    const sstScaleTag = sstGlobal ? "global · zoom in for local scale" : "local";
+    const sstOmFallback = !sstGlobal && SST_FORECAST_GRID
+      && SST_FORECAST_GRID.source === "open-meteo-marine-sst";
+    const sstScaleTag = sstGlobal
+      ? "global · zoom in for local scale"
+      : (sstOmFallback ? "local · model fallback" : "local");
     const nTicks = phone ? 5 : 7;
     const sstTicks = [];
     for(let i = 0; i < nTicks; i++){
