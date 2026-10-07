@@ -389,13 +389,11 @@
       if (fh <= 0 && daysBack != null && isFinite(daysBack) && daysBack > 0) {
         params.set("daysBack", String(Math.max(1, Math.min(14, daysBack | 0))));
       }
-      // MUR pulls off this ERDDAP host measure 14–30 s and the edge function now
-      // waits up to 45 s for them, so a 30 s client budget would abort the very
-      // requests that were about to succeed. The overlay keeps GIBS tiles on
-      // screen while this is in flight, so the longer wait costs nothing visible.
+      // Overlay path: MUR is fail-fast (~8 s) then Open-Meteo marine SST, then the
+      // client falls back to GIBS tiles. Budget covers a large Open-Meteo box.
       const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
         headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: fetchTimeout(55000),
+        signal: fetchTimeout(35000),
       });
       if (!res.ok) return null;
       const data = await res.json();

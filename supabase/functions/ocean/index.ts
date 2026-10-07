@@ -1357,6 +1357,12 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
 const SSTGRID_TTL_MS = 3 * 60 * 60 * 1000;
 const sstGridCache = new Map<string, { body: unknown; atMs: number }>();
 
+/** Map overlay MUR abort budget before Open-Meteo marine SST (PFEG often hangs). */
+function sstOverlayMurTimeoutMs(): number {
+  const raw = Number(Deno.env.get("SST_OVERLAY_MUR_TIMEOUT_MS") ?? "8000");
+  return Math.max(3000, Math.min(45000, Number.isFinite(raw) ? raw : 8000));
+}
+
 // opts.lookback — daily slices to search for freshest non-fill per cell.
 // opts.timeoutMs — abort budget for the ERDDAP call. The default is deliberately
 //   tight because the scoring assembly runs this inside a ~50 s client budget.
@@ -1633,11 +1639,20 @@ async function fetchOpenMeteoElevationGrid(
 
 async function resolveObservedSstGrid(
   latMin: number, latMax: number, lngMin: number, lngMax: number,
-  opts: { targetDeg?: number; lookback?: number; timeoutMs?: number; retries?: number } = {},
+  opts: {
+    targetDeg?: number; lookback?: number; timeoutMs?: number; retries?: number; daysBack?: number;
+  } = {},
 ) {
   const mur = await fetchSstRows(latMin, latMax, lngMin, lngMax, opts);
   const murRows = (mur.rows as number[][]).filter((r) => r && r[2] != null);
   if (murRows.length) return { ...mur, rows: murRows, source: SST_DATASET };
+  // Historical MUR slider — no Open-Meteo substitute (current model only).
+  const histBack = (typeof opts.daysBack === "number" && isFinite(opts.daysBack))
+    ? Math.max(0, Math.round(opts.daysBack))
+    : 0;
+  if (histBack > 0) {
+    return { stepDeg: mur.stepDeg, rows: [] as number[][], source: SST_DATASET };
+  }
   const step = (typeof opts.targetDeg === "number" && isFinite(opts.targetDeg))
     ? Math.max(0.05, opts.targetDeg) : 0.08;
   const om = await fetchOpenMeteoSstGrid(latMin, latMax, lngMin, lngMax, step);
@@ -1873,10 +1888,10 @@ export const handler = async (req: Request): Promise<Response> => {
         targetDeg: reqStep ?? undefined,
         lookback: histBack != null ? 0 : 4,
         daysBack: histBack ?? undefined,
-        // MUR is daily and this host routinely needs 14–30 s; a 20 s abort was
-        // discarding good pulls and the overlay then had nothing to draw.
-        timeoutMs: 45000,
-        retries: 2,
+        // Fail fast on PFEG MUR so Open-Meteo marine SST can fill the local canvas
+        // when ERDDAP is down or stalling (predictinputs already uses ~8 s).
+        timeoutMs: sstOverlayMurTimeoutMs(),
+        retries: 0,
       });
       const rows = (mur.rows as number[][]).filter((r) => r && r[2] != null);
       if (!rows.length) return json({ error: "SST grid unavailable" }, cors, 502);
