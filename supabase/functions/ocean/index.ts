@@ -1544,19 +1544,12 @@ async function fetchOpenMeteoSstGrid(
       const r = await fetch(url, { signal: AbortSignal.timeout(15000), headers: ERDDAP_HEADERS });
       if (!r.ok) continue;
       const d = await r.json();
-      const arrLat: number[] = Array.isArray(d?.latitude) ? d.latitude : laSlice;
-      const arrLon: number[] = Array.isArray(d?.longitude) ? d.longitude : lnSlice;
-      const temps = d?.current?.sea_surface_temperature;
-      if (Array.isArray(temps)) {
-        for (let k = 0; k < temps.length; k++) {
-          const f = num(temps[k]);
-          const la = num(arrLat[k]), ln = num(arrLon[k]);
-          if (f == null || la == null || ln == null) continue;
-          rows.push([la, ln, Math.round(f * 10) / 10, atMs]);
-        }
-      } else {
-        const f = num(temps);
-        if (f != null && laSlice.length === 1) rows.push([laSlice[0], lnSlice[0], Math.round(f * 10) / 10, atMs]);
+      const payloads = Array.isArray(d) ? d : [d];
+      for (const p of payloads) {
+        const la = num(p?.latitude), ln = num(p?.longitude);
+        const f = num(p?.current?.sea_surface_temperature);
+        if (f == null || la == null || ln == null) continue;
+        rows.push([la, ln, Math.round(f * 10) / 10, atMs]);
       }
     } catch { /* try next batch */ }
   }
