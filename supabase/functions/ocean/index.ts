@@ -79,6 +79,7 @@ const CHL_VAR = Deno.env.get("CHL_VAR") ?? "chlor_a";
 const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true";
 const OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast";
 const OPEN_METEO_MARINE = "https://marine-api.open-meteo.com/v1/marine";
+const OPEN_METEO_ELEVATION = "https://api.open-meteo.com/v1/elevation";
 // ETOPO 1-arcmin global relief (real bathymetry) via NOAA CoastWatch ERDDAP.
 // altitude is metres relative to sea level (negative = below sea level).
 const ETOPO_ERDDAP = Deno.env.get("ETOPO_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
@@ -1467,29 +1468,147 @@ async function assembleFieldPoint(lat: number, lng: number, hoursAhead = 0) {
       sources: { ...wx.sources, tide: tide.station },
     };
   }
-  const [buoy, marine, tide] = await Promise.all([
+  const [buoy, marine, tide, model] = await Promise.all([
     fetchBuoy(lat, lng),
     fetchModelMarine(lat, lng, 0),
     fetchTide(lat, lng, hoursAhead),
+    fetchModelWind(lat, lng, 0),
   ]);
+  const wind = (buoy?.wind?.value != null && buoy.wind.dir != null)
+    ? buoy.wind
+    : model.wind;
+  const pressure = buoy?.pressure?.value != null ? buoy.pressure : model.pressure;
+  const barometer = buoy?.barometer?.value != null ? buoy.barometer : model.barometer;
+  const airTemp = buoy?.airTemp?.value != null ? buoy.airTemp : model.airTemp;
   return {
     point: { lat, lng },
     fetchedAtMs: Date.now(),
     sst: { value: null, observedAtMs: null },
     chlor: { value: null, observedAtMs: null },
-    wind: buoy?.wind ?? { value: null, observedAtMs: null },
+    wind,
     waves: pickWaves(buoy?.waves, marine),
     waterTemp: buoy?.waterTemp ?? { value: null, observedAtMs: null },
-    airTemp: buoy?.airTemp ?? { value: null, observedAtMs: null },
-    pressure: buoy?.pressure ?? { value: null, observedAtMs: null },
-    barometer: buoy?.barometer ?? { value: null, observedAtMs: null },
+    airTemp,
+    pressure,
+    barometer,
     tide: tidePayload(tide),
     sources: {
       buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
       waves: buoy?.waves?.value != null ? `NDBC ${buoy.buoyId}` : marine.source,
       tide: tide.station,
+      ...(wind === model.wind && model.wind.value != null ? { wind: model.source } : {}),
     },
   };
+}
+
+// When ERDDAP bathy is down, still sample wind/SST on a lattice across the box.
+function latticeWaterPoints(
+  latMin: number, latMax: number, lngMin: number, lngMax: number, maxPoints = 90,
+): number[][] {
+  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+  const nSide = Math.max(3, Math.ceil(Math.sqrt(maxPoints)));
+  const pts: number[][] = [];
+  for (let i = 0; i < nSide; i++) {
+    for (let j = 0; j < nSide; j++) {
+      pts.push([
+        a0 + ((i + 0.5) / nSide) * (a1 - a0),
+        o0 + ((j + 0.5) / nSide) * (o1 - o0),
+      ]);
+    }
+  }
+  return pts.slice(0, maxPoints);
+}
+
+async function fetchOpenMeteoSstGrid(
+  latMin: number, latMax: number, lngMin: number, lngMax: number, stepDeg = 0.08,
+): Promise<{ stepDeg: number; rows: number[][]; source: string }> {
+  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+  const lats: number[] = [], lons: number[] = [];
+  for (let la = a0; la <= a1 + 1e-9; la += stepDeg) {
+    for (let ln = o0; ln <= o1 + 1e-9; ln += stepDeg) {
+      lats.push(Math.round(la * 1000) / 1000);
+      lons.push(Math.round(ln * 1000) / 1000);
+    }
+  }
+  const rows: number[][] = [];
+  const atMs = Date.now();
+  const batch = 60;
+  for (let i = 0; i < lats.length; i += batch) {
+    const laSlice = lats.slice(i, i + batch);
+    const lnSlice = lons.slice(i, i + batch);
+    const url = `${OPEN_METEO_MARINE}?latitude=${laSlice.join(",")}&longitude=${lnSlice.join(",")}`
+      + "&current=sea_surface_temperature&temperature_unit=fahrenheit";
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(15000), headers: ERDDAP_HEADERS });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const arrLat: number[] = Array.isArray(d?.latitude) ? d.latitude : laSlice;
+      const arrLon: number[] = Array.isArray(d?.longitude) ? d.longitude : lnSlice;
+      const temps = d?.current?.sea_surface_temperature;
+      if (Array.isArray(temps)) {
+        for (let k = 0; k < temps.length; k++) {
+          const f = num(temps[k]);
+          const la = num(arrLat[k]), ln = num(arrLon[k]);
+          if (f == null || la == null || ln == null) continue;
+          rows.push([la, ln, Math.round(f * 10) / 10, atMs]);
+        }
+      } else {
+        const f = num(temps);
+        if (f != null && laSlice.length === 1) rows.push([laSlice[0], lnSlice[0], Math.round(f * 10) / 10, atMs]);
+      }
+    } catch { /* try next batch */ }
+  }
+  return { stepDeg, rows, source: "open-meteo-marine-sst" };
+}
+
+async function fetchOpenMeteoElevationGrid(
+  latMin: number, latMax: number, lngMin: number, lngMax: number, stepDeg = 0.05,
+): Promise<BathyOut> {
+  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
+  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
+  const lats: number[] = [], lons: number[] = [];
+  for (let la = a0; la <= a1 + 1e-9; la += stepDeg) {
+    for (let ln = o0; ln <= o1 + 1e-9; ln += stepDeg) {
+      lats.push(Math.round(la * 1000) / 1000);
+      lons.push(Math.round(ln * 1000) / 1000);
+    }
+  }
+  const rows: unknown[][] = [];
+  const batch = 100;
+  for (let i = 0; i < lats.length; i += batch) {
+    const laSlice = lats.slice(i, i + batch);
+    const lnSlice = lons.slice(i, i + batch);
+    const url = `${OPEN_METEO_ELEVATION}?latitude=${laSlice.join(",")}&longitude=${lnSlice.join(",")}`;
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(15000), headers: ERDDAP_HEADERS });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const elevs: number[] = d?.elevation ?? [];
+      for (let k = 0; k < elevs.length; k++) {
+        const alt = num(elevs[k]);
+        if (alt == null) continue;
+        const depth = alt < 0 ? Math.round(-alt * 10) / 10 : 0;
+        rows.push([laSlice[k], lnSlice[k], depth]);
+      }
+    } catch { /* batch failed */ }
+  }
+  return { stepDeg, rows, source: "open-meteo-elevation" };
+}
+
+async function resolveObservedSstGrid(
+  latMin: number, latMax: number, lngMin: number, lngMax: number,
+  opts: { targetDeg?: number; lookback?: number; timeoutMs?: number; retries?: number } = {},
+) {
+  const mur = await fetchSstRows(latMin, latMax, lngMin, lngMax, opts);
+  const murRows = (mur.rows as number[][]).filter((r) => r && r[2] != null);
+  if (murRows.length) return { ...mur, rows: murRows, source: SST_DATASET };
+  const step = (typeof opts.targetDeg === "number" && isFinite(opts.targetDeg))
+    ? Math.max(0.05, opts.targetDeg) : 0.08;
+  const om = await fetchOpenMeteoSstGrid(latMin, latMax, lngMin, lngMax, step);
+  if (om.rows.length) return om;
+  return { stepDeg: mur.stepDeg, rows: [] as number[][], source: SST_DATASET };
 }
 
 // ETOPO bathymetry grid for a box → { stepDeg, rows:[[lat,lng,depthM],…] }.
@@ -1665,7 +1784,13 @@ async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, ln
   const etopoP = fetchEtopoRows(latMin, latMax, lngMin, lngMax);
   const cudemP = fetchCudemRows(latMin, latMax, lngMin, lngMax).catch(() => null);
   const [cudem, etopo] = await Promise.all([cudemP, etopoP]);
-  if (!cudem?.rows?.length) return etopo;
+  if (!cudem?.rows?.length) {
+    if (!etopo.rows.length) {
+      const om = await fetchOpenMeteoElevationGrid(latMin, latMax, lngMin, lngMax);
+      if (om.rows.length) return om;
+    }
+    return etopo;
+  }
   const byKey = new Map<string, unknown[]>();
   for (const row of etopo.rows) {
     byKey.set(`${(row[0] as number).toFixed(3)},${(row[1] as number).toFixed(3)}`, row);
@@ -1848,7 +1973,7 @@ export const handler = async (req: Request): Promise<Response> => {
           headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" },
         });
       }
-      const mur = await fetchSstRows(latMin, latMax, lngMin, lngMax, {
+      const mur = await resolveObservedSstGrid(latMin, latMax, lngMin, lngMax, {
         targetDeg: reqStep ?? undefined,
         lookback: 4,
         // MUR is daily and this host routinely needs 14–30 s; a 20 s abort was
@@ -1857,7 +1982,7 @@ export const handler = async (req: Request): Promise<Response> => {
         retries: 2,
       });
       const rows = (mur.rows as number[][]).filter((r) => r && r[2] != null);
-      if (!rows.length) return json({ error: "MUR SST unavailable" }, cors, 502);
+      if (!rows.length) return json({ error: "SST grid unavailable" }, cors, 502);
       let freshest = 0;
       for (const r of rows) if (r[3] && r[3] > freshest) freshest = r[3] as number;
       const body = {
@@ -1865,7 +1990,7 @@ export const handler = async (req: Request): Promise<Response> => {
         rows,
         observedAtMs: freshest || null,
         forecastHour: 0,
-        source: SST_DATASET,
+        source: (mur as { source?: string }).source ?? SST_DATASET,
         _forecast: false,
       };
       // Warm instances then serve pans over the same water instantly, which
@@ -1950,7 +2075,10 @@ export const handler = async (req: Request): Promise<Response> => {
       fetchChlorRows(latMin, latMax, lngMin, lngMax),
       useOceanForecast
         ? fetchRtofsSstGrid(latMin, latMax, lngMin, lngMax, forecastHour)
-        : fetchSstRows(latMin, latMax, lngMin, lngMax),
+        : resolveObservedSstGrid(latMin, latMax, lngMin, lngMax, {
+          timeoutMs: 35000,
+          retries: 1,
+        }),
       useOceanForecast ? Promise.resolve([] as BuoyTemp[]) : buoyWtmpList(),
       fetchCurrentGrid(latMin, latMax, lngMin, lngMax, forecastHour),
       altiSoft,
@@ -1981,7 +2109,10 @@ export const handler = async (req: Request): Promise<Response> => {
       };
     // Pick water field points (depth > 0) spread across the box, capped. These
     // only carry wind/tide (buoy + CO-OPS) — SST/chlor come from the grids.
-    const water = (bathy.rows as number[][]).filter((r) => typeof r[2] === "number" && (r[2] as number) > 0);
+    let water = (bathy.rows as number[][]).filter((r) => typeof r[2] === "number" && (r[2] as number) > 0);
+    if (!water.length) {
+      water = latticeWaterPoints(latMin, latMax, lngMin, lngMax, maxPoints).map((p) => [p[0], p[1], 100]);
+    }
     let fieldPts: number[][] = water;
     if (water.length > maxPoints) {
       const step = water.length / maxPoints;
