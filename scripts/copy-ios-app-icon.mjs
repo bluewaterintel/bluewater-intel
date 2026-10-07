@@ -17,7 +17,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const src = join(root, "icons", "app-icon-1024.png");
 const iconDest = join(
   root,
-  "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
+  "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
 );
 
 if (!existsSync(src)) {

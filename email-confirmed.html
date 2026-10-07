@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Email confirmed — Bluewater Intel</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 24px; font-family: "Segoe UI", system-ui, sans-serif;
+      background: linear-gradient(160deg, #0a1628 0%, #0d2847 50%, #0a1628 100%);
+      color: #f0f6ff;
+    }
+    .card {
+      width: 100%; max-width: 420px; text-align: center;
+      background: rgba(15, 35, 60, .92); border: 1px solid rgba(107, 191, 234, .25);
+      border-radius: 18px; padding: 36px 28px; box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+    }
+    .icon {
+      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto 20px;
+      background: rgba(34, 197, 94, .14); border: 1px solid rgba(134, 239, 172, .45);
+      display: flex; align-items: center; justify-content: center; font-size: 34px; color: #86efac;
+    }
+    h1 { font-size: 24px; font-weight: 800; margin: 0 0 12px; }
+    p { font-size: 15px; color: #cfe5ff; line-height: 1.6; margin: 0 0 10px; }
+    .sub { font-size: 13px; color: #9ab3cc; margin-bottom: 24px; }
+    button {
+      width: 100%; max-width: 280px; padding: 13px; border: none; border-radius: 10px;
+      background: #2979b5; color: #fff; font-weight: 700; font-size: 16px; cursor: pointer;
+      font-family: inherit;
+    }
+    .hint { font-size: 12px; color: #7d9bb8; margin-top: 18px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon" aria-hidden="true">✓</div>
+    <h1>Email confirmed!</h1>
+    <p>Your registration is complete.</p>
+    <p class="sub">Open the <strong>Bluewater Intel</strong> app on your phone and sign in to choose your plan and start fishing.</p>
+    <button type="button" id="open-app">Open Bluewater Intel App</button>
+    <p class="hint">If the app does not open automatically, return to the app manually and sign in with the email and password you registered.</p>
+  </div>
+  <script>
+    (function () {
+      var APP_SCHEME = "com.bluewaterintel.app://?confirmed=1";
+      function tryOpenApp() {
+        window.location.href = APP_SCHEME;
+      }
+      document.getElementById("open-app").addEventListener("click", tryOpenApp);
+      // Brief delay so Mail/Safari can paint this page before the handoff attempt.
+      setTimeout(tryOpenApp, 350);
+    })();
+  </script>
+</body>
+</html>

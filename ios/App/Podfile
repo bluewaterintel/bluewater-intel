@@ -1,4 +1,5 @@
-require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+require_relative 'pod_post_install'
+require_relative 'patch_revenuecat_paywall_color'
 
 platform :ios, '15.0'
 use_frameworks!
@@ -18,14 +19,17 @@ def capacitor_pods
   pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
   pod 'CapacitorSplashScreen', :path => '../../node_modules/@capacitor/splash-screen'
   pod 'CapacitorStatusBar', :path => '../../node_modules/@capacitor/status-bar'
+  pod 'CapgoCapacitorNativeBiometric', :path => '../../node_modules/@capgo/capacitor-native-biometric'
   pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
 end
 
 target 'App' do
   capacitor_pods
-  # Add your Pods here
+  # RevenueCat 5.51.1 (PHC 17.25 from purchases-capacitor 11.3.x) needs PaywallColor patch on Xcode 27 — see scripts/patch-revenuecat-paywall-color.mjs
 end
 
 post_install do |installer|
-  assertDeploymentTarget(installer)
+  patch_all_pod_deployment_targets(installer, MIN_IOS_DEPLOYMENT)
+  patch_revenuecat_paywall_color_pod!(installer)
+  add_revenuecat_paywall_color_build_phase!(installer)
 end

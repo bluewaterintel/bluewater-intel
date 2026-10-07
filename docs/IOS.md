@@ -239,10 +239,15 @@ npm run build:ios && npx cap sync ios
 
 ```bash
 supabase secrets set REVENUECAT_WEBHOOK_AUTH=your-long-random-secret
-supabase secrets set REVENUECAT_SECRET_API_KEY=sk_your_revenuecat_secret_key
+supabase secrets set REVENUECAT_SECRET_API_KEY=sk_your_revenuecat_v2_secret_key
+supabase secrets set REVENUECAT_PROJECT_ID=proj_your_project_id
 supabase functions deploy revenuecat-webhook --no-verify-jwt
 supabase functions deploy iap-sync
 ```
+
+Use a **V2** secret key with **Customer information → Read** (V1 keys and V2 keys are not interchangeable with the REST paths we call). Copy **Project ID** (`proj_…`) from RevenueCat → **Project settings → General**.
+
+**Android + troubleshooting:** see **`docs/REVENUECAT-SUPABASE.md`** (same secrets; `iap-sync` and owner **Sync RevenueCat** require `REVENUECAT_PROJECT_ID`).
 
 Webhook URL:
 ```
@@ -376,6 +381,8 @@ supabase functions deploy stripe-portal
 | Sync to Xcode | `npx cap sync ios` |
 | Open Xcode | `npm run cap:open:ios` |
 | All-in-one | `npm run ios:sync` |
+| Bump native version/build | `npm run version:native -- 1.5 68` |
+| Stage web app for iOS + Android | `npm run bundle:native` |
 | Deploy Apple webhook | `supabase functions deploy revenuecat-webhook --no-verify-jwt` |
 
 ---
@@ -387,8 +394,8 @@ supabase functions deploy stripe-portal
 | “StoreKit plugin not loaded” | `npm install && npx cap sync ios`, rebuild in Xcode |
 | “In-app purchases not configured” | Set `REVENUECAT_IOS_API_KEY` in `.env`, run `npm run build:ios` |
 | Email link opens Safari, not app | Check Supabase redirect URLs + `Info.plist` URL scheme |
-| Pro not showing after purchase | Check RevenueCat webhook logs + Supabase function logs |
-| Website subscriber can't manage in app | Expected — app shows message to use website (Apple rules) |
+| Pro not showing after purchase | User Admin → **Sync from RevenueCat**, or `npm run sync:revenuecat-user -- email@example.com`; check webhook + `iap-sync` logs |
+| Website subscriber wants to manage billing | Menu → Manage Account → Manage Billing opens the Stripe portal |
 
 ---
 
@@ -398,7 +405,7 @@ supabase functions deploy stripe-portal
 capacitor.config.json        Capacitor app ID, webDir, iOS plugins
 bw-capacitor.js                  Deep links, status bar
 bw-iap.js                        Apple IAP (RevenueCat / StoreKit)
-bw-billing.js                    Stripe (web) vs IAP (iOS) routing
+bw-billing.js                    Stripe (web) vs IAP (iOS) routing; billing from Account page
 scripts/build-ios-www.mjs        Stages www/ for Capacitor
 supabase/migrations/0015_*.sql   billing_source + Apple transaction ID
 supabase/functions/revenuecat-webhook/  IAP → profiles sync

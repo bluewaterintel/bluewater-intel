@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Billing — Bluewater Intel</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 24px; font-family: "Segoe UI", system-ui, sans-serif;
+      background: linear-gradient(160deg, #0a1628 0%, #0d2847 50%, #0a1628 100%);
+      color: #f0f6ff;
+    }
+    .card {
+      width: 100%; max-width: 420px; text-align: center;
+      background: rgba(15, 35, 60, .92); border: 1px solid rgba(107, 191, 234, .25);
+      border-radius: 18px; padding: 36px 28px;
+    }
+    h1 { font-size: 22px; font-weight: 800; margin: 0 0 12px; }
+    p { font-size: 15px; color: #cfe5ff; line-height: 1.55; margin: 0 0 18px; }
+    button {
+      width: 100%; max-width: 280px; padding: 13px; border: none; border-radius: 10px;
+      background: #2979b5; color: #fff; font-weight: 700; font-size: 16px; cursor: pointer;
+      font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Billing updated</h1>
+    <p>Close this window to return to the Bluewater Intel app. On iPhone, tap <b>Done</b> at the top of the browser.</p>
+    <button type="button" id="open-app">Open the app</button>
+  </div>
+  <script>
+    document.getElementById("open-app").addEventListener("click", function () {
+      window.location.href = "com.bluewaterintel.app://?portal=return";
+    });
+  </script>
+</body>
+</html>

@@ -33,6 +33,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { esc, ownerEmailShell, sendOwnerEmail } from "../_shared/email.ts";
+import { ERDDAP_COASTWATCH, ERDDAP_HEADERS, fetchNoaa } from "../_shared/erddap.ts";
 
 // ── CORS (public GET) ────────────────────────────────────────────────────────
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -50,16 +51,12 @@ function cors(origin: string | null) {
   };
 }
 
-const ERDDAP_HEADERS = { "User-Agent": "BluewaterIntel/1.0 (+https://bluewaterintel.com; health monitor)" };
-const H = 3600 * 1000;
-
-// ── Dataset config (mirrors ocean/index.ts) ──────────────────────────────────
 const SST_ERDDAP = Deno.env.get("SST_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
 const SST_DATASET = Deno.env.get("SST_DATASET") ?? "jplMURSST41";
 const SST_VAR = Deno.env.get("SST_VAR") ?? "analysed_sst";
 const SST_HAS_ALTITUDE = (Deno.env.get("SST_HAS_ALTITUDE") ?? "false") === "true";
 
-const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? "https://coastwatch.noaa.gov/erddap/griddap";
+const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? ERDDAP_COASTWATCH;
 const CHL_DATASET = Deno.env.get("CHL_DATASET") ?? "noaacwNPPN20VIIRSDINEOFDaily";
 const CHL_VAR = Deno.env.get("CHL_VAR") ?? "chlor_a";
 const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true";
@@ -67,9 +64,10 @@ const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true"
 const ETOPO_ERDDAP = Deno.env.get("ETOPO_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
 const ETOPO_DATASET = Deno.env.get("ETOPO_DATASET") ?? "etopo180";
 
-const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP") ?? "https://coastwatch.noaa.gov/erddap/griddap";
+const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP") ?? ERDDAP_COASTWATCH;
 const ALTIMETRY_SSH_DATASET = "noaacwBLENDEDsshDaily";
 const ALTIMETRY_CUR_DATASET = "noaacwBLENDEDNRTcurrentsDaily";
+const H = 3600 * 1000;
 
 const RTOFS_DODS = Deno.env.get("RTOFS_DODS")
   ?? "https://tds.hycom.org/thredds/dodsC/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd";
@@ -132,7 +130,7 @@ function classify(opts: {
 async function timedFetch(url: string, timeoutMs = 12000): Promise<{ res: Response | null; ms: number }> {
   const t0 = Date.now();
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers: ERDDAP_HEADERS });
+    const res = await fetchNoaa(url, timeoutMs);
     return { res, ms: Date.now() - t0 };
   } catch {
     return { res: null, ms: Date.now() - t0 };
@@ -144,10 +142,11 @@ async function probeErddapPoint(cfg: {
   id: string; label: string; category: "core" | "supporting";
   base: string; dataset: string; varName: string; hasAltitude: boolean;
   amberAfter: number; redAfter: number; scale?: (v: number) => number;
+  timeoutMs?: number;
 }): Promise<Probe> {
   const altIdx = cfg.hasAltitude ? "%5B(0.0)%5D" : "";
   const url = `${cfg.base}/${cfg.dataset}.json?${cfg.varName}%5B(last)%5D${altIdx}%5B(${PROBE_LAT})%5D%5B(${PROBE_LNG})%5D`;
-  const { res, ms } = await timedFetch(url);
+  const { res, ms } = await timedFetch(url, cfg.timeoutMs ?? 12000);
   const httpOk = !!res && res.ok;
   let value: number | null = null;
   let obsAt: string | null = null;
@@ -185,7 +184,7 @@ async function probeErddapPoint(cfg: {
 // ── ETOPO relief probe (static — reachability + a real depth only) ───────────
 async function probeEtopo(): Promise<Probe> {
   const url = `${ETOPO_ERDDAP}/${ETOPO_DATASET}.json?altitude%5B(${PROBE_LAT})%5D%5B(${PROBE_LNG})%5D`;
-  const { res, ms } = await timedFetch(url);
+  const { res, ms } = await timedFetch(url, 28000);
   const httpOk = !!res && res.ok;
   let value: number | null = null;
   if (httpOk) {
@@ -346,22 +345,22 @@ async function runAllProbes(): Promise<Probe[]> {
     probeErddapPoint({
       id: "sst", label: "Sea-surface temperature — MUR (jplMURSST41)", category: "core",
       base: SST_ERDDAP, dataset: SST_DATASET, varName: SST_VAR, hasAltitude: SST_HAS_ALTITUDE,
-      amberAfter: 72, redAfter: 144, scale: sstScale,
+      amberAfter: 72, redAfter: 144, scale: sstScale, timeoutMs: 28000,
     }),
     probeErddapPoint({
       id: "chlor", label: "Chlorophyll — VIIRS DINEOF NRT", category: "core",
       base: CHL_ERDDAP, dataset: CHL_DATASET, varName: CHL_VAR, hasAltitude: CHL_HAS_ALTITUDE,
-      amberAfter: 120, redAfter: 240,
+      amberAfter: 120, redAfter: 240, timeoutMs: 22000,
     }),
     probeErddapPoint({
       id: "ssh", label: "Altimetry SSH / eddies — BLENDED", category: "core",
       base: ALTIMETRY_ERDDAP, dataset: ALTIMETRY_SSH_DATASET, varName: "sla", hasAltitude: false,
-      amberAfter: 96, redAfter: 192,
+      amberAfter: 96, redAfter: 192, timeoutMs: 22000,
     }),
     probeErddapPoint({
       id: "altcurrents", label: "Geostrophic currents — BLENDED", category: "core",
       base: ALTIMETRY_ERDDAP, dataset: ALTIMETRY_CUR_DATASET, varName: "u_current", hasAltitude: false,
-      amberAfter: 96, redAfter: 192,
+      amberAfter: 96, redAfter: 192, timeoutMs: 22000,
     }),
     probeRtofs(),
     probeEtopo(),

@@ -14,9 +14,19 @@
 import { createClient, type User } from "jsr:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@16";
 import { purgeUserAccount } from "../_shared/delete-user.ts";
+import { syncStripeEntitlementForUser } from "../_shared/stripe-entitlements.ts";
+import { syncRevenueCatEntitlementForUser } from "../_shared/revenuecat.ts";
+import {
+  compareRoster,
+  tallyRoster,
+  userMatchesFilter,
+  userMatchesQuery,
+} from "../_shared/admin-roster.ts";
 
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: "2024-06-20" }) : null;
+const rcSecret = Deno.env.get("REVENUECAT_SECRET_API_KEY") ?? "";
+const rcProject = Deno.env.get("REVENUECAT_PROJECT_ID") ?? "";
 
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 const ADMIN_EMAILS = new Set(
@@ -98,6 +108,7 @@ function mergeUser(authUser: User, profile: ProfileRow | null, briefCount: numbe
     current_period_end: (profile?.current_period_end as string) ?? null,
     trial_end: (profile?.trial_end as string) ?? null,
     is_owner: !!(profile?.is_owner),
+    billing_source: (profile?.billing_source as string) ?? null,
     stripe_customer_id: (profile?.stripe_customer_id as string) ?? null,
     plan_selected_at: (profile?.plan_selected_at as string) ?? null,
     updated_at: (profile?.updated_at as string) ?? null,
@@ -106,98 +117,64 @@ function mergeUser(authUser: User, profile: ProfileRow | null, briefCount: numbe
   };
 }
 
-async function listUsers(admin: ReturnType<typeof adminClient>, q: string, limit: number, offset: number) {
-  const needle = q.trim().toLowerCase();
-  let collected: User[] = [];
-  let searchTotal: number | null = null;
-
-  if (!needle) {
-    let page = 1;
-    const perPage = 200;
-    while (collected.length < 1000 && page <= 10) {
-      const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
-      if (error) throw error;
-      const batch = data.users ?? [];
-      collected.push(...batch);
-      if (batch.length < perPage) break;
-      page++;
-    }
-    collected.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    collected = collected.slice(offset, offset + limit);
-  } else {
-    let page = 1;
-    const perPage = 200;
-    const matches: User[] = [];
-    while (page <= 30) {
-      const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
-      if (error) throw error;
-      const batch = data.users ?? [];
-      if (!batch.length) break;
-      for (const u of batch) {
-        const email = (u.email ?? "").toLowerCase();
-        if (email.includes(needle) || u.id.toLowerCase().includes(needle)) {
-          matches.push(u);
-          continue;
-        }
-        const prof = await profileForUser(admin, u.id);
-        const name = ((prof?.display_name as string) ?? "").toLowerCase();
-        if (name.includes(needle)) matches.push(u);
-      }
-      if (batch.length < perPage) break;
-      page++;
-    }
-    searchTotal = matches.length;
-    collected = matches.slice(offset, offset + limit);
+async function loadAllAuthUsers(admin: ReturnType<typeof adminClient>): Promise<User[]> {
+  const collected: User[] = [];
+  const perPage = 200;
+  for (let page = 1; page <= 30; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const batch = data.users ?? [];
+    collected.push(...batch);
+    if (batch.length < perPage) break;
   }
+  return collected;
+}
 
-  const ids = collected.map((u) => u.id);
+async function loadAllProfiles(admin: ReturnType<typeof adminClient>): Promise<ProfileRow[]> {
+  const all: ProfileRow[] = [];
+  const pageSize = 1000;
+  for (let from = 0; from < 20000; from += pageSize) {
+    const { data, error } = await admin.from("profiles").select("*").range(from, from + pageSize - 1);
+    if (error) throw error;
+    const batch = (data ?? []) as ProfileRow[];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return all;
+}
+
+async function loadRoster(admin: ReturnType<typeof adminClient>) {
+  const [authUsers, profiles] = await Promise.all([loadAllAuthUsers(admin), loadAllProfiles(admin)]);
   const profileMap = new Map<string, ProfileRow>();
-  if (ids.length) {
-    const { data: profiles } = await admin.from("profiles").select("*").in("id", ids);
-    for (const p of profiles ?? []) profileMap.set(p.id as string, p);
-  }
+  for (const p of profiles) profileMap.set(String(p.id), p);
+  return authUsers.map((u) => mergeUser(u, profileMap.get(u.id) ?? null, 0));
+}
 
-  const briefMap = new Map<string, number>();
+async function listUsers(
+  admin: ReturnType<typeof adminClient>,
+  q: string,
+  limit: number,
+  offset: number,
+  filter: string,
+  sort: string,
+) {
+  const roster = await loadRoster(admin);
+  const matched = roster.filter((u) => userMatchesQuery(u, q) && userMatchesFilter(u, filter));
+  matched.sort((a, b) => compareRoster(a, b, sort));
+  const page = matched.slice(offset, offset + limit);
+  const ids = page.map((u) => u.id);
   if (ids.length) {
     const { data: usage } = await admin.from("user_brief_usage").select("user_id, count")
       .eq("day", todayUtc()).in("user_id", ids);
+    const briefMap = new Map<string, number>();
     for (const row of usage ?? []) briefMap.set(row.user_id as string, row.count as number);
+    for (const u of page) u.briefs_today = briefMap.get(u.id) ?? 0;
   }
-
-  return {
-    users: collected.map((u) => mergeUser(u, profileMap.get(u.id) ?? null, briefMap.get(u.id) ?? 0)),
-    total: searchTotal,
-    limit,
-    offset,
-  };
+  return { users: page, total: matched.length, limit, offset };
 }
 
 async function stats(admin: ReturnType<typeof adminClient>) {
-  const { data: profiles, error } = await admin.from("profiles")
-    .select("subscription_status, is_owner");
-  if (error) throw error;
-  const counts = { total_profiles: 0, owners: 0, active: 0, trialing: 0, canceled: 0, free: 0, lifetime: 0 };
-  for (const p of profiles ?? []) {
-    counts.total_profiles++;
-    if (p.is_owner) counts.owners++;
-    const st = (p.subscription_status as string) ?? "none";
-    if (st === "active") counts.active++;
-    else if (st === "trialing") counts.trialing++;
-    else if (st === "canceled") counts.canceled++;
-    else if (st === "lifetime") counts.lifetime++;
-    else counts.free++;
-  }
-
-  let authTotal = 0;
-  let page = 1;
-  while (page <= 30) {
-    const { data } = await admin.auth.admin.listUsers({ page, perPage: 200 });
-    const batch = data.users ?? [];
-    authTotal += batch.length;
-    if (batch.length < 200) break;
-    page++;
-  }
-  return { ...counts, total_auth_users: authTotal };
+  return tallyRoster(await loadRoster(admin));
 }
 
 function sanitizePatch(raw: Record<string, unknown>) {
@@ -261,9 +238,11 @@ Deno.serve(async (req) => {
 
     if (action === "list") {
       const q = String(body.q ?? "");
-      const limit = Math.min(100, Math.max(1, Number(body.limit) || 50));
+      const filter = String(body.filter ?? "all");
+      const sort = String(body.sort ?? "newest");
+      const limit = Math.min(200, Math.max(1, Number(body.limit) || 80));
       const offset = Math.max(0, Number(body.offset) || 0);
-      return json(await listUsers(admin, q, limit, offset));
+      return json(await listUsers(admin, q, limit, offset, filter, sort));
     }
 
     if (action === "get") {
@@ -290,6 +269,39 @@ Deno.serve(async (req) => {
       return json({ ok: true, user: user ? mergeUser(user, profile, usage?.count ?? 0) : null });
     }
 
+    if (action === "sync_stripe") {
+      const userId = String(body.userId ?? "");
+      if (!userId) return json({ error: "userId required" }, 400);
+      if (!stripe) return json({ error: "Stripe not configured." }, 503);
+      const { data: { user }, error } = await admin.auth.admin.getUserById(userId);
+      if (error || !user) return json({ error: "User not found" }, 404);
+      const result = await syncStripeEntitlementForUser(admin, stripe, userId, user.email);
+      const profile = await profileForUser(admin, userId);
+      const { data: usage } = await admin.from("user_brief_usage").select("count")
+        .eq("user_id", userId).eq("day", todayUtc()).maybeSingle();
+      return json({ ok: true, sync: result, user: mergeUser(user, profile, usage?.count ?? 0) });
+    }
+
+    if (action === "sync_revenuecat") {
+      const userId = String(body.userId ?? "");
+      if (!userId) return json({ error: "userId required" }, 400);
+      if (!rcSecret || rcSecret.includes("YOUR_")) {
+        return json({ error: "RevenueCat secret key not configured." }, 503);
+      }
+      if (!rcProject || rcProject.includes("YOUR_")) {
+        return json({
+          error: "REVENUECAT_PROJECT_ID not configured (required for V2 secret keys).",
+        }, 503);
+      }
+      const { data: { user }, error } = await admin.auth.admin.getUserById(userId);
+      if (error || !user) return json({ error: "User not found" }, 404);
+      const result = await syncRevenueCatEntitlementForUser(admin, userId, rcSecret, rcProject);
+      const profile = await profileForUser(admin, userId);
+      const { data: usage } = await admin.from("user_brief_usage").select("count")
+        .eq("user_id", userId).eq("day", todayUtc()).maybeSingle();
+      return json({ ok: true, sync: result, user: mergeUser(user, profile, usage?.count ?? 0) });
+    }
+
     if (action === "preset") {
       const userId = String(body.userId ?? "");
       const preset = String(body.preset ?? "");
@@ -298,10 +310,12 @@ Deno.serve(async (req) => {
       let patch: Record<string, unknown> = { updated_at: now.toISOString() };
       if (preset === "grant_pro") {
         const end = new Date(now); end.setFullYear(end.getFullYear() + 1);
-        patch = { ...patch, subscription_status: "active", subscription_interval: "year", current_period_end: end.toISOString(), trial_end: null };
+        // billing_source null = owner comp (not Stripe/Apple/Google) so stripe-sync
+        // won't revoke when an abandoned checkout left stripe_customer_id set.
+        patch = { ...patch, subscription_status: "active", subscription_interval: "year", current_period_end: end.toISOString(), trial_end: null, billing_source: null };
       } else if (preset === "grant_trial") {
         const end = new Date(now); end.setDate(end.getDate() + 7);
-        patch = { ...patch, subscription_status: "trialing", subscription_interval: "month", trial_end: end.toISOString() };
+        patch = { ...patch, subscription_status: "trialing", subscription_interval: "month", trial_end: end.toISOString(), billing_source: null };
       } else if (preset === "revoke") {
         patch = { ...patch, subscription_status: "canceled", subscription_interval: null, current_period_end: null, trial_end: null, is_owner: false };
       } else if (preset === "grant_owner") {

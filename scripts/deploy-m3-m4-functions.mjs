@@ -54,7 +54,11 @@ run(SUPABASE, ["link", "--project-ref", PROJECT_REF], cliEnv);
 const secrets = [`ALLOWED_ORIGINS=${SITE},${NETLIFY_PREVIEW}`];
 if (envFile.ANTHROPIC_API_KEY) secrets.push(`ANTHROPIC_API_KEY=${envFile.ANTHROPIC_API_KEY}`);
 else console.warn("⚠ ANTHROPIC_API_KEY missing from .env — brief will return 503.");
-if (envFile.BRIEF_MODEL) secrets.push(`BRIEF_MODEL=${envFile.BRIEF_MODEL}`);
+const briefModel =
+  (envFile.BRIEF_MODEL || process.env.BRIEF_MODEL || "claude-sonnet-5-5").trim() ||
+  "claude-sonnet-5-5";
+secrets.push(`BRIEF_MODEL=${briefModel}`);
+console.log(`→ Setting Supabase secret BRIEF_MODEL=${briefModel}`);
 
 run(SUPABASE, ["secrets", "set", ...secrets], cliEnv);
 run(SUPABASE, ["functions", "deploy", "brief"], cliEnv);

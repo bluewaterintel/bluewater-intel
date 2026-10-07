@@ -338,10 +338,23 @@
       });
       if (fh > 0) params.set("hours", String(fh));
       else params.set("daysBack", String(back));
-      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
-        headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
-        signal: fetchTimeout(20000),
-      });
+      // NOAA blended SSH is noaacwBLENDEDsshDaily. The edge function now reads
+      // PolarWatch (coastwatch.noaa.gov 403s Deno). Do not let the browser
+      // HTTP-cache an empty 200 — that painted UNAVAILABLE with no spinner.
+      let res = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          res = await fetch(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+            headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
+            signal: fetchTimeout(55000),
+            cache: "no-store",
+          });
+          if (res.ok || res.status < 500) break;
+        } catch (e) {
+          if (attempt === 2) throw e;
+        }
+        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+      }
       if (!res.ok) return null;
       const data = await res.json();
       if (!data || !Array.isArray(data.rows) || !data.rows.length) return null;
@@ -353,11 +366,14 @@
   }
 
   const sstGridCache = new Map();
-  async function fetchSstGrid(latMin, latMax, lngMin, lngMax, hours = 0, stepDeg = null) {
+  async function fetchSstGrid(latMin, latMax, lngMin, lngMax, hours = 0, stepDeg = null, daysBack = null) {
     const fh = normalizeOceanHours(hours);
     const stepKey = (typeof stepDeg === "number" && isFinite(stepDeg))
       ? stepDeg.toFixed(3) : "auto";
-    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${fh}:${stepKey}`;
+    const backKey = (fh <= 0 && daysBack != null && isFinite(daysBack))
+      ? String(Math.max(0, daysBack | 0))
+      : "fresh";
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${fh}:${stepKey}:${backKey}`;
     const hit = sstGridCache.get(k);
     if (hit && Date.now() - hit.atMs < 2 * 60 * 60 * 1000) return hit.data;
     try {
@@ -369,6 +385,9 @@
       });
       if (typeof stepDeg === "number" && isFinite(stepDeg)) {
         params.set("stepDeg", String(stepDeg));
+      }
+      if (fh <= 0 && daysBack != null && isFinite(daysBack) && daysBack > 0) {
+        params.set("daysBack", String(Math.max(1, Math.min(14, daysBack | 0))));
       }
       // MUR pulls off this ERDDAP host measure 14–30 s and the edge function now
       // waits up to 45 s for them, so a 30 s client budget would abort the very

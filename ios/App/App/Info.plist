@@ -26,6 +26,23 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>armv7</string>
@@ -61,9 +78,11 @@
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Bluewater Intel uses your location while you are using the app to center the fishing map and log catch locations when you choose to use GPS.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Take a photo of your catch for length and weight estimation.</string>
+	<string>Take a photo of your catch to attach to your catch log.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Select a catch photo for measurement.</string>
+	<string>Select a catch photo to attach to your catch log.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Sign in quickly and securely with Face ID instead of typing your password.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

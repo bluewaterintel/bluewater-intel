@@ -83,16 +83,25 @@ Apple will **not** approve the app until IAP products are submitted **with** a n
 
 ## Resubmission workflow
 
-```bash
-# 1. Ensure build number > latest in App Store Connect (e.g. 23 if 22 was last)
-# Edit CURRENT_PROJECT_VERSION in ios/App/App.xcodeproj/project.pbxproj
+**Single source of truth:** `native-version.json` at the repo root (`versionName` + `versionCode`).
 
-npm run ios:icon
-npm run build:ios && npx cap copy ios
-# Archive in Xcode → Distribute → App Store Connect
+```bash
+git pull origin main
+npm ci
+
+# Bump when App Store Connect needs a new build (example: 1.5.2 build 73):
+# npm run version:native -- 1.5.2 73
+
+# One command before Archive (icon, www build, cap sync, version verify; on Mac also agvtool + xcodebuild check):
+npm run ios:prepare
+
+open ios/App/App.xcworkspace
+# Product → Clean Build Folder → Archive → Distribute → App Store Connect
 
 npm run legal:pages   # if deploying web URLs
 npm run deploy        # publish privacy/terms/support pages
 ```
+
+If Xcode **General** tab still shows an old version, you opened the wrong project or skipped `ios:prepare`. Use **only** `ios/App/App.xcworkspace` (not `.xcodeproj`, not a copy elsewhere). Re-run `npm run ios:prepare` on the Mac; it runs Apple `agvtool` so Xcode matches `native-version.json`.
 
 Then in App Store Connect: attach new build, submit IAP products, resubmit for review.

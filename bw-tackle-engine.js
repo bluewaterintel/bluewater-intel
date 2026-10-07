@@ -177,9 +177,21 @@ function tbTipSpeciesContext(){
 // ════════════════════════════════════════════════════════════════════════════
 // SCORING — match each tackle item against current conditions
 // ════════════════════════════════════════════════════════════════════════════
+function tbIsPacificBonitoTarget(){
+  if(TB_state.species !== "bonito") return false;
+  const port = (typeof activePort !== "undefined" && activePort && typeof PORTS !== "undefined")
+    ? PORTS[activePort] : null;
+  if(!port) return false;
+  return typeof isPacificContext === "function" && isPacificContext(port.lat, port.lng);
+}
+
 function tbScore(item){
   let score = 0;
   let max = 0;
+
+  if(tbIsPacificBonitoTarget() && item.atlanticBonitoOnly){
+    return { score: 0, pct: 0 };
+  }
 
   // Species match (mandatory)
   max += 40;
@@ -247,6 +259,9 @@ function tbRenderRecommend(){
 
   const top = scored.slice(0, 8);
   const sp = SPECIES.find(s => s.id === TB_state.species);
+  const spLabel = (typeof activePortSpeciesDisplayName === "function")
+    ? activePortSpeciesDisplayName(TB_state.species)
+    : (sp ? sp.name : TB_state.species);
 
   return `
     <div style="margin-bottom:14px;padding:14px 18px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:10px;font-size:15px;color:#86efac;line-height:1.6">

@@ -1,4 +1,6 @@
 import { NetCDFReader } from "npm:netcdfjs";
+import { ERDDAP_COASTWATCH, ERDDAP_HEADERS, fetchNoaa } from "../_shared/erddap.ts";
+import { pickPointWeather } from "./pick-point-weather.ts";
 
 // ============================================================================
 // Bluewater Intel — Milestone 4: ocean data proxy
@@ -53,9 +55,9 @@ const json = (body: unknown, cors: Record<string, string>, status = 200) =>
 // coastwatch.noaa.gov for some products. Point each dataset at its canonical host
 // directly so we don't depend on redirects.
 const SST_ERDDAP = Deno.env.get("SST_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
-const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? "https://coastwatch.noaa.gov/erddap/griddap";
-// A conventional User-Agent — some NOAA hosts 403 the default Deno UA.
-const ERDDAP_HEADERS = { "User-Agent": "BluewaterIntel/1.0 (+https://bluewaterintel.com; ocean data proxy)" };
+// Same griddap ids on coastwatch.noaa.gov and polarwatch.noaa.gov. Prefer
+// coastwatch (valid TLS); fetchNoaa falls back to PolarWatch on 403 / errors.
+const CHL_ERDDAP = Deno.env.get("CHL_ERDDAP") ?? ERDDAP_COASTWATCH;
 // SST: JPL MUR, daily, global ~1km — reliable coverage, ~1-day latency.
 // (The previous default, nesdisGeoPolarSSTN5SQNRT, has been retired from CoastWatch
 // ERDDAP and now 404s, which returned null SST for every point and left the heat
@@ -104,8 +106,8 @@ const CUDEM_MAX_TILES = Number(Deno.env.get("CUDEM_MAX_TILES") ?? "64");
 // Two sibling datasets on the same 0.25° grid: sla (m) from the SSH product,
 // u_current/v_current (m/s geostrophic) from the currents product. The older
 // nesdisSSH1day (pfeg host) stopped updating in March 2026 — do not use it.
-const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP")
-  ?? "https://coastwatch.noaa.gov/erddap/griddap";
+// BLENDED SSH + geostrophic currents — same hosts as chlorophyll (see CHL_ERDDAP).
+const ALTIMETRY_ERDDAP = Deno.env.get("ALTIMETRY_ERDDAP") ?? ERDDAP_COASTWATCH;
 const ALTIMETRY_SSH_DATASET = "noaacwBLENDEDsshDaily";
 const ALTIMETRY_CUR_DATASET = "noaacwBLENDEDNRTcurrentsDaily";
 const ALTIMETRY_STEP = 0.25;
@@ -140,6 +142,9 @@ const BUOYS: { id: string; lat: number; lng: number }[] = [
   { id: "44065", lat: 40.37, lng: -73.70 }, // NY Harbor entrance
   { id: "44009", lat: 38.46, lng: -74.70 }, // Delaware Bay
   { id: "44100", lat: 36.26, lng: -75.59 }, // Duck, NC (Outer Banks)
+  { id: "44095", lat: 35.75, lng: -75.33 }, // Oregon Inlet, NC
+  { id: "41120", lat: 35.258, lng: -75.285 }, // Cape Hatteras East, NC
+  { id: "41025", lat: 35.026, lng: -75.40 }, // Diamond Shoals, NC
   { id: "44014", lat: 36.61, lng: -74.84 }, // Virginia Beach
   { id: "41001", lat: 34.72, lng: -72.32 }, // E of Cape Hatteras
   { id: "41002", lat: 31.76, lng: -74.84 }, // S Hatteras
@@ -362,14 +367,6 @@ async function fetchModelMarine(lat: number, lng: number, hoursAhead = 0): Promi
   return p;
 }
 
-function pickWaves(
-  buoyWaves: { value: number | null; periodS?: number | null; observedAtMs: number | null } | null | undefined,
-  marine: MarineRec,
-) {
-  if (buoyWaves?.value != null) return buoyWaves;
-  return marine.waves;
-}
-
 // ── Gridded wind field for a bounding box (Open-Meteo bulk, ONE request) ──────
 // Returns a FIXED-resolution grid { stepDeg, rows:[[lat,lng,speedKt,dirDeg],…] }
 // snapped to absolute multiples of stepDeg, so the field is identical regardless
@@ -496,7 +493,8 @@ async function fetchAltimetryGrid(
   const fetchErddap = async (url: string): Promise<Response | null> => {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const r = await fetch(url, { signal: AbortSignal.timeout(25000), headers: ERDDAP_HEADERS });
+        const r = await fetchNoaa(url, 25000);
+        if (!r) continue;
         if (r.ok) return r;
         // 5xx from the ERDDAP proxy is worth a retry; 4xx is not.
         if (r.status < 500) return r;
@@ -953,24 +951,56 @@ async function fetchBuoy(lat: number, lng: number) {
     .sort((a, b) => a.nm - b.nm); // nearest first
   if (!recs.length) return null;
   const nullField = { value: null as number | null, observedAtMs: null as number | null };
-  // Wind: take the nearest buoy that has both speed and direction.
-  let wind: BuoyRec["wind"] | null = null;
-  for (const { rec } of recs) { if (rec.wind && rec.wind.value != null && rec.wind.dir != null) { wind = rec.wind; break; } }
-  // Other fields: nearest buoy reporting a value.
-  const pick = (sel: (r: BuoyRec) => { value: number | null }) => {
-    for (const { rec } of recs) { const f = sel(rec); if (f && f.value != null) return f; }
+  // Nearest station that actually reports the field. Distance and age are
+  // applied later in pickPointWeather — a July reading 140 nm away must not win.
+  const pick = <T extends { value: number | null }>(sel: (r: BuoyRec) => T | null | undefined) => {
+    for (const { rec, nm } of recs) {
+      const f = sel(rec);
+      if (f && f.value != null) return { field: f, nm, id: rec.id };
+    }
     return null;
   };
+  const wind = pick((r) => (r.wind?.value != null && r.wind.dir != null ? r.wind : null));
+  const waves = pick((r) => r.waves);
+  const waterTemp = pick((r) => r.waterTemp);
+  const airTemp = pick((r) => r.airTemp);
+  const pressure = pick((r) => r.pressure);
+  const barometer = pick((r) => r.barometer);
   return {
     buoyId: recs[0].rec.id, buoyNm: Math.round(recs[0].nm),
     observedAtMs: recs[0].rec.observedAtMs,
-    wind: wind ?? { value: null, dir: null, observedAtMs: null },
-    waves: pick((r) => r.waves) ?? nullField,
-    waterTemp: pick((r) => r.waterTemp) ?? nullField,
-    airTemp: pick((r) => r.airTemp) ?? nullField,
-    pressure: pick((r) => r.pressure) ?? nullField,
-    barometer: pick((r) => r.barometer) ?? nullField,
+    wind: wind?.field ?? { value: null, dir: null, observedAtMs: null },
+    windNm: wind?.nm ?? null,
+    waves: waves?.field ?? nullField,
+    waveNm: waves?.nm ?? null,
+    waveId: waves?.id ?? null,
+    waterTemp: waterTemp?.field ?? nullField,
+    airTemp: airTemp?.field ?? nullField,
+    pressure: pressure?.field ?? nullField,
+    pressureNm: pressure?.nm ?? null,
+    barometer: barometer?.field ?? nullField,
   };
+}
+
+function weatherAtPoint(
+  buoy: Awaited<ReturnType<typeof fetchBuoy>>,
+  model: ModelWindRec,
+  marine: MarineRec,
+) {
+  return pickPointWeather({
+    nowMs: Date.now(),
+    buoyWind: buoy?.wind ?? null,
+    buoyWindNm: buoy?.windNm ?? null,
+    buoyWaves: buoy?.waves ?? null,
+    buoyWaveNm: buoy?.waveNm ?? null,
+    buoyPressure: buoy?.pressure ?? null,
+    buoyPressureNm: buoy?.pressureNm ?? null,
+    buoyBarometer: buoy?.barometer ?? null,
+    modelWind: model.wind,
+    modelPressure: model.pressure,
+    modelBarometer: model.barometer,
+    marineWaves: marine.waves,
+  });
 }
 
 // ── Distance- & freshness-weighted SST blend (grid base + buoy correction) ───
@@ -1073,8 +1103,8 @@ async function fetchGridPoint(
   try {
     // Some NOAA ERDDAP hosts (e.g. coastwatch.noaa.gov) reject requests that lack
     // a conventional User-Agent (the default Deno UA gets a 403), so set one.
-    const r = await fetch(url, { signal: AbortSignal.timeout(9000), headers: ERDDAP_HEADERS });
-    if (!r.ok) return { value: null, observedAtMs: null };
+    const r = await fetchNoaa(url, 28000);
+    if (!r || !r.ok) return { value: null, observedAtMs: null };
     const d = await r.json();
     const cols: string[] = d?.table?.columnNames ?? [];
     const rows: unknown[][] = d?.table?.rows ?? [];
@@ -1281,19 +1311,20 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
   const buoySst = nearestBuoySst(lat, lng, buoyTemps);
   const sstF = blendSst(gridSstF, buoySst);
   const wx = useForecast && model ? forecastWeatherFields(model, marine, hoursAhead) : null;
-  const waves = wx ? wx.waves : pickWaves(buoy?.waves, marine);
+  const live = wx ? null : weatherAtPoint(buoy, model, marine);
+  const waves = wx ? wx.waves : live!.waves;
   return {
     point: { lat, lng },
     fetchedAtMs: Date.now(),
     ...(wx ? { forecastHour: wx.forecastHour } : {}),
     sst: sstF,
     chlor: { value: chlorRaw.value, observedAtMs: chlorRaw.observedAtMs },
-    wind: wx ? wx.wind : (buoy?.wind ?? { value: null, observedAtMs: null }),
+    wind: wx ? wx.wind : live!.wind,
     waves,
     waterTemp: wx ? wx.waterTemp : (buoy?.waterTemp ?? { value: null, observedAtMs: null }),
-    airTemp: wx ? wx.airTemp : (buoy?.airTemp ?? { value: null, observedAtMs: null }),
-    pressure: wx ? wx.pressure : (buoy?.pressure ?? { value: null, observedAtMs: null }),
-    barometer: wx ? wx.barometer : (buoy?.barometer ?? { value: null, observedAtMs: null }),
+    airTemp: wx ? wx.airTemp : (buoy?.airTemp?.value != null ? buoy.airTemp : model.airTemp),
+    pressure: wx ? wx.pressure : live!.pressure,
+    barometer: wx ? wx.barometer : live!.barometer,
     tide: tidePayload(tide),
     current,
     sources: {
@@ -1302,7 +1333,7 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
       chlor: CHL_DATASET,
       buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
       tide: tide.station,
-      waves: buoy?.waves?.value != null ? `NDBC ${buoy.buoyId}` : marine.source,
+      waves: wx ? (marine.source) : (live!.wavesFrom === "buoy" && buoy?.waveId ? `NDBC ${buoy.waveId}` : marine.source),
       current: current ? "RTOFS ESPC-D-V02" : null,
       ...(wx?.sources ?? {}),
     },
@@ -1339,7 +1370,7 @@ async function fetchSstRows(
   latMax: number,
   lngMin: number,
   lngMax: number,
-  opts: { targetDeg?: number; lookback?: number; timeoutMs?: number; retries?: number } = {},
+  opts: { targetDeg?: number; lookback?: number; timeoutMs?: number; retries?: number; daysBack?: number } = {},
 ) {
   const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
   const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
@@ -1351,13 +1382,18 @@ async function fetchSstRows(
   const envLookback = Math.max(0, Number(Deno.env.get("SSTGRID_LOOKBACK") ?? "4"));
   const lookback = Math.max(0, Math.min(6,
     (typeof opts.lookback === "number" && isFinite(opts.lookback)) ? opts.lookback : envLookback));
+  const singleDayBack = (typeof opts.daysBack === "number" && isFinite(opts.daysBack))
+    ? Math.max(0, Math.min(14, Math.round(opts.daysBack)))
+    : null;
   const altIdx = SST_HAS_ALTITUDE ? "%5B(0.0)%5D" : "";
-  const timeIdx = lookback > 0 ? `%5Blast-${lookback}:last%5D` : "%5B(last)%5D";
+  const timeIdx = singleDayBack != null
+    ? `%5Blast-${singleDayBack}%5D`
+    : (lookback > 0 ? `%5Blast-${lookback}:last%5D` : "%5B(last)%5D");
   const url = `${SST_ERDDAP}/${SST_DATASET}.json`
     + `?${SST_VAR}${timeIdx}${altIdx}`
     + `%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
   const timeoutMs = Math.max(5000, Math.min(60000,
-    (typeof opts.timeoutMs === "number" && isFinite(opts.timeoutMs)) ? opts.timeoutMs : 20000));
+    (typeof opts.timeoutMs === "number" && isFinite(opts.timeoutMs)) ? opts.timeoutMs : 35000));
   const retries = Math.max(0, Math.min(2, opts.retries ?? 0));
   try {
     let r: Response | null = null;
@@ -1374,7 +1410,8 @@ async function fetchSstRows(
     const cols: string[] = d?.table?.columnNames ?? [];
     const rawRows: unknown[][] = d?.table?.rows ?? [];
     const ti = cols.indexOf("time"), li = cols.indexOf("latitude"), gi = cols.indexOf("longitude"), vi = cols.indexOf(SST_VAR);
-    // Freshest non-fill value per cell across the lookback window.
+    // Freshest non-fill value per cell across the lookback window (map overlay
+    // default). Historical slider requests a single daily slice via daysBack.
     const best = new Map<string, { lat: number; lng: number; f: number; ms: number }>();
     for (const row of rawRows) {
       let c = num(row[vi]);
@@ -1386,7 +1423,11 @@ async function fetchSstRows(
       const ms = ti >= 0 && typeof row[ti] === "string" ? Date.parse(row[ti] as string) : 0;
       const k = `${la.toFixed(3)},${ln.toFixed(3)}`;
       const cur = best.get(k);
-      if (!cur || ms > cur.ms) best.set(k, { lat: la, lng: ln, f, ms });
+      if (singleDayBack != null) {
+        if (!cur) best.set(k, { lat: la, lng: ln, f, ms });
+      } else if (!cur || ms > cur.ms) {
+        best.set(k, { lat: la, lng: ln, f, ms });
+      }
     }
     const rows = [...best.values()].map((c) =>
       [Math.round(c.lat * 1000) / 1000, Math.round(c.lng * 1000) / 1000, c.f, c.ms || null]);
@@ -1416,28 +1457,28 @@ async function assembleConditions(lat: number, lng: number, hoursAhead = 0) {
     gridSstF = { value: Math.round((c * 9 / 5 + 32) * 10) / 10, observedAtMs: sst.observedAtMs };
   }
   const wx = useForecast && model ? forecastWeatherFields(model, marine, hoursAhead) : null;
-  const waves = wx ? wx.waves : pickWaves(buoy?.waves, marine);
+  const live = wx ? null : weatherAtPoint(buoy, model, marine);
   return {
     point: { lat, lng },
     fetchedAtMs: Date.now(),
     ...(wx ? { forecastHour: wx.forecastHour } : {}),
     sst: gridSstF,
     chlor: { value: null, observedAtMs: null },
-    wind: wx ? wx.wind : (buoy?.wind ?? model.wind ?? { value: null, observedAtMs: null }),
-    waves,
+    wind: wx ? wx.wind : live!.wind,
+    waves: wx ? wx.waves : live!.waves,
     waterTemp: wx ? wx.waterTemp : (buoy?.waterTemp ?? { value: null, observedAtMs: null }),
-    airTemp: wx ? wx.airTemp : (buoy?.airTemp ?? model.airTemp ?? { value: null, observedAtMs: null }),
-    pressure: wx ? wx.pressure : (buoy?.pressure ?? model.pressure ?? { value: null, observedAtMs: null }),
-    barometer: wx ? wx.barometer : (buoy?.barometer ?? model.barometer ?? { value: null, observedAtMs: null }),
+    airTemp: wx ? wx.airTemp : (buoy?.airTemp?.value != null ? buoy.airTemp : model.airTemp),
+    pressure: wx ? wx.pressure : live!.pressure,
+    barometer: wx ? wx.barometer : live!.barometer,
     tide: tidePayload(tide),
     current: null,
     sources: {
       sst: gridSstF.value != null ? SST_DATASET : null,
       buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
       tide: tide.station,
-      waves: buoy?.waves?.value != null ? `NDBC ${buoy.buoyId}` : marine.source,
+      waves: wx ? marine.source : (live!.wavesFrom === "buoy" && buoy?.waveId ? `NDBC ${buoy.waveId}` : marine.source),
       ...(wx?.sources ?? {}),
-      ...(!wx && !buoy?.wind?.value && model.wind.value != null ? { wind: model.source } : {}),
+      ...(!wx && live!.windFrom === "model" ? { wind: model.source } : {}),
     },
   };
 }
@@ -1468,35 +1509,30 @@ async function assembleFieldPoint(lat: number, lng: number, hoursAhead = 0) {
       sources: { ...wx.sources, tide: tide.station },
     };
   }
-  const [buoy, marine, tide, model] = await Promise.all([
+  const [buoy, marine, model, tide] = await Promise.all([
     fetchBuoy(lat, lng),
     fetchModelMarine(lat, lng, 0),
-    fetchTide(lat, lng, hoursAhead),
     fetchModelWind(lat, lng, 0),
+    fetchTide(lat, lng, hoursAhead),
   ]);
-  const wind = (buoy?.wind?.value != null && buoy.wind.dir != null)
-    ? buoy.wind
-    : model.wind;
-  const pressure = buoy?.pressure?.value != null ? buoy.pressure : model.pressure;
-  const barometer = buoy?.barometer?.value != null ? buoy.barometer : model.barometer;
-  const airTemp = buoy?.airTemp?.value != null ? buoy.airTemp : model.airTemp;
+  const live = weatherAtPoint(buoy, model, marine);
   return {
     point: { lat, lng },
     fetchedAtMs: Date.now(),
     sst: { value: null, observedAtMs: null },
     chlor: { value: null, observedAtMs: null },
-    wind,
-    waves: pickWaves(buoy?.waves, marine),
+    wind: live.wind,
+    waves: live.waves,
     waterTemp: buoy?.waterTemp ?? { value: null, observedAtMs: null },
-    airTemp,
-    pressure,
-    barometer,
+    airTemp: buoy?.airTemp?.value != null ? buoy.airTemp : model.airTemp,
+    pressure: live.pressure,
+    barometer: live.barometer,
     tide: tidePayload(tide),
     sources: {
       buoy: buoy ? { id: buoy.buoyId, nm: buoy.buoyNm } : null,
-      waves: buoy?.waves?.value != null ? `NDBC ${buoy.buoyId}` : marine.source,
+      waves: live.wavesFrom === "buoy" && buoy?.waveId ? `NDBC ${buoy.waveId}` : marine.source,
+      wind: live.windFrom === "model" ? model.source : (buoy ? `NDBC ${buoy.buoyId}` : model.source),
       tide: tide.station,
-      ...(wind === model.wind && model.wind.value != null ? { wind: model.source } : {}),
     },
   };
 }
@@ -1753,7 +1789,7 @@ async function fetchEtopoRows(latMin: number, latMax: number, lngMin: number, ln
   const url = `${ETOPO_ERDDAP}/${ETOPO_DATASET}.json`
     + `?altitude%5B(${a0}):${strideIdx}:(${a1})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(12000), headers: ERDDAP_HEADERS });
+    const r = await fetch(url, { signal: AbortSignal.timeout(28000), headers: ERDDAP_HEADERS });
     if (!r.ok) return { stepDeg: strideIdx * ETOPO_STEP_DEG, rows: [] as unknown[][], source: "ETOPO" };
     const d = await r.json();
     const cols: string[] = d?.table?.columnNames ?? [];
@@ -1813,8 +1849,8 @@ async function fetchChlorRowsWithLookback(
     + `?${CHL_VAR}${timeIdx}${altIdx}`
     + `%5B(${a1}):${strideIdx}:(${a0})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(20000), headers: ERDDAP_HEADERS });
-    if (!r.ok) return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
+    const r = await fetchNoaa(url, 20000);
+    if (!r || !r.ok) return { stepDeg: strideIdx * native, rows: [] as unknown[][] };
     const d = await r.json();
     const cols: string[] = d?.table?.columnNames ?? [];
     const rawRows: unknown[][] = d?.table?.rows ?? [];
@@ -1940,6 +1976,14 @@ export const handler = async (req: Request): Promise<Response> => {
       ? await fetchRtofsModelAltimetryGrid(latMin, latMax, lngMin, lngMax, hoursAhead)
       : await fetchAltimetryGrid(latMin, latMax, lngMin, lngMax,
         Math.max(0, Math.min(6, Math.round(num(u.searchParams.get("daysBack")) ?? 0))));
+    if (!out.rows.length) {
+      // Empty 200 + max-age=21600 poisoned the overlay for 6h after a 403:
+      // the client painted UNAVAILABLE instantly with no visible spinner.
+      return new Response(JSON.stringify(out), {
+        status: 502,
+        headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
     return new Response(JSON.stringify(out), {
       headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" },
     });
@@ -1959,7 +2003,11 @@ export const handler = async (req: Request): Promise<Response> => {
       // Map overlay may request denser stepDeg when zoomed; lookback=2 keeps
       // the ERDDAP pull light so pans stay snappy (scoring still uses default 4).
       const reqStep = num(u.searchParams.get("stepDeg"));
-      const ck = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${reqStep ?? "auto"}`;
+      const daysBackRaw = num(u.searchParams.get("daysBack"));
+      const histBack = daysBackRaw != null
+        ? Math.max(0, Math.min(14, Math.round(daysBackRaw)))
+        : null;
+      const ck = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${reqStep ?? "auto"}:${histBack ?? "fresh"}`;
       const cached = sstGridCache.get(ck);
       if (cached && Date.now() - cached.atMs < SSTGRID_TTL_MS) {
         return new Response(JSON.stringify(cached.body), {
@@ -1968,7 +2016,8 @@ export const handler = async (req: Request): Promise<Response> => {
       }
       const mur = await resolveObservedSstGrid(latMin, latMax, lngMin, lngMax, {
         targetDeg: reqStep ?? undefined,
-        lookback: 4,
+        lookback: histBack != null ? 0 : 4,
+        daysBack: histBack ?? undefined,
         // MUR is daily and this host routinely needs 14–30 s; a 20 s abort was
         // discarding good pulls and the overlay then had nothing to draw.
         timeoutMs: 45000,
@@ -1985,6 +2034,7 @@ export const handler = async (req: Request): Promise<Response> => {
         forecastHour: 0,
         source: (mur as { source?: string }).source ?? SST_DATASET,
         _forecast: false,
+        ...(histBack != null ? { daysBack: histBack } : {}),
       };
       // Warm instances then serve pans over the same water instantly, which
       // matters a lot when a cold pull costs half a minute.
@@ -2045,7 +2095,8 @@ export const handler = async (req: Request): Promise<Response> => {
     // cold cache, so we bound the wait — but NOT so aggressively that a common
     // cold-start returns empty fronts. An empty SSH payload makes offshore
     // edge-seeking bite maps (yellowfin, etc.) score ~SST-only; the next warm
-    // request then jumps ~10 pts and relocates hotspots. Client budget is 50s.
+    // request then jumps ~10 pts and relocates hotspots. Client budget is 50s;
+    // 32s leaves room for the rest of Promise.all without starving SST/chlor.
     type AltiSoftResult = { grid: AltimetryGrid; status: "ok" | "timeout" | "empty" };
     const altiNone: AltimetryGrid = { stepDeg: ALTIMETRY_STEP, observedAtMs: null, rows: [] };
     const altiSoft: Promise<AltiSoftResult> = useOceanForecast
@@ -2059,7 +2110,7 @@ export const handler = async (req: Request): Promise<Response> => {
           status: grid.rows.length ? "ok" : "empty",
         })),
         new Promise<AltiSoftResult>((res) =>
-          setTimeout(() => res({ grid: altiNone, status: "timeout" }), 20000)),
+          setTimeout(() => res({ grid: altiNone, status: "timeout" }), 32000)),
       ]);
     // Grids in parallel (each ONE upstream box request). Bathy also tells us which
     // field points are water so we don't fetch buoy/tide over land.

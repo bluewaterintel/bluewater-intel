@@ -19,9 +19,14 @@ const PORTS={
   "Point Judith, RI":  {lat:41.36,  lng:-71.48,  short:"Pt Judith"},
   // ── MID-ATLANTIC ─────────────────────────────────────────────────────
   "Montauk, NY":       {lat:41.035, lng:-71.96,  short:"Montauk"},
-  "Long Beach, NY":    {lat:40.583, lng:-73.66,  short:"Long Beach"},
+  // Atlantic Highlands harbor — the Sandy Hook fleet basin. Replaces Long
+  // Beach, NY, which sat ~4 nm from Freeport. Header weather is sampled
+  // 0.05° north and east of this point (ocean side of the Hook).
+  "Sandy Hook, NJ":    {lat:40.419, lng:-74.034, short:"Sandy Hook"},
   "Freeport, NY":      {lat:40.59,  lng:-73.575, short:"Freeport"},
-  "Toms River, NJ":    {lat:39.945, lng:-74.165, short:"Toms River"},
+  // Manasquan Inlet fleet basin (Point Pleasant / Brielle side). Replaces
+  // Toms River, which duplicated the Barnegat Bay inshore reach.
+  "Manasquan Inlet, NJ": {lat:40.102, lng:-74.035, short:"Manasquan"},
   "Atlantic City, NJ": {lat:39.355, lng:-74.418, short:"Atlantic City"},
   "Cape May, NJ":      {lat:38.93,  lng:-74.91,  short:"Cape May"},
   "Ocean City, MD":    {lat:38.33,  lng:-75.08,  short:"Ocean City"},
@@ -127,3 +132,11 @@ const PORTS={
   "Oceanside, CA":         {lat:33.195, lng:-117.385, short:"Oceanside"},
   "San Diego, CA":         {lat:32.723, lng:-117.174, short:"San Diego"},
 };
+
+// Saved home ports from before a harbor was renamed. Applied when prefs and
+// the account profile load so an old default still opens on the new harbor.
+function canonicalPortName(name){
+  if(name === "Long Beach, NY") return "Sandy Hook, NJ";
+  if(name === "Toms River, NJ") return "Manasquan Inlet, NJ";
+  return name;
+}

@@ -54,8 +54,10 @@
 
   if (native) {
     document.documentElement.classList.add("bw-native");
-    if (typeof cap.getPlatform === "function" && cap.getPlatform() === "ios") {
-      document.documentElement.classList.add("bw-ios");
+    if (typeof cap.getPlatform === "function") {
+      const platform = cap.getPlatform();
+      if (platform === "ios") document.documentElement.classList.add("bw-ios");
+      if (platform === "android") document.documentElement.classList.add("bw-android");
     }
   }
 
@@ -70,12 +72,32 @@
   const plugins = cap.Plugins || {};
 
   async function openExternalUrl(url) {
+    if (!url) return;
     const Browser = plugins.Browser;
+    const App = plugins.App;
+    const platform = typeof cap.getPlatform === "function" ? cap.getPlatform() : "";
+    // iPhone: presentationStyle "popover" often never appears (no popover
+    // source view). Use fullscreen in-app Safari, then the system browser.
     if (Browser && Browser.open) {
-      await Browser.open({ url, presentationStyle: "popover" });
-      return;
+      try {
+        await Browser.open({
+          url,
+          presentationStyle: platform === "ios" ? "fullscreen" : "popover",
+        });
+        return;
+      } catch (e) {
+        console.warn("BW_CAPACITOR: Browser.open failed", e);
+      }
     }
-    window.location.href = url;
+    if (App && App.openUrl) {
+      try {
+        await App.openUrl({ url });
+        return;
+      } catch (e) {
+        console.warn("BW_CAPACITOR: App.openUrl failed", e);
+      }
+    }
+    window.open(url, "_blank") || (window.location.href = url);
   }
 
   // Hide the native splash only after auth/session is resolved (see bw-authgate.js).
@@ -86,12 +108,82 @@
     } catch (e) { /* non-fatal */ }
   };
 
+  async function nativeBuildLabel() {
+    const App = plugins.App;
+    let code = "";
+    let name = "";
+    if (App && App.getInfo) {
+      try {
+        const info = await App.getInfo();
+        code = String(info.build || "").trim();
+        name = String(info.version || "").trim();
+      } catch (e) { /* non-fatal */ }
+    }
+    const cfg = window.BW_DATA_CONFIG || {};
+    if (!code && cfg.nativeVersionCode) code = String(cfg.nativeVersionCode);
+    if (!name && cfg.nativeVersionName) name = String(cfg.nativeVersionName);
+    if (!code) return "";
+    const android = typeof cap.getPlatform === "function" && cap.getPlatform() === "android";
+    const rc = android ? (cfg.revenueCatAndroidApiKey || "") : (cfg.revenueCatIosApiKey || "");
+    const rcOk = rc && !String(rc).includes("YOUR_");
+    return `Build ${code}${name ? " · v" + name : ""} · ${android ? "Play" : "App Store"} billing ${rcOk ? "OK" : "key missing"}`;
+  }
+
+  function injectAccountBuildLine(text) {
+    if (!text) return;
+    let el = document.getElementById("acct-app-build");
+    if (!el) {
+      const page = document.getElementById("account-page");
+      if (!page) return;
+      for (const btn of page.querySelectorAll("button")) {
+        const onclick = btn.getAttribute("onclick") || "";
+        if (!/signOut/i.test(onclick)) continue;
+        el = document.createElement("div");
+        el.id = "acct-app-build";
+        el.style.cssText = "text-align:center;font-size:11px;color:#64748b;margin-bottom:12px;line-height:1.45";
+        btn.parentNode.insertBefore(el, btn);
+        break;
+      }
+    }
+    if (el) {
+      el.textContent = text;
+      el.style.display = "block";
+    }
+  }
+
+  function injectMenuBuildLine(text) {
+    if (!text) return;
+    let el = document.getElementById("nav-native-build");
+    const menu = document.getElementById("nav-menu");
+    if (!menu) return;
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "nav-native-build";
+      el.style.cssText = "padding:6px 18px 0;font-size:10px;color:rgba(107,191,234,.55);text-align:center;line-height:1.4";
+      const footer = menu.querySelector("div[style*='MAINE TO SOUTHERN CALIFORNIA']");
+      if (footer) menu.insertBefore(el, footer);
+      else menu.appendChild(el);
+    }
+    el.textContent = text;
+  }
+
+  window.BW_paintNativeBuildStamp = async function () {
+    const text = await nativeBuildLabel();
+    if (!text) return text;
+    injectMenuBuildLine(text);
+    injectAccountBuildLine(text);
+    return text;
+  };
+
   async function initNativeShell() {
-    // Status bar — match app header
+    // Status bar — match app header. Capacitor: DARK = dark icons (light bg),
+    // LIGHT = light icons (dark bg). Android needs LIGHT on navy; iOS already
+    // uses DARK in capacitor.config / existing builds — leave that path alone.
     try {
       const StatusBar = plugins.StatusBar;
       if (StatusBar) {
-        await StatusBar.setStyle({ style: "DARK" });
+        const platform = typeof cap.getPlatform === "function" ? cap.getPlatform() : "";
+        await StatusBar.setStyle({ style: platform === "android" ? "LIGHT" : "DARK" });
         await StatusBar.setBackgroundColor({ color: "#0a1628" });
       }
     } catch (e) { /* non-fatal */ }
@@ -110,11 +202,13 @@
       App.addListener("appStateChange", ({ isActive }) => {
         if (isActive) {
           if (typeof restoreSessionLayerState === "function") restoreSessionLayerState();
+          window.BW_paintNativeBuildStamp?.().catch(() => {});
         } else if (typeof saveSessionLayerState === "function") {
           saveSessionLayerState();
         }
       });
     }
+    window.BW_paintNativeBuildStamp?.().catch(() => {});
   }
 
   async function handleAuthDeepLink(rawUrl) {
@@ -128,8 +222,12 @@
       if (u.searchParams.get("recovery") === "1" && typeof window.openPasswordRecoveryModal === "function") {
         window.openPasswordRecoveryModal();
       }
-      if (u.searchParams.get("confirmed") === "1" && typeof showToast === "function") {
-        showToast("Email confirmed — welcome aboard!", "success");
+      if (u.searchParams.get("confirmed") === "1") {
+        if (typeof window.showEmailConfirmedScreen === "function") {
+          window.showEmailConfirmedScreen();
+        } else if (typeof showToast === "function") {
+          showToast("Email confirmed — return to the app and sign in.", "success");
+        }
       }
       if (u.searchParams.get("checkout") === "success" && typeof showToast === "function") {
         showToast("Subscription active — Pro features unlocked.", "success");
