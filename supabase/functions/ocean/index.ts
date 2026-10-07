@@ -986,8 +986,9 @@ function weatherAtPoint(
   buoy: Awaited<ReturnType<typeof fetchBuoy>>,
   model: ModelWindRec,
   marine: MarineRec,
+  hoursAhead = 0,
 ) {
-  return pickPointWeather({
+  const picked = pickPointWeather({
     nowMs: Date.now(),
     buoyWind: buoy?.wind ?? null,
     buoyWindNm: buoy?.windNm ?? null,
@@ -1001,6 +1002,19 @@ function weatherAtPoint(
     modelBarometer: model.barometer,
     marineWaves: marine.waves,
   });
+  // Model stand-ins are valid at the selected forecast hour. Stamp that time so
+  // a +12h/+24h score is not marked "too old" against a future clock, and a
+  // stale buoy is not what the bite map keeps when GFS is the replacement.
+  const validMs = Date.now() + Math.max(0, hoursAhead) * 3600000;
+  const asModel = <T extends { observedAtMs: number | null }>(field: T, fromModel: boolean): T =>
+    fromModel ? { ...field, observedAtMs: validMs, _forecast: true } : field;
+  return {
+    ...picked,
+    wind: asModel(picked.wind, picked.windFrom === "model"),
+    pressure: asModel(picked.pressure, picked.pressure === model.pressure),
+    barometer: asModel(picked.barometer, picked.barometer === model.barometer),
+    waves: asModel(picked.waves, picked.wavesFrom === "model"),
+  };
 }
 
 // ── Distance- & freshness-weighted SST blend (grid base + buoy correction) ───
@@ -1270,8 +1284,9 @@ async function fetchChlorPoint(lat: number, lng: number) {
 // forecast request (that would misrepresent the selected time).
 function forecastWeatherFields(model: ModelWindRec, marine: MarineRec | null, hoursAhead: number) {
   const fh = Math.round(clamp(hoursAhead, 0, 96) / 3) * 3;
+  const validMs = Date.now() + fh * 3600000;
   const mark = <T extends { value: number | null; observedAtMs: number | null }>(f: T) =>
-    ({ ...f, _forecast: true, forecastHour: fh });
+    ({ ...f, _forecast: true, forecastHour: fh, observedAtMs: validMs });
   return {
     forecastHour: fh,
     wind: (model.wind.value != null && model.wind.dir != null)
@@ -1311,7 +1326,7 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
   const buoySst = nearestBuoySst(lat, lng, buoyTemps);
   const sstF = blendSst(gridSstF, buoySst);
   const wx = useForecast && model ? forecastWeatherFields(model, marine, hoursAhead) : null;
-  const live = wx ? null : weatherAtPoint(buoy, model, marine);
+  const live = wx ? null : weatherAtPoint(buoy, model, marine, hoursAhead);
   const waves = wx ? wx.waves : live!.waves;
   return {
     point: { lat, lng },
@@ -1457,7 +1472,7 @@ async function assembleConditions(lat: number, lng: number, hoursAhead = 0) {
     gridSstF = { value: Math.round((c * 9 / 5 + 32) * 10) / 10, observedAtMs: sst.observedAtMs };
   }
   const wx = useForecast && model ? forecastWeatherFields(model, marine, hoursAhead) : null;
-  const live = wx ? null : weatherAtPoint(buoy, model, marine);
+  const live = wx ? null : weatherAtPoint(buoy, model, marine, hoursAhead);
   return {
     point: { lat, lng },
     fetchedAtMs: Date.now(),
@@ -1515,7 +1530,7 @@ async function assembleFieldPoint(lat: number, lng: number, hoursAhead = 0) {
     fetchModelWind(lat, lng, 0),
     fetchTide(lat, lng, hoursAhead),
   ]);
-  const live = weatherAtPoint(buoy, model, marine);
+  const live = weatherAtPoint(buoy, model, marine, hoursAhead);
   return {
     point: { lat, lng },
     fetchedAtMs: Date.now(),
@@ -1570,25 +1585,29 @@ async function fetchOpenMeteoSstGrid(
   }
   const rows: number[][] = [];
   const atMs = Date.now();
-  const batch = 60;
+  const batch = 80;
+  const jobs: Promise<void>[] = [];
   for (let i = 0; i < lats.length; i += batch) {
     const laSlice = lats.slice(i, i + batch);
     const lnSlice = lons.slice(i, i + batch);
-    const url = `${OPEN_METEO_MARINE}?latitude=${laSlice.join(",")}&longitude=${lnSlice.join(",")}`
-      + "&current=sea_surface_temperature&temperature_unit=fahrenheit";
-    try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(15000), headers: ERDDAP_HEADERS });
-      if (!r.ok) continue;
-      const d = await r.json();
-      const payloads = Array.isArray(d) ? d : [d];
-      for (const p of payloads) {
-        const la = num(p?.latitude), ln = num(p?.longitude);
-        const f = num(p?.current?.sea_surface_temperature);
-        if (f == null || la == null || ln == null) continue;
-        rows.push([la, ln, Math.round(f * 10) / 10, atMs]);
-      }
-    } catch { /* try next batch */ }
+    jobs.push((async () => {
+      const url = `${OPEN_METEO_MARINE}?latitude=${laSlice.join(",")}&longitude=${lnSlice.join(",")}`
+        + "&current=sea_surface_temperature&temperature_unit=fahrenheit";
+      try {
+        const r = await fetch(url, { signal: AbortSignal.timeout(12000), headers: ERDDAP_HEADERS });
+        if (!r.ok) return;
+        const d = await r.json();
+        const payloads = Array.isArray(d) ? d : [d];
+        for (const p of payloads) {
+          const la = num(p?.latitude), ln = num(p?.longitude);
+          const f = num(p?.current?.sea_surface_temperature);
+          if (f == null || la == null || ln == null) continue;
+          rows.push([la, ln, Math.round(f * 10) / 10, atMs]);
+        }
+      } catch { /* batch failed */ }
+    })());
   }
+  await Promise.all(jobs);
   return { stepDeg, rows, source: "open-meteo-marine-sst" };
 }
 
@@ -1813,13 +1832,10 @@ async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, ln
   const etopoP = fetchEtopoRows(latMin, latMax, lngMin, lngMax);
   const cudemP = fetchCudemRows(latMin, latMax, lngMin, lngMax).catch(() => null);
   const [cudem, etopo] = await Promise.all([cudemP, etopoP]);
-  if (!cudem?.rows?.length) {
-    if (!etopo.rows.length) {
-      const om = await fetchOpenMeteoElevationGrid(latMin, latMax, lngMin, lngMax);
-      if (om.rows.length) return om;
-    }
-    return etopo;
-  }
+  // Open-Meteo elevation is a land DEM (0 over the ocean). It is not bathymetry
+  // and was painting shelf depths onto the beach. Empty ETOPO lets the client
+  // shelf model shoal correctly until CUDEM/ETOPO are reachable again.
+  if (!cudem?.rows?.length) return etopo;
   const byKey = new Map<string, unknown[]>();
   for (const row of etopo.rows) {
     byKey.set(`${(row[0] as number).toFixed(3)},${(row[1] as number).toFixed(3)}`, row);
@@ -2088,7 +2104,7 @@ export const handler = async (req: Request): Promise<Response> => {
     if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
       return json({ error: "latMin,latMax,lngMin,lngMax required" }, cors, 400);
     }
-    const maxPoints = Math.max(20, Math.min(120, Math.round(num(u.searchParams.get("maxPoints")) ?? 90)));
+    const maxPoints = Math.max(16, Math.min(40, Math.round(num(u.searchParams.get("maxPoints")) ?? 36)));
     const forecastHour = normalizeOceanForecastHour(num(u.searchParams.get("hours")) ?? 0);
     const useOceanForecast = forecastHour > 0;
     // Altimetry (SSH) feeds the scorer's front fusion. ERDDAP can be slow on a
@@ -2110,7 +2126,7 @@ export const handler = async (req: Request): Promise<Response> => {
           status: grid.rows.length ? "ok" : "empty",
         })),
         new Promise<AltiSoftResult>((res) =>
-          setTimeout(() => res({ grid: altiNone, status: "timeout" }), 32000)),
+          setTimeout(() => res({ grid: altiNone, status: "timeout" }), 10000)),
       ]);
     // Grids in parallel (each ONE upstream box request). Bathy also tells us which
     // field points are water so we don't fetch buoy/tide over land.
@@ -2120,8 +2136,9 @@ export const handler = async (req: Request): Promise<Response> => {
       useOceanForecast
         ? fetchRtofsSstGrid(latMin, latMax, lngMin, lngMax, forecastHour)
         : resolveObservedSstGrid(latMin, latMax, lngMin, lngMax, {
-          timeoutMs: 35000,
-          retries: 1,
+          // PFEG often hangs for 30s+. Fail fast and use the marine SST fallback.
+          timeoutMs: 8000,
+          retries: 0,
         }),
       useOceanForecast ? Promise.resolve([] as BuoyTemp[]) : buoyWtmpList(),
       fetchCurrentGrid(latMin, latMax, lngMin, lngMax, forecastHour),
