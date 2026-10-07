@@ -54,6 +54,17 @@ console.log("\nChoctawhatchee Bay (Destin) is fishable inshore water:");
   check("sheepshead allowed in the bay", api.speciesAllowedInWater("sheepshead", "bay", lat, lng));
 }
 
+console.log("\nNearshore reef water off Destin is Gulf, not land:");
+{
+  // ~5 nm south of the beach, about 80 ft. The old coast vertex at 30.20
+  // classified this whole band as land, so the heat map started offshore
+  // of the 100 ft reefs.
+  check("80 ft water off Destin is not land", !api.isOnLand(30.32, -86.50));
+  check("80 ft water off Destin is fishable", api.isPredictWater(30.32, -86.50));
+  check("that water is not the bay", !api.isFishableBaySound(30.32, -86.50));
+  check("Okaloosa Island stays land", api.isOnLand(30.40, -86.50));
+}
+
 console.log("\nOpen Gulf off Destin is not a bay:");
 {
   const lat = 30.10, lng = -86.50;
