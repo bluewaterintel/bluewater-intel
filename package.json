@@ -21,6 +21,7 @@
     "test:freshness": "node tests/freshness.test.mjs",
     "test:wind": "node tests/wind.test.mjs",
     "test:ocean": "node tests/ocean-forecast.test.mjs",
+    "test:cudem": "node --experimental-strip-types tests/cudem-mosaic.test.mjs",
     "test:seastate": "node --experimental-strip-types tests/sea-state-source.test.mjs",
     "test:briefmodel": "node --experimental-strip-types tests/brief-anthropic.test.mjs",
     "test:breaks": "node tests/breaks.test.mjs",

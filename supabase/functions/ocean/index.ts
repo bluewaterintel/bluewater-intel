@@ -1,6 +1,7 @@
 import { NetCDFReader } from "npm:netcdfjs";
 import { ERDDAP_COASTWATCH, ERDDAP_HEADERS, fetchNoaa } from "../_shared/erddap.ts";
 import { pickPointWeather } from "./pick-point-weather.ts";
+import { fetchDemMosaicRows } from "./cudem-mosaic.ts";
 
 // ============================================================================
 // Bluewater Intel — Milestone 4: ocean data proxy
@@ -23,8 +24,8 @@ import { pickPointWeather } from "./pick-point-weather.ts";
 //   • NOAA RTOFS surface currents (ESPC-D-V02 / HYCOM NCSS) — u/v at the
 //     surface; global 1/12° nowcast + forecast. CoastWatch ERDDAP RTOFS
 //     datasets currently 404, so we subset via HYCOM THREDDS NCSS (same model).
-//   • Bathymetry: NOAA CUDEM 1/9 arc-sec (US coastal, BlueTopo sources) with
-//     ETOPO 1-arcmin global fallback — proxied here for bite-map depth scoring.
+//   • Bathymetry: NOAA CUDEM / BlueTopo mosaic (every US coast) with ETOPO
+//     1-arcmin global fallback when that mosaic returns nothing.
 //
 // NOTE: dataset IDs and station lists are configured below and WILL need
 // verification/tuning against live ERDDAP when you deploy (dataset IDs change,
@@ -87,21 +88,6 @@ const OPEN_METEO_ELEVATION = "https://api.open-meteo.com/v1/elevation";
 const ETOPO_ERDDAP = Deno.env.get("ETOPO_ERDDAP") ?? "https://coastwatch.pfeg.noaa.gov/erddap/griddap";
 const ETOPO_DATASET = Deno.env.get("ETOPO_DATASET") ?? "etopo180";
 const ETOPO_STEP_DEG = 1 / 60; // native ~1 arcmin grid step
-// CUDEM / BlueTopo — NOAA NCEI 1/9 arc-second (~3 m) US coastal bathymetry.
-// CoastWatch ERDDAP has no global BlueTopo grid; we subset CUDEM tiles via NCSS.
-const CUDEM_NCSS = Deno.env.get("CUDEM_NCSS")
-  ?? "https://www.ngdc.noaa.gov/thredds/ncss/grid/tiles/tiled_19as";
-const CUDEM_TILE_DEG = 0.25;
-const CUDEM_NATIVE_STEP = 1 / (9 * 3600); // 1/9 arc-second in degrees
-const CUDEM_VERSIONS = ["2019v2", "2019v1", "2018v1"];
-const CUDEM_BOUNDS = { latMin: 23, latMax: 52, lngMin: -127, lngMax: -65 };
-// NCEI CUDEM NCSS can hang for 20s+ per tile when overloaded. Without a wall
-// clock the bite-map predictinputs call waits on hundreds of tiles and the whole
-// edge function times out — SST/wind never reach the client and depths fall back
-// to coarse ETOPO or the static shelf model.
-const CUDEM_TILE_TIMEOUT_MS = Number(Deno.env.get("CUDEM_TILE_TIMEOUT_MS") ?? "8000");
-const CUDEM_WALL_MS = Number(Deno.env.get("CUDEM_WALL_MS") ?? "12000");
-const CUDEM_MAX_TILES = Number(Deno.env.get("CUDEM_MAX_TILES") ?? "64");
 // NOAA CoastWatch BLENDED altimetry (multi-mission NRT, ~1-2 day latency).
 // Two sibling datasets on the same 0.25° grid: sla (m) from the SSH product,
 // u_current/v_current (m/s geostrophic) from the currents product. The older
@@ -1659,145 +1645,11 @@ async function resolveObservedSstGrid(
   return { stepDeg: mur.stepDeg, rows: [] as number[][], source: SST_DATASET };
 }
 
-// ETOPO bathymetry grid for a box → { stepDeg, rows:[[lat,lng,depthM],…] }.
-// US coastal boxes prefer NOAA CUDEM (1/9 arc-sec, BlueTopo source data); ETOPO
-// fills gaps offshore, outside CUDEM coverage, or when a tile is unavailable.
+// Bathymetry grid for a box → { stepDeg, rows:[[lat,lng,depthM],…] }.
+// US coastal boxes use the CUDEM / BlueTopo mosaic. ETOPO is the backup when
+// that mosaic returns nothing.
 type BathyOut = { stepDeg: number; rows: unknown[][]; source?: string };
 
-function bboxOverlapsCudem(latMin: number, latMax: number, lngMin: number, lngMax: number) {
-  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
-  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
-  return a1 >= CUDEM_BOUNDS.latMin && a0 <= CUDEM_BOUNDS.latMax
-    && o1 >= CUDEM_BOUNDS.lngMin && o0 <= CUDEM_BOUNDS.lngMax;
-}
-
-function cudemTileName(latSouth: number, lngWest: number) {
-  const latTag = Math.round((latSouth + CUDEM_TILE_DEG) * 100);
-  const nLat = Math.floor(latTag / 100);
-  const xLat = latTag % 100;
-  const lngTag = Math.round(Math.abs(lngWest) * 100);
-  const wLng = Math.floor(lngTag / 100);
-  const xLng = lngTag % 100;
-  return `n${nLat}x${String(xLat).padStart(2, "0")}_w${wLng}x${String(xLng).padStart(2, "0")}`;
-}
-
-function cudemTilesForBBox(latMin: number, latMax: number, lngMin: number, lngMax: number) {
-  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
-  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
-  const tiles: { id: string; latSouth: number; lngWest: number }[] = [];
-  const latStart = Math.floor(a0 / CUDEM_TILE_DEG) * CUDEM_TILE_DEG;
-  const lngStart = Math.floor(o0 / CUDEM_TILE_DEG) * CUDEM_TILE_DEG;
-  for (let la = latStart; la < a1; la += CUDEM_TILE_DEG) {
-    for (let ln = lngStart; ln < o1; ln += CUDEM_TILE_DEG) {
-      tiles.push({ id: cudemTileName(la, ln), latSouth: la, lngWest: ln });
-    }
-  }
-  return tiles;
-}
-
-function parseCudemNcss(buf: ArrayBuffer): { lats: number[]; lons: number[]; z: number[] } | null {
-  try {
-    const reader = new NetCDFReader(new Uint8Array(buf));
-    const lats = reader.getDataVariable("lat") as number[];
-    const lons = reader.getDataVariable("lon") as number[];
-    const zRaw = reader.getDataVariable("z") as number[];
-    if (!lats?.length || !lons?.length || !zRaw?.length) return null;
-    return { lats, lons, z: zRaw };
-  } catch {
-    return null;
-  }
-}
-
-const cudemTileCache = new Map<string, { atMs: number; p: Promise<unknown[][]> }>();
-async function fetchCudemTileRows(
-  tile: { id: string; latSouth: number; lngWest: number },
-  latMin: number, latMax: number, lngMin: number, lngMax: number,
-  horizStride: number,
-  deadlineMs = 0,
-): Promise<unknown[][]> {
-  const a0 = Math.max(latMin, tile.latSouth);
-  const a1 = Math.min(latMax, tile.latSouth + CUDEM_TILE_DEG);
-  const o0 = Math.max(lngMin, tile.lngWest);
-  const o1 = Math.min(lngMax, tile.lngWest + CUDEM_TILE_DEG);
-  if (a0 >= a1 || o0 >= o1) return [];
-  if (deadlineMs > 0 && Date.now() >= deadlineMs) return [];
-  const key = `${tile.id},${a0.toFixed(3)},${a1.toFixed(3)},${o0.toFixed(3)},${o1.toFixed(3)},${horizStride}`;
-  const now = Date.now();
-  const hit = cudemTileCache.get(key);
-  if (hit && now - hit.atMs < 7 * 24 * 3600 * 1000) return hit.p;
-
-  const p = (async () => {
-    const q = `var=z&north=${a1}&south=${a0}&west=${o0}&east=${o1}`
-      + `&horizStride=${horizStride}&accept=netcdf`;
-    for (const ver of CUDEM_VERSIONS) {
-      if (deadlineMs > 0 && Date.now() >= deadlineMs) return [];
-      const url = `${CUDEM_NCSS}/ncei19_${tile.id}_${ver}.nc?${q}`;
-      try {
-        const r = await fetch(url, { signal: AbortSignal.timeout(CUDEM_TILE_TIMEOUT_MS), headers: ERDDAP_HEADERS });
-        if (!r.ok) continue;
-        const parsed = parseCudemNcss(await r.arrayBuffer());
-        if (!parsed) continue;
-        const rows: unknown[][] = [];
-        for (let i = 0; i < parsed.lats.length; i++) {
-          for (let j = 0; j < parsed.lons.length; j++) {
-            const z = num(parsed.z[i * parsed.lons.length + j]);
-            if (z == null) continue;
-            const depth = z < 0 ? Math.round(-z * 10) / 10 : 0;
-            rows.push([
-              Math.round(parsed.lats[i] * 10000) / 10000,
-              Math.round(parsed.lons[j] * 10000) / 10000,
-              depth,
-            ]);
-          }
-        }
-        if (rows.length) return rows;
-      } catch { /* try next version */ }
-    }
-    return [];
-  })();
-  cudemTileCache.set(key, { atMs: now, p });
-  return p;
-}
-
-async function fetchCudemRows(latMin: number, latMax: number, lngMin: number, lngMax: number): Promise<BathyOut | null> {
-  if (!bboxOverlapsCudem(latMin, latMax, lngMin, lngMax)) return null;
-  const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
-  const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
-  const CAP = 12000;
-  const TARGETS = [0.005, 0.01, 0.02, 0.03, 0.05, 0.08];
-  let targetStep = TARGETS[TARGETS.length - 1];
-  for (const s of TARGETS) {
-    const n = (Math.floor((a1 - a0) / s) + 1) * (Math.floor((o1 - o0) / s) + 1);
-    if (n <= CAP) { targetStep = s; break; }
-  }
-  const horizStride = Math.max(1, Math.round(targetStep / CUDEM_NATIVE_STEP));
-  const tiles = cudemTilesForBBox(a0, a1, o0, o1);
-  // Large port-range boxes can span 200+ tiles. When NCEI is slow that blocks
-  // the entire predictinputs response; ETOPO (sub-second) is good enough to score.
-  if (tiles.length > CUDEM_MAX_TILES) return null;
-  // Coastal predict boxes fan out into dozens–hundreds of 0.25° CUDEM tiles. At
-  // concurrency 4 they drained in slow serial batches (the top cold-load cost
-  // for both the bite map and the currents coast mask). 10 keeps us well within
-  // NCEI's tolerance while cutting wall time; tiles are cached 7 days after.
-  const cudemConc = Number(Deno.env.get("CUDEM_CONCURRENCY") ?? "10");
-  const deadlineMs = Date.now() + CUDEM_WALL_MS;
-  const parts = await pool(tiles, cudemConc, (t) => {
-    if (Date.now() >= deadlineMs) return Promise.resolve([]);
-    return fetchCudemTileRows(t, a0, a1, o0, o1, horizStride, deadlineMs);
-  });
-  const byKey = new Map<string, unknown[]>();
-  for (const part of parts) {
-    for (const row of part) {
-      byKey.set(`${(row[0] as number).toFixed(4)},${(row[1] as number).toFixed(4)}`, row);
-    }
-  }
-  if (!byKey.size) return null;
-  return {
-    stepDeg: Math.round(horizStride * CUDEM_NATIVE_STEP * 10000) / 10000,
-    rows: [...byKey.values()],
-    source: "CUDEM",
-  };
-}
 
 async function fetchEtopoRows(latMin: number, latMax: number, lngMin: number, lngMax: number): Promise<BathyOut> {
   const a0 = Math.max(-89, Math.min(latMin, latMax));
@@ -1827,27 +1679,14 @@ async function fetchEtopoRows(latMin: number, latMax: number, lngMin: number, ln
 }
 
 async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, lngMax: number): Promise<BathyOut> {
-  // Never block bathy on a hung CUDEM pull — ETOPO always runs in parallel and
-  // returns in ~1s even when NCEI NCSS is down.
-  const etopoP = fetchEtopoRows(latMin, latMax, lngMin, lngMax);
-  const cudemP = fetchCudemRows(latMin, latMax, lngMin, lngMax).catch(() => null);
-  const [cudem, etopo] = await Promise.all([cudemP, etopoP]);
-  // Open-Meteo elevation is a land DEM (0 over the ocean). It is not bathymetry
-  // and was painting shelf depths onto the beach. Empty ETOPO lets the client
-  // shelf model shoal correctly until CUDEM/ETOPO are reachable again.
-  if (!cudem?.rows?.length) return etopo;
-  const byKey = new Map<string, unknown[]>();
-  for (const row of etopo.rows) {
-    byKey.set(`${(row[0] as number).toFixed(3)},${(row[1] as number).toFixed(3)}`, row);
-  }
-  for (const row of cudem.rows) {
-    byKey.set(`${(row[0] as number).toFixed(4)},${(row[1] as number).toFixed(4)}`, row);
-  }
-  return {
-    stepDeg: cudem.stepDeg,
-    rows: [...byKey.values()],
-    source: "CUDEM+ETOPO",
-  };
+  // The coastal mosaic is the surveyed depth. Return it as soon as it has
+  // rows — do not hold the bite map or a chart click for ETOPO, which lives
+  // on a host that can sit until its 28s timeout. ETOPO is only the backup
+  // when the mosaic has nothing (outside US coverage, or the mosaic is down).
+  // Open-Meteo elevation is a land DEM (0 over the ocean) and is not used.
+  const cudem = await fetchDemMosaicRows(latMin, latMax, lngMin, lngMax).catch(() => null);
+  if (cudem?.rows?.length) return cudem;
+  return fetchEtopoRows(latMin, latMax, lngMin, lngMax);
 }
 
 // Chlorophyll spatial grid for a box — freshest real value per cell.
