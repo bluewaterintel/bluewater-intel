@@ -4801,10 +4801,13 @@ function gulfShoreLat(lng){
   if(lng < -89.0) return 29.00;
   if(lng < -88.4) return 30.25;
   if(lng < -87.8) return 30.20;
-  if(lng < -87.4) return 30.25;
-  if(lng < -86.8) return 30.30;
-  if(lng < -86.0) return 30.35;
-  if(lng < -85.4) return 30.10;
+  if(lng < -87.4) return 30.28;
+  if(lng < -87.0) return 30.34;
+  // Destin / Santa Rosa Island. The old 30.30–30.35 shore sat 8–12 nm south
+  // of the beach, so the shelf model treated 80 ft reef water as the surf.
+  if(lng < -86.2) return 30.39;
+  if(lng < -85.7) return 30.26;
+  if(lng < -85.4) return 30.12;
   if(lng < -84.5) return 29.65;
   if(lng < -83.8) return 29.85;
   if(lng < -83.2) return 29.40;
@@ -5102,10 +5105,16 @@ const MAIN_COAST = [
   [28.00, -82.75], [28.30, -82.70], [28.65, -82.75], [28.90, -82.80],
   [29.20, -82.90], [29.55, -83.20], [29.80, -83.55], [29.95, -84.00],
   // ── FL Panhandle (Apalachicola west) ──
-  [29.85, -84.50], [29.75, -84.85], [29.70, -85.30], [30.00, -85.60],
-  [30.15, -86.00], [30.20, -86.50], [30.25, -86.85], [30.30, -87.25],
+  [29.85, -84.50], [29.75, -84.85], [29.70, -85.30], [30.09, -85.60],
+  // Panama City Beach → Destin → Navarre. These vertices used to sit
+  // 8–12 nm south of Santa Rosa Island (30.20 at Destin vs a 30.40 beach),
+  // so the heat map treated the 70–100 ft reef band as land and started
+  // only once the water was already well offshore.
+  [30.16, -85.80], [30.26, -86.00], [30.32, -86.20], [30.36, -86.40],
+  [30.38, -86.55], [30.38, -86.75], [30.36, -87.00], [30.31, -87.25],
+  [30.27, -87.50],
   // ── AL coast ──
-  [30.20, -87.70], [30.35, -87.95], [30.40, -88.20],
+  [30.23, -87.70], [30.35, -87.95], [30.40, -88.20],
   // ── MS coast ──
   [30.30, -88.60], [30.25, -89.00], [30.20, -89.40], [30.20, -89.80],
   // ── LA coast (Mississippi delta, Barataria, Atchafalaya, Vermilion) ──
