@@ -3083,7 +3083,7 @@ function _buildBathyGridFromRows(data){
     const j = Math.round((ln - mnLn) / step);
     if(i >= 0 && i < nLat && j >= 0 && j < nLng) depth[i * nLng + j] = d;
   }
-  return { step, minLat: mnLa, minLng: mnLn, nLat, nLng, depth };
+  return { step, minLat: mnLa, minLng: mnLn, nLat, nLng, depth, source: data.source || null };
 }
 
 function depthAtFromGrid(g, lat, lng){
@@ -3103,6 +3103,9 @@ function depthAtFromGrid(g, lat, lng){
   const jN = Math.max(0, Math.min(g.nLng - 1, Math.round(fj)));
   const nearest = cell(iN, jN);
   if(nearest === 0) return 0;
+  // A coarse cell that touches land must not bilinear-average with the offshore
+  // corner. That was reading ~80 ft on the beach at Brunswick.
+  if(nearest != null && nearest < 12) return nearest;
 
   // In/near water: bilinear among finite cells (including 0) so nearshore depth
   // can shoal naturally. Missing (NaN) cells are skipped.
@@ -3392,7 +3395,7 @@ function parseWaypointDepthMeters(depthStr){
 // ETOPO grids often snap bay-mouth hotspots onto adjacent shoals (e.g. Chesapeake
 // Light Tower reading ~20 ft instead of the real ~40–50 ft). When the cell is
 // within ~1.5 nm of a known pin with depth metadata, that pin is authoritative.
-function knownStructureDepthM(lat, lng, maxNm = 1.5){
+function knownStructureDepthM(lat, lng, maxNm = 0.4){
   if(typeof WP_PUBLIC === "undefined" || !Array.isArray(WP_PUBLIC)) return null;
   let bestM = null, bestNm = maxNm;
   for(const w of WP_PUBLIC){
@@ -3415,8 +3418,14 @@ function knownStructureDepthM(lat, lng, maxNm = 1.5){
 // Near curated structure pins, override a grid sample that snapped too shallow —
 // but never invent water depth on land (that put #1 cobia on Norfolk).
 function predictDepth(lat, lng){
-  const real = depthAtFromGrid(PREDICT_BATHY_GRID, lat, lng) ?? realDepthAt(lat, lng);
+  const g = PREDICT_BATHY_GRID;
+  // Land-elevation fallbacks are not ocean depth. Ignore them.
+  const grid = (g && g.source === "open-meteo-elevation") ? null : g;
+  const real = depthAtFromGrid(grid, lat, lng) ?? realDepthAt(lat, lng);
   if(real != null && real <= 0) return real;
+  const shelf = (typeof seaDepth === "function") ? seaDepth(lat, lng) : null;
+  const coarse = grid && grid.step >= 0.04;
+  if(coarse && shelf > 0 && shelf < 15 && real != null && real > shelf * 2) return shelf;
   // CUDEM can report positive depth on narrow beaches/peninsulas; coastline wins.
   if(typeof isOnLand === "function" && isOnLand(lat, lng) && !isFishableBaySound(lat, lng)){
     return seaDepth(lat, lng);
@@ -3774,11 +3783,21 @@ function scoreCell(lat, lng, speciesId){
     chlorObj = { value: OCEAN_FIELD.medianChlor, observedAtMs: OCEAN_FIELD.freshestChlorMs, _regional: true };
   }
   chlorObj = chlorObj ?? { value: null, observedAtMs: null };
-  const windObj  = ocean?.wind  ?? { value: null, dir: null, observedAtMs: null };
+  // Forecast wind/pressure are valid at the selected hour (Now / +12 / +24).
+  // Judge them against that hour so a GFS stand-in is not dropped as "too old"
+  // just because the buoy it replaced stopped reporting.
+  const alignForecastWx = (obj) => {
+    if(!obj || obj.value == null) return obj;
+    if(obj._forecast || (typeof FORECAST_HOUR_OFFSET === "number" && FORECAST_HOUR_OFFSET > 0)){
+      return { ...obj, observedAtMs: (typeof forecastTimeMs === "function") ? forecastTimeMs() : Date.now() };
+    }
+    return obj;
+  };
+  const windObj  = alignForecastWx(ocean?.wind) ?? { value: null, dir: null, observedAtMs: null };
   let waveObj = ocean?.waves;
   if(!waveObj || waveObj.value == null) waveObj = nearestFieldSample(lat, lng, "waves");
-  waveObj = waveObj ?? { value: null, observedAtMs: null };
-  const presObj  = ocean?.pressure ?? { value: null, observedAtMs: null };
+  waveObj = alignForecastWx(waveObj) ?? { value: null, observedAtMs: null };
+  const presObj  = alignForecastWx(ocean?.pressure) ?? { value: null, observedAtMs: null };
   const tideObj  = ocean?.tide  ?? { value: null, observedAtMs: null };
 
   const sst   = sstObj.value;
