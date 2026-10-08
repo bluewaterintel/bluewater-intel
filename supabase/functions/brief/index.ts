@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
   // augmented with the server-computed port→spot distance/heading for grounding.
   const payloadForModel = { ...body, computedPortToSpot: bd, runPlan };
 
-  const system = `You are a veteran offshore + inshore charter captain writing a sharp, practical pre-trip brief for another captain who is PAYING for this. You get structured JSON for one spot (or a runPlan[] of spots), the departure port, the day to fish, and target species. Ground the brief ONLY in the data given, but USE EVERY REAL VALUE. Scope everything to fishDayLabel/fishDate. Be concise — a captain reads this on a phone at the dock.
+  const system = `You are a veteran offshore + inshore charter captain writing a sharp, practical pre-trip brief for another captain who is PAYING for this. You get structured JSON for one spot (or a runPlan[] of spots), the departure port, the day to fish, and target species. Ground the brief ONLY in the data given, but USE EVERY REAL VALUE. Scope everything to fishDayLabel/fishDate. The conditions{} block (wind, seas, air) is already aligned to forecastLeadHours / conditionsTimeLabel — treat it as the weather AT TRIP TIME, not necessarily "right now". Be concise — a captain reads this on a phone at the dock.
 
 RULES:
 - Read dataAvailability{} first, then build around what's present. Lead each section with the real numbers that matter ONCE, then translate them into what to look for and where to fish.

@@ -2385,6 +2385,86 @@ function forecastHourForBriefDay(dayOffset){
   return (dayOffset >= 1) ? 24 : 0;
 }
 
+// Captain's Brief must match the Bite Map time toggle (Now / +12h / +24h) AND the
+// brief day picker (Today / Tomorrow). Previously wind/seas came from live buoys
+// even when the captain had +12h selected — the model then quoted 20 kt "now"
+// instead of the 12 kt forecast at trip time.
+function briefForecastLeadHours(){
+  const bite = (typeof FORECAST_HOUR_OFFSET === "number") ? (FORECAST_HOUR_OFFSET || 0) : 0;
+  const day = (typeof briefDayOffset === "number" && briefDayOffset >= 1)
+    ? Math.round(briefDayOffset) * 24 : 0;
+  return Math.max(0, Math.min(96, day + bite));
+}
+
+function briefForecastLeadForBiteScore(){
+  return normalizeForecastHour(briefForecastLeadHours());
+}
+
+function briefTargetTimeMs(){
+  return Date.now() + briefForecastLeadHours() * 3600000;
+}
+
+function forecastSlotNearest(slots, targetMs){
+  if(!Array.isArray(slots) || !slots.length || !isFinite(targetMs)) return null;
+  let best = null, bestDt = Infinity;
+  for(const s of slots){
+    const t = Date.parse(s.time);
+    if(!isFinite(t)) continue;
+    const dt = Math.abs(t - targetMs);
+    if(dt < bestDt){ bestDt = dt; best = s; }
+  }
+  return best;
+}
+
+function forecastDayAirHiLo(slots, dayOffset){
+  const tz = displayTimezone();
+  const targetKey = calendarDayKeyInTz(Date.now() + (dayOffset || 0) * 86400000, tz);
+  let airHiF = null, airLoF = null;
+  for(const s of slots){
+    const t = Date.parse(s.time);
+    if(!isFinite(t) || calendarDayKeyInTz(t, tz) !== targetKey) continue;
+    if(s.airF == null) continue;
+    if(airHiF == null || s.airF > airHiF) airHiF = s.airF;
+    if(airLoF == null || s.airF < airLoF) airLoF = s.airF;
+  }
+  return { airHiF, airLoF };
+}
+
+function applyForecastSlotToConditions(cond, slot, forceForecast){
+  if(!slot) return cond;
+  cond = cond || {};
+  if(slot.windKt != null) cond.windKt = slot.windKt;
+  if(slot.windDir != null){
+    cond.windDir = (typeof bwiCompass16 === "function") ? bwiCompass16(slot.windDir) : slot.windDir;
+  }
+  if(slot.gustKt != null) cond.windGustKt = slot.gustKt;
+  if(slot.waveFt != null) cond.waveHtFt = slot.waveFt;
+  if(slot.wavePer != null) cond.wavePeriodS = slot.wavePer;
+  if(slot.sstF != null && (forceForecast || cond.waterTempF == null)){
+    cond.waterTempF = slot.sstF;
+    cond.waterTempSource = "Open-Meteo marine forecast";
+  }
+  if(slot.wxCode != null && typeof bwiWeatherIcon === "function"){
+    const wx = bwiWeatherIcon(slot.wxCode, slot.precip);
+    if(wx && wx.label) cond.sky = wx.label;
+  }
+  if(slot.precip != null) cond.precipChancePct = slot.precip;
+  if(slot.airF != null && (forceForecast || cond.airTempF == null)) cond.airTempF = slot.airF;
+  if(forceForecast){
+    cond.source = "Open-Meteo forecast";
+    cond.buoy = null;
+  }
+  return cond;
+}
+
+function briefConditionsTimeLabel(){
+  const h = briefForecastLeadHours();
+  if(h <= 0) return "current conditions";
+  const ms = briefTargetTimeMs();
+  const tz = displayTimezone();
+  return `forecast for ${formatWeekdayInTz(ms, tz)} ${formatTimeInTz(ms, tz)} (+${h}h from now)`;
+}
+
 // Run a callback with FORECAST_HOUR_OFFSET temporarily set; restores on exit.
 function withForecastHour(hours, fn){
   const prev = FORECAST_HOUR_OFFSET;
@@ -6749,10 +6829,7 @@ function briefEnrichSpeciesSpot(entry, portObj){
 
 function briefPickSpeciesAuto(lat, lng, allowed, limit = 3){
   if(typeof scoreCell !== "function" || !allowed || !allowed.length) return { picks: [], candidates: [] };
-  const hour = (briefDayOffset >= 1)
-    ? forecastHourForBriefDay(briefDayOffset)
-    : (typeof FORECAST_HOUR_OFFSET === "number" ? FORECAST_HOUR_OFFSET : 0);
-  return withForecastHour(hour, () => {
+  return withForecastHour(briefForecastLeadForBiteScore(), () => {
     const locations = (typeof briefPortSearchLocations === "function" && activePort && PORTS[activePort])
       ? briefPortSearchLocations(PORTS[activePort], lat, lng)
       : briefPickScoreLocations(lat, lng);
@@ -19009,10 +19086,11 @@ async function runBrief(){
   //    score per selected species via scoreCell, and depth/structure context.
   //    Everything is best-effort: any field we can't get is sent as null and the
   //    prompt is instructed to omit what's missing rather than invent it.
+  const briefLeadH = briefForecastLeadHours();
   let cond = null, tide = null;
   try {
     if(typeof BW_OCEAN !== "undefined" && BW_OCEAN.fetchOcean){
-      const o = await BW_OCEAN.fetchOcean(pinLL.lat, pinLL.lng);
+      const o = await BW_OCEAN.fetchOcean(pinLL.lat, pinLL.lng, briefLeadH);
       if(o){
         const waterF = (o.waterTemp?.value != null) ? o.waterTemp.value : o.sst?.value;
         cond = {
@@ -19049,50 +19127,34 @@ async function runBrief(){
     }
   } catch(e){ /* conditions are best-effort */ }
 
-  // Overlay the FORECAST for the day the captain plans to fish. BW_OCEAN above
-  // gives "now" (buoy + model), but the brief is scoped to fishDate, and we want
-  // the forecasted high/low air temp for that day. fetchForecast() returns a
-  // per-day forecast (air hi/lo, wind, gusts, seas) indexed by day offset, so we
-  // fill the hi/lo for the fish date and, for FUTURE days, swap the live wind/seas
-  // for that day's forecast. Best-effort — any failure just leaves nulls.
+  // Open-Meteo 3-hour slots: air hi/lo for the fish day, and — when the trip is
+  // not "now" — wind/seas at the exact target time (Bite Map +12h/+24h or Tomorrow).
   try {
     if(typeof fetchForecast === "function"){
-      const days = await fetchForecast(pinLL.lat, pinLL.lng);
-      const fd = Array.isArray(days) ? days[briefDayOffset] : null;
-      if(fd){
+      const slots = await fetchForecast(pinLL.lat, pinLL.lng);
+      if(Array.isArray(slots) && slots.length){
+        const dayAir = forecastDayAirHiLo(slots, briefDayOffset);
         cond = cond || {};
-        if(fd.airHiF != null) cond.airTempHiF = fd.airHiF;
-        if(fd.airLoF != null) cond.airTempLoF = fd.airLoF;
-        // Open-Meteo weather code → a plain-language sky summary for the brief.
-        if(fd.wxCode != null && typeof bwiWeatherIcon === "function"){
-          const wx = bwiWeatherIcon(fd.wxCode, fd.precip);
-          if(wx && wx.label) cond.sky = wx.label;
-        }
-        if(fd.precip != null) cond.precipChancePct = fd.precip;
-        if(briefDayOffset > 0){
-          // Future day → the live buoy reading isn't for that day; use the forecast
-          // as the authoritative source for the whole conditions block.
-          if(fd.windKt  != null) cond.windKt      = fd.windKt;
-          if(fd.windDir != null) cond.windDir     = (typeof bwiCompass16==="function"?bwiCompass16(fd.windDir):fd.windDir);
-          if(fd.gustKt  != null) cond.windGustKt  = fd.gustKt;
-          if(fd.waveFt  != null) cond.waveHtFt    = fd.waveFt;
-          if(fd.wavePer != null) cond.wavePeriodS = fd.wavePer;
-          if(fd.sstF    != null && cond.waterTempF == null){ cond.waterTempF = fd.sstF; cond.waterTempSource = "Open-Meteo marine forecast"; }
-          cond.source = "Open-Meteo forecast";
-        } else {
-          // Today → keep the live buoy values, but fill ANY gap from the forecast.
-          // Previously wind speed/direction were never gap-filled on "today", so an
-          // offshore spot with no nearby buoy showed empty wind even though a real
-          // forecast was available — the exact failure captains reported.
-          if(cond.windKt      == null && fd.windKt  != null) cond.windKt      = fd.windKt;
-          if(cond.windDir     == null && fd.windDir != null) cond.windDir     = (typeof bwiCompass16==="function"?bwiCompass16(fd.windDir):fd.windDir);
-          if(cond.windGustKt  == null && fd.gustKt  != null) cond.windGustKt  = fd.gustKt;
-          if(cond.waveHtFt    == null && fd.waveFt  != null) cond.waveHtFt    = fd.waveFt;
+        if(dayAir.airHiF != null) cond.airTempHiF = dayAir.airHiF;
+        if(dayAir.airLoF != null) cond.airTempLoF = dayAir.airLoF;
+        const fd = forecastSlotNearest(slots, briefTargetTimeMs());
+        const useForecastTime = briefLeadH > 0;
+        cond = applyForecastSlotToConditions(cond, fd, useForecastTime);
+        if(!useForecastTime && fd){
+          if(cond.windKt == null && fd.windKt != null) cond.windKt = fd.windKt;
+          if(cond.windDir == null && fd.windDir != null){
+            cond.windDir = (typeof bwiCompass16 === "function") ? bwiCompass16(fd.windDir) : fd.windDir;
+          }
+          if(cond.windGustKt == null && fd.gustKt != null) cond.windGustKt = fd.gustKt;
+          if(cond.waveHtFt == null && fd.waveFt != null) cond.waveHtFt = fd.waveFt;
           if(cond.wavePeriodS == null && fd.wavePer != null) cond.wavePeriodS = fd.wavePer;
-          if(cond.waterTempF  == null && fd.sstF    != null){ cond.waterTempF = fd.sstF; cond.waterTempSource = "Open-Meteo marine forecast"; }
-          // If the live block had no buoy AND the wind now comes from the model,
-          // reflect that in the source label so the brief attributes it honestly.
-          if(!cond.buoy && cond.windKt != null && (cond.source == null || cond.source === "forecast model")) cond.source = "forecast model";
+          if(cond.waterTempF == null && fd.sstF != null){
+            cond.waterTempF = fd.sstF;
+            cond.waterTempSource = "Open-Meteo marine forecast";
+          }
+          if(!cond.buoy && cond.windKt != null && (cond.source == null || cond.source === "forecast model")){
+            cond.source = "forecast model";
+          }
         }
       }
     }
@@ -19160,7 +19222,7 @@ async function runBrief(){
   // (ocean fetch only returns state, not nextHigh/nextLow).
   if(!tide && portObj && typeof BW_OCEAN !== "undefined" && BW_OCEAN.fetchOcean){
     try {
-      const op = await BW_OCEAN.fetchOcean(portObj.lat, portObj.lng);
+      const op = await BW_OCEAN.fetchOcean(portObj.lat, portObj.lng, briefLeadH);
       if(op && op.tide){
         tide = {
           state: op.tide.state || null,
@@ -19205,7 +19267,7 @@ async function runBrief(){
   let scored = [];
   let runPlan = null;
   let speciesLocationsDiverge = false;
-  withForecastHour(forecastHourForBriefDay(briefDayOffset), () => {
+  withForecastHour(briefForecastLeadForBiteScore(), () => {
     try {
       if(typeof scoreCell === "function"){
         const locations = (typeof briefPortSearchLocations === "function")
@@ -19384,6 +19446,8 @@ async function runBrief(){
     fishDayOffset: briefDayOffset,                       // 0=today, 1=tomorrow…
     fishDate: fishDate.toISOString().slice(0,10),         // YYYY-MM-DD
     fishDayLabel: briefDayLabel(briefDayOffset),
+    forecastLeadHours: briefLeadH,
+    conditionsTimeLabel: briefConditionsTimeLabel(),
     conditions: cond,
     tide,
     biteScores: scored,
