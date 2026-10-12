@@ -4,7 +4,7 @@ The app loads transparent contour tiles from Supabase Storage (public bucket `ch
 
 | Product | Storage prefix | App usage |
 |---------|----------------|-----------|
-| Transparent contours | `contours/v1/` | **Layers → Depth Contours** (any basemap) |
+| Transparent contours | `contours/v3/` (labels v3: larger fathom type) | **Layers → Depth Contours** (any basemap) |
 
 Tile URLs are derived from `SUPABASE_URL` in `.env` (see `bw-config.js` → `contoursTilesBaseUrl`).
 
@@ -32,4 +32,6 @@ Full pipeline docs: [`chart-basemap/README.md`](../chart-basemap/README.md) and 
 
 ## Version bumps
 
-When re-rendering tiles, bump `contours/v1` → `contours/v2` (and update `contoursTilesVersion` in `scripts/generate-bw-config.mjs`). Tiles are cached immutable — never overwrite in place.
+When re-rendering tiles, bump the storage prefix (e.g. `contours/v3`) and update `contoursTilesVersion` in `scripts/generate-bw-config.mjs`, then raise `CONTOURS_TILES_REVISION` in `bw-core.js` so clients refetch. Tiles are cached immutable — never overwrite in place.
+
+**v3 (Oct 2026):** Larger contour label font in `chart-basemap/render_tiles.py`. Upload with `node scripts/upload-chart-tiles.mjs --src chart-basemap/tiles_overlay --prefix contours/v3` after `make overlay`.

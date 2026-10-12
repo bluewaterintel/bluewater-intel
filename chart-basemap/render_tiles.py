@@ -407,21 +407,21 @@ def render_tile_merc(Xm, Ym, elev_m, z, xt, yt, out_dir, cmap, overlay=False,
         lv = [l for l in cs.levels if l in lbl_levels and l != SHELFBREAK_FM]
         if not lv:
             continue
-        texts = ax.clabel(cs, levels=lv, fmt=fmt_fm, fontsize=5.4,
+        texts = ax.clabel(cs, levels=lv, fmt=fmt_fm, fontsize=7.2,
                           inline=True, inline_spacing=2)
         for t in texts:
             t.set_color(STYLE["label_color"])
             t.set_path_effects([
                 matplotlib.patheffects.withStroke(
-                    linewidth=1.6, foreground=STYLE["label_halo"])])
+                    linewidth=2.0, foreground=STYLE["label_halo"])])
     # Shelf-break label on the longest offshore segment — inline clabel erases the curve.
     if shelf_segs and SHELFBREAK_FM in lbl_levels:
         longest = max(shelf_segs, key=lambda s: len(s))
         mid = longest[len(longest) // 2]
-        ax.text(mid[0], mid[1], fmt_fm(SHELFBREAK_FM), fontsize=5.8,
+        ax.text(mid[0], mid[1], fmt_fm(SHELFBREAK_FM), fontsize=7.8,
                 color=STYLE["label_color"], ha="center", va="center", zorder=11,
                 path_effects=[matplotlib.patheffects.withStroke(
-                    linewidth=1.6, foreground=STYLE["label_halo"])])
+                    linewidth=2.0, foreground=STYLE["label_halo"])])
 
     d = os.path.join(out_dir, str(z), str(xt))
     os.makedirs(d, exist_ok=True)

@@ -93,7 +93,8 @@ window.BW_DATA_CONFIG = {
   nativeVersionCode: ${androidVer.code || 0},
   nativeVersionName: ${JSON.stringify(androidVer.name || '')},` : ''}
   contoursTilesBaseUrl: ${JSON.stringify(url && !url.includes('YOURPROJECT') ? `${url.replace(/\/$/, '')}/storage/v1/object/public/chart-tiles` : '')},
-  contoursTilesVersion: 'v2',${webBundle ? `
+  contoursTilesVersion: 'v3',
+  contoursTilesFallbackVersion: 'v2',${webBundle ? `
   webBundle: ${JSON.stringify(webBundle)},` : ''}
 };
 `;

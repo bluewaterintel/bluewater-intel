@@ -476,7 +476,9 @@ async function wpFetchCharted(force){
         type: WP_CODE_TO_PANEL_TYPE[r.type_code] || "private",
         lat: r.lat, lng: r.lng,
         region: port,
-        desc: nm != null ? `${nm.toFixed(1)} nm from ${port}` : "",
+        desc: nm != null
+          ? ((typeof fmtDist === "function") ? fmtDist(nm) : (nm.toFixed(1) + " nm")) + " from " + port
+          : "",
         charted: true,
       };
     });
@@ -727,7 +729,7 @@ function mceInitControls(){
   const slider = document.getElementById("mce-range");
   if(slider) slider.value = mceRangeNm;
   const rangeLabel = document.getElementById("mce-range-label");
-  if(rangeLabel) rangeLabel.textContent = mceRangeNm + " nm";
+  if(rangeLabel) rangeLabel.textContent = (typeof fmtDist === "function") ? fmtDist(mceRangeNm) : (mceRangeNm + " nm");
   if(defaultSource === "dataset") mceUpdate();
 }
 
@@ -806,7 +808,7 @@ function wpRangeBar(){
       <label class="wp-range-label" for="wp-panel-radius-select">Distance from port</label>
       <select id="wp-panel-radius-select" class="wp-filter wp-range-select" aria-label="Distance from port"
         onchange="wpOnPanelRadiusChange(Number(this.value))">
-        ${radii.map(nm => `<option value="${nm}" ${radiusNm === nm ? "selected" : ""}>Within ${nm} nm</option>`).join("")}
+        ${radii.map(nm => `<option value="${nm}" ${radiusNm === nm ? "selected" : ""}>Within ${(typeof fmtDist === "function") ? fmtDist(nm) : `${nm} nm`}</option>`).join("")}
       </select>
     </div>`;
 }
@@ -840,7 +842,7 @@ function wpStatsBar(list, label, extra){
       ${extra || ""}
       ${WP_state.typeFilter !== "all" ? `<span>· Type: <b>${wpType(WP_state.typeFilter).name}</b></span>` : ""}
       ${WP_state.regionFilter !== "all" ? `<span>· Port: <b>${WP_state.regionFilter}</b></span>` : ""}
-      ${WP_state.tab === "public" && typeof wpRadiusNm !== "undefined" ? `<span>· Range: <b>${wpRadiusNm} nm</b></span>` : ""}
+      ${WP_state.tab === "public" && typeof wpRadiusNm !== "undefined" ? `<span>· Range: <b>${(typeof fmtDist === "function") ? fmtDist(wpRadiusNm) : (wpRadiusNm + " nm")}</b></span>` : ""}
     </div>
   `;
 }

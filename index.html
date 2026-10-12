@@ -3696,7 +3696,7 @@ body.bw-auth-screen-open .leaflet-container{
       <path d="M2 17 L12 22 L22 17"/>
     </svg>
   </div>
-  <div id="ruler-toggle" onclick="toggleRuler()" title="Measure distance" aria-label="Measure distance (nautical miles)">
+  <div id="ruler-toggle" onclick="toggleRuler()" title="Measure distance" aria-label="Measure distance">
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#e8f0ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M3 17 L17 3 L21 7 L7 21 Z"/>
       <path d="M7 13 L9 15"/>
@@ -3878,7 +3878,7 @@ body.bw-auth-screen-open .leaflet-container{
       <input type="checkbox" id="chk-contours" onchange="toggleLayer('contours')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:linear-gradient(135deg,#1E3A50,#8FD3E4);border:1px solid #8FD3E4;border-radius:2px;width:10px;height:10px"></span>
-        <span>Depth Contours <span style="font-size:8px;color:#9ec5e8;opacity:.7">(fathoms)</span></span>
+        <span>Depth Contours <span id="contour-unit-hint-layers" style="font-size:8px;color:#9ec5e8;opacity:.7">(fathoms)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
@@ -4163,6 +4163,20 @@ body.bw-auth-screen-open .leaflet-container{
       <div class="pref-hint">Loads automatically when you open the app.</div>
 
       <hr class="layers-divider">
+      <div class="layers-section">UNITS</div>
+      <div class="pref-hint" style="margin-bottom:8px">Defaults for distances and depths across the app. Map tap still shows both feet and fathoms.</div>
+      <label class="pref-label" for="pref-depth-unit" style="display:block;font-size:11px;color:#9ec5e8;margin:8px 0 4px">Depth</label>
+      <select id="pref-depth-unit" class="pref-select" onchange="prefSet('depthUnit', this.value)">
+        <option value="feet">Feet</option>
+        <option value="fathoms">Fathoms</option>
+      </select>
+      <label class="pref-label" for="pref-distance-unit" style="display:block;font-size:11px;color:#9ec5e8;margin:12px 0 4px">Distance</label>
+      <select id="pref-distance-unit" class="pref-select" onchange="prefSet('distanceUnit', this.value)">
+        <option value="nm">Nautical miles</option>
+        <option value="sm">Statute miles</option>
+      </select>
+
+      <hr class="layers-divider">
       <div class="layers-section">DEFAULT BASE MAP</div>
       <select id="pref-basemap" class="pref-select" onchange="prefSet('defaultBaseMap', this.value)">
         <option value="satellite">🛰 Satellite</option>
@@ -4176,11 +4190,11 @@ body.bw-auth-screen-open .leaflet-container{
         <input type="checkbox" id="pref-contours" onchange="prefSet('defaultContours', this.checked)">
         <span class="lyr-label">
           <span class="layer-swatch" style="background:linear-gradient(135deg,#1E3A50,#8FD3E4);border:1px solid #8FD3E4;border-radius:2px;width:10px;height:10px"></span>
-          <span>Depth Contours <span style="font-size:8px;color:#9ec5e8;opacity:.7">(fathoms)</span></span>
+          <span>Depth Contours <span id="contour-unit-hint-pref" style="font-size:8px;color:#9ec5e8;opacity:.7">(fathoms)</span></span>
         </span>
         <span class="lyr-toggle"></span>
       </label>
-      <div class="pref-hint">Turns on now and every time you open the app. Zoom in for 5-fathom shelf steps and 20-fathom slope steps.</div>
+      <div class="pref-hint">Turns on now and every time you open the app. Zoom in for 5-fathom shelf steps and 20-fathom slope steps. Contour labels on the chart are in fathoms.</div>
 
       <label class="layer-row" title="Show home-port markers across the chart when the app opens.">
         <input type="checkbox" id="pref-ports" onchange="prefSet('defaultPorts', this.checked)">
@@ -4237,7 +4251,8 @@ body.bw-auth-screen-open .leaflet-container{
 </div>
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
-<script src="bw-core.js?v=20261004a"></script>
+<script src="bw-units.js?v=20261012a"></script>
+<script src="bw-core.js?v=20261012a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay
