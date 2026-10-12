@@ -527,7 +527,7 @@ const CONTOURS_TILES_NATIVE_ZOOM = 13;
 //         bundle at Hatteras Canyon. It was bad data rather than coarse data:
 //         BlueTopo on that same 1 arcmin grid steps a near-constant 0.053 deg,
 //         so smoothing only rounded the corner while leaving the line misplaced.
-const CONTOURS_TILES_REVISION = "r14";
+const CONTOURS_TILES_REVISION = "r15";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
@@ -680,17 +680,13 @@ function buildDepthContoursLayer(){
   const base = getContoursTilesBase();
   if(!base) return null;
   const cfg = window.BW_DATA_CONFIG || {};
-  const primary = cfg.contoursTilesVersion || "v3";
-  const fallback = cfg.contoursTilesFallbackVersion || "v2";
+  const ver = cfg.contoursTilesVersion || "v2";
   const blank = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-  const mk = (ver) => L.tileLayer(`${base}/contours/${ver}/{z}/{x}/{y}.png?${CONTOURS_TILES_REVISION}`, {
+  return L.tileLayer(`${base}/contours/${ver}/{z}/{x}/{y}.png?${CONTOURS_TILES_REVISION}`, {
     minZoom: 5, maxZoom: 16, maxNativeZoom: CONTOURS_TILES_NATIVE_ZOOM, tileSize: 256,
     crossOrigin: "anonymous", opacity: DEPTH_CONTOURS_OPACITY, pane: "bathy",
     attribution: BW_CONTOURS_ATTRIB, errorTileUrl: blank,
   });
-  if(!fallback || fallback === primary) return mk(primary);
-  // v3 (larger labels) stacks over v2 until the new prefix is fully uploaded.
-  return L.layerGroup([mk(fallback), mk(primary)]);
 }
 
 function contoursTilesAvailable(){
