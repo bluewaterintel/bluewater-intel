@@ -527,7 +527,7 @@ const CONTOURS_TILES_NATIVE_ZOOM = 13;
 //         bundle at Hatteras Canyon. It was bad data rather than coarse data:
 //         BlueTopo on that same 1 arcmin grid steps a near-constant 0.053 deg,
 //         so smoothing only rounded the corner while leaving the line misplaced.
-const CONTOURS_TILES_REVISION = "r13";
+const CONTOURS_TILES_REVISION = "r14";
 const DEPTH_CONTOURS_OPACITY = 0.9;
 const BW_CONTOURS_ATTRIB = "Contours © Bluewater Intel · NOAA NCEI ETOPO / NOAA OCS BlueTopo / GEBCO";
 // Ocean Bathymetric hillshade strength (0 = flat color, 1 = strong relief).
@@ -680,13 +680,17 @@ function buildDepthContoursLayer(){
   const base = getContoursTilesBase();
   if(!base) return null;
   const cfg = window.BW_DATA_CONFIG || {};
-  const ver = cfg.contoursTilesVersion || "v1";
+  const primary = cfg.contoursTilesVersion || "v3";
+  const fallback = cfg.contoursTilesFallbackVersion || "v2";
   const blank = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-  return L.tileLayer(`${base}/contours/${ver}/{z}/{x}/{y}.png?${CONTOURS_TILES_REVISION}`, {
+  const mk = (ver) => L.tileLayer(`${base}/contours/${ver}/{z}/{x}/{y}.png?${CONTOURS_TILES_REVISION}`, {
     minZoom: 5, maxZoom: 16, maxNativeZoom: CONTOURS_TILES_NATIVE_ZOOM, tileSize: 256,
     crossOrigin: "anonymous", opacity: DEPTH_CONTOURS_OPACITY, pane: "bathy",
     attribution: BW_CONTOURS_ATTRIB, errorTileUrl: blank,
   });
+  if(!fallback || fallback === primary) return mk(primary);
+  // v3 (larger labels) stacks over v2 until the new prefix is fully uploaded.
+  return L.layerGroup([mk(fallback), mk(primary)]);
 }
 
 function contoursTilesAvailable(){
@@ -697,6 +701,7 @@ async function initMap(){
   // Restore saved preferences (default port, basemap, etc.) before any view
   // logic reads them, so the app opens with the user's chosen defaults.
   if(typeof prefLoad === "function") prefLoad();
+  if(typeof updateContourUnitHints === "function") updateContourUnitHints();
   MAP=L.map("map",{center:[29.0,-85.0],zoom:5,zoomControl:false,attributionControl:true,maxZoom:18,
     // Trackpad/mouse-wheel zoom is handled by our own debounced handler below
     // (bindTrackpadZoom). Leaflet's built-in scrollWheelZoom accumulates the many
@@ -4657,7 +4662,7 @@ function scoreCell(lat, lng, speciesId){
   const allFactors = [
     {key:"temp", name:"Water temperature",  weight:W.temperature,   score:tempScore,        raw: (_isBottom || _isDemersal) ? (tempForScore != null ? `~${Math.round(tempForScore)}°F bottom` : "—") : (sst != null ? `${sst.toFixed(1)}°F` : "—")},
     {key:"depth", name: ((W.structure || 0) === 0 && (speciesId === "mahi" || speciesId === "sailfish" || speciesId === "skipjack" || speciesId === "wahoo")) ? "Water depth" : "Depth/structure",    weight:W.depthStruct,   score:depthScore,
-     raw: `${Math.round(depth * 3.28084)} ft` + (reefStructureNm == null ? ""
+     raw: fmtDepthM(depth) + (reefStructureNm == null ? ""
        : isFinite(reefStructureNm) && reefStructureNm <= 20 ? ` · ${reefStructureNm.toFixed(1)} nm to charted structure`
        : " · no charted structure nearby")},
     {key:"structure", name:"Bottom structure",   weight:(W.structure||0), score:structureScore,
@@ -10230,7 +10235,7 @@ function _altiDrawDriftArrows(ctx, map, pairs){
     ctx.fillStyle = "rgba(255,244,214,0.96)";
     ctx.strokeStyle = "rgba(10,22,40,0.75)";
     ctx.lineWidth = 3;
-    const label = `${Math.round(distNm)} nm`;
+    const label = fmtDist(distNm);
     ctx.strokeText(label, mx + 7, my - 5);
     ctx.fillText(label, mx + 7, my - 5);
   }
@@ -10595,7 +10600,7 @@ function bindPredictInteractionHandlers(){
             </div>
             <div style="font-size:12.5px;color:#cfe5ff;line-height:1.6">
               ${cell.lat.toFixed(2)}°N ${Math.abs(cell.lng).toFixed(2)}°W<br>
-              SST ${cell.sst != null ? cell.sst.toFixed(1) : "—"}°F · ${Math.round(cell.depth * 3.28084)} ft<br>
+              SST ${cell.sst != null ? cell.sst.toFixed(1) : "—"}°F · ${fmtDepthM(cell.depth)}<br>
               <b>Top factor:</b> ${top.name}<br>
               <b>Confidence:</b> ${cell.confidence}%
             </div>
@@ -11191,7 +11196,7 @@ function renderExplainerMain(){
       </div>
       <div style="flex:1;min-width:0;font-size:11.5px;color:#9ec5e8;line-height:1.5;text-align:right;padding-top:2px">
         <div style="white-space:nowrap">${cell.lat.toFixed(3)}°N ${Math.abs(cell.lng).toFixed(3)}°W</div>
-        ${cell.distNm != null ? `<div style="color:#7dd3fc;white-space:nowrap">⛵ ${cell.distNm}nm from ${activePort ? activePort.split(",")[0] : "port"}</div>` : ""}
+        ${cell.distNm != null ? `<div style="color:#7dd3fc;white-space:nowrap">⛵ ${fmtDist(cell.distNm)} from ${activePort ? activePort.split(",")[0] : "port"}</div>` : ""}
       </div>
     </div>
 
@@ -13552,12 +13557,62 @@ const USER_PREFS = {
   defaultSpots:      true,    // Major Fishing Areas on open
   autozoomPort:      true,
   persistLoran:      false,   // LORAN-C lines on open (Pro)
+  depthUnit:         "feet",  // feet | fathoms — map tap readout always shows both
+  distanceUnit:      "nm",    // nm | sm (statute miles)
   // Account state — null when logged out. When signed in, becomes
   //   {name: "Display Name", email: "user@example.com", id: "..."}.
   // The auth backend isn't wired up yet (waiting on deploy); for now this
   // is UI scaffolding only. signIn() / signOut() below stub the flow.
   account:           null,
 };
+
+function userDepthUnit(){
+  if(typeof BW_UNITS === "undefined") return "feet";
+  return BW_UNITS.normalizeDepthUnit(USER_PREFS.depthUnit);
+}
+function userDistanceUnit(){
+  if(typeof BW_UNITS === "undefined") return "nm";
+  return BW_UNITS.normalizeDistanceUnit(USER_PREFS.distanceUnit);
+}
+function fmtDist(nm){
+  if(nm == null || !isFinite(nm)) return "—";
+  if(typeof BW_UNITS === "undefined") return `${Math.round(nm * 10) / 10} nm`;
+  return BW_UNITS.formatDistanceNm(nm, userDistanceUnit());
+}
+function fmtDistParts(nm){
+  if(typeof BW_UNITS === "undefined") return { value: nm != null ? String(Math.round(nm * 10) / 10) : null, suffix: "nm" };
+  return BW_UNITS.formatDistanceNmParts(nm, userDistanceUnit());
+}
+function fmtDepthM(m){
+  if(typeof BW_UNITS === "undefined") return m != null ? `${Math.round(m * 3.281)} ft` : "—";
+  return BW_UNITS.formatDepthFromMeters(m, userDepthUnit());
+}
+function fmtDepthFt(ft){
+  if(typeof BW_UNITS === "undefined") return ft != null ? `${Math.round(ft)} ft` : "—";
+  return BW_UNITS.formatDepthFromFeet(ft, userDepthUnit());
+}
+function distSuffix(){ return (typeof BW_UNITS !== "undefined") ? BW_UNITS.distanceSuffix(userDistanceUnit()) : "nm"; }
+
+function applyUnitPreferenceSideEffects(){
+  if(typeof updateContourUnitHints === "function") updateContourUnitHints();
+  if(typeof rulerActive !== "undefined" && rulerActive && typeof rulerRedraw === "function") rulerRedraw();
+  else if(typeof rulerClear === "function") rulerClear();
+  if(typeof renderBrief === "function") renderBrief();
+  if(typeof wpRender === "function") wpRender();
+  if(typeof MAP !== "undefined" && MAP){
+    if(typeof drawCanyons === "function") drawCanyons();
+    if(typeof drawPortMarkers === "function") drawPortMarkers();
+    if(typeof drawRampMarkers === "function") drawRampMarkers();
+  }
+}
+
+function updateContourUnitHints(){
+  const fm = "(fathoms)";
+  for(const id of ["contour-unit-hint-layers", "contour-unit-hint-pref"]){
+    const el = document.getElementById(id);
+    if(el) el.textContent = fm;
+  }
+}
 
 function prefGet(key){
   return USER_PREFS[key];
@@ -13583,6 +13638,15 @@ function prefSet(key, val){
   }
   if(key === "defaultPorts" || key === "defaultSpots" || key === "persistLoran"){
     if(typeof applyDefaultMapLayers === "function") applyDefaultMapLayers();
+  }
+  if(key === "depthUnit" || key === "distanceUnit"){
+    if(key === "depthUnit" && typeof BW_UNITS !== "undefined"){
+      USER_PREFS.depthUnit = BW_UNITS.normalizeDepthUnit(val);
+    }
+    if(key === "distanceUnit" && typeof BW_UNITS !== "undefined"){
+      USER_PREFS.distanceUnit = BW_UNITS.normalizeDistanceUnit(val);
+    }
+    applyUnitPreferenceSideEffects();
   }
 }
 
@@ -13649,6 +13713,8 @@ function prefSave(){
     defaultSpots:    USER_PREFS.defaultSpots,
     autozoomPort:   USER_PREFS.autozoomPort,
     persistLoran:   USER_PREFS.persistLoran,
+    depthUnit:      USER_PREFS.depthUnit,
+    distanceUnit:   USER_PREFS.distanceUnit,
   };
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify(out));
@@ -13697,6 +13763,12 @@ function prefLoad(){
       if("defaultSpots" in saved)    USER_PREFS.defaultSpots    = !!saved.defaultSpots;
       if("autozoomPort" in saved)   USER_PREFS.autozoomPort   = !!saved.autozoomPort;
       if("persistLoran" in saved)   USER_PREFS.persistLoran   = !!saved.persistLoran;
+      if("depthUnit" in saved && typeof BW_UNITS !== "undefined"){
+        USER_PREFS.depthUnit = BW_UNITS.normalizeDepthUnit(saved.depthUnit);
+      }
+      if("distanceUnit" in saved && typeof BW_UNITS !== "undefined"){
+        USER_PREFS.distanceUnit = BW_UNITS.normalizeDistanceUnit(saved.distanceUnit);
+      }
     }
   } catch(e){ /* corrupt/unavailable — fall back to defaults */ }
 }
@@ -13874,9 +13946,12 @@ function prefResetAll(){
   USER_PREFS.defaultSpots = true;
   USER_PREFS.autozoomPort = true;
   USER_PREFS.persistLoran = false;
+  USER_PREFS.depthUnit = "feet";
+  USER_PREFS.distanceUnit = "nm";
   prefSave();
   if(typeof applyDefaultMapLayers === "function") applyDefaultMapLayers();
   if(typeof applyDefaultContours === "function") applyDefaultContours();
+  applyUnitPreferenceSideEffects();
   refreshSettingsModal();
 }
 
@@ -13948,6 +14023,12 @@ function refreshSettingsModal(){
   }
 
   if(typeof refreshBriefRecallUi === "function") refreshBriefRecallUi();
+
+  const depthSel = document.getElementById("pref-depth-unit");
+  if(depthSel) depthSel.value = userDepthUnit();
+  const distSel = document.getElementById("pref-distance-unit");
+  if(distSel) distSel.value = userDistanceUnit();
+  if(typeof updateContourUnitHints === "function") updateContourUnitHints();
 }
 
 // (offline cache is now permanently visible in the layers modal — no
@@ -15325,8 +15406,8 @@ function updateOceanLegend(){
     const altiPort = (typeof activePort!=="undefined"&&activePort&&PORTS[activePort]) ? activePort.split(",")[0] : null;
     const altiRangeNm = altiBreakRadiusForActivePort();
     const altiRangeNote = altiPort
-      ? `within <b style="color:#e8f4ff">${altiRangeNm} nm</b> of <b style="color:#e8f4ff">${altiPort}</b>`
-      : `within <b style="color:#e8f4ff">${altiRangeNm} nm</b> of your home port <span style="color:#fbbf24">(select a port)</span>`;
+      ? `within <b style="color:#e8f4ff">${fmtDist(altiRangeNm)}</b> of <b style="color:#e8f4ff">${altiPort}</b>`
+      : `within <b style="color:#e8f4ff">${fmtDist(altiRangeNm)}</b> of your home port <span style="color:#fbbf24">(select a port)</span>`;
     parts.push(section("altimetry", "front convergence", altiTitleRow, `
         <div style="height:11px;border-radius:3px;background:linear-gradient(90deg,#1e88ff 0%,#22d3ee 26%,#1b2233 50%,#ffa63a 74%,#ff2a1a 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#cfe5ff;margin-top:3px;font-weight:600">
@@ -15610,7 +15691,7 @@ function rulerClear(){
     MAP.removeLayer(rulerLayer);
     rulerLayer = null;
   }
-  document.getElementById("ruler-total").textContent = rulerActive ? "Tap map to measure" : "0.0 nm";
+  document.getElementById("ruler-total").textContent = rulerActive ? "Tap map to measure" : fmtDist(0);
 }
 
 function rulerAddPoint(latlng){
@@ -15697,7 +15778,7 @@ function rulerRedraw(){
             white-space:nowrap;
             box-shadow:0 1px 3px rgba(0,0,0,.5);
             font-family:'Segoe UI',Arial,sans-serif;
-          ">${segNm.toFixed(2)} nm</div>`,
+          ">${fmtDist(segNm)}</div>`,
           iconSize: [60, 20],
           iconAnchor: [30, 10],
         }),
@@ -15715,7 +15796,7 @@ function rulerRedraw(){
   if(rulerPoints.length < 2){
     lbl.textContent = "Tap another point";
   } else {
-    lbl.textContent = `Total: ${totalNm.toFixed(2)} nm`;
+    lbl.textContent = `Total: ${fmtDist(totalNm)}`;
   }
 }
 
@@ -16075,7 +16156,7 @@ function wpShowDropPopup(lat, lng){
   try {
     if(typeof realDepthAt === "function"){
       const m = realDepthAt(lat, lng);
-      if(m != null && m > 0) depthLine = `<div style="font-size:12px;color:#9ec5e8;margin-top:2px">Depth ~${Math.round(m * 3.281)} ft</div>`;
+      if(m != null && m > 0) depthLine = `<div style="font-size:12px;color:#9ec5e8;margin-top:2px">Depth ~${fmtDepthM(m)}</div>`;
     }
   } catch(e){}
   const html =
@@ -17436,7 +17517,7 @@ function renderWaypointMarkers(force){
     m.bindPopup(
       `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:180px">
         <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:15px;padding:0 18px">${w.name}</div>
-        <div style="font-size:12px;color:#cfe5ff;margin-bottom:2px">${s.label} · ${w.nm.toFixed(1)} nm</div>
+        <div style="font-size:12px;color:#cfe5ff;margin-bottom:2px">${s.label} · ${fmtDist(w.nm)}</div>
         <div style="font-size:10.5px;color:#8fb4d8;margin-bottom:9px">${latStr}, ${lngStr}</div>
         ${saveBtn}
         <button onclick="showForecast(${w.lat},${w.lng},'${wpSafeName}')" style="
@@ -17536,7 +17617,7 @@ async function drawRamps(){
     const lngStr = Math.abs(r.lng).toFixed(5) + (r.lng>=0 ? "° E" : "° W");
     const m = L.marker([r.lat, r.lng], {icon: rampIcon()})
       .bindTooltip(
-        `<b>${r.name}</b><br>Public boat ramp · ${r.nm.toFixed(1)} nm<br><span style="font-size:10px;opacity:.85">${latStr}, ${lngStr}</span>`,
+        `<b>${r.name}</b><br>Public boat ramp · ${fmtDist(r.nm)}<br><span style="font-size:10px;opacity:.85">${latStr}, ${lngStr}</span>`,
         {direction:"top", offset:[0,-8]}
       );
     bindRulerMarkerClick(m, r.lat, r.lng);
@@ -17588,7 +17669,7 @@ function mceBuildGpx(items, portName, radiusNm){
     const s = WP_TYPE_STYLE[w.t] || {label:"Spot"};
     return `<wpt lat="${w.lat}" lon="${w.lng}"><name>${gpxEscape(w.name)}</name>`+
            `<type>${gpxEscape(s.label)}</type>`+
-           `<desc>${gpxEscape(s.label)} · ${w.nm.toFixed(1)} nm from ${gpxEscape(portName)}</desc></wpt>`;
+           `<desc>${gpxEscape(s.label)} · ${fmtDist(w.nm)} from ${gpxEscape(portName)}</desc></wpt>`;
   }).join("\n");
   return head + "\n" + body + "\n</gpx>";
 }
@@ -17631,7 +17712,7 @@ function expRun(){
 // Recompute the live preview (count + breakdown) whenever port/range changes.
 async function mceUpdate(){
   const rangeLabel = document.getElementById("mce-range-label");
-  if(rangeLabel) rangeLabel.textContent = mceRangeNm + " nm";
+  if(rangeLabel) rangeLabel.textContent = fmtDist(mceRangeNm);
   const countEl = document.getElementById("mce-count");
   const breakdownEl = document.getElementById("mce-breakdown");
   const btn = (typeof expSource !== "undefined" && expSource === "dataset")
@@ -17682,7 +17763,7 @@ async function wpExportChartedGPX(){
     return;
   }
   if(rows.length === 0){
-    showToast(`No charted waypoints within ${radius} nm of ${port}.`, "info");
+    showToast(`No charted waypoints within ${fmtDist(radius)} of ${port}.`, "info");
     return;
   }
   const gpx = mceBuildGpx(rows, port, radius);
@@ -17707,7 +17788,7 @@ async function mceExport(){
     else showToast("Subscribe to Pro to export charted waypoints.", "info");
     return;
   }
-  if(rows.length === 0){ showToast("No waypoints within "+mceRangeNm+" nm of "+mcePort+".", "info"); return; }
+  if(rows.length === 0){ showToast(`No waypoints within ${fmtDist(mceRangeNm)} of ${mcePort}.`, "info"); return; }
   const items = rows;
   const gpx = mceBuildGpx(items, mcePort, mceRangeNm);
   const blob = new Blob([gpx], {type:"application/gpx+xml"});
@@ -17745,7 +17826,7 @@ function buildWpRadiusButtons(){
   WP_RADII.forEach(nm=>{
     const o = document.createElement("option");
     o.value = String(nm);
-    o.textContent = nm + " nm";
+    o.textContent = fmtDist(nm);
     if(nm === wpRadiusNm) o.selected = true;
     sel.appendChild(o);
   });
@@ -17773,9 +17854,9 @@ function updateWaypointPanel(total, drawn, status){
     total = items.length;
     drawn = Math.min(total, wpDrawCap());
   }
-  if(total === 0){ el.textContent = `none within ${wpRadiusNm} nm of ${PORTS[activePort]?.short||activePort}${tag}`; return; }
+  if(total === 0){ el.textContent = `none within ${fmtDist(wpRadiusNm)} of ${PORTS[activePort]?.short||activePort}${tag}`; return; }
   const capped = drawn < total ? ` (showing nearest ${drawn})` : "";
-  el.textContent = `${total} within ${wpRadiusNm} nm${capped}${tag}`;
+  el.textContent = `${total} within ${fmtDist(wpRadiusNm)}${capped}${tag}`;
 }
 
 // Build the type legend once (mirrors the marker glyphs/colors exactly).
@@ -17992,7 +18073,7 @@ function platformPopupHtml(p){
   return `<div style="text-align:center;font-family:'Segoe UI',Arial,sans-serif;min-width:190px">
     <div style="font-weight:700;color:#f0f6ff;margin-bottom:2px;font-size:14px;padding:0 12px">${p.name}</div>
     ${p.complex ? `<div style="font-size:11px;color:#fde68a;margin-bottom:4px">Complex ${p.complex}</div>` : ""}
-    <div style="font-size:12px;color:#cfe5ff;margin-bottom:2px">${p.nm.toFixed(1)} nm from ${activePort.split(",")[0]}</div>
+    <div style="font-size:12px;color:#cfe5ff;margin-bottom:2px">${fmtDist(p.nm)} from ${activePort.split(",")[0]}</div>
     <div style="font-size:10.5px;color:#8fb4d8;margin-bottom:8px">${latStr}, ${lngStr}</div>
     <div style="font-size:9.5px;color:#9ca3af;line-height:1.4;margin-bottom:8px;font-style:italic">BSEE active platform — informational only, not for navigation.</div>
     <button onclick="showForecast(${p.lat},${p.lng},'${safeName}')" style="
@@ -18161,7 +18242,7 @@ function drawBuoys(){
         <div style="font-weight:700;color:#facc15;font-size:13px;margin-bottom:4px">⚓ ${b.id}</div>
         <div style="font-size:12px;color:#e8f4ff">${b.name}</div>
         <div style="font-size:11px;color:#9ec5e8;margin-top:4px">${b.owner}${b.pgm ? ` · ${b.pgm}` : ""}</div>
-        <div style="font-size:11px;color:#fde68a;margin-top:4px">${b.nm.toFixed(0)} nm from ${activePort.split(",")[0]} · ${b.lat.toFixed(3)}°N ${Math.abs(b.lng).toFixed(3)}°W</div>
+        <div style="font-size:11px;color:#fde68a;margin-top:4px">${fmtDist(b.nm)} from ${activePort.split(",")[0]} · ${b.lat.toFixed(3)}°N ${Math.abs(b.lng).toFixed(3)}°W</div>
         <a href="https://www.ndbc.noaa.gov/station_page.php?station=${encodeURIComponent(b.id)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:7px;font-size:11px;color:#facc15">NDBC station page →</a>
       </div>`,
       { maxWidth: 260, className: "buoy-popup" }
@@ -18533,7 +18614,7 @@ function briefModalSubtitle(){
   if(pinLL && typeof activePort !== "undefined" && activePort && typeof PORTS !== "undefined" && PORTS[activePort] && typeof nmBetween === "function"){
     const p = PORTS[activePort];
     const nm = Math.round(nmBetween(p.lat, p.lng, pinLL.lat, pinLL.lng));
-    if(Number.isFinite(nm)) parts.push(`${nm} nm run`);
+    if(Number.isFinite(nm)) parts.push(`${fmtDist(nm)} run`);
   }
   return parts.join("  ·  ");
 }
@@ -18554,7 +18635,7 @@ function briefHistoryPanelHtml(opts = {}){
     const spLabel = (b.speciesNames && b.speciesNames.length)
       ? (b.speciesAutoPick ? "Bluewater Recommendation · " : "") + b.speciesNames.slice(0, 2).join(", ") + (b.speciesNames.length > 2 ? "…" : "")
       : "General";
-    const run = b.runFromPortNm != null ? `${b.runFromPortNm} nm` : "";
+    const run = b.runFromPortNm != null ? fmtDist(b.runFromPortNm) : "";
     const safeId = (b.id || "").replace(/'/g, "\\'");
     const active = opts.highlightId && b.id === opts.highlightId;
     return `<button type="button" class="brief-history-btn${active ? " brief-history-btn--active" : ""}" onclick="recallBrief('${safeId}')">
@@ -19437,7 +19518,13 @@ async function runBrief(){
     runFromPortNm: (portObj && typeof nmBetween === "function")
       ? Math.round(nmBetween(portObj.lat, portObj.lng, pinLL.lat, pinLL.lng))
       : null,
+    runFromPortDisplay: (portObj && typeof nmBetween === "function")
+      ? fmtDist(Math.round(nmBetween(portObj.lat, portObj.lng, pinLL.lat, pinLL.lng)))
+      : null,
+    depthUnit: userDepthUnit(),
+    distanceUnit: userDistanceUnit(),
     depthFt,
+    depthDisplay: depthFt != null ? fmtDepthFt(depthFt) : null,
     nearbyStructure: structureNear(pinLL.lat, pinLL.lng),
     species: speciesNames,
     speciesMode: autoPickMeta ? "auto" : "manual",
@@ -19463,8 +19550,10 @@ async function runBrief(){
       lat: s.scoredAtLat,
       lng: s.scoredAtLng,
       runFromPortNm: s.runFromPortNm,
+      runFromPortDisplay: s.runFromPortNm != null ? fmtDist(s.runFromPortNm) : null,
       runCompass: s.runCompass,
       depthFt: s.depthFt,
+      depthDisplay: s.depthFt != null ? fmtDepthFt(s.depthFt) : null,
       spotLabel: s.spotLabel,
       nearbyStructure: s.nearbyStructure,
     })),
@@ -20929,6 +21018,12 @@ window.bwOnSignedIn = async function (user) {
           if("defaultSpots"    in acct) USER_PREFS.defaultSpots    = acct.defaultSpots !== false;
           if("autozoomPort"   in acct) USER_PREFS.autozoomPort   = !!acct.autozoomPort;
           if("persistLoran"   in acct) USER_PREFS.persistLoran   = !!acct.persistLoran;
+          if("depthUnit" in acct && typeof BW_UNITS !== "undefined"){
+            USER_PREFS.depthUnit = BW_UNITS.normalizeDepthUnit(acct.depthUnit);
+          }
+          if("distanceUnit" in acct && typeof BW_UNITS !== "undefined"){
+            USER_PREFS.distanceUnit = BW_UNITS.normalizeDistanceUnit(acct.distanceUnit);
+          }
         }
       } catch(e){ /* malformed blob — ignore, fall back to device prefs */ }
     }
