@@ -52,6 +52,19 @@ if (existsSync(corePub) && !read(corePub, "bw-core.js").includes("function speci
 }
 const buildCode = readAndroidVersionCode();
 const nativeCacheQ = buildCode ? `?v=b${buildCode}` : "";
+if (ix && !ix.includes("pref-depth-unit")) {
+  errors.push(
+    "ios/App/App/public/index.html has no Units settings (pref-depth-unit) — run npm run build:ios && npx cap copy ios on current main"
+  );
+}
+if (ix && !ix.includes("bw-units.js")) {
+  errors.push("ios/App/App/public/index.html missing bw-units.js script — cap copy stale");
+}
+const unitsPub = join(pub, "bw-units.js");
+if (existsSync(unitsPub) && read(unitsPub, "bw-units.js").length < 100) {
+  errors.push("ios/App/App/public/bw-units.js missing or empty");
+}
+
 if (ix && nativeCacheQ) {
   if (!ix.includes(`bw-core.js${nativeCacheQ}`)) {
     errors.push(
