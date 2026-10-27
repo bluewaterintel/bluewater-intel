@@ -399,9 +399,9 @@ const REGIONAL_SEASONS = {
   // nearshore zone, so the season gate suppresses the inshore red bloom seen
   // there. (A blackfin off VA Beach in July is not a real fishery.)
   blackfin: [
-    {centerLat: 35.0, centerLng: -75.0, radiusNm: 45, label: "Outer Banks (Hatteras) edge",
-     // Reliable along the Hatteras/Lookout Stream edge. Radius stops short of
-     // Oregon Inlet so the northern stray does not outrank the real grounds.
+    {centerLat: 35.0, centerLng: -75.0, radiusNm: 70, label: "Outer Banks (Hatteras / Oregon Inlet) edge",
+     // Boats from Oregon Inlet run south to the Point and the Stream edge.
+     // 70 nm reaches the inlet (35.78°N) without covering Virginia Beach.
      seasons:{Jan:1,Feb:1,Mar:2,Apr:2,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
     {centerLat: 33.5, centerLng: -77.0, radiusNm: 160, label: "Carolinas Gulf Stream",
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
@@ -740,6 +740,13 @@ const REGIONAL_SEASONS = {
      seasons:{Jan:2,Feb:2,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:2}},
     {centerLat: 27.5, centerLng: -93.5, radiusNm: 280, label: "Western Gulf",
      seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1}},
+    // Warm-water months only. September–October is the San Diego → LA bite
+    // on the offshore banks. Santa Barbara / Ventura are a shoulder. Morro
+    // Bay sits outside both circles.
+    {centerLat: 33.15, centerLng: -117.90, radiusNm: 95, label: "SoCal bight wahoo (San Diego → LA)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:1,Jul:2,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
+    {centerLat: 34.32, centerLng: -119.48, radiusNm: 40, label: "Santa Barbara / Ventura wahoo",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:0,Jul:1,Aug:2,Sep:2,Oct:1,Nov:0,Dec:0}},
   ],
 
   // ── BIGEYE TUNA ────────────────────────────────────────────────────────

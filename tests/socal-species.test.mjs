@@ -43,6 +43,19 @@ for (const name of shoulder) {
   check(`${name} dorado is a September shoulder`, mahi >= 1.5 && mahi <= 2.4);
 }
 
+for (const name of peak) {
+  const w = sep("wahoo", name);
+  check(`${name} offers wahoo as a fall peak`, offered("wahoo", name) && w >= 2.5);
+}
+for (const name of shoulder) {
+  const w = sep("wahoo", name);
+  check(`${name} wahoo is a fall shoulder`, offered("wahoo", name) && w >= 1.5 && w <= 2.4);
+}
+check("Morro Bay wahoo is not offered", offered("wahoo", "Morro Bay, CA") === false);
+check("Monterey wahoo is not offered", offered("wahoo", "Monterey, CA") === false);
+check("Hatteras still offers Atlantic wahoo", offered("wahoo", "Hatteras, NC"));
+check("Venice still offers Gulf wahoo", offered("wahoo", "Venice, LA"));
+
 check("Morro Bay yellowfin is not offered", offered("yellowfin", "Morro Bay, CA") === false);
 check("Morro Bay dorado is not offered", offered("mahi", "Morro Bay, CA") === false);
 check("Monterey bonito is not offered", offered("bonito", "Monterey, CA") === false);
