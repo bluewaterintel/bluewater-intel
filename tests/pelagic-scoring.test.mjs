@@ -75,11 +75,15 @@ console.log("\nblackfin habitat no longer treats Hatteras Stream as too hot or t
   const mhc = PORTS["Morehead City, NC"];
   check("Hatteras is in Atlantic range", speciesAllowedAtLat("blackfin", hat.lat, hat.lng));
   check("Morehead is in Atlantic range", speciesAllowedAtLat("blackfin", mhc.lat, mhc.lng));
-  check("Oregon Inlet is north of the 35.6°N cutoff", !speciesAllowedAtLat("blackfin", oi.lat, oi.lng));
-  check("lat max is 35.6", SPECIES_LAT_RANGE.blackfin[1] === 35.6);
+  check("Oregon Inlet is in range (boats run south to the Point)", speciesAllowedAtLat("blackfin", oi.lat, oi.lng));
+  check("lat max includes Oregon Inlet and stops short of Virginia Beach", SPECIES_LAT_RANGE.blackfin[1] === 36.05);
+  const vb = PORTS["Virginia Beach, VA"];
+  check("Virginia Beach stays north of the blackfin cutoff", !speciesAllowedAtLat("blackfin", vb.lat, vb.lng));
   const hatReg = REGIONAL_SEASONS.blackfin[0];
-  check("Hatteras season region does not reach Oregon Inlet",
-    nmBetween(oi.lat, oi.lng, hatReg.centerLat, hatReg.centerLng) > hatReg.radiusNm);
+  check("Hatteras season region reaches Oregon Inlet",
+    nmBetween(oi.lat, oi.lng, hatReg.centerLat, hatReg.centerLng) <= hatReg.radiusNm);
+  check("Hatteras season region does not reach Virginia Beach",
+    nmBetween(vb.lat, vb.lng, hatReg.centerLat, hatReg.centerLng) > hatReg.radiusNm);
   const bw80 = bluewaterGateFor("blackfin", 80 / 3.28084);
   const bwYft = bluewaterGateFor("yellowfin", 80 / 3.28084);
   check("blackfin 80 ft is not nearly vetoed", bw80 >= 0.4);

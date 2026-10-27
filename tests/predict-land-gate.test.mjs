@@ -65,6 +65,46 @@ console.log("\nPredict land gate (Outer Cape / false-positive CUDEM depth):");
     !badges.some(b => Math.abs(b.lat - lat) < 1e-6 && Math.abs(b.lng - lng) < 1e-6));
 }
 
+console.log("\nCalifornia coastal plain is land even when the depth grid says water:");
+{
+  const inland = { lat: 33.206, lng: -117.365 }; // Oceanside / Carlsbad, the on-land hotspot
+  const offshore = { lat: 33.20, lng: -117.50 };
+  const kelp = { lat: 32.667, lng: -117.267 };
+  const fakeGrid = {
+    step: 0.05,
+    minLat: 32.4,
+    minLng: -122.2,
+    nLat: 100,
+    nLng: 120,
+    depth: new Array(100 * 120).fill(8),
+  };
+  const { isOnLand, isPredictWater, predictDepth } = runWithFakeBathy(fakeGrid);
+  check("Oceanside inland point is inside the California land polygon", isOnLand(inland.lat, inland.lng));
+  check("Positive depth on that inland point is not fishable water", !isPredictWater(inland.lat, inland.lng));
+  check("predictDepth does not report the false 8 m on land", predictDepth(inland.lat, inland.lng) <= 0);
+  check("Water just off Oceanside stays fishable", isPredictWater(offshore.lat, offshore.lng));
+  check("Point Loma kelp stays water", !isOnLand(kelp.lat, kelp.lng) && isPredictWater(kelp.lat, kelp.lng));
+  check("Catalina stays water", !isOnLand(33.35, -118.42));
+  check("Nine Mile Bank stays water", !isOnLand(32.60, -117.42));
+  const harbors = [
+    ["San Diego", 32.723, -117.174],
+    ["Oceanside", 33.195, -117.385],
+    ["Dana Point", 33.461, -117.698],
+    ["Newport Beach", 33.618, -117.929],
+    ["San Pedro", 33.736, -118.272],
+    ["Marina del Rey", 33.978, -118.451],
+    ["Ventura", 34.248, -119.264],
+    ["Santa Barbara", 34.403, -119.692],
+    ["Port San Luis", 35.171, -120.754],
+    ["Morro Bay", 35.369, -120.854],
+    ["Monterey", 36.604, -121.888],
+    ["Moss Landing", 36.804, -121.786],
+  ];
+  for (const [name, lat, lng] of harbors) {
+    check(`${name} harbor is still fishable water`, isPredictWater(lat, lng));
+  }
+}
+
 console.log("\nCape Cod Bay in-bay water still scores:");
 {
   const lat = 41.88;

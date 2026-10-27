@@ -263,7 +263,7 @@ const ENC_SPECIES = [
     },
     facts:{ size:"15-40 lbs", record:"49 lbs (Bermuda)", legal:"No federal size limit", season:"April - November" },
     seasons:{Jan:1,Feb:1,Mar:2,Apr:3,May:3,Jun:3,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:1},
-    where:"Hatteras shelf, Cape Lookout, Charleston Bump, Myrtle Beach offshore wrecks. Often on bottom structure in 80-300 ft. Gulf Panhandle (Panama City/Destin): late summer/fall they slide in with sardines and threadfin a few miles off the beach; The Edge is still the more consistent blue-water bite.",
+    where:"Hatteras shelf and the run south from Oregon Inlet to the Point, Cape Lookout, Charleston Bump, Myrtle Beach offshore wrecks. Often on bottom structure in 80-300 ft. Gulf Panhandle (Panama City/Destin): late summer/fall they slide in with sardines and threadfin a few miles off the beach; The Edge is still the more consistent blue-water bite.",
     tackle:[
       "20-30 lb class spinning or conventional",
       "Sealed offshore spinning reels in the 8000-14000 size class",
@@ -287,7 +287,7 @@ const ENC_SPECIES = [
     snippet:"The fastest fish on the East Coast. Lightning-fast strikes on high-speed trolled lures along temperature breaks and the 100-fathom line.",
     facts:{ size:"20-90 lbs", record:"184 lbs (Mexico)", legal:"No federal size limit (state limits vary)", season:"Regional — SE FL/Keys/Bahamas peak in WINTER (Nov-Mar); NC & Mid-Atlantic peak in FALL (Sep-Nov); Gulf year-round with a fall peak" },
     seasons:{Jan:3,Feb:3,Mar:2,Apr:2,May:2,Jun:2,Jul:2,Aug:3,Sep:3,Oct:3,Nov:3,Dec:3},
-    where:"SE FL, the Keys, and the Bahamas in winter (high-speed trolling the deep drop-offs); the 100-fathom line off Hatteras/Oregon Inlet and the Charleston Bump on the fall run; Gulf rigs and shelf edge year-round.",
+    where:"SE FL, the Keys, and the Bahamas in winter (high-speed trolling the deep drop-offs); the 100-fathom line off Hatteras/Oregon Inlet and the Charleston Bump on the fall run; Gulf rigs and shelf edge year-round. Southern California: late summer and fall on the offshore banks (Nine Mile, the 425, 14 Mile, Cortes) when the water warms, San Diego through the LA bight.",
     tackle:[
       "30-50 lb class trolling outfits with bent-butt for high-speed",
       "50-80 class lever-drag reels with 80-130 lb braid backing + 80-130 lb mono topshot",

@@ -5391,7 +5391,36 @@ const MA_MAINLAND_FILL = [
   [42.45, -71.10],   // back to start
 ];
 
-const LAND_POLYGONS = [MAIN_COAST, LONG_ISLAND, CAPE_COD, FL_KEYS, MA_MAINLAND_FILL, MARTHAS_VINEYARD, NANTUCKET, MOUNT_DESERT_ISLAND, DEER_ISLE, SWANS_ISLAND, ISLE_AU_HAUT, VINALHAVEN, CRANBERRY_ISLES];
+// California mainland, border → Santa Cruz, traced along the outer beach so
+// the SoCal bight, Santa Monica Bay and Monterey Bay stay water. Closes far
+// inland. CUDEM/ETOPO cells on the coastal plain were reading as a few metres
+// of water (Oceanside spot sitting on land at ~27 ft). Harbors that sit just
+// inside this line are punched back out in PACIFIC_HARBOR_BOXES.
+const CA_MAINLAND = [
+  [32.53, -117.12], [32.58, -117.13], [32.67, -117.17], // border → Coronado strand
+  [32.665, -117.245],                                   // Point Loma tip (bay mouth)
+  [32.74, -117.255], [32.85, -117.28], [32.95, -117.27],
+  [33.04, -117.30], [33.14, -117.35],
+  [33.19, -117.39],                                     // Oceanside beach
+  [33.30, -117.48], [33.38, -117.58], [33.46, -117.72], // Dana Point
+  [33.54, -117.79], [33.60, -117.93],                   // Newport beach
+  [33.66, -118.00], [33.73, -118.12],                   // Huntington → Seal Beach
+  [33.72, -118.32], [33.74, -118.41],                   // Palos Verdes
+  [33.85, -118.39], [34.01, -118.50],                   // Redondo → Santa Monica
+  [34.03, -118.70], [34.00, -118.81],                   // Malibu → Point Dume
+  [34.15, -119.23], [34.27, -119.31],                   // Ventura
+  [34.40, -119.72],                                     // Santa Barbara
+  [34.45, -120.47],                                     // Point Conception
+  [34.70, -120.62], [35.10, -120.64], [35.16, -120.75], // Port San Luis
+  [35.30, -120.88], [35.45, -121.05],                   // Morro Bay
+  [35.70, -121.30], [36.00, -121.55], [36.30, -121.90],
+  [36.52, -121.95], [36.64, -121.94],                   // Point Lobos → Point Pinos
+  [36.61, -121.86], [36.72, -121.82], [36.81, -121.79], // Monterey Bay shore
+  [36.96, -122.02],                                     // Santa Cruz
+  [36.96, -120.20], [32.53, -116.20], [32.53, -117.12],
+];
+
+const LAND_POLYGONS = [MAIN_COAST, LONG_ISLAND, CAPE_COD, FL_KEYS, MA_MAINLAND_FILL, MARTHAS_VINEYARD, NANTUCKET, MOUNT_DESERT_ISLAND, DEER_ISLE, SWANS_ISLAND, ISLE_AU_HAUT, VINALHAVEN, CRANBERRY_ISLES, CA_MAINLAND];
 
 // ── Point-in-polygon test (ray casting algorithm) ──
 // Returns true if (lat, lng) lies inside the polygon. Uses the horizontal
@@ -5422,6 +5451,21 @@ function isOnLand(lat, lng){
 // the water is fishable (Chesapeake, Cape Cod Bay, etc.). Shared by seaDepth()
 // and isPredictWater() so CUDEM/ETOPO can't paint hotspots on outer beaches
 // (e.g. North Truro on the Cape) while still allowing in-bay scoring.
+const PACIFIC_HARBOR_BOXES = [
+  {b:[32.60, 32.75, -117.25, -117.08], depth: 8},  // San Diego Bay
+  {b:[32.76, 32.79, -117.26, -117.21], depth: 4},  // Mission Bay
+  {b:[33.185, 33.215, -117.41, -117.378], depth: 5}, // Oceanside Harbor
+  {b:[33.455, 33.475, -117.72, -117.68], depth: 6},  // Dana Point Harbor
+  {b:[33.595, 33.645, -117.95, -117.88], depth: 6},  // Newport Bay
+  {b:[33.72, 33.77, -118.28, -118.18], depth: 10},   // LA / Long Beach Harbor
+  {b:[33.955, 33.985, -118.47, -118.44], depth: 5},  // Marina del Rey
+  {b:[34.24, 34.27, -119.28, -119.25], depth: 6},    // Ventura Harbor
+  {b:[34.395, 34.415, -119.71, -119.67], depth: 6},  // Santa Barbara Harbor
+  {b:[35.33, 35.38, -120.88, -120.84], depth: 5},    // Morro Bay
+  {b:[35.165, 35.180, -120.77, -120.74], depth: 6},  // Port San Luis
+  {b:[36.595, 36.620, -121.90, -121.87], depth: 8},  // Monterey Harbor
+  {b:[36.795, 36.815, -121.80, -121.77], depth: 6},  // Moss Landing
+];
 const FISHABLE_BAY_SOUND_BOXES = [
   {b:[36.95, 39.55, -77.30, -75.95], depth: 12},  // Chesapeake
   {b:[38.85, 39.35, -75.45, -75.05], depth: 15},  // Delaware
@@ -5448,6 +5492,9 @@ const FISHABLE_BAY_SOUND_BOXES = [
   {b:[29.20, 29.55, -94.95, -94.60], depth: 7},   // Galveston
   {b:[28.10, 28.55, -96.70, -96.20], depth: 4},   // San Antonio
   {b:[27.55, 27.95, -97.40, -97.05], depth: 4},   // Corpus Christi
+  // California harbors the mainland polygon would otherwise call land. Tight
+  // on the basin so the coastal plain (Oceanside at -117.36) stays land.
+  ...PACIFIC_HARBOR_BOXES,
 ];
 function fishableBaySoundDepthM(lat, lng){
   for(const bay of FISHABLE_BAY_SOUND_BOXES){
@@ -5518,21 +5565,20 @@ function bathyRefDepth(lat, lng){
 function seaDepth(lat, lng){
   // Out of envelope → just return abyssal (irrelevant)
   //
-  // KNOWN GAP — this static model is Atlantic/Gulf only. Everything west of
-  // -98° (i.e. the entire Pacific coast) returns 3000 m, and the land polygons
-  // behind isOnLand()/isFishableWater() carry no West Coast geometry either, so
-  // inland California reads as fishable water here.
-  //
-  // It does not bite in practice because predictDepth() and isPredictWater()
-  // both prefer the fetched bathymetry grid, and the ocean function's CUDEM
-  // bounds (lat 23-52, lng -127 to -65) plus its global ETOPO fallback do cover
-  // California. This path is only reached when that fetch is unavailable — and
-  // when it is, every Pacific nearshore species (cayellowtail, lingcod, calico
-  // bass) reads 3000 m and scores zero on depth. Giving the West Coast a real
-  // static shelf model + coastline is the fix; it needs a Pacific coastline
-  // dataset, so it is deliberately not attempted inline here.
+  // Static shelf model is Atlantic/Gulf only. West of -98° there is no
+  // shelf curve, so open water falls back to 3000 m when the CUDEM/ETOPO grid
+  // hasn't loaded. CA_MAINLAND still marks the coastal plain as land — a coarse
+  // grid was reporting ~8 m on top of Oceanside.
   if(lat < 22 || lat > 45) return 3000;
-  if(lng < -98 || lng > -64) return 3000;
+  if(lng < -98){
+    if(isOnLand(lat, lng)){
+      const bay = fishableBaySoundDepthM(lat, lng);
+      if(bay != null) return bay;
+      return -100;
+    }
+    return 3000;
+  }
+  if(lng > -64) return 3000;
 
   // ── STEP 1: Bay/sound polygons (act as "holes" in the land polygon) ──
   const bayDepth = fishableBaySoundDepthM(lat, lng);
@@ -6375,10 +6421,10 @@ const SPECIES_LAT_RANGE = {
   cobia:         [24.0, 40.5],   // Keys through Chesapeake/DelMarVa up to NJ (summer)
   spanishmack:   [24.0, 41.0],   // Keys and South Texas through NJ
   // Blackfin: a warm-water / subtropical tuna. Common FL, Gulf, and the SE
-  // Atlantic; Hatteras/Lookout is the northern stronghold. 35.6°N keeps the
-  // Hatteras Stream in range and drops Oregon Inlet / VA so the stray northern
-  // edge cannot outrank the real grounds.
-  blackfin:      [24.0, 35.6],
+  // Atlantic; Hatteras/Lookout is the northern stronghold. 36.05°N includes
+  // Oregon Inlet (35.78°N) — boats there run south to the Point — and still
+  // drops Virginia Beach (36.85°N) and the Chesapeake.
+  blackfin:      [24.0, 36.05],
   // Vermilion (beeliner): Gulf year-round; South Atlantic ledges only as far
   // north as Cape Hatteras (35.4°N). They are not a Mid-Atlantic / VA fishery.
   vermilion:     {atlantic: [24.0, 35.4], gulf: [24.5, 30.5]},
@@ -6466,6 +6512,10 @@ const PACIFIC_SPECIES = {
   // White seabass are a SoCal and Channel Islands fish. 35.8 reaches Morro
   // Bay on warm years and stops short of a Monterey fishery.
   whiteseabass: [28.0, 35.8],
+  // SoCal wahoo show up with the warm water, San Diego through the LA bight
+  // and the Channel Islands. They thin out past Point Conception; Morro Bay
+  // and Monterey are not a wahoo fishery.
+  wahoo:        [28.0, 34.5],
 };
 
 // ── Pacific habitat overrides (West-Coast tuning pass) ──────────────────────
@@ -6509,6 +6559,10 @@ const PACIFIC_SPECIES_PREFS = {
   // 70s), not Gulf Stream 74-82°F. Without this override a 70°F San Diego day
   // was treated as too cold.
   mahi: { tempIdeal:[68,76], tempWorking:[64,80], chlorPref:"weed", depthBands:[[30,400]], breakPref:"any" },
+  // SoCal wahoo are a warm-season offshore fish on the banks and paddies
+  // (Nine Mile, the 425, 14 Mile, Cortes), not Gulf Stream 74-82°F canyon
+  // fish. California Current water in the high 60s to mid 70s is the bite.
+  wahoo: { tempIdeal:[68,76], tempWorking:[64,80], chlorPref:"edge", depthBands:[[40,800]], breakPref:"edge" },
 };
 
 // Bahamas / Bahama-Bank water east of the Florida crossings. Several US
@@ -9316,7 +9370,14 @@ const CHESAPEAKE_BAY_WATER = [
 // Water the land shape would otherwise swallow. Cut out of the mask after the
 // land is painted. Delaware Bay and the Albemarle are enclosed the same way and
 // can be added here once their outlines are traced the same way.
-const SST_WATER_POLYGONS = [CHESAPEAKE_BAY_WATER];
+function _harborRing(b){
+  const [s, n, w, e] = b;
+  return [[s, w], [n, w], [n, e], [s, e], [s, w]];
+}
+const SST_WATER_POLYGONS = [
+  CHESAPEAKE_BAY_WATER,
+  ...PACIFIC_HARBOR_BOXES.map(h => _harborRing(h.b)),
+];
 
 function _sstPaintLandShapes(cx, toX, toY, westLng){
   if(typeof LAND_POLYGONS !== "undefined"){
