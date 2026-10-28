@@ -16,35 +16,38 @@ export const SST_RAMP_STOPS = [
   [1.00, 176, 40, 52],
 ];
 
+// Pictures overlap, and the renderer feathers the outer half-degree, so a
+// pan across Virginia or off the Stream does not hit a hard edge. The home
+// port's picture stays on top until the view actually leaves it.
 export const COASTS = {
   newengland: {
     label: "New England", lo: 45, hi: 70,
-    s: 39.6, n: 45.6, w: -72.6, e: -63.8,
+    s: 38.8, n: 45.8, w: -74.2, e: -63.0,
     coreLat: 43.2, coreLng: -69.8,
   },
   midatlantic: {
     label: "Mid-Atlantic", lo: 58, hi: 82,
-    s: 35.4, n: 41.8, w: -77.4, e: -69.8,
+    s: 35.2, n: 42.2, w: -78.2, e: -66.0,
     coreLat: 38.6, coreLng: -74.6,
   },
   carolinas: {
     label: "Carolinas", lo: 66, hi: 88,
-    s: 26.8, n: 37.4, w: -82.0, e: -72.2,
+    s: 26.2, n: 39.6, w: -82.2, e: -66.0,
     coreLat: 33.8, coreLng: -77.2,
   },
   southflorida: {
     label: "South Florida", lo: 74, hi: 90,
-    s: 23.6, n: 29.0, w: -83.4, e: -74.8,
+    s: 23.2, n: 30.2, w: -84.0, e: -72.0,
     coreLat: 25.6, coreLng: -79.6,
   },
   gulf: {
     label: "Gulf", lo: 70, hi: 90,
-    s: 24.2, n: 30.9, w: -97.9, e: -81.2,
+    s: 23.5, n: 31.2, w: -98.2, e: -80.5,
     coreLat: 28.2, coreLng: -89.5,
   },
   pacific: {
     label: "Pacific", lo: 52, hi: 74,
-    s: 31.3, n: 38.0, w: -125.2, e: -116.6,
+    s: 30.8, n: 38.4, w: -128.5, e: -116.2,
     coreLat: 34.2, coreLng: -120.2,
   },
 };

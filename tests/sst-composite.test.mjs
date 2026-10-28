@@ -16,6 +16,9 @@ assert.equal(coastForPort("Venice, LA"), "gulf");
 assert.equal(coastForPort("San Diego, CA"), "pacific");
 assert.equal(COASTS.carolinas.lo, 66);
 assert.equal(COASTS.carolinas.hi, 88);
+assert.ok(COASTS.carolinas.n >= 39, "Carolinas picture covers the Virginia canyons");
+assert.ok(COASTS.carolinas.e <= -66, "Carolinas picture continues east of the Stream");
+assert.ok(COASTS.midatlantic.s <= 36, "Mid-Atlantic picture sits under the Carolinas edge");
 
 // A summer Carolina break has to land on different colors. 79°F is still
 // in the yellow-greens; 84°F has crossed into the oranges.

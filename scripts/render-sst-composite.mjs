@@ -279,7 +279,9 @@ function paintCoast(coast, tiles, cmap, land){
       if(temp == null) continue;
       const c = sstRampRGBA(temp, coast.lo, coast.hi);
       const o = (row * w + col) * 4;
-      rgba[o] = c[0]; rgba[o + 1] = c[1]; rgba[o + 2] = c[2]; rgba[o + 3] = 235;
+      const edge = Math.min(lat - coast.s, coast.n - lat, lng - coast.w, coast.e - lng);
+      const fade = edge >= 0.5 ? 1 : Math.max(0, edge / 0.5);
+      rgba[o] = c[0]; rgba[o + 1] = c[1]; rgba[o + 2] = c[2]; rgba[o + 3] = Math.round(235 * fade);
       water++;
     }
   }
@@ -337,7 +339,7 @@ async function main(){
   const offshore = sampleTemp(tiles, cmap, 35.54, -74.55);
   console.log("check The Point", point && point.f?.toFixed(1), "shelf", shelf && shelf.f?.toFixed(1), "east", offshore && offshore.f?.toFixed(1));
   mkdirSync(OUT, { recursive: true });
-  const manifest = { version: 1, observed: date, stepDeg: STEP, coasts: {} };
+  const manifest = { version: 1, rev: 2, observed: date, stepDeg: STEP, coasts: {} };
   const uploads = [];
   for(const [id, coast] of Object.entries(COASTS)){
     console.log("paint", id);

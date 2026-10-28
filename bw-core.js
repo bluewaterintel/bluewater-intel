@@ -10204,7 +10204,8 @@ function activeSstPictureSpec(){
   return _sstCoastManifest.coasts[id] || null;
 }
 function sstCoastUrl(base, spec, observed){
-  return base.replace(/\/$/, "") + "/sst/v1/" + spec.file + "?d=" + encodeURIComponent(observed || "");
+  const rev = (_sstCoastManifest && _sstCoastManifest.rev) || 1;
+  return base.replace(/\/$/, "") + "/sst/v1/" + spec.file + "?d=" + encodeURIComponent(observed || "") + "&r=" + rev;
 }
 function loadSstCoastManifest(){
   if(_sstCoastManifest) return Promise.resolve(_sstCoastManifest);
@@ -10232,22 +10233,22 @@ function sstPictureOpacity(){
 }
 function revealSstCoastPicture(id){
   if(!sstPictureMode() || _sstCoastActive !== id || !MAP) return;
-  for(const other of Object.keys(_sstCoastOverlays)){
-    if(other !== id && MAP.hasLayer(_sstCoastOverlays[other])) MAP.removeLayer(_sstCoastOverlays[other]);
-  }
-  _sstCoastVisible = id;
-  _sstScaleMode = "picture";
-  SST_STATUS = "ready";
+  // Hide the global tiles first. That helper also labels the scale "local",
+  // so the picture label has to be set after it or the legend stays wrong.
   _sstHideGibsFallback();
+  _sstScaleMode = "picture";
+  _sstCoastVisible = id;
+  SST_STATUS = "ready";
+  const top = _sstCoastOverlays[id];
+  if(top && top.bringToFront) top.bringToFront();
   if(typeof updateOceanLegend === "function") updateOceanLegend();
   if(typeof updateSatDateDisplay === "function") updateSatDateDisplay();
 }
-function showSstCoastPicture(id){
+function mountSstCoastOverlay(id){
   const man = _sstCoastManifest;
   const base = (typeof getContoursTilesBase === "function") ? getContoursTilesBase() : null;
-  if(!man || !man.coasts[id] || !base || !MAP) return;
-  const spec = man.coasts[id];
-  _sstCoastActive = id;
+  const spec = man && man.coasts[id];
+  if(!spec || !base || !MAP) return null;
   let overlay = _sstCoastOverlays[id];
   if(!overlay){
     overlay = L.imageOverlay(sstCoastUrl(base, spec, man.observed), L.latLngBounds([spec.s, spec.w], [spec.n, spec.e]), {
@@ -10257,7 +10258,7 @@ function showSstCoastPicture(id){
       interactive: false,
     });
     _sstCoastOverlays[id] = overlay;
-    overlay.on("load", () => revealSstCoastPicture(id));
+    overlay.on("load", () => { if(_sstCoastActive === id) revealSstCoastPicture(id); });
     overlay.on("error", () => {
       if(_sstCoastActive !== id) return;
       _sstScaleMode = "global";
@@ -10268,7 +10269,20 @@ function showSstCoastPicture(id){
   }
   if(!MAP.hasLayer(overlay)) overlay.addTo(MAP);
   else overlay.setOpacity(sstPictureOpacity());
-  const img = overlay._image;
+  return overlay;
+}
+function showSstCoastPicture(id){
+  const man = _sstCoastManifest;
+  if(!man || !man.coasts[id] || !MAP) return;
+  _sstCoastActive = id;
+  // Neighbors stay underneath. Their feathered edges show through where this
+  // picture ends, so the water does not go blank and the colors do not pop.
+  for(const other of Object.keys(man.coasts)){
+    if(other !== id) mountSstCoastOverlay(other);
+  }
+  const overlay = mountSstCoastOverlay(id);
+  if(overlay && overlay.bringToFront) overlay.bringToFront();
+  const img = overlay && overlay._image;
   if(img && img.complete && img.naturalWidth) revealSstCoastPicture(id);
   else if(!_sstCoastVisible){
     _sstScaleMode = "global";
@@ -10313,12 +10327,6 @@ function ensureSstCoastPictures(){
     }
     const id = pickSstCoastId() || "carolinas";
     showSstCoastPicture(id);
-    for(const other of Object.keys(man.coasts)){
-      if(other === id) continue;
-      const img = new Image();
-      img.decoding = "async";
-      img.src = sstCoastUrl(base, man.coasts[other], man.observed);
-    }
   }).catch(() => {});
 }
 
@@ -12733,9 +12741,13 @@ function activeOceanLayerKey(){
 // crossfade or date change so the new tile layer inherits the chosen opacity).
 function applyOceanOpacity(){
   if(layerVis.sst){
-    const picture = _sstCoastOverlays && _sstCoastVisible && _sstCoastOverlays[_sstCoastVisible];
-    if(picture && typeof picture.setOpacity === "function") picture.setOpacity(oceanOpacity.sst);
-    else if(sstForecastLayer && MAP && MAP.hasLayer(sstForecastLayer) && typeof sstForecastLayer._draw === "function"){
+    const pictures = _sstCoastOverlays && _sstScaleMode === "picture" && Object.keys(_sstCoastOverlays);
+    if(pictures && pictures.length){
+      for(const id of pictures){
+        const picture = _sstCoastOverlays[id];
+        if(picture && MAP.hasLayer(picture) && typeof picture.setOpacity === "function") picture.setOpacity(oceanOpacity.sst);
+      }
+    } else if(sstForecastLayer && MAP && MAP.hasLayer(sstForecastLayer) && typeof sstForecastLayer._draw === "function"){
       sstForecastLayer._draw();
     } else if(sstLayer) sstLayer.setOpacity(oceanOpacity.sst);
   }
@@ -12749,9 +12761,13 @@ function onOceanOpacityInput(pct){
   const v = Math.max(0, Math.min(1, (pct|0) / 100));
   oceanOpacity[key] = v;
   if(key === "sst"){
-    const picture = _sstCoastOverlays && _sstCoastVisible && _sstCoastOverlays[_sstCoastVisible];
-    if(picture && typeof picture.setOpacity === "function") picture.setOpacity(v);
-    else if(sstForecastLayer && typeof MAP !== "undefined" && MAP && MAP.hasLayer(sstForecastLayer)
+    const pictures = _sstCoastOverlays && _sstScaleMode === "picture" && Object.keys(_sstCoastOverlays);
+    if(pictures && pictures.length){
+      for(const id of pictures){
+        const picture = _sstCoastOverlays[id];
+        if(picture && typeof MAP !== "undefined" && MAP && MAP.hasLayer(picture) && typeof picture.setOpacity === "function") picture.setOpacity(v);
+      }
+    } else if(sstForecastLayer && typeof MAP !== "undefined" && MAP && MAP.hasLayer(sstForecastLayer)
         && typeof sstForecastLayer._draw === "function"){
       sstForecastLayer._draw();
     } else if(sstLayer){
