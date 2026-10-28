@@ -16,6 +16,7 @@ const COPY_FILES = [
   "auth-gate.html",
   "email-confirmed.html",
   "manifest.json",
+  "sst-composite.json",
   "sw.js",
   "terms.html",
   "privacy.html",

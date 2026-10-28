@@ -445,6 +445,7 @@ function applyLayerVisibilityToMap(){
     } else {
       if(MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
       if(typeof sstForecastLayer !== "undefined" && sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
+      if(typeof hideSstCoastPictures === "function") hideSstCoastPictures();
     }
   }
   if(typeof chlorLayer !== "undefined" && chlorLayer){
@@ -10043,41 +10044,341 @@ const SstForecastLayer = L.Layer.extend({
   refresh: function(){ this._requestData(); },
 });
 
+const SST_PORT_COAST = {
+  "Stonington, ME": "newengland",
+  "Jonesport, ME": "newengland",
+  "Portland, ME": "newengland",
+  "Kennebunkport, ME": "newengland",
+  "Portsmouth, NH": "newengland",
+  "Gloucester, MA": "newengland",
+  "Boston, MA": "newengland",
+  "Cape Cod, MA": "newengland",
+  "Point Judith, RI": "newengland",
+  "Sandy Hook, NJ": "midatlantic",
+  "Freeport, NY": "midatlantic",
+  "Montauk, NY": "midatlantic",
+  "Manasquan Inlet, NJ": "midatlantic",
+  "Atlantic City, NJ": "midatlantic",
+  "Cape May, NJ": "midatlantic",
+  "Ocean City, MD": "midatlantic",
+  "Chincoteague, VA": "midatlantic",
+  "Virginia Beach, VA": "midatlantic",
+  "Cape Charles, VA": "midatlantic",
+  "Reedville, VA": "midatlantic",
+  "Coles Point, VA": "midatlantic",
+  "Solomons, MD": "midatlantic",
+  "Colonial Beach, VA": "midatlantic",
+  "Annapolis, MD": "midatlantic",
+  "Baltimore, MD": "midatlantic",
+  "Delaware City, DE": "midatlantic",
+  "Oregon Inlet, NC": "carolinas",
+  "Hatteras, NC": "carolinas",
+  "Morehead City, NC": "carolinas",
+  "Oak Island, NC": "carolinas",
+  "Myrtle Beach, SC": "carolinas",
+  "Murrells Inlet, SC": "carolinas",
+  "Charleston, SC": "carolinas",
+  "Savannah, GA": "carolinas",
+  "Brunswick, GA": "carolinas",
+  "St. Augustine, FL": "carolinas",
+  "Jacksonville, FL": "carolinas",
+  "Daytona Beach, FL": "carolinas",
+  "Port Canaveral, FL": "carolinas",
+  "Melbourne, FL": "carolinas",
+  "Vero Beach, FL": "carolinas",
+  "Stuart, FL": "southflorida",
+  "Palm Beach, FL": "southflorida",
+  "Fort Lauderdale, FL": "southflorida",
+  "Miami, FL": "southflorida",
+  "Bimini, Bahamas": "southflorida",
+  "West End, Bahamas": "southflorida",
+  "Chub Cay, Bahamas": "southflorida",
+  "Walker's Cay, Bahamas": "southflorida",
+  "Marsh Harbour, Bahamas": "southflorida",
+  "Islamorada, FL": "southflorida",
+  "Marathon, FL": "southflorida",
+  "Key West, FL": "southflorida",
+  "Clearwater, FL": "gulf",
+  "Tampa Bay, FL": "gulf",
+  "Sarasota, FL": "gulf",
+  "Venice, FL": "gulf",
+  "Fort Myers, FL": "gulf",
+  "Naples, FL": "gulf",
+  "Crystal River, FL": "gulf",
+  "Cedar Key, FL": "gulf",
+  "Steinhatchee, FL": "gulf",
+  "Apalachicola, FL": "gulf",
+  "Panama City, FL": "gulf",
+  "Destin, FL": "gulf",
+  "Pensacola, FL": "gulf",
+  "Dauphin Island, AL": "gulf",
+  "Biloxi, MS": "gulf",
+  "Venice, LA": "gulf",
+  "Grand Isle, LA": "gulf",
+  "Houma, LA": "gulf",
+  "Morgan City, LA": "gulf",
+  "New Iberia, LA": "gulf",
+  "Cameron, LA": "gulf",
+  "Lake Charles, LA": "gulf",
+  "Sabine Pass, TX": "gulf",
+  "Galveston, TX": "gulf",
+  "Freeport, TX": "gulf",
+  "Matagorda, TX": "gulf",
+  "Port O'Connor, TX": "gulf",
+  "Port Aransas, TX": "gulf",
+  "Port Mansfield, TX": "gulf",
+  "Port Isabel, TX": "gulf",
+  "Monterey, CA": "pacific",
+  "Moss Landing, CA": "pacific",
+  "Morro Bay, CA": "pacific",
+  "Port San Luis, CA": "pacific",
+  "Santa Barbara, CA": "pacific",
+  "Ventura, CA": "pacific",
+  "Marina del Rey, CA": "pacific",
+  "San Pedro, CA": "pacific",
+  "Newport Beach, CA": "pacific",
+  "Dana Point, CA": "pacific",
+  "Oceanside, CA": "pacific",
+  "San Diego, CA": "pacific"
+};
+function coastForPort(name){
+  return SST_PORT_COAST[name] || null;
+}
+const SST_PICTURE_STOPS = [[0,37,99,196],[0.14,45,160,214],[0.28,56,190,186],[0.42,90,196,120],[0.54,180,206,70],[0.64,230,200,55],[0.74,236,154,42],[0.84,226,96,40],[0.93,204,60,48],[1,176,40,52]];
+function sstPictureRampCss(){
+  const hex = n => n.toString(16).padStart(2, "0");
+  return "linear-gradient(90deg," + SST_PICTURE_STOPS.map(s =>
+    "#" + hex(s[1]) + hex(s[2]) + hex(s[3]) + " " + Math.round(s[0] * 100) + "%"
+  ).join(",") + ")";
+}
+
+// Daily composite at the latest day is a precolored regional picture.
+// Panning moves that picture. Hourly passes and the forecast hour still
+// fetch a grid. An earlier day uses the global tiles.
+let _sstCoastManifest = null;
+let _sstCoastManifestPromise = null;
+let _sstCoastActive = null;
+let _sstCoastVisible = null;
+let _sstCoastOverlays = {};
+let _sstCoastHooked = false;
+let _sstCoastSeq = 0;
+
+function sstPictureMode(){
+  return !!(typeof layerVis !== "undefined" && layerVis.sst
+    && (typeof sstProduct === "undefined" || sstProduct !== "goes")
+    && (typeof oceanOverlayForecastHour !== "function" || oceanOverlayForecastHour() === 0)
+    && (typeof satDayOffset === "undefined" || satDayOffset === 0));
+}
+function _sstCoastContains(spec, center){
+  if(!spec || !center) return false;
+  return center.lat >= spec.s && center.lat <= spec.n
+    && center.lng >= spec.w && center.lng <= spec.e;
+}
+function _sstViewCenter(){
+  try{
+    const c = MAP.getCenter();
+    return { lat: c.lat, lng: c.lng };
+  }catch(e){ return null; }
+}
+function pickSstCoastId(){
+  const man = _sstCoastManifest;
+  if(!man || !man.coasts) return null;
+  const center = _sstViewCenter();
+  const home = (typeof activePort === "string") ? coastForPort(activePort) : null;
+  if(home && _sstCoastContains(man.coasts[home], center)) return home;
+  let best = null;
+  let bestD = Infinity;
+  for(const id of Object.keys(man.coasts)){
+    const spec = man.coasts[id];
+    if(!_sstCoastContains(spec, center)) continue;
+    const dLat = center.lat - spec.coreLat;
+    const dLng = (center.lng - spec.coreLng) * Math.cos(center.lat * Math.PI / 180);
+    const d = dLat * dLat + dLng * dLng;
+    if(d < bestD){ bestD = d; best = id; }
+  }
+  return best || home;
+}
+function activeSstPictureSpec(){
+  const id = _sstCoastVisible || _sstCoastActive;
+  if(!_sstCoastManifest || !id) return null;
+  return _sstCoastManifest.coasts[id] || null;
+}
+function sstCoastUrl(base, spec, observed){
+  return base.replace(/\/$/, "") + "/sst/v1/" + spec.file + "?d=" + encodeURIComponent(observed || "");
+}
+function loadSstCoastManifest(){
+  if(_sstCoastManifest) return Promise.resolve(_sstCoastManifest);
+  if(_sstCoastManifestPromise) return _sstCoastManifestPromise;
+  const base = (typeof getContoursTilesBase === "function") ? getContoursTilesBase() : null;
+  if(!base) return Promise.resolve(null);
+  _sstCoastManifestPromise = fetch("sst-composite.json", { cache: "no-store" })
+    .then(r => r.ok ? r.json() : null)
+    .then(j => { _sstCoastManifest = (j && j.coasts) ? j : null; return _sstCoastManifest; })
+    .catch(() => null);
+  return _sstCoastManifestPromise;
+}
+function hideSstCoastPictures(){
+  _sstCoastActive = null;
+  _sstCoastVisible = null;
+  if(typeof MAP === "undefined" || !MAP) return;
+  for(const id of Object.keys(_sstCoastOverlays)){
+    const o = _sstCoastOverlays[id];
+    if(o && MAP.hasLayer(o)) MAP.removeLayer(o);
+  }
+}
+function sstPictureOpacity(){
+  return (typeof oceanOpacity !== "undefined" && typeof oceanOpacity.sst === "number")
+    ? oceanOpacity.sst : 0.82;
+}
+function revealSstCoastPicture(id){
+  if(!sstPictureMode() || _sstCoastActive !== id || !MAP) return;
+  for(const other of Object.keys(_sstCoastOverlays)){
+    if(other !== id && MAP.hasLayer(_sstCoastOverlays[other])) MAP.removeLayer(_sstCoastOverlays[other]);
+  }
+  _sstCoastVisible = id;
+  _sstScaleMode = "picture";
+  SST_STATUS = "ready";
+  _sstHideGibsFallback();
+  if(typeof updateOceanLegend === "function") updateOceanLegend();
+  if(typeof updateSatDateDisplay === "function") updateSatDateDisplay();
+}
+function showSstCoastPicture(id){
+  const man = _sstCoastManifest;
+  const base = (typeof getContoursTilesBase === "function") ? getContoursTilesBase() : null;
+  if(!man || !man.coasts[id] || !base || !MAP) return;
+  const spec = man.coasts[id];
+  _sstCoastActive = id;
+  let overlay = _sstCoastOverlays[id];
+  if(!overlay){
+    overlay = L.imageOverlay(sstCoastUrl(base, spec, man.observed), L.latLngBounds([spec.s, spec.w], [spec.n, spec.e]), {
+      pane: "ocean-overlays",
+      opacity: sstPictureOpacity(),
+      className: "sst-coast-picture",
+      interactive: false,
+    });
+    _sstCoastOverlays[id] = overlay;
+    overlay.on("load", () => revealSstCoastPicture(id));
+    overlay.on("error", () => {
+      if(_sstCoastActive !== id) return;
+      _sstScaleMode = "global";
+      SST_STATUS = "ready";
+      _sstShowGibsFallback();
+      if(typeof updateOceanLegend === "function") updateOceanLegend();
+    });
+  }
+  if(!MAP.hasLayer(overlay)) overlay.addTo(MAP);
+  else overlay.setOpacity(sstPictureOpacity());
+  const img = overlay._image;
+  if(img && img.complete && img.naturalWidth) revealSstCoastPicture(id);
+  else if(!_sstCoastVisible){
+    _sstScaleMode = "global";
+    SST_STATUS = "loading";
+    _sstShowGibsFallback();
+  }
+  if(typeof updateOceanLegend === "function") updateOceanLegend();
+  if(typeof updateSatDateDisplay === "function") updateSatDateDisplay();
+}
+function hookSstCoastMove(){
+  if(_sstCoastHooked || typeof MAP === "undefined" || !MAP) return;
+  _sstCoastHooked = true;
+  MAP.on("moveend", () => {
+    if(!sstPictureMode() || !_sstCoastManifest) return;
+    const next = pickSstCoastId();
+    if(next && next !== _sstCoastActive) showSstCoastPicture(next);
+  });
+}
+function ensureSstCoastPictures(){
+  hookSstCoastMove();
+  const seq = ++_sstCoastSeq;
+  const base = (typeof getContoursTilesBase === "function") ? getContoursTilesBase() : null;
+  if(!base){
+    _sstScaleMode = "global";
+    SST_STATUS = "ready";
+    _sstShowGibsFallback();
+    return;
+  }
+  if(!_sstCoastVisible){
+    _sstScaleMode = "global";
+    SST_STATUS = "loading";
+    _sstShowGibsFallback();
+  }
+  loadSstCoastManifest().then(man => {
+    if(seq !== _sstCoastSeq || !sstPictureMode()) return;
+    if(!man || !man.coasts){
+      _sstScaleMode = "global";
+      SST_STATUS = "ready";
+      _sstShowGibsFallback();
+      if(typeof updateOceanLegend === "function") updateOceanLegend();
+      return;
+    }
+    const id = pickSstCoastId() || "carolinas";
+    showSstCoastPicture(id);
+    for(const other of Object.keys(man.coasts)){
+      if(other === id) continue;
+      const img = new Image();
+      img.decoding = "async";
+      img.src = sstCoastUrl(base, man.coasts[other], man.observed);
+    }
+  }).catch(() => {});
+}
+
 function syncSstOverlayMode(){
   if(!MAP) return;
-  // Canvas SST for observed AND forecast: adaptive local stretch so 1–2°F
-  // breaks stay visible. GIBS must stay OFF — its baked global palette makes
-  // NC summer look flat red and was racing back on via refreshSatLayerDate.
-  if(layerVis.sst){
-    // Strip every GIBS SST instance (including a mid-crossfade replacement),
-    // but only once the canvas actually has a field to draw. Removing it while
-    // the MUR pull is still in flight — or when the view is too wide for one —
-    // leaves a blank ocean, which reads as SST failing to load.
-    if(!sstForecastLayer) sstForecastLayer = new SstForecastLayer();
-    if(!MAP.hasLayer(sstForecastLayer)) sstForecastLayer.addTo(MAP);
-    else sstForecastLayer.refresh();
-    if(SST_FORECAST_GRID && (sstProduct !== "goes" || SST_FORECAST_GRID.source === "goes19SSThourly")){
-      SST_STATUS = "ready";
-      _sstHideGibsFallback();
-    } else if(sstProduct === "goes"){
-      SST_STATUS = "loading";
-      _sstHideGibsFallback();
-    } else {
-      SST_STATUS = "loading";
-      _sstShowGibsFallback();
-    }
-  } else {
+  if(!layerVis.sst){
     if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
+    hideSstCoastPictures();
     SST_FORECAST_GRID = null;
     SST_STATUS = "idle";
     _sstScaleMode = "local";
     if(sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
+    updateSatDateDisplay();
+    updateSatDateControlVisibility();
+    return;
+  }
+  // Latest daily composite: one fixed-scale picture for this coast.
+  // Moving the map slides the picture. It does not download a new grid.
+  if(sstPictureMode()){
+    if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
+    ensureSstCoastPictures();
+    updateSatDateDisplay();
+    updateSatDateControlVisibility();
+    if(typeof updateOceanLegend === "function") updateOceanLegend();
+    return;
+  }
+  hideSstCoastPictures();
+  const historical = (typeof sstProduct === "undefined" || sstProduct !== "goes")
+    && (typeof oceanOverlayForecastHour !== "function" || oceanOverlayForecastHour() === 0)
+    && satDayOffset > 0;
+  if(historical){
+    if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
+    if(sstLayer && MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
+    if(typeof window.buildSstLayer === "function") sstLayer = window.buildSstLayer(satDayOffset);
+    SST_STATUS = "ready";
+    _sstScaleMode = "global";
+    _sstShowGibsFallback();
+    updateSatDateDisplay();
+    updateSatDateControlVisibility();
+    if(typeof updateOceanLegend === "function") updateOceanLegend();
+    return;
+  }
+  // Hourly passes and the forecast hour still paint from a fetched grid.
+  if(!sstForecastLayer) sstForecastLayer = new SstForecastLayer();
+  if(!MAP.hasLayer(sstForecastLayer)) sstForecastLayer.addTo(MAP);
+  else sstForecastLayer.refresh();
+  if(SST_FORECAST_GRID && (sstProduct !== "goes" || SST_FORECAST_GRID.source === "goes19SSThourly")){
+    SST_STATUS = "ready";
+    _sstHideGibsFallback();
+  } else if(sstProduct === "goes"){
+    SST_STATUS = "loading";
+    _sstHideGibsFallback();
+  } else {
+    SST_STATUS = "loading";
+    _sstShowGibsFallback();
   }
   updateSatDateDisplay();
   updateSatDateControlVisibility();
-  if(layerVis.sst && typeof updateOceanLegend === "function") updateOceanLegend();
+  if(typeof updateOceanLegend === "function") updateOceanLegend();
 }
-
 function refreshOceanForecastLayers(){
   // Altimetry is observed-only and intentionally not refreshed here.
   syncSstOverlayMode();
@@ -11846,6 +12147,7 @@ function toggleLayer(key){
     } else {
       if(MAP.hasLayer(sstLayer)) MAP.removeLayer(sstLayer);
       if(sstForecastLayer && MAP.hasLayer(sstForecastLayer)) MAP.removeLayer(sstForecastLayer);
+      if(typeof hideSstCoastPictures === "function") hideSstCoastPictures();
     }
     updateOceanLegend();
     updateSatDateControlVisibility();
@@ -11999,6 +12301,7 @@ function formatPassStamp(observedAtMs){
 function sstOverlaySourceHint(){
   if(satControlIsPass()) return "GOES-19 hourly · clouds stay blank";
   if(oceanOverlayForecastHour() > 0 && layerVis.sst) return "NOAA RTOFS model · ~9 km";
+  if(typeof sstPictureMode === "function" && sstPictureMode() && _sstScaleMode === "picture") return "NASA MUR composite · fixed scale";
   if(layerVis.chlor && !layerVis.sst) return "NASA GIBS · VIIRS observed";
   if(SST_FORECAST_GRID && SST_FORECAST_GRID.source === "open-meteo-marine-sst"){
     return "Open-Meteo model SST · local scale (MUR unavailable)";
@@ -12018,6 +12321,11 @@ function updateSatDateDisplay(){
       el.textContent = cloudy ? (stamp + " · cloud") : stamp;
     } else if(oceanOverlayForecastHour() > 0 && layerVis.sst){
       el.textContent = `Model +${oceanOverlayForecastHour()}h · ${forecastTimeDisplay()}`;
+    } else if(typeof sstPictureMode === "function" && sstPictureMode() && _sstCoastManifest && _sstScaleMode === "picture"){
+      const parts = String(_sstCoastManifest.observed || "").split("-").map(Number);
+      const d = new Date(Date.UTC(parts[0], (parts[1] || 1) - 1, parts[2] || 1, 16));
+      const age = formatObservedAgeDays(calendarDaysBeforeToday(d.getTime()));
+      el.textContent = `Observed ${d.toLocaleDateString(undefined, {month:"short", day:"numeric", timeZone:"America/New_York"})} · ${age}`;
     } else if(layerVis.sst && SST_FORECAST_GRID && SST_FORECAST_GRID.observedAtMs){
       // Canvas MUR date — not the GIBS slider offset (those diverged and made
       // it look like historical GIBS was on when the local canvas was freshest).
@@ -12425,7 +12733,9 @@ function activeOceanLayerKey(){
 // crossfade or date change so the new tile layer inherits the chosen opacity).
 function applyOceanOpacity(){
   if(layerVis.sst){
-    if(sstForecastLayer && MAP && MAP.hasLayer(sstForecastLayer) && typeof sstForecastLayer._draw === "function"){
+    const picture = _sstCoastOverlays && _sstCoastVisible && _sstCoastOverlays[_sstCoastVisible];
+    if(picture && typeof picture.setOpacity === "function") picture.setOpacity(oceanOpacity.sst);
+    else if(sstForecastLayer && MAP && MAP.hasLayer(sstForecastLayer) && typeof sstForecastLayer._draw === "function"){
       sstForecastLayer._draw();
     } else if(sstLayer) sstLayer.setOpacity(oceanOpacity.sst);
   }
@@ -12439,9 +12749,9 @@ function onOceanOpacityInput(pct){
   const v = Math.max(0, Math.min(1, (pct|0) / 100));
   oceanOpacity[key] = v;
   if(key === "sst"){
-    // Observed SST also uses the canvas layer now — always redraw it when live.
-    // (Old path only redrew on forecast hours, so the slider looked broken until zoom.)
-    if(sstForecastLayer && typeof MAP !== "undefined" && MAP && MAP.hasLayer(sstForecastLayer)
+    const picture = _sstCoastOverlays && _sstCoastVisible && _sstCoastOverlays[_sstCoastVisible];
+    if(picture && typeof picture.setOpacity === "function") picture.setOpacity(v);
+    else if(sstForecastLayer && typeof MAP !== "undefined" && MAP && MAP.hasLayer(sstForecastLayer)
         && typeof sstForecastLayer._draw === "function"){
       sstForecastLayer._draw();
     } else if(sstLayer){
@@ -15690,18 +16000,24 @@ function updateOceanLegend(){
     // Legend ticks follow the adaptive local stretch (not the old global 50–86).
     // When the view is too wide for a MUR pull we are showing GIBS tiles on their
     // own baked palette, so say "global" rather than claim a local stretch.
-    const sstGlobal = !sstLoading && !sstUnavailable
+    const pictureSpec = (!pass && !sstLoading && !sstUnavailable
+      && typeof _sstScaleMode !== "undefined" && _sstScaleMode === "picture"
+      && typeof activeSstPictureSpec === "function")
+      ? activeSstPictureSpec() : null;
+    const sstGlobal = !pictureSpec && !sstLoading && !sstUnavailable
       && (typeof _sstScaleMode !== "undefined" && _sstScaleMode === "global");
-    const lo = sstGlobal ? 50 : ((typeof _sstColorLo === "number") ? _sstColorLo : 74);
-    const hi = sstGlobal ? 86 : ((typeof _sstColorHi === "number") ? _sstColorHi : 88);
-    const sstOmFallback = !sstGlobal && SST_FORECAST_GRID
+    const lo = pictureSpec ? pictureSpec.lo : (sstGlobal ? 50 : ((typeof _sstColorLo === "number") ? _sstColorLo : 74));
+    const hi = pictureSpec ? pictureSpec.hi : (sstGlobal ? 86 : ((typeof _sstColorHi === "number") ? _sstColorHi : 88));
+    const sstOmFallback = !pictureSpec && !sstGlobal && SST_FORECAST_GRID
       && SST_FORECAST_GRID.source === "open-meteo-marine-sst";
     const passCloudy = pass && SST_FORECAST_GRID && SST_FORECAST_GRID.cloudy;
     const sstScaleTag = pass
       ? (passCloudy ? "hourly · this pass is cloud" : "hourly · clouds blank")
-      : (sstGlobal
-        ? "global · zoom in for local scale"
-        : (sstOmFallback ? "local · model fallback" : "local"));
+      : (pictureSpec
+        ? (pictureSpec.label + " · fixed scale")
+        : (sstGlobal
+          ? "global · zoom in for local scale"
+          : (sstOmFallback ? "local · model fallback" : "local")));
     const nTicks = phone ? 5 : 7;
     const sstTicks = [];
     for(let i = 0; i < nTicks; i++){
@@ -15718,12 +16034,15 @@ function updateOceanLegend(){
             <div style="font-size:${legendMetaPx};font-weight:700;color:#f8a5a5;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap">Unavailable</div>
           </div>`
         : `<div class="oc-legend-title" style="font-size:${legendTitlePx};font-weight:700;color:#fbbf24;letter-spacing:.08em;margin-bottom:3px">${sstTitle} <span style="font-weight:500;letter-spacing:0;color:#9ec5e8;text-transform:none">${sstScaleTag}</span></div>`);
+    const sstBarBg = pictureSpec && typeof sstPictureRampCss === "function"
+      ? sstPictureRampCss()
+      : "linear-gradient(90deg,#082460 0%,#0e5aaa 12%,#28aac8 24%,#5ac878 36%,#dcd232 50%,#ebb028 62%,#eb7823 74%,#be281f 88%,#8c1432 100%)";
     const sstBar = (sstLoading || sstUnavailable) ? "" : `
-        <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#082460 0%,#0e5aaa 12%,#28aac8 24%,#5ac878 36%,#dcd232 50%,#ebb028 62%,#eb7823 74%,#be281f 88%,#8c1432 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
+        <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:${sstBarBg};box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:1px">
           ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}°</span>`).join("")}
         </div>
-        ${sstGlobal ? "" : `<div class="sst-scale-lock">
+        ${(sstGlobal || pictureSpec) ? "" : `<div class="sst-scale-lock">
           <button type="button" class="${_sstScaleSpan === 20 ? "on" : ""}" onclick="setSstScaleSpan(20)" title="Hold a 20°F color range while the map moves">20°</button>
           <button type="button" class="${_sstScaleSpan === 25 ? "on" : ""}" onclick="setSstScaleSpan(25)" title="Hold a 25°F color range while the map moves">25°</button>
           <span>scale locked</span>
