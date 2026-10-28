@@ -77,7 +77,7 @@ for(let i = 0; i < 10; i++){
 }
 assert.equal(stepFromRows(aligned, 0.06), 0.06);
 
-assert.match(core, /const SST_RUN_RADIUS_NM = 60/);
+assert.match(core, /const SST_RUN_RADIUS_NM = 100/);
 assert.match(core, /_sstScaleLocked/);
 assert.match(core, /function setSstScaleSpan/);
 assert.doesNotMatch(core, /g\._requestStep - want/);
@@ -87,7 +87,7 @@ const runEnd = core.indexOf("function _sstBoxTooBig");
 assert.ok(runStart > 0 && runEnd > runStart);
 const runBox = { Math };
 vm.runInNewContext(
-  "const SST_RUN_RADIUS_NM = 60; const SST_CELL_BUDGET = 6000; const SST_STEP_MAX = 0.10;\n"
+  "const SST_RUN_RADIUS_NM = 100; const SST_CELL_BUDGET = 6000; const SST_STEP_MAX = 0.10;\n"
   + core.slice(runStart, runEnd)
   + "\nglobalThis._sstRunBox = _sstRunBox;\nglobalThis._sstStepForRunBox = _sstStepForRunBox;",
   runBox,
@@ -96,7 +96,7 @@ const held = runBox._sstRunBox(
   { s: 35.7, n: 35.9, w: -75.6, e: -75.4 },
   { lat: 35.8, lng: -75.55 },
 );
-assert.ok(held.n - held.s >= 1.9, JSON.stringify(held));
+assert.ok(held.n - held.s >= 3.2 && held.n - held.s <= 3.5, JSON.stringify(held));
 assert.ok(held.s <= 35.7 && held.n >= 35.9, JSON.stringify(held));
 const zoomedOut = runBox._sstRunBox(
   { s: 30, n: 40, w: -80, e: -70 },

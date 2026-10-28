@@ -9091,8 +9091,11 @@ let _sstScaleLocked = false;
 // Radius of water sampled the one time the scale is chosen.
 const SST_RANGE_RADIUS_NM = 100;
 // One download covers this radius around the port (or the view, once a run
-// leaves the port). Pans and zooms inside it reuse the grid.
-const SST_RUN_RADIUS_NM = 60;
+// leaves the port). Pans and zooms inside it reuse the grid. 100 nm keeps a
+// normal Oregon Inlet run, including The Point, inside the first download.
+// Wider than this and the cell budget coarsens the step, and a MUR pull is
+// more likely to time out onto the model.
+const SST_RUN_RADIUS_NM = 100;
 let _sstRangeAnchor = null;   // {lat,lng} the live palette was derived for
 let _sstRangeKey    = null;   // anchor identity the palette was last built from
 
