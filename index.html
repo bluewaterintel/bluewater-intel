@@ -19,7 +19,7 @@
 <script src="bw-auth.js?v=20260914a"></script>
 <script src="bw-biometric-auth.js?v=20260903c"></script>
 <script src="bw-freshness.js"></script>
-<script src="bw-ocean.js?v=20260719j"></script>
+<script src="bw-ocean.js?v=20261028a"></script>
 <script src="bw-wind.js?v=20260712c"></script>
 <script src="bw-breaks.js?v=20260812f"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -1244,6 +1244,23 @@ html.bw-block-store-purchase #plan-gate-checkout-note{
 /* Layer label text grows to fill, pushing the toggle to the right edge */
 .layer-row .lyr-label{flex:1;min-width:0;display:flex;align-items:center;gap:10px}
 .layer-row.pro-locked{opacity:.45}
+.sst-product{
+  display:flex; gap:6px; margin:-2px 8px 4px 36px;
+}
+.sst-product button{
+  flex:1; border:1px solid rgba(107,191,234,.35);
+  background:rgba(8,20,36,.55); color:#cfe5ff;
+  border-radius:8px; padding:7px 8px; font-size:11px; font-weight:700;
+  cursor:pointer; font-family:inherit;
+}
+.sst-product button.on{
+  background:linear-gradient(135deg,#0e7490,#0f766e);
+  color:#f0fdfa; border-color:rgba(34,211,238,.65);
+}
+.sst-product-note{
+  font-size:10px; color:#9ec5e8; line-height:1.4;
+  margin:0 8px 10px 36px;
+}
 
 .layer-swatch{width:18px;height:8px;border-radius:2px;flex-shrink:0}
 .layers-divider{border:none;border-top:1px solid rgba(255,255,255,.10);margin:14px 0 8px}
@@ -3510,9 +3527,9 @@ body.bw-auth-screen-open .leaflet-container{
       <button id="sat-day-newer" type="button" class="map-time-pill-step" onclick="stepSatDayNewer()" title="One day newer">▶</button>
     </div>
     <div class="map-time-pill-footer">
-      <span>2 weeks ago</span>
+      <span id="sat-date-older-label">2 weeks ago</span>
       <span id="sat-date-hint" class="map-time-pill-hint">Observed imagery only</span>
-      <span>Latest →</span>
+      <span id="sat-date-newer-label">Latest →</span>
     </div>
   </div>
 
@@ -3892,10 +3909,15 @@ body.bw-auth-screen-open .leaflet-container{
       <input type="checkbox" id="chk-sst" onchange="toggleLayer('sst')">
       <span class="lyr-label">
         <span class="layer-swatch" style="background:linear-gradient(90deg,#082460 0%,#0e5aaa 20%,#28aac8 35%,#5ac878 50%,#ebb028 70%,#eb7823 85%,#be281f 100%);width:18px;height:8px;border-radius:2px"></span>
-        <span>Sea Surface Temp <span style="font-size:8px;color:#fbbf24;opacity:.85">(MUR 1km)</span></span>
+        <span>Sea Surface Temp <span id="sst-layer-tag" style="font-size:8px;color:#fbbf24;opacity:.85">(MUR 1km)</span></span>
       </span>
       <span class="lyr-toggle"></span>
     </label>
+    <div class="sst-product" id="sst-product" role="group" aria-label="Sea surface temperature source">
+      <button type="button" id="sst-product-mur" class="on" aria-pressed="true" onclick="setSstProduct('mur')">Daily composite</button>
+      <button type="button" id="sst-product-goes" aria-pressed="false" onclick="setSstProduct('goes')">Hourly passes</button>
+    </div>
+    <div class="sst-product-note">Hourly is GOES-19, a few hours old, loaded for the map on screen. Clouds stay blank. It is not saved, so it does not use file storage. The bite score stays on the daily composite.</div>
     <label class="layer-row" title="NASA VIIRS NOAA-20 Chlorophyll-a (1km) — water color/productivity, same VIIRS sensor family the bite score reads. Green/yellow = nutrient-rich; dark blue = clear blue water. Edges where they meet hold bait and predators.">
       <input type="checkbox" id="chk-chlor" onchange="toggleLayer('chlor')">
       <span class="lyr-label">
@@ -4252,7 +4274,7 @@ body.bw-auth-screen-open .leaflet-container{
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
 <script src="bw-units.js?v=20261012a"></script>
-<script src="bw-core.js?v=20261012a"></script>
+<script src="bw-core.js?v=20261028a"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

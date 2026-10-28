@@ -1357,6 +1357,20 @@ async function assembleOcean(lat: number, lng: number, hoursAhead = 0) {
 const SSTGRID_TTL_MS = 3 * 60 * 60 * 1000;
 const sstGridCache = new Map<string, { body: unknown; atMs: number }>();
 
+// GOES-19 hourly SST (AOML CoastWatch). Time axis is seconds since 1970, so
+// "6 hours before the newest file" is (last-21600), not (last-6). The grid
+// covers 60S–60N and 134W–16W: California through the Atlantic, not Hawaii.
+// Each request is one hour of the viewport. Nothing is written to storage.
+const GOES_SST_ERDDAP = "https://cwcgom.aoml.noaa.gov/erddap/griddap";
+const GOES_SST_DATASET = "goes19SSThourly";
+const GOES_SST_NATIVE = 0.02;
+const GOES_LAT_MIN = -59.99, GOES_LAT_MAX = 59.99;
+const GOES_LNG_MIN = -133.99, GOES_LNG_MAX = -16.01;
+const SST_PASS_MAX_HOURS = 48;
+const SSTPASS_LATEST_TTL_MS = 20 * 60 * 1000;
+const SSTPASS_OLDER_TTL_MS = 6 * 60 * 60 * 1000;
+const sstPassCache = new Map<string, { body: unknown; atMs: number }>();
+
 /** Map overlay MUR abort budget before Open-Meteo marine SST (PFEG often hangs). */
 function sstOverlayMurTimeoutMs(): number {
   const raw = Number(Deno.env.get("SST_OVERLAY_MUR_TIMEOUT_MS") ?? "8000");
@@ -1660,6 +1674,78 @@ async function resolveObservedSstGrid(
   return { stepDeg: mur.stepDeg, rows: [] as number[][], source: SST_DATASET };
 }
 
+// One GOES-19 hour for the map viewport. Clouds stay null (not gap-filled).
+// hoursBack 0 is the newest file on the server, which is typically a few
+// hours behind the clock. Older hours use the axis units (seconds).
+async function fetchGoesSstPass(
+  latMin: number, latMax: number, lngMin: number, lngMax: number,
+  hoursBack = 0, targetDeg = 0.05,
+) {
+  const back = Math.max(0, Math.min(SST_PASS_MAX_HOURS, Math.round(hoursBack)));
+  const a0raw = Math.min(latMin, latMax), a1raw = Math.max(latMin, latMax);
+  const o0raw = Math.min(lngMin, lngMax), o1raw = Math.max(lngMin, lngMax);
+  const a0 = Math.max(GOES_LAT_MIN, a0raw), a1 = Math.min(GOES_LAT_MAX, a1raw);
+  const o0 = Math.max(GOES_LNG_MIN, o0raw), o1 = Math.min(GOES_LNG_MAX, o1raw);
+  const stepWant = Math.max(GOES_SST_NATIVE, Math.min(0.10, targetDeg));
+  let stride = Math.max(1, Math.round(stepWant / GOES_SST_NATIVE));
+  if (!(a1 - a0 >= GOES_SST_NATIVE && o1 - o0 >= GOES_SST_NATIVE)) {
+    return {
+      stepDeg: stride * GOES_SST_NATIVE, rows: [] as number[][],
+      observedAtMs: null, source: GOES_SST_DATASET, hoursBack: back,
+      cloud: false, outside: true, cells: 0, valid: 0,
+      bounds: { s: a0raw, n: a1raw, w: o0raw, e: o1raw },
+    };
+  }
+  for (let i = 0; i < 12; i++) {
+    const nLat = Math.ceil((a1 - a0) / (stride * GOES_SST_NATIVE)) + 1;
+    const nLng = Math.ceil((o1 - o0) / (stride * GOES_SST_NATIVE)) + 1;
+    if (nLat * nLng <= 8000 || stride >= 10) break;
+    stride++;
+  }
+  const stepDeg = stride * GOES_SST_NATIVE;
+  const timeIdx = back <= 0 ? "%5B(last)%5D" : `%5B(last-${back * 3600})%5D`;
+  const url = `${GOES_SST_ERDDAP}/${GOES_SST_DATASET}.json?sst${timeIdx}`
+    + `%5B(${a0.toFixed(2)}):${stride}:(${a1.toFixed(2)})%5D`
+    + `%5B(${o0.toFixed(2)}):${stride}:(${o1.toFixed(2)})%5D`;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000), headers: ERDDAP_HEADERS });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const cols: string[] = d?.table?.columnNames ?? [];
+    const rawRows: unknown[][] = d?.table?.rows ?? [];
+    const ti = cols.indexOf("time"), li = cols.indexOf("latitude"), gi = cols.indexOf("longitude"), vi = cols.indexOf("sst");
+    let observedAtMs: number | null = null;
+    const rows: number[][] = [];
+    for (const row of rawRows) {
+      if (observedAtMs == null && ti >= 0 && typeof row[ti] === "string") {
+        const ms = Date.parse(row[ti] as string);
+        if (isFinite(ms)) observedAtMs = ms;
+      }
+      let c = num(row[vi]);
+      if (c == null) continue;
+      if (c > 200) c = c - 273.15;
+      if (c < -3 || c > 45) continue;
+      const la = num(row[li]), ln = num(row[gi]);
+      if (la == null || ln == null) continue;
+      const f = Math.round((c * 9 / 5 + 32) * 10) / 10;
+      const ms = ti >= 0 && typeof row[ti] === "string" ? Date.parse(row[ti] as string) : 0;
+      rows.push([
+        Math.round(la * 1000) / 1000,
+        Math.round(ln * 1000) / 1000,
+        f,
+        ms || null,
+      ]);
+    }
+    return {
+      stepDeg, rows, observedAtMs, source: GOES_SST_DATASET, hoursBack: back,
+      cloud: rows.length === 0, outside: false, cells: rawRows.length, valid: rows.length,
+      bounds: { s: a0, n: a1, w: o0, e: o1 },
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Bathymetry grid for a box → { stepDeg, rows:[[lat,lng,depthM],…] }.
 // US coastal boxes use the CUDEM / BlueTopo mosaic. ETOPO is the backup when
 // that mosaic returns nothing.
@@ -1921,6 +2007,38 @@ export const handler = async (req: Request): Promise<Response> => {
     if (!out) return json({ error: "RTOFS SST forecast unavailable" }, cors, 502);
     return new Response(JSON.stringify(out), {
       headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=7200" },
+    });
+  }
+
+  // ── Hourly GOES-19 SST pass. Display only — bite scores stay on MUR. ────────
+  // On-demand subset of one hour. No granules are stored.
+  if (mode === "sstpass") {
+    const latMin = num(u.searchParams.get("latMin"));
+    const latMax = num(u.searchParams.get("latMax"));
+    const lngMin = num(u.searchParams.get("lngMin"));
+    const lngMax = num(u.searchParams.get("lngMax"));
+    if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
+      return json({ error: "latMin,latMax,lngMin,lngMax required" }, cors, 400);
+    }
+    const hoursBack = Math.max(0, Math.min(SST_PASS_MAX_HOURS, Math.round(num(u.searchParams.get("hoursBack")) ?? 0)));
+    const reqStep = num(u.searchParams.get("stepDeg")) ?? 0.05;
+    const ck = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${hoursBack}:${reqStep.toFixed(3)}`;
+    const ttl = hoursBack === 0 ? SSTPASS_LATEST_TTL_MS : SSTPASS_OLDER_TTL_MS;
+    const cached = sstPassCache.get(ck);
+    if (cached && Date.now() - cached.atMs < ttl) {
+      return new Response(JSON.stringify(cached.body), {
+        headers: { ...cors, "Content-Type": "application/json", "Cache-Control": hoursBack === 0 ? "public, max-age=600" : "public, max-age=21600" },
+      });
+    }
+    const pass = await fetchGoesSstPass(latMin, latMax, lngMin, lngMax, hoursBack, reqStep);
+    if (!pass) return json({ error: "GOES SST pass unavailable" }, cors, 502);
+    sstPassCache.set(ck, { body: pass, atMs: Date.now() });
+    if (sstPassCache.size > 48) {
+      const oldest = sstPassCache.keys().next().value;
+      if (oldest != null) sstPassCache.delete(oldest);
+    }
+    return new Response(JSON.stringify(pass), {
+      headers: { ...cors, "Content-Type": "application/json", "Cache-Control": hoursBack === 0 ? "public, max-age=600" : "public, max-age=21600" },
     });
   }
 

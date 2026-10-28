@@ -540,6 +540,16 @@ const M_PER_FATHOM = 1.8288;
 // forecast slider drives the algorithm FORWARD; this slider steps imagery BACK.
 let satDayOffset = 0;   // 0 = most recent (the resolved freshest published date)
 const SAT_MAX_DAYS_BACK = 14;
+// SST picture source. "mur" is the daily cloud-free composite the bite score
+// uses. "goes" is GOES-19 hourly passes (a few hours old, clouds left blank).
+// Passes are fetched for the viewport only — nothing is saved to file storage.
+let sstProduct = "mur";
+try {
+  const savedProduct = localStorage.getItem("bwi_sst_product");
+  if(savedProduct === "goes" || savedProduct === "mur") sstProduct = savedProduct;
+} catch(e){}
+let sstPassOffset = 0; // hours back from the newest GOES file, 0 = latest
+const SST_PASS_MAX_HOURS = 48;
 // Resolved "freshest available" GIBS publish lag per product (days back from UTC
 // today) and the real date string being shown. Defaults to 1 day (these products
 // typically publish within ~24h); ensureFreshestSatDates() probes GIBS and tightens
@@ -697,6 +707,7 @@ async function initMap(){
   // Restore saved preferences (default port, basemap, etc.) before any view
   // logic reads them, so the app opens with the user's chosen defaults.
   if(typeof prefLoad === "function") prefLoad();
+  if(typeof updateSstProductButtons === "function") updateSstProductButtons();
   if(typeof updateContourUnitHints === "function") updateContourUnitHints();
   MAP=L.map("map",{center:[29.0,-85.0],zoom:5,zoomControl:false,attributionControl:true,maxZoom:18,
     // Trackpad/mouse-wheel zoom is handled by our own debounced handler below
@@ -901,13 +912,9 @@ async function initMap(){
   //   score's gap-filled DINEOF product is built from (replaces the old MODIS
   //   Aqua overlay, a different sensor). Color: blue (clear) → green → red.
   //
-  // Why not 6-8 images/day like some imagery services? Those stitch every
-  // individual polar-orbiter pass (VIIRS on SNPP/NOAA-20/21, MODIS Aqua/Terra)
-  // plus geostationary GOES ABI. We instead render ONE daily gap-filled L4
-  // analysis: it's cloud-free everywhere in a single frame (no swath holes to
-  // slide past) and is the exact grid the bite score uses. Multi-pass
-  // compositing is a backend pipeline we can add later; for planning, one
-  // complete cloud-free frame/day is more useful than 8 partial cloudy ones.
+  // The daily layer is the gap-filled MUR composite the bite score uses.
+  // Hourly passes are a separate canvas source (GOES-19, sstProduct "goes"):
+  // one hour at a time, clouds left blank, fetched for the view only.
   //
   // Both products have a ~1 day processing lag. Tile failures degrade to
   // transparent (no broken images). Layers are NOT added to the map on init —
@@ -9230,7 +9237,30 @@ function _sstForecastRGBA(tempF){
 
 function applySstForecastGrid(data){
   SST_FORECAST_GRID = null;
-  if(!data || !data.rows || !data.rows.length) return;
+  if(!data) return;
+  const goes = data.source === "goes19SSThourly";
+  if(!data.rows || !data.rows.length){
+    // A cloudy hour is a real result. Keep an empty field so the previous
+    // hour (or the daily composite) does not stay painted in the holes.
+    if(goes && data.cloud && data.bounds){
+      const b = data.bounds;
+      SST_FORECAST_GRID = {
+        step: data.stepDeg || 0.04,
+        minLat: b.s, minLng: b.w, nLat: 1, nLng: 1,
+        val: new Float32Array([NaN]),
+        bounds: { s: b.s, n: b.n, w: b.w, e: b.e },
+        observedAtMs: data.observedAtMs || null,
+        forecastHour: 0,
+        source: data.source,
+        hoursBack: data.hoursBack || 0,
+        daysBack: 0,
+        keepClouds: true,
+        cloudy: true,
+        _requestStep: data.stepDeg || null,
+      };
+    }
+    return;
+  }
   const step = data.stepDeg || 0.0833;
   let mnLa = Infinity, mxLa = -Infinity, mnLn = Infinity, mxLn = -Infinity, freshest = 0;
   for(const r of data.rows){
@@ -9255,6 +9285,9 @@ function applySstForecastGrid(data){
     daysBack: (typeof data.daysBack === "number" && isFinite(data.daysBack))
       ? data.daysBack
       : (satDayOffset > 0 ? satDayOffset : 0),
+    hoursBack: (typeof data.hoursBack === "number") ? data.hoursBack : null,
+    keepClouds: goes,
+    cloudy: false,
   };
 }
 
@@ -9478,7 +9511,9 @@ function _sstLandMaskAtGrid(g){
 // once per grid and shared by the range computation and the raster build.
 function _sstFcPrepared(g){
   if(g._prepared) return g._prepared;
-  const filled = _sstFcFillGaps(g.val, g.nLat, g.nLng);
+  // Hourly passes leave cloud holes empty. Filling them would invent a
+  // temperature and make a partial pass look like the daily composite.
+  const filled = g.keepClouds ? new Float32Array(g.val) : _sstFcFillGaps(g.val, g.nLat, g.nLng);
   const landAtGrid = _sstLandMaskAtGrid(g);
   for(let k = 0; k < filled.length; k++) if(landAtGrid[k]) filled[k] = NaN;
   g._prepared = {
@@ -9658,8 +9693,14 @@ const SstForecastLayer = L.Layer.extend({
     const want = _sstStepForZoom(this._map.getZoom());
     // Refetch when zoom wants a meaningfully denser/coarser grid.
     if(g._requestStep != null && Math.abs(g._requestStep - want) > 0.005) return false;
-    const wantMur = satDayOffset > 0 ? satDayOffset : 0;
-    if(g.daysBack != null && g.daysBack !== wantMur) return false;
+    if(sstProduct === "goes"){
+      if(g.source !== "goes19SSThourly") return false;
+      if((g.hoursBack || 0) !== sstPassOffset) return false;
+    } else {
+      if(g.source === "goes19SSThourly") return false;
+      const wantMur = satDayOffset > 0 ? satDayOffset : 0;
+      if(g.daysBack != null && g.daysBack !== wantMur) return false;
+    }
     return true;
   },
   _reset: function(){
@@ -9680,7 +9721,12 @@ const SstForecastLayer = L.Layer.extend({
     this._refetchTimer = setTimeout(() => this._requestData(), 220);
   },
   _requestData: function(){
-    if(!layerVis.sst || !MAP || typeof BW_OCEAN === "undefined" || !BW_OCEAN.fetchSstGrid) return;
+    if(!layerVis.sst || !MAP || typeof BW_OCEAN === "undefined") return;
+    if(sstProduct === "goes"){
+      this._requestGoesPass();
+      return;
+    }
+    if(!BW_OCEAN.fetchSstGrid) return;
     const hours = (typeof oceanOverlayForecastHour === "function") ? oceanOverlayForecastHour() : 0;
     const seq = ++_sstFcFetchSeq;
     let b;
@@ -9778,6 +9824,99 @@ const SstForecastLayer = L.Layer.extend({
     };
     attempt(2);
   },
+  // Hourly GOES-19 for this view. Clouds stay blank. Never fall back to the
+  // daily MUR/GIBS picture — that would hide the holes the pass is for.
+  _requestGoesPass: function(){
+    if(!BW_OCEAN.fetchSstPass) return;
+    const seq = ++_sstFcFetchSeq;
+    let b;
+    try { b = MAP.getBounds(); } catch(e){ return; }
+    const z = MAP.getZoom();
+    const pad = z >= 8 ? 0.18 : z >= 6 ? 0.08 : 0.02;
+    const bx = {
+      s: b.getSouth() - (b.getNorth() - b.getSouth()) * pad,
+      n: b.getNorth() + (b.getNorth() - b.getSouth()) * pad,
+      w: b.getWest() - (b.getEast() - b.getWest()) * pad,
+      e: b.getEast() + (b.getEast() - b.getWest()) * pad,
+    };
+    if(_sstBoxTooBig(bx)){
+      const already = SST_STATUS === "unavailable" && !SST_FORECAST_GRID;
+      SST_STATUS = "unavailable";
+      _sstHideGibsFallback();
+      SST_FORECAST_GRID = null;
+      this._smallFor = null;
+      this._draw();
+      updateSatDateDisplay();
+      if(typeof updateOceanLegend === "function") updateOceanLegend();
+      if(!already && typeof showToast === "function") showToast("Zoom in to load an hourly SST pass.", "info");
+      return;
+    }
+    SST_STATUS = "loading";
+    _sstHideGibsFallback();
+    if(typeof updateOceanLegend === "function") updateOceanLegend();
+    const stepDeg = _sstStepForBox(bx, z);
+    const reqOffset = sstPassOffset;
+    if(bx.w < -98 && typeof buildBathyGrid === "function"
+       && typeof _bathyGridCoversView === "function"
+       && !_bathyGridCoversView(bx.s, bx.n, bx.w, bx.e)){
+      buildBathyGrid(bx.s, bx.n, bx.w, bx.e).then(() => {
+        if(seq !== _sstFcFetchSeq || !layerVis.sst || sstProduct !== "goes") return;
+        this._smallFor = null;
+        this._draw();
+      }).catch(() => {});
+    }
+    const giveUp = () => {
+      SST_STATUS = "unavailable";
+      SST_FORECAST_GRID = null;
+      _sstHideGibsFallback();
+      this._smallFor = null;
+      this._draw();
+      updateSatDateDisplay();
+      if(typeof updateOceanLegend === "function") updateOceanLegend();
+    };
+    const attempt = (triesLeft) => {
+      if(seq !== _sstFcFetchSeq || !layerVis.sst || sstProduct !== "goes") return;
+      BW_OCEAN.fetchSstPass(bx.s, bx.n, bx.w, bx.e, reqOffset, stepDeg).then(data => {
+        if(seq !== _sstFcFetchSeq || !layerVis.sst || sstProduct !== "goes") return;
+        if(reqOffset !== sstPassOffset) return;
+        if(!data){
+          if(triesLeft > 0){ setTimeout(() => attempt(triesLeft - 1), 900); return; }
+          giveUp();
+          return;
+        }
+        if(data.outside){
+          const already = SST_STATUS === "unavailable" && !SST_FORECAST_GRID;
+          SST_STATUS = "unavailable";
+          SST_FORECAST_GRID = null;
+          _sstHideGibsFallback();
+          this._smallFor = null;
+          this._draw();
+          updateSatDateDisplay();
+          if(typeof updateOceanLegend === "function") updateOceanLegend();
+          if(!already && typeof showToast === "function") showToast("Hourly GOES-19 covers California through the Atlantic. This view is outside that grid.", "info");
+          return;
+        }
+        applySstForecastGrid(data);
+        if(!SST_FORECAST_GRID){
+          if(triesLeft > 0){ setTimeout(() => attempt(triesLeft - 1), 900); return; }
+          giveUp();
+          return;
+        }
+        SST_FORECAST_GRID._requestStep = stepDeg;
+        SST_STATUS = "ready";
+        _sstHideGibsFallback();
+        updateSatDateDisplay();
+        if(!SST_FORECAST_GRID.cloudy) _sstUpdateDisplayRange(SST_FORECAST_GRID, true);
+        this._draw();
+        if(typeof updateOceanLegend === "function") updateOceanLegend();
+      }).catch(() => {
+        if(seq !== _sstFcFetchSeq || !layerVis.sst) return;
+        if(triesLeft > 0){ setTimeout(() => attempt(triesLeft - 1), 900); return; }
+        giveUp();
+      });
+    };
+    attempt(1);
+  },
   _draw: function(){
     if(!this._canvas || !this._map) return;
     const ctx = this._canvas.getContext("2d");
@@ -9822,8 +9961,11 @@ function syncSstOverlayMode(){
     if(!sstForecastLayer) sstForecastLayer = new SstForecastLayer();
     if(!MAP.hasLayer(sstForecastLayer)) sstForecastLayer.addTo(MAP);
     else sstForecastLayer.refresh();
-    if(SST_FORECAST_GRID){
+    if(SST_FORECAST_GRID && (sstProduct !== "goes" || SST_FORECAST_GRID.source === "goes19SSThourly")){
       SST_STATUS = "ready";
+      _sstHideGibsFallback();
+    } else if(sstProduct === "goes"){
+      SST_STATUS = "loading";
       _sstHideGibsFallback();
     } else {
       SST_STATUS = "loading";
@@ -11748,7 +11890,19 @@ function satDateLabel(){
   d.setUTCDate(d.getUTCDate() - satCurrentDaysBack());
   return d.toLocaleDateString(undefined, {month:"short", day:"numeric"});
 }
+function satControlIsPass(){
+  return sstProduct === "goes" && typeof layerVis !== "undefined" && !!layerVis.sst;
+}
+function formatPassStamp(observedAtMs){
+  if(!observedAtMs) return "Hourly pass";
+  const h = Math.max(0, Math.round((Date.now() - observedAtMs) / 3600000));
+  const d = new Date(observedAtMs);
+  const clock = d.toLocaleString(undefined, { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
+  const age = h <= 0 ? "under 1h old" : (h === 1 ? "1h old" : h + "h old");
+  return clock + " · " + age;
+}
 function sstOverlaySourceHint(){
+  if(satControlIsPass()) return "GOES-19 hourly · clouds stay blank";
   if(oceanOverlayForecastHour() > 0 && layerVis.sst) return "NOAA RTOFS model · ~9 km";
   if(layerVis.chlor && !layerVis.sst) return "NASA GIBS · VIIRS observed";
   if(SST_FORECAST_GRID && SST_FORECAST_GRID.source === "open-meteo-marine-sst"){
@@ -11758,8 +11912,16 @@ function sstOverlaySourceHint(){
 }
 function updateSatDateDisplay(){
   const el = document.getElementById("sat-date-display");
+  const pass = satControlIsPass();
   if(el){
-    if(oceanOverlayForecastHour() > 0 && layerVis.sst){
+    if(pass){
+      const g = SST_FORECAST_GRID;
+      const cloudy = g && g.cloudy;
+      const stamp = (g && g.source === "goes19SSThourly")
+        ? formatPassStamp(g.observedAtMs)
+        : (SST_STATUS === "loading" ? "Loading hourly pass…" : "Hourly pass");
+      el.textContent = cloudy ? (stamp + " · cloud") : stamp;
+    } else if(oceanOverlayForecastHour() > 0 && layerVis.sst){
       el.textContent = `Model +${oceanOverlayForecastHour()}h · ${forecastTimeDisplay()}`;
     } else if(layerVis.sst && SST_FORECAST_GRID && SST_FORECAST_GRID.observedAtMs){
       // Canvas MUR date — not the GIBS slider offset (those diverged and made
@@ -11774,24 +11936,89 @@ function updateSatDateDisplay(){
     }
   }
   const inp = document.getElementById("sat-date-input");
-  // Slider is left→right = OLDER→NEWER (intuitive: rightward = forward in time).
-  // The input value is "days back", so the thumb position is the inverse.
+  // Slider is left→right = OLDER→NEWER. Days for the composite, hours for passes.
+  const max = pass ? SST_PASS_MAX_HOURS : SAT_MAX_DAYS_BACK;
+  const offset = pass ? sstPassOffset : satDayOffset;
   if(inp){
-    const pos = SAT_MAX_DAYS_BACK - satDayOffset;
-    if(+inp.value !== pos) inp.value = pos;
+    if(+inp.max !== max) inp.max = String(max);
+    const pos = max - offset;
+    if(+inp.value !== pos) inp.value = String(pos);
   }
   const older = document.getElementById("sat-day-older");
   const newer = document.getElementById("sat-day-newer");
-  if(older) older.disabled = satDayOffset >= SAT_MAX_DAYS_BACK;
-  if(newer) newer.disabled = satDayOffset <= 0;
+  if(older) older.disabled = offset >= max;
+  if(newer) newer.disabled = offset <= 0;
+  const olderLabel = document.getElementById("sat-date-older-label");
+  const newerLabel = document.getElementById("sat-date-newer-label");
+  if(olderLabel) olderLabel.textContent = pass ? "48h ago" : "2 weeks ago";
+  if(newerLabel) newerLabel.textContent = "Latest →";
 }
-function stepSatDayOlder(){ stopSatPlayback(); setSatDayOffset(satDayOffset + 1); }
-function stepSatDayNewer(){ stopSatPlayback(); setSatDayOffset(satDayOffset - 1); }
-// Slider handler: input position is left(old)→right(newest), so days-back is inverted.
+function stepSatDayOlder(){
+  stopSatPlayback();
+  if(satControlIsPass()) setSstPassOffset(sstPassOffset + 1);
+  else setSatDayOffset(satDayOffset + 1);
+}
+function stepSatDayNewer(){
+  stopSatPlayback();
+  if(satControlIsPass()) setSstPassOffset(sstPassOffset - 1);
+  else setSatDayOffset(satDayOffset - 1);
+}
+// Slider handler: input position is left(old)→right(newest).
 function onSatSliderInput(sliderPos){
-  setSatDayOffset(SAT_MAX_DAYS_BACK - (sliderPos|0));
+  if(satControlIsPass()) setSstPassOffset(SST_PASS_MAX_HOURS - (sliderPos|0));
+  else setSatDayOffset(SAT_MAX_DAYS_BACK - (sliderPos|0));
+}
+function setSstPassOffset(hours){
+  const v = Math.max(0, Math.min(SST_PASS_MAX_HOURS, hours|0));
+  if(v === sstPassOffset && SST_FORECAST_GRID && SST_FORECAST_GRID.source === "goes19SSThourly"
+     && (SST_FORECAST_GRID.hoursBack || 0) === v){
+    updateSatDateDisplay();
+    return;
+  }
+  sstPassOffset = v;
+  SST_FORECAST_GRID = null;
+  _sstFcFetchSeq++;
+  if(sstForecastLayer) sstForecastLayer._smallFor = null;
+  if(layerVis.sst){
+    if(typeof syncSstOverlayMode === "function") syncSstOverlayMode();
+  } else updateSatDateDisplay();
+}
+function updateSstProductButtons(){
+  const mur = document.getElementById("sst-product-mur");
+  const goes = document.getElementById("sst-product-goes");
+  if(mur){
+    mur.classList.toggle("on", sstProduct === "mur");
+    mur.setAttribute("aria-pressed", sstProduct === "mur" ? "true" : "false");
+  }
+  if(goes){
+    goes.classList.toggle("on", sstProduct === "goes");
+    goes.setAttribute("aria-pressed", sstProduct === "goes" ? "true" : "false");
+  }
+  const tag = document.getElementById("sst-layer-tag");
+  if(tag) tag.textContent = sstProduct === "goes" ? "(GOES hourly)" : "(MUR 1km)";
+}
+function setSstProduct(which){
+  if(which !== "mur" && which !== "goes") return;
+  if(which === sstProduct){
+    updateSstProductButtons();
+    if(typeof layerVis !== "undefined" && !layerVis.sst && typeof toggleLayer === "function") toggleLayer("sst");
+    return;
+  }
+  sstProduct = which;
+  try { localStorage.setItem("bwi_sst_product", which); } catch(e){}
+  updateSstProductButtons();
+  SST_FORECAST_GRID = null;
+  _sstFcFetchSeq++;
+  if(typeof sstForecastLayer !== "undefined" && sstForecastLayer) sstForecastLayer._smallFor = null;
+  if(typeof layerVis !== "undefined" && !layerVis.sst && typeof toggleLayer === "function"){
+    toggleLayer("sst");
+    return;
+  }
+  if(typeof syncSstOverlayMode === "function") syncSstOverlayMode();
+  if(typeof updateSatDateControlVisibility === "function") updateSatDateControlVisibility();
 }
 function setSatDayOffset(days){
+  if(satControlIsPass()) return;
   if(oceanOverlayForecastHour() > 0 && layerVis.sst) return;
   const v = Math.max(0, Math.min(SAT_MAX_DAYS_BACK, days|0));
   if(v === satDayOffset){ updateSatDateDisplay(); return; }
@@ -11816,14 +12043,15 @@ function updateSatDateControlVisibility(){
     const titleEl = document.getElementById("sat-date-title");
     const hintEl = document.getElementById("sat-date-hint");
     const chlorOnly = layerVis.chlor && !layerVis.sst;
-    const label = chlorOnly ? "Chlorophyll" : "SST";
+    const pass = satControlIsPass();
+    const label = chlorOnly ? "Chlorophyll" : (pass ? "SST passes" : "SST");
     if(titleEl) titleEl.textContent = label;
     if(hintEl) hintEl.textContent = chlorOnly
       ? "NASA GIBS · VIIRS observed"
       : sstOverlaySourceHint();
     const row = box.querySelector(".map-time-pill-row");
     const footer = box.querySelector(".map-time-pill-footer");
-    const forecastLocked = oceanOverlayForecastHour() > 0 && layerVis.sst;
+    const forecastLocked = oceanOverlayForecastHour() > 0 && layerVis.sst && !pass;
     if(row) row.style.opacity = forecastLocked ? "0.45" : "";
     if(row) row.style.pointerEvents = forecastLocked ? "none" : "";
     if(footer) footer.style.opacity = forecastLocked ? "0.45" : "";
@@ -15356,9 +15584,12 @@ function updateOceanLegend(){
   // the map (see updateBiteBanner), not in this side panel — it was taking up
   // too much room here. This panel now only covers the gradient overlays.
   if(layerVis.sst){
-    const sstTitle = oceanOverlayForecastHour() > 0
-      ? `SST FORECAST (+${oceanOverlayForecastHour()}h)`
-      : "SST (°F)";
+    const pass = sstProduct === "goes";
+    const sstTitle = pass
+      ? "SST PASSES (°F)"
+      : (oceanOverlayForecastHour() > 0
+        ? `SST FORECAST (+${oceanOverlayForecastHour()}h)`
+        : "SST (°F)");
     const sstLoading = SST_STATUS === "loading";
     const sstUnavailable = SST_STATUS === "unavailable";
     // Legend ticks follow the adaptive local stretch (not the old global 50–86).
@@ -15370,9 +15601,12 @@ function updateOceanLegend(){
     const hi = sstGlobal ? 86 : ((typeof _sstColorHi === "number") ? _sstColorHi : 88);
     const sstOmFallback = !sstGlobal && SST_FORECAST_GRID
       && SST_FORECAST_GRID.source === "open-meteo-marine-sst";
-    const sstScaleTag = sstGlobal
-      ? "global · zoom in for local scale"
-      : (sstOmFallback ? "local · model fallback" : "local");
+    const passCloudy = pass && SST_FORECAST_GRID && SST_FORECAST_GRID.cloudy;
+    const sstScaleTag = pass
+      ? (passCloudy ? "hourly · this pass is cloud" : "hourly · clouds blank")
+      : (sstGlobal
+        ? "global · zoom in for local scale"
+        : (sstOmFallback ? "local · model fallback" : "local"));
     const nTicks = phone ? 5 : 7;
     const sstTicks = [];
     for(let i = 0; i < nTicks; i++){

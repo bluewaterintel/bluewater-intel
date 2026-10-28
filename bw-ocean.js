@@ -365,6 +365,43 @@
     }
   }
 
+  const sstPassCache = new Map();
+  // One GOES-19 hour for the viewport. Empty rows with cloud:true are a real
+  // cloudy pass, not a failure — the caller must not swap in the daily composite.
+  async function fetchSstPass(latMin, latMax, lngMin, lngMax, hoursBack = 0, stepDeg = null) {
+    const back = Math.max(0, Math.min(48, hoursBack | 0));
+    const stepKey = (typeof stepDeg === "number" && isFinite(stepDeg)) ? stepDeg.toFixed(3) : "auto";
+    const k = `${latMin.toFixed(2)},${latMax.toFixed(2)},${lngMin.toFixed(2)},${lngMax.toFixed(2)}:${back}:${stepKey}`;
+    const hit = sstPassCache.get(k);
+    const ttl = back === 0 ? 20 * 60 * 1000 : 6 * 60 * 60 * 1000;
+    if (hit && Date.now() - hit.atMs < ttl) return hit.data;
+    try {
+      const params = new URLSearchParams({
+        mode: "sstpass",
+        latMin: String(latMin), latMax: String(latMax),
+        lngMin: String(lngMin), lngMax: String(lngMax),
+        hoursBack: String(back),
+      });
+      if (typeof stepDeg === "number" && isFinite(stepDeg)) params.set("stepDeg", String(stepDeg));
+      const res = await fetchWithRetry(`${BASE}/functions/v1/ocean?${params.toString()}`, {
+        headers: ANON ? { apikey: ANON, Authorization: `Bearer ${ANON}` } : {},
+        signal: fetchTimeout(25000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !Array.isArray(data.rows)) return null;
+      if (!data.rows.length && !data.cloud && !data.outside) return null;
+      sstPassCache.set(k, { data, atMs: Date.now() });
+      if (sstPassCache.size > 24) {
+        const oldest = sstPassCache.keys().next().value;
+        if (oldest != null) sstPassCache.delete(oldest);
+      }
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
   const sstGridCache = new Map();
   async function fetchSstGrid(latMin, latMax, lngMin, lngMax, hours = 0, stepDeg = null, daysBack = null) {
     const fh = normalizeOceanHours(hours);
@@ -413,7 +450,7 @@
   root.BW_OCEAN = {
     fetchOcean, fetchBathy, fetchChlorGrid, fetchPredictInputs, clearPredictInputsCache,
     predictInputsFrontsOk,
-    fetchWindGrid, fetchCurrentGrid, fetchAltimetryGrid, fetchSstGrid,
+    fetchWindGrid, fetchCurrentGrid, fetchAltimetryGrid, fetchSstGrid, fetchSstPass,
     // After deploying the ocean edge function, pass { mode: "conditions" } for
     // fast header / tide-station resolution (~3–8 s vs 25 s+ full assembly).
     fetchConditions: (lat, lng, hours = 0) => fetchOcean(lat, lng, { mode: "conditions", hours }),
