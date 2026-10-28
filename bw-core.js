@@ -9235,10 +9235,49 @@ function _sstForecastRGBA(tempF){
   ];
 }
 
+// Open-Meteo marine SST is natively 1/12°. The overlay request asks for a
+// finer step, and the payload echoes that request even though every returned
+// point has been snapped onto the coarser grid. Binning those points on the
+// requested step leaves most cells empty; gap fill then invents the front.
+// MUR and GOES already sit on the reported stride, so a matching sample keeps it.
+function _sstStepFromRows(rows, reported){
+  const axisStep = (axis) => {
+    const xs = [];
+    const seen = new Set();
+    for(const r of rows){
+      const x = r[axis];
+      if(typeof x !== "number" || !isFinite(x)) continue;
+      const key = Math.round(x * 1e5);
+      if(seen.has(key)) continue;
+      seen.add(key);
+      xs.push(x);
+    }
+    if(xs.length < 4) return null;
+    xs.sort((a, b) => a - b);
+    const gaps = [];
+    for(let i = 1; i < xs.length; i++){
+      const g = xs[i] - xs[i - 1];
+      if(g >= 0.01) gaps.push(g);
+    }
+    if(gaps.length < 3) return null;
+    gaps.sort((a, b) => a - b);
+    // Low percentile, not the median: a cloudy pass drops whole rows and
+    // those double gaps must not coarsen the stride.
+    return gaps[Math.floor((gaps.length - 1) * 0.2)];
+  };
+  const a = axisStep(0), b = axisStep(1);
+  const obs = (a && b) ? (a + b) / 2 : (a || b);
+  const fallback = (typeof reported === "number" && isFinite(reported) && reported > 0)
+    ? reported : 0.0833;
+  if(!obs) return fallback;
+  if(obs <= fallback * 1.03) return fallback;
+  return Math.round(obs * 10000) / 10000;
+}
+
 function applySstForecastGrid(data){
   SST_FORECAST_GRID = null;
   if(!data || !data.rows || !data.rows.length) return;
-  const step = data.stepDeg || 0.0833;
+  const step = _sstStepFromRows(data.rows, data.stepDeg || 0.0833);
   let mnLa = Infinity, mxLa = -Infinity, mnLn = Infinity, mxLn = -Infinity, freshest = 0;
   for(const r of data.rows){
     if(r[0] < mnLa) mnLa = r[0]; if(r[0] > mxLa) mxLa = r[0];
