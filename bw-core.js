@@ -9061,17 +9061,17 @@ let SST_STATUS = "idle"; // idle | loading | ready | unavailable
 
 // Adaptive SST display range (°F). GIBS MUR tiles bake a global ~0–32°C
 // palette, so summer Mid-Atlantic water (all ~78–86°F) looks uniformly red.
-// Canvas SST stretches P10–P90 across the full rainbow so 1–2°F breaks read
-// like Rutgers coolers.
+// Canvas SST stretches the water actually on screen across the rainbow.
 //
 // The stretch is anchored to a REGION, not to the viewport. Deriving it from
 // the on-screen bounds meant every pan re-derived a slightly different range
 // and repainted the whole field, so the same water changed colour as you moved
 // and two screens were never comparable. Anchoring also lets the rasterised
 // field be cached, which is what makes panning a blit instead of a rebuild.
-// Still not the padded fetch box: that pulls in Gulf Stream / cool-shelf
-// extremes and lands everything on the 74–88°F fallback, crushing the 79–84°F
-// fishing band into one orange smear.
+// A 10°F window centered on the middle of that region was clipping the shelf
+// to one navy and the Stream to one maroon, so most of the map had no steps.
+// The window now follows the real spread, up to 20°F, so a Hatteras
+// shelf-to-Stream picture keeps intermediate colors.
 let _sstColorLo = 74;
 let _sstColorHi = 88;
 
@@ -9176,26 +9176,33 @@ function computeSstDisplayRangeFromGrid(g, viewBounds){
   }
   if(vals.length < 30) return {lo: 74, hi: 88, n: vals.length};
   vals.sort((a, b) => a - b);
-  const at = q => vals[Math.min(vals.length - 1, Math.max(0, Math.round(q * (vals.length - 1))))];
-  // P10–P90 (was P5–P95): drop the Stream-core / cold-eddy tails so the color
-  // budget stays on the water captains actually fish.
-  let lo = at(0.10), hi = at(0.90);
-  const MIN_SPAN = 5;   // avoid posterizing a flat field
-  const MAX_SPAN = 10;  // ~79–84°F band gets real contrast; was 18 and looked global
+  return sstDisplayEnds(vals);
+}
+
+// Color ends for a sorted list of water temperatures (°F).
+// P2–P98 keeps both the cool shelf and the Stream inside the rainbow when
+// both are on screen. A 6°F floor stops a flat field from posterizing sensor
+// noise. A 20°F ceiling still shows a real shelf-to-Stream range; the old
+// 10°F ceiling pinned everything outside a thin middle band to navy or maroon.
+function sstDisplayEnds(vals){
+  const n = vals.length;
+  const at = q => vals[Math.min(n - 1, Math.max(0, Math.round(q * (n - 1))))];
+  let lo = at(0.02), hi = at(0.98);
+  const MIN_SPAN = 6;
+  const MAX_SPAN = 20;
   if(hi - lo < MIN_SPAN){
     const mid = (lo + hi) / 2;
     lo = mid - MIN_SPAN / 2;
     hi = mid + MIN_SPAN / 2;
-  }
-  if(hi - lo > MAX_SPAN){
+  } else if(hi - lo > MAX_SPAN){
     const mid = (lo + hi) / 2;
     lo = mid - MAX_SPAN / 2;
     hi = mid + MAX_SPAN / 2;
   }
   lo = Math.floor(lo * 2) / 2;
   hi = Math.ceil(hi * 2) / 2;
-  if(hi <= lo) hi = lo + MIN_SPAN;
-  return {lo, hi, n: vals.length};
+  if(hi - lo < MIN_SPAN) hi = lo + MIN_SPAN;
+  return {lo, hi, n};
 }
 
 function _sstForecastRGBA(tempF){
@@ -9205,16 +9212,16 @@ function _sstForecastRGBA(tempF){
   const lo = _sstColorLo, hi = _sstColorHi;
   const u = Math.max(0, Math.min(1, (tempF - lo) / Math.max(0.001, hi - lo)));
   const stops = [
-    [0.00,  8,  36,  96],   // deep blue — cool end of local range
-    [0.12, 14,  90, 170],   // blue
-    [0.24, 40, 170, 200],   // cyan
-    [0.36, 90, 200, 120],   // green
-    [0.48, 160, 210,  70],  // yellow-green
-    [0.58, 220, 210,  50],  // yellow
-    [0.68, 235, 170,  40],  // gold
-    [0.78, 235, 120,  35],  // orange
-    [0.88, 220,  70,  30],  // red-orange
-    [1.00, 140,  20,  50],  // deep red — warm end
+    [0.00,  37,  99, 196],  // blue — cold end, still a water color
+    [0.14,  45, 160, 214],
+    [0.28,  56, 190, 186],  // cyan
+    [0.42,  90, 196, 120],  // green
+    [0.54, 180, 206,  70],  // yellow-green
+    [0.64, 230, 200,  55],  // yellow
+    [0.74, 236, 154,  42],  // gold
+    [0.84, 226,  96,  40],  // orange
+    [0.93, 204,  60,  48],  // red
+    [1.00, 176,  40,  52],  // warm end — not near-black maroon
   ];
   let i = 0;
   while(i < stops.length - 2 && u > stops[i + 1][0]) i++;
@@ -9491,7 +9498,9 @@ function _sstFcPrepared(g){
 function _sstFcBuildSmallCanvas(g){
   // Bilinear-interpolate TEMPERATURE into a denser grid, then colorize.
   // Land/sound cells are cleared first so the wash never paints over terrain.
-  const scale = (g.step <= 0.025) ? 3 : 4;
+  // Coarse cells (wide zoom, or the model fallback) need more samples or each
+  // cell paints as a hard rectangle. Fine satellite steps stay lighter.
+  const scale = g.step <= 0.03 ? 4 : (g.step <= 0.06 ? 6 : 8);
   const w = g.nLng * scale, h = g.nLat * scale;
   const filled = _sstFcPrepared(g).val;
   const c = document.createElement("canvas");
