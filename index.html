@@ -1261,6 +1261,20 @@ html.bw-block-store-purchase #plan-gate-checkout-note{
   font-size:10px; color:#9ec5e8; line-height:1.4;
   margin:0 8px 10px 36px;
 }
+.sst-scale-lock{
+  display:flex; gap:6px; align-items:center; margin-top:6px;
+}
+.sst-scale-lock button{
+  border:1px solid rgba(107,191,234,.35);
+  background:rgba(8,20,36,.55); color:#cfe5ff;
+  border-radius:7px; padding:3px 8px; font-size:11px; font-weight:700;
+  cursor:pointer; font-family:inherit;
+}
+.sst-scale-lock button.on{
+  background:linear-gradient(135deg,#0e7490,#0f766e);
+  color:#f0fdfa; border-color:rgba(34,211,238,.65);
+}
+.sst-scale-lock span{font-size:10px; color:#9ec5e8; font-weight:600}
 
 .layer-swatch{width:18px;height:8px;border-radius:2px;flex-shrink:0}
 .layers-divider{border:none;border-top:1px solid rgba(255,255,255,.10);margin:14px 0 8px}
@@ -4274,7 +4288,7 @@ body.bw-auth-screen-open .leaflet-container{
 
 <!-- SCALE BAR (bottom-left of map; auto-scaling nautical miles) -->
 <script src="bw-units.js?v=20261012a"></script>
-<script src="bw-core.js?v=20261028c"></script>
+<script src="bw-core.js?v=20261028d"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      SPECIES ENCYCLOPEDIA — full-screen overlay

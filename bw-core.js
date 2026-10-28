@@ -550,6 +550,14 @@ try {
 } catch(e){}
 let sstPassOffset = 0; // hours back from the newest GOES file, 0 = latest
 const SST_PASS_MAX_HOURS = 48;
+// Locked legend width. 20°F is enough for a shelf-to-Stream picture; 25°F
+// leaves more room when the run crosses a bigger break. It does not follow
+// the map. Picked again only when the home port changes.
+let _sstScaleSpan = 20;
+try {
+  const savedSpan = localStorage.getItem("bwi_sst_span");
+  if(savedSpan === "25") _sstScaleSpan = 25;
+} catch(e){}
 // Resolved "freshest available" GIBS publish lag per product (days back from UTC
 // today) and the real date string being shown. Defaults to 1 day (these products
 // typically publish within ~24h); ensureFreshestSatDates() probes GIBS and tightens
@@ -9070,23 +9078,21 @@ let SST_STATUS = "idle"; // idle | loading | ready | unavailable
 // palette, so summer Mid-Atlantic water (all ~78–86°F) looks uniformly red.
 // Canvas SST stretches the water actually on screen across the rainbow.
 //
-// The stretch is anchored to a REGION, not to the viewport. Deriving it from
-// the on-screen bounds meant every pan re-derived a slightly different range
-// and repainted the whole field, so the same water changed colour as you moved
-// and two screens were never comparable. Anchoring also lets the rasterised
-// field be cached, which is what makes panning a blit instead of a rebuild.
-// A 10°F window centered on the middle of that region was clipping the shelf
-// to one navy and the Stream to one maroon, so most of the map had no steps.
-// The window now follows the real spread, up to 20°F, so a Hatteras
-// shelf-to-Stream picture keeps intermediate colors.
+// The stretch is anchored to the home port, then locked. Deriving it from the
+// on-screen bounds meant every pan re-derived a slightly different range and
+// repainted the whole field, so the same water changed colour as you moved.
+// The locked window is 20°F or 25°F, centered on that port's water. Panning,
+// zooming, and a new download keep the same colors. A new home port unlocks it.
 let _sstColorLo = 74;
 let _sstColorHi = 88;
+let _sstColorMid = null;
+let _sstScaleLocked = false;
 
-// Radius of water that defines the stretch, and how far the view has to leave
-// the anchor before it is re-derived. Sized so a normal day's panning around
-// the run never moves the scale, but a long steam to different water does.
-const SST_RANGE_RADIUS_NM   = 100;
-const SST_RANGE_REANCHOR_NM = 50;
+// Radius of water sampled the one time the scale is chosen.
+const SST_RANGE_RADIUS_NM = 100;
+// One download covers this radius around the port (or the view, once a run
+// leaves the port). Pans and zooms inside it reuse the grid.
+const SST_RUN_RADIUS_NM = 60;
 let _sstRangeAnchor = null;   // {lat,lng} the live palette was derived for
 let _sstRangeKey    = null;   // anchor identity the palette was last built from
 
@@ -9116,8 +9122,6 @@ function _sstResolveRangeAnchor(){
     _sstRangeAnchor = (p && _sstNmBetween({ lat: p.lat, lng: p.lng }, centre) <= SST_RANGE_RADIUS_NM)
       ? { lat: p.lat, lng: p.lng }
       : centre;
-  } else if(_sstNmBetween(_sstRangeAnchor, centre) > SST_RANGE_REANCHOR_NM){
-    _sstRangeAnchor = centre;
   }
   return _sstRangeAnchor;
 }
@@ -9125,7 +9129,10 @@ function _sstResolveRangeAnchor(){
 // Returns true when the accepted palette actually moved (caller repaints).
 // `force` is for a freshly fetched field, which must always be re-evaluated.
 function _sstUpdateDisplayRange(g, force){
-  if(!g) return false;
+  // Locked after the first good sample. A new grid, a pan, and a zoom must
+  // not move it. `force` remains for callers; the port change clears the lock.
+  if(!g || _sstScaleLocked) return false;
+  void force;
   const anchor = _sstResolveRangeAnchor();
   if(!anchor) return false;
   const key = anchor.lat.toFixed(3) + "," + anchor.lng.toFixed(3);
@@ -9139,15 +9146,42 @@ function _sstUpdateDisplayRange(g, force){
   // Percentile noise between two fetches of the same water moves the ends by a
   // tenth or two. Repainting for that is exactly the flicker being removed, so
   // hold the current scale unless it has drifted by a legend tick.
-  if(Math.abs(range.lo - _sstColorLo) < 0.5 && Math.abs(range.hi - _sstColorHi) < 0.5) return false;
+  if(Math.abs(range.lo - _sstColorLo) < 0.5 && Math.abs(range.hi - _sstColorHi) < 0.5){
+    _sstColorMid = range.mid;
+    _sstScaleLocked = true;
+    return false;
+  }
   _sstColorLo = range.lo;
   _sstColorHi = range.hi;
+  _sstColorMid = range.mid;
+  _sstScaleLocked = true;
   return true;
 }
 
 function resetSstRangeAnchor(){
   _sstRangeAnchor = null;
   _sstRangeKey = null;
+  _sstScaleLocked = false;
+  _sstColorMid = null;
+  // The held grid and the locked colors belong to the port being left.
+  SST_FORECAST_GRID = null;
+  _sstFcFetchSeq++;
+  if(sstForecastLayer) sstForecastLayer._smallFor = null;
+}
+
+function setSstScaleSpan(span){
+  const width = span === 25 ? 25 : 20;
+  _sstScaleSpan = width;
+  try { localStorage.setItem("bwi_sst_span", String(width)); } catch(e){}
+  if(_sstColorMid != null){
+    const ends = sstWindowAround(_sstColorMid, width);
+    _sstColorLo = ends.lo;
+    _sstColorHi = ends.hi;
+    if(typeof sstForecastLayer !== "undefined" && sstForecastLayer && sstForecastLayer._draw){
+      sstForecastLayer._draw();
+    }
+  }
+  if(typeof updateOceanLegend === "function") updateOceanLegend();
 }
 
 // Returns {lo, hi, n} — n is the sample count, so callers can tell a real
@@ -9181,35 +9215,34 @@ function computeSstDisplayRangeFromGrid(g, viewBounds){
       if(typeof v === "number" && isFinite(v) && v > 28 && v < 100) vals.push(v);
     }
   }
-  if(vals.length < 30) return {lo: 74, hi: 88, n: vals.length};
+  if(vals.length < 30) return {lo: 74, hi: 88, mid: 81, n: vals.length};
   vals.sort((a, b) => a - b);
-  return sstDisplayEnds(vals);
+  return sstDisplayEnds(vals, _sstScaleSpan);
+}
+
+// Fixed-width window centered on a temperature. Half-degree ticks, and the
+// snap is not allowed to shrink the width the captain picked.
+function sstWindowAround(mid, span){
+  const width = span === 25 ? 25 : 20;
+  let lo = mid - width / 2;
+  let hi = mid + width / 2;
+  lo = Math.floor(lo * 2) / 2;
+  hi = Math.ceil(hi * 2) / 2;
+  if(hi - lo < width) hi = lo + width;
+  return {lo, hi, mid, n: 0};
 }
 
 // Color ends for a sorted list of water temperatures (°F).
-// P2–P98 keeps both the cool shelf and the Stream inside the rainbow when
-// both are on screen. A 6°F floor stops a flat field from posterizing sensor
-// noise. A 20°F ceiling still shows a real shelf-to-Stream range; the old
-// 10°F ceiling pinned everything outside a thin middle band to navy or maroon.
-function sstDisplayEnds(vals){
+// The center is the middle of P2–P98 so a shelf-and-Stream sample sits in
+// the middle of the rainbow. The width is the locked 20°F or 25°F choice,
+// not a window that recenters on whatever is currently on screen.
+function sstDisplayEnds(vals, span){
   const n = vals.length;
   const at = q => vals[Math.min(n - 1, Math.max(0, Math.round(q * (n - 1))))];
-  let lo = at(0.02), hi = at(0.98);
-  const MIN_SPAN = 6;
-  const MAX_SPAN = 20;
-  if(hi - lo < MIN_SPAN){
-    const mid = (lo + hi) / 2;
-    lo = mid - MIN_SPAN / 2;
-    hi = mid + MIN_SPAN / 2;
-  } else if(hi - lo > MAX_SPAN){
-    const mid = (lo + hi) / 2;
-    lo = mid - MAX_SPAN / 2;
-    hi = mid + MAX_SPAN / 2;
-  }
-  lo = Math.floor(lo * 2) / 2;
-  hi = Math.ceil(hi * 2) / 2;
-  if(hi - lo < MIN_SPAN) hi = lo + MIN_SPAN;
-  return {lo, hi, n};
+  const mid = (at(0.02) + at(0.98)) / 2;
+  const windowed = sstWindowAround(mid, span);
+  windowed.n = n;
+  return windowed;
 }
 
 function _sstForecastRGBA(tempF){
@@ -9638,13 +9671,6 @@ function _sstFcBuildSmallCanvas(g){
   return c;
 }
 
-function _sstStepForZoom(z){
-  if(z >= 9) return 0.02;
-  if(z >= 7) return 0.03;
-  if(z >= 5) return 0.05;
-  return 0.08;
-}
-
 // ERDDAP refuses / times out on large MUR pulls, and the failure mode is a 502
 // with no rows — which used to leave the ocean empty. Measured on the live
 // function: a 2.6°x2.2° box at 0.05° returns fine (~2.1k cells), 0.03° over the
@@ -9653,8 +9679,43 @@ function _sstStepForZoom(z){
 const SST_CELL_BUDGET = 6000;
 const SST_STEP_MAX = 0.10;   // server clamps targetDeg here too
 
-function _sstStepForBox(bx, z){
-  let step = _sstStepForZoom(z);
+// Held download: at least SST_RUN_RADIUS_NM around the port (or the camera,
+// once the run has left the port), and never smaller than the screen.
+// A wider view is kept as-is so zooming out still fills the map until the
+// box is too big and the global tiles take over.
+function _sstRunBox(view, center){
+  const cos = Math.max(0.2, Math.cos(center.lat * Math.PI / 180));
+  const dLat = SST_RUN_RADIUS_NM / 60;
+  const dLng = SST_RUN_RADIUS_NM / (60 * cos);
+  return {
+    s: Math.min(view.s, center.lat - dLat),
+    n: Math.max(view.n, center.lat + dLat),
+    w: Math.min(view.w, center.lng - dLng),
+    e: Math.max(view.e, center.lng + dLng),
+  };
+}
+
+function _sstFetchCenter(viewCenter){
+  const p = (activePort && typeof PORTS !== "undefined") ? PORTS[activePort] : null;
+  if(p && _sstNmBetween({ lat: p.lat, lng: p.lng }, viewCenter) <= SST_RUN_RADIUS_NM * 2){
+    return { lat: p.lat, lng: p.lng };
+  }
+  return viewCenter;
+}
+
+function _sstRequestBox(){
+  let b;
+  try { b = MAP.getBounds(); } catch(e){ return null; }
+  const view = { s: b.getSouth(), n: b.getNorth(), w: b.getWest(), e: b.getEast() };
+  const centre = _sstFetchCenter({ lat: (view.s + view.n) / 2, lng: (view.w + view.e) / 2 });
+  const bx = _sstRunBox(view, centre);
+  return { bx, stepDeg: _sstStepForRunBox(bx) };
+}
+
+// Stable step for the held grid. Zooming in does not ask for a finer lattice;
+// that request is what made every zoom wait on a new download.
+function _sstStepForRunBox(bx){
+  let step = 0.05;
   const dLat = Math.abs(bx.n - bx.s), dLng = Math.abs(bx.e - bx.w);
   for(let i = 0; i < 24; i++){
     const cells = (dLat / step) * (dLng / step);
@@ -9738,9 +9799,8 @@ const SstForecastLayer = L.Layer.extend({
     if(b.getNorth() > g.bounds.n - margin) return false;
     if(b.getWest() < g.bounds.w + margin) return false;
     if(b.getEast() > g.bounds.e - margin) return false;
-    const want = _sstStepForZoom(this._map.getZoom());
-    // Refetch when zoom wants a meaningfully denser/coarser grid.
-    if(g._requestStep != null && Math.abs(g._requestStep - want) > 0.005) return false;
+    // Zoom stays on this grid. A new step used to force a download and a
+    // repaint on every zoom click.
     if(sstProduct === "goes"){
       if(g.source !== "goes19SSThourly") return false;
       if((g.hoursBack || 0) !== sstPassOffset) return false;
@@ -9748,6 +9808,8 @@ const SstForecastLayer = L.Layer.extend({
       if(g.source === "goes19SSThourly") return false;
       const wantMur = satDayOffset > 0 ? satDayOffset : 0;
       if(g.daysBack != null && g.daysBack !== wantMur) return false;
+      const wantHour = (typeof oceanOverlayForecastHour === "function") ? oceanOverlayForecastHour() : 0;
+      if((g.forecastHour || 0) !== wantHour) return false;
     }
     return true;
   },
@@ -9757,13 +9819,12 @@ const SstForecastLayer = L.Layer.extend({
     const tl = this._map.containerPointToLayerPoint([0, 0]);
     L.DomUtil.setPosition(this._canvas, tl);
     this._canvas.width = size.x; this._canvas.height = size.y;
-    // View settled. The stretch is anchored to a region, so panning inside it
-    // is a no-op here and _draw() reuses the cached raster; only a long run
-    // that re-anchors rebuilds the field.
-    _sstUpdateDisplayRange(SST_FORECAST_GRID, false);
+    // View settled. The color scale is locked, so this is a blit. The legend
+    // is rebuilt only when that lock is first chosen.
+    const rangeMoved = _sstUpdateDisplayRange(SST_FORECAST_GRID, false);
     this._draw();
-    if(typeof updateOceanLegend === "function") updateOceanLegend();
-    // Only hit the network when the view leaves cached coverage (or zoom tier changes).
+    if(rangeMoved && typeof updateOceanLegend === "function") updateOceanLegend();
+    // Download only when the view leaves the held grid, or the day/hour changes.
     if(this._gridCoversView()) return;
     clearTimeout(this._refetchTimer);
     this._refetchTimer = setTimeout(() => this._requestData(), 220);
@@ -9777,19 +9838,10 @@ const SstForecastLayer = L.Layer.extend({
     if(!BW_OCEAN.fetchSstGrid) return;
     const hours = (typeof oceanOverlayForecastHour === "function") ? oceanOverlayForecastHour() : 0;
     const seq = ++_sstFcFetchSeq;
-    let b;
-    try { b = MAP.getBounds(); } catch(e){ return; }
-    const z = MAP.getZoom();
-    // Pad shrinks as the view widens: at low zoom the pad alone can push the box
-    // past what ERDDAP will serve, and losing the whole field costs more than
-    // an extra refetch after a pan.
-    const pad = z >= 8 ? 0.18 : z >= 6 ? 0.08 : 0.02;
-    const bx = {
-      s: b.getSouth() - (b.getNorth() - b.getSouth()) * pad,
-      n: b.getNorth() + (b.getNorth() - b.getSouth()) * pad,
-      w: b.getWest() - (b.getEast() - b.getWest()) * pad,
-      e: b.getEast() + (b.getEast() - b.getWest()) * pad,
-    };
+    const req = _sstRequestBox();
+    if(!req) return;
+    const bx = req.bx;
+    const stepDeg = req.stepDeg;
     if(_sstBoxTooBig(bx)){
       // Zoomed out past what a MUR pull can cover — show tiles rather than an
       // empty ocean, and say so in the legend.
@@ -9814,7 +9866,6 @@ const SstForecastLayer = L.Layer.extend({
     // ERDDAP stall, so the fix is to try again — coarsening does not help and
     // only costs resolution. Retry at the same step with a short backoff, and
     // fall back to tiles only once the retries are spent.
-    const stepDeg = _sstStepForBox(bx, z);
     const reqSatOffset = satDayOffset;
     const sstDaysBack = (hours <= 0) ? sstMurDaysBackParam() : null;
     // Pacific SST has no coastline polygons — CUDEM is the land mask. Load it
@@ -9877,16 +9928,10 @@ const SstForecastLayer = L.Layer.extend({
   _requestGoesPass: function(){
     if(!BW_OCEAN.fetchSstPass) return;
     const seq = ++_sstFcFetchSeq;
-    let b;
-    try { b = MAP.getBounds(); } catch(e){ return; }
-    const z = MAP.getZoom();
-    const pad = z >= 8 ? 0.18 : z >= 6 ? 0.08 : 0.02;
-    const bx = {
-      s: b.getSouth() - (b.getNorth() - b.getSouth()) * pad,
-      n: b.getNorth() + (b.getNorth() - b.getSouth()) * pad,
-      w: b.getWest() - (b.getEast() - b.getWest()) * pad,
-      e: b.getEast() + (b.getEast() - b.getWest()) * pad,
-    };
+    const req = _sstRequestBox();
+    if(!req) return;
+    const bx = req.bx;
+    const stepDeg = req.stepDeg;
     if(_sstBoxTooBig(bx)){
       const already = SST_STATUS === "unavailable" && !SST_FORECAST_GRID;
       SST_STATUS = "unavailable";
@@ -9902,7 +9947,6 @@ const SstForecastLayer = L.Layer.extend({
     SST_STATUS = "loading";
     _sstHideGibsFallback();
     if(typeof updateOceanLegend === "function") updateOceanLegend();
-    const stepDeg = _sstStepForBox(bx, z);
     const reqOffset = sstPassOffset;
     if(bx.w < -98 && typeof buildBathyGrid === "function"
        && typeof _bathyGridCoversView === "function"
@@ -15675,7 +15719,12 @@ function updateOceanLegend(){
         <div class="oc-legend-bar" style="height:11px;border-radius:3px;background:linear-gradient(90deg,#082460 0%,#0e5aaa 12%,#28aac8 24%,#5ac878 36%,#dcd232 50%,#ebb028 62%,#eb7823 74%,#be281f 88%,#8c1432 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)"></div>
         <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:12px;color:#cfe5ff;font-weight:600;gap:1px">
           ${sstTicks.map(v=>`<span style="flex:1;text-align:center;min-width:0;white-space:nowrap">${v}°</span>`).join("")}
-        </div>`;
+        </div>
+        ${sstGlobal ? "" : `<div class="sst-scale-lock">
+          <button type="button" class="${_sstScaleSpan === 20 ? "on" : ""}" onclick="setSstScaleSpan(20)" title="Hold a 20°F color range while the map moves">20°</button>
+          <button type="button" class="${_sstScaleSpan === 25 ? "on" : ""}" onclick="setSstScaleSpan(25)" title="Hold a 25°F color range while the map moves">25°</button>
+          <span>scale locked</span>
+        </div>`}`;
     parts.push(section("sst", "SST", sstTitleRow, sstBar));
   }
   if(layerVis.chlor){
