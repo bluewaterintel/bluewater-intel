@@ -3061,6 +3061,51 @@ function seasonAlignmentLabel(seasonScore){
   return "off";
 }
 
+// SoCal warm-water pelagics leave when the water cools, not on a fixed date:
+// warm falls hold yellowfin, wahoo and dorado into November. The calendar
+// curve stays the presence prior; in-band SST on a shoulder month (≥ 0.2) earns
+// back part of the gap. Dead months are never rescued.
+const PACIFIC_WARM_LINGER = new Set(["yellowfin", "wahoo", "mahi"]);
+function pacificWarmSeason(seasonScore, tempScore){
+  if(!(seasonScore >= 0.2) || !(tempScore > 0)) return seasonScore;
+  return Math.min(0.85, seasonScore + 0.35 * Math.min(1, tempScore));
+}
+
+// Biggest drag on the headline, in headline points. A factor costs
+// effWeight × (1 − quality) of the blend, scaled by the gates; a gate costs
+// what the headline would regain at 1.0. Temperature and depth own their gates,
+// so cold water names temperature instead of splitting the blame. Light factors
+// (solunar 4%) cannot win just by reading zero.
+function biteLimiter({ factors, usedFactors, blend, headline, gates, seasonScore }){
+  if(!Array.isArray(factors) || !factors.length || !(blend > 0) || !(headline > 0)) return null;
+  const eff = new Map();
+  if(Array.isArray(usedFactors)) for(const f of usedFactors) eff.set(f.key, f.effWeight);
+  const rows = factors.filter(f => f.key !== "reports");
+  const wOf = f => eff.size ? (eff.get(f.key) || 0) : (f.weight || 0);
+  const total = rows.reduce((s, f) => s + wOf(f), 0);
+  if(!(total > 0)) return null;
+  const scale = headline / blend;
+  const loss = new Map();
+  for(const f of rows){
+    const q = Math.max(0, Math.min(1, typeof f.quality === "number" ? f.quality : 0));
+    loss.set(f.key, (wOf(f) / total) * (1 - q) * scale);
+  }
+  const gateLoss = g => (g > 0 && g < 1) ? headline * (1 / g - 1) : 0;
+  const add = (key, v) => loss.set(key, (loss.get(key) || 0) + v);
+  add("temp", gateLoss(gates.temp));
+  add("depth", gateLoss(gates.depth));
+  add("season", gateLoss(gates.season));
+  let bestKey = null, best = 0;
+  for(const [k, v] of loss) if(v > best){ best = v; bestKey = k; }
+  if(!bestKey || best < 0.04) return null;
+  const row = rows.find(f => f.key === bestKey);
+  const name = row ? row.name : (bestKey === "season" ? "Season alignment" : bestKey);
+  const raw = bestKey === "season"
+    ? `${Math.round(Math.max(0, seasonScore) * 100)}% of peak season`
+    : (row && row.raw && row.raw !== "—" ? row.raw : "");
+  return { key: bestKey, name, raw, lostPts: Math.round(best * 100) };
+}
+
 // Chlorophyll factor. "weed" is the mahi/paddy proxy: moderate color plus a
 // color edge (sargassum and kelp sit on green-to-blue rips). No dedicated
 // sargassum feed — this uses the VIIRS chlorophyll we already have.
@@ -4357,6 +4402,7 @@ function scoreCell(lat, lng, speciesId){
   if(reportScore > 0){
     finalScore = finalScore + Math.min(reportScore * 0.55, 0.18);
   }
+  const _blendBeforeGates = finalScore;
   // ── TEMPERATURE GATE ──
   // Like depth, temperature influences fish presence — but HOW MUCH depends on
   // the species category, which is the key correction here:
@@ -4397,7 +4443,7 @@ function scoreCell(lat, lng, speciesId){
   //   depthScore 1.0 → gate 1.00 (no penalty) in every zone
   // Tighten when real GEBCO bathymetry replaces synthDepth.
   const _depthGateFloor = (speciesCat === "inshore" || speciesCat === "nearshore") ? 0.35 : 0.22;
-  const depthGate = _depthGateFloor + (1 - _depthGateFloor) * Math.pow(depthScore, 0.65);
+  let depthGate = _depthGateFloor + (1 - _depthGateFloor) * Math.pow(depthScore, 0.65);
   finalScore = finalScore * depthGate;
 
   // ── BLUE-WATER GATE (offshore pelagics only) ───────────────────────────────
@@ -4417,7 +4463,9 @@ function scoreCell(lat, lng, speciesId){
   // their depth band requirement already places them correctly. Depth is meters.
   const _bluewaterExempt = (speciesId === "bluefin") || !!prefs.bottom;
   if(speciesCat === "offshore" && !_bluewaterExempt && depth != null && depth > 0){
-    finalScore = finalScore * bluewaterGateFor(speciesId, depth, lat, lng);
+    const bwGate = bluewaterGateFor(speciesId, depth, lat, lng);
+    finalScore = finalScore * bwGate;
+    depthGate *= bwGate;
   }
 
   // ── SEASON GATE ──
@@ -4438,6 +4486,8 @@ function scoreCell(lat, lng, speciesId){
   //   seasonScore 0.0 (off)   → gate 0.06 (effectively absent — "poor")
   // Floor is a small non-zero so a freak straggler still shows a faint trace
   // rather than a hard zero, but it can never read "good"/"excellent".
+  let seasonGate = 1;
+  let effSeason = seasonScore;
   if(_seasonGateActive){
     // WARM-CORE RANGE EXTENSION: an active warm-water Stream intrusion (real warm
     // SST + strong current) pulls pelagics in early/late, so treat the LOCAL
@@ -4446,11 +4496,13 @@ function scoreCell(lat, lng, speciesId){
     // make a shoulder-season area fish well, but can never manufacture a "prime"
     // reading out of a dead month. (Deep winter self-excludes: no warm SST → no
     // _streamInf01, so this term is 0 there.)
-    const effSeason = _streamInf01 > 0
-      ? Math.min(0.85, seasonScore + 0.30 * _streamInf01)
-      : seasonScore;
+    if(_streamInf01 > 0) effSeason = Math.min(0.85, seasonScore + 0.30 * _streamInf01);
+    if(sst != null && !_seasonOutOfRange && PACIFIC_WARM_LINGER.has(speciesId) &&
+       typeof isPacificContext === "function" && isPacificContext(lat, lng)){
+      effSeason = Math.max(effSeason, pacificWarmSeason(seasonScore, tempScore));
+    }
     const _seasonGateFloor = 0.06;
-    const seasonGate = _seasonGateFloor + (1 - _seasonGateFloor) * Math.pow(effSeason, 0.55);
+    seasonGate = _seasonGateFloor + (1 - _seasonGateFloor) * Math.pow(effSeason, 0.55);
     finalScore = finalScore * seasonGate;
     // Out-of-season is also a HIGH-confidence call (the fish simply aren't here),
     // which is handled in the confidence-adjustment block below. Here we cap the
@@ -4599,6 +4651,9 @@ function scoreCell(lat, lng, speciesId){
     confidence = Math.max(confidence, 90);
     freshnessAnnotations.push({ variable: "season",
       message: "Out of season here — high confidence the bite is poor this month." });
+  } else if(_seasonGateActive && effSeason >= seasonScore + 0.1){
+    freshnessAnnotations.push({ variable: "season",
+      message: "Shoulder season, but the water is still warm enough to hold fish — season penalty eased." });
   } else if(_seasonGateActive && seasonScore < 0.4){
     confidence = Math.max(confidence, 75);
     freshnessAnnotations.push({ variable: "season",
@@ -4726,6 +4781,14 @@ function scoreCell(lat, lng, speciesId){
     .map(f => ({ factor: String(f.name).replace(/^[^\w]+\s*/, ""), detail: (f.raw != null && f.raw !== "—") ? String(f.raw) : null }));
   const topFactor = _rankedFactors.length ? _rankedFactors[0].factor : null;
   const topFactors = _rankedFactors.slice(0, 3);
+  const limiter = biteLimiter({
+    factors: allFactors,
+    usedFactors: fr && fr.usedFactors,
+    blend: _blendBeforeGates,
+    headline: headlineScore,
+    gates: { temp: sst == null ? 1 : tempGate, depth: depthGate, season: seasonGate },
+    seasonScore,
+  });
 
   return {
     score: Math.max(0, Math.min(1, finalScore)),
@@ -4744,6 +4807,7 @@ function scoreCell(lat, lng, speciesId){
     // actually belongs in this area/time; seasonStrength is the 0–1 seasonal fit.
     topFactor,
     topFactors,
+    limiter,
     inSeason: !_seasonOutOfRange && !(vermilionGate && vermilionGate.status === "NORTH_OF_HATTERAS"),
     outOfRange: _seasonOutOfRange || !!(vermilionGate && vermilionGate.status === "NORTH_OF_HATTERAS"),
     seasonStrength: Math.round(seasonScore * 100) / 100,
@@ -6575,10 +6639,11 @@ const PACIFIC_SPECIES_PREFS = {
   // 70s), not Gulf Stream 74-82°F. Without this override a 70°F San Diego day
   // was treated as too cold.
   mahi: { tempIdeal:[68,76], tempWorking:[64,80], chlorPref:"weed", depthBands:[[30,400]], breakPref:"any" },
-  // SoCal wahoo are a warm-season offshore fish on the banks and paddies
-  // (Nine Mile, the 425, 14 Mile, Cortes), not Gulf Stream 74-82°F canyon
-  // fish. California Current water in the high 60s to mid 70s is the bite.
-  wahoo: { tempIdeal:[68,76], tempWorking:[64,80], chlorPref:"edge", depthBands:[[40,800]], breakPref:"edge" },
+  // SoCal wahoo are a warm-year offshore fish on the banks and paddies
+  // (Nine Mile, the 425, 14 Mile, Cortes, the Hidden Banks). They show up
+  // when the bight pushes past ~70°F and are rare in 66-68°F water that still
+  // holds yellowfin, so the ideal band sits a notch above Pacific yellowfin.
+  wahoo: { tempIdeal:[70,78], tempWorking:[66,82], chlorPref:"edge", depthBands:[[40,800]], breakPref:"edge" },
 };
 
 // Bahamas / Bahama-Bank water east of the Florida crossings. Several US
@@ -11702,31 +11767,18 @@ function renderExplainerMain(){
 
   const shownScore = (typeof cell.headlineScore === "number") ? cell.headlineScore : cell.score;
 
-  // When the headline score is notably worse than the *best* individual factors
-  // suggest, find the single biggest drag so the score feels explained.
+  // Name the factor that costs the most headline points (scoreCell's limiter),
+  // not the emptiest bar — a 4%-weight solunar "off" is not the drag.
   let limitingFactorHtml = "";
-  if(!cell.outOfRange && Array.isArray(cell.factors) && shownScore < 0.5){
-    const withQuality = cell.factors.map(f => ({
-      name: f.name,
-      raw: f.raw,
-      weight: f.weight || 0,
-      quality: (typeof f.quality === "number") ? f.quality : Math.min(1, (f.score || 0) / 0.30)
-    }));
-    const strongCount = withQuality.filter(f => f.quality >= 0.6).length;
-    if(strongCount >= 1){
-      const drag = withQuality
-        .filter(f => f.quality < 0.4)
-        .sort((a,b) => (a.quality - b.quality) || (b.weight - a.weight))[0];
-      if(drag){
-        limitingFactorHtml = `
-          <div style="margin-bottom:11px;padding:9px 11px;border-radius:8px;
-            background:rgba(251,191,36,.09);border:1px solid rgba(251,191,36,.28);
-            color:#fde68a;font-size:12px;line-height:1.5">
-            <b>Main thing holding this back:</b> ${drag.name.toLowerCase()}${drag.raw ? ` (${drag.raw})` : ""}.
-            Other factors look good — this one is the drag.
-          </div>`;
-      }
-    }
+  const drag = cell.limiter;
+  if(!cell.outOfRange && shownScore < 0.5 && drag && drag.lostPts >= 4){
+    limitingFactorHtml = `
+      <div style="margin-bottom:11px;padding:9px 11px;border-radius:8px;
+        background:rgba(251,191,36,.09);border:1px solid rgba(251,191,36,.28);
+        color:#fde68a;font-size:12px;line-height:1.5">
+        <b>Main thing holding this back:</b> ${String(drag.name).toLowerCase()}${drag.raw ? ` (${drag.raw})` : ""},
+        about ${drag.lostPts} points.
+      </div>`;
   }
 
   const verdict = biteVerdict(Math.round(shownScore * 100));
