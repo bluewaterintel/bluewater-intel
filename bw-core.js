@@ -4012,9 +4012,15 @@ function scoreCell(lat, lng, speciesId){
       tempScore = sst <= warmEdge ? 1.0 : Math.max(0, 1 - (sst - warmEdge) / 4);
     }
     // Warm-side bias: 0 at the cool edge of ideal → 1 at the warm working edge.
-    const span = Math.max(1, warmEdge - prefs.tempIdeal[0]);
-    const warmBias = Math.max(0, Math.min(1, (sst - prefs.tempIdeal[0]) / span));
-    tempScore = Math.min(1, tempScore * (0.7 + 0.4 * warmBias));
+    // Gulf yellowfin skip it: fall 78-82°F Loop water is prime, not a discount
+    // against 86°F summer water, and the eddy edge is scored by the front factors.
+    const gulfYellowfin = speciesId === "yellowfin" &&
+      typeof usesGulfSpeciesPrefs === "function" && usesGulfSpeciesPrefs(speciesId, lat, lng);
+    if(!gulfYellowfin || sst < prefs.tempIdeal[0]){
+      const span = Math.max(1, warmEdge - prefs.tempIdeal[0]);
+      const warmBias = Math.max(0, Math.min(1, (sst - prefs.tempIdeal[0]) / span));
+      tempScore = Math.min(1, tempScore * (0.7 + 0.4 * warmBias));
+    }
   }
 
   // ── Warm-adapted nearshore/inshore pelagics (Gulf fix) ──
@@ -4178,6 +4184,12 @@ function scoreCell(lat, lng, speciesId){
   let structureScore = 0;
   if((W.structure || 0) > 0 && typeof bottomStructureStrengthAt === "function"){
     structureScore = bottomStructureStrengthAt(lat, lng);
+  }
+  let rigStructureScore = 0;
+  if((W.structure || 0) > 0 && GULF_RIG_PELAGICS.has(speciesId) &&
+     typeof usesGulfSpeciesPrefs === "function" && usesGulfSpeciesPrefs(speciesId, lat, lng)){
+    rigStructureScore = gulfRigStructureScore(lat, lng, speciesId);
+    structureScore = Math.max(structureScore, rigStructureScore);
   }
 
   // ── Factor 5: Recent fishing reports ──
@@ -4446,8 +4458,9 @@ function scoreCell(lat, lng, speciesId){
     // make a shoulder-season area fish well, but can never manufacture a "prime"
     // reading out of a dead month. (Deep winter self-excludes: no warm SST → no
     // _streamInf01, so this term is 0 there.)
+    // The 0.85 cap bounds the lift only; it must never pull a peak month down.
     const effSeason = _streamInf01 > 0
-      ? Math.min(0.85, seasonScore + 0.30 * _streamInf01)
+      ? Math.max(seasonScore, Math.min(0.85, seasonScore + 0.30 * _streamInf01))
       : seasonScore;
     const _seasonGateFloor = 0.06;
     const seasonGate = _seasonGateFloor + (1 - _seasonGateFloor) * Math.pow(effSeason, 0.55);
@@ -4678,7 +4691,9 @@ function scoreCell(lat, lng, speciesId){
        : isFinite(reefStructureNm) && reefStructureNm <= 20 ? ` · ${reefStructureNm.toFixed(1)} nm to charted structure`
        : " · no charted structure nearby")},
     {key:"structure", name:"Bottom structure",   weight:(W.structure||0), score:structureScore,
-     raw: structureScore > 0.05 ? `${Math.round(structureScore*100)}% · edge/slope` : "flat bottom"},
+     raw: structureScore > 0.05
+       ? `${Math.round(structureScore*100)}% · ${rigStructureScore > 0 && rigStructureScore >= structureScore ? "rig/lump" : "edge/slope"}`
+       : "flat bottom"},
     {key:"pres", name:"Pressure trend",     weight:W.pressure,      score:pressureScore,    raw:pressureTrend != null ? `${pressureTrend.toFixed(1)} hPa` : "—"},
     {key:"chlor", name:"Chlorophyll",        weight:W.chlorophyll,   score:chlorScore,
      raw: chlor != null
@@ -6241,7 +6256,10 @@ function collectPredictStructureCandidates(port, radiusNm, speciesId){
     // the edge of range still sees the structure just beyond it.
     const rowRadius = reef ? radiusNm + REEF_STRUCTURE_FADE_NM : radiusNm;
     const rows = chartedStructureRowsNearPort(port, rowRadius, types);
-    if(reef) rows.push(...gulfPlatformRowsNearPort(port, rowRadius));
+    if(reef || (port && GULF_RIG_PELAGICS.has(speciesId) &&
+       typeof isGulfContext === "function" && isGulfContext(port.lat, port.lng))){
+      rows.push(...gulfPlatformRowsNearPort(port, rowRadius));
+    }
     for(const w of rows){
       out.push({
         lat: w.lat, lng: w.lng,
@@ -6378,11 +6396,21 @@ function nearestStructureNm(lat, lng, speciesId){
 // Gulf yellowfin giants: fall (Sep-Nov) on the deepwater floaters/rigs,
 // winter (Dec-Feb) on Midnight Lump. Same proximity curve, bigger lift on
 // the in-season structure so the numbered pin can land on the Floaters in fall.
+// Gulf rig pelagics: BSEE platforms join their structure candidates, and rig /
+// lump proximity counts as bottom structure (the floaters sit over flat mud).
+const GULF_RIG_PELAGICS = new Set(["yellowfin", "wahoo"]);
+// Full credit within 1 nm of a rig or lump, none past 6 nm.
+function gulfRigStructureScore(lat, lng, speciesId){
+  if(typeof nearestMappedStructure !== "function") return 0;
+  const hit = nearestMappedStructure(lat, lng, speciesId);
+  if(!hit || hit.nm == null || gulfYellowfinStructureKind(hit.canyon) === "other") return 0;
+  return Math.max(0, Math.min(1, (6 - hit.nm) / 5));
+}
 function gulfYellowfinStructureKind(canyon){
   if(!canyon) return "other";
   const type = String(canyon.type || "").toLowerCase();
   const name = String(canyon.name || "").toLowerCase();
-  if(type === "rig" || type === "platform" || /floater|petronius/.test(name)) return "rig";
+  if(type === "rig" || type === "rg" || type === "platform" || type === "pf" || /floater|petronius/.test(name)) return "rig";
   if(type === "lump" || /\blump/.test(name)) return "lump";
   return "other";
 }
