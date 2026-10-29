@@ -386,6 +386,11 @@ const REGIONAL_SEASONS = {
     // them as a September 3.
     {centerLat: 33.20, centerLng: -117.95, radiusNm: 65, label: "Southern California bight (San Diego → LA)",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    // Tanner/Cortes and the Hidden Banks are core San Diego yellowfin runs but
+    // sit outside the 65 nm bight circle, which made them "outside known range".
+    // Stops ~95 nm short of Ventura so the shoulder stays a shoulder.
+    {centerLat: 32.15, centerLng: -118.35, radiusNm: 70, label: "Outer banks / northern Baja (Tanner, Cortes, Hidden Banks)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 34.32, centerLng: -119.48, radiusNm: 40, label: "Santa Barbara / Ventura",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:1,Jul:2,Aug:2,Sep:2,Oct:1,Nov:1,Dec:0}},
   ],
@@ -710,6 +715,8 @@ const REGIONAL_SEASONS = {
     // Santa Barbara and Ventura are a shoulder. Morro stays out via the
     // Pacific latitude cap. Do not restore the 340 nm September-3 disc.
     {centerLat: 33.20, centerLng: -117.95, radiusNm: 65, label: "SoCal bight dorado (San Diego → LA)",
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
+    {centerLat: 32.15, centerLng: -118.35, radiusNm: 70, label: "Outer banks / northern Baja dorado",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:0}},
     {centerLat: 34.32, centerLng: -119.48, radiusNm: 40, label: "Santa Barbara / Ventura dorado",
      seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:1,Jul:2,Aug:2,Sep:2,Oct:1,Nov:1,Dec:0}},
