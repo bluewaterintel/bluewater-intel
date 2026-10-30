@@ -10221,18 +10221,18 @@ const SST_PORT_COAST = {
   "Port Aransas, TX": "gulf",
   "Port Mansfield, TX": "gulf",
   "Port Isabel, TX": "gulf",
-  "Monterey, CA": "pacific",
-  "Moss Landing, CA": "pacific",
-  "Morro Bay, CA": "pacific",
-  "Port San Luis, CA": "pacific",
-  "Santa Barbara, CA": "pacific",
-  "Ventura, CA": "pacific",
-  "Marina del Rey, CA": "pacific",
-  "San Pedro, CA": "pacific",
-  "Newport Beach, CA": "pacific",
-  "Dana Point, CA": "pacific",
-  "Oceanside, CA": "pacific",
-  "San Diego, CA": "pacific"
+  "Monterey, CA": "centralca",
+  "Moss Landing, CA": "centralca",
+  "Morro Bay, CA": "centralca",
+  "Port San Luis, CA": "centralca",
+  "Santa Barbara, CA": "socal",
+  "Ventura, CA": "socal",
+  "Marina del Rey, CA": "socal",
+  "San Pedro, CA": "socal",
+  "Newport Beach, CA": "socal",
+  "Dana Point, CA": "socal",
+  "Oceanside, CA": "socal",
+  "San Diego, CA": "socal"
 };
 function coastForPort(name){
   return SST_PORT_COAST[name] || null;
