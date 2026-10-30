@@ -6,12 +6,17 @@
 //
 //   node scripts/render-sst-composite.mjs
 //   node scripts/render-sst-composite.mjs --no-upload
+//   node scripts/render-sst-composite.mjs --only=socal,centralca
+//
+// --only paints those pictures and merges them into sst-composite.json.
+// Coasts that are no longer in COASTS (the old single Pacific picture) are
+// dropped. Atlantic and Gulf entries stay, including their previous files.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
-import { COASTS, sstRampRGBA } from "./sst-composite-lib.mjs";
+import { COASTS, MANIFEST_REV, sstRampRGBA } from "./sst-composite-lib.mjs";
 import { decodePng } from "./png-decode.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -24,6 +29,17 @@ const BUCKET = "chart-tiles";
 const PREFIX = "sst/v1";
 const PROJECT_REF = "mealpzwbjamkjdrsszqe";
 const noUpload = process.argv.includes("--no-upload");
+
+function coastFilter(){
+  const arg = process.argv.find(a => a.startsWith("--only="));
+  if(!arg) return null;
+  const ids = arg.slice("--only=".length).split(",").map(s => s.trim()).filter(Boolean);
+  if(!ids.length) throw new Error("--only needs at least one coast id");
+  for(const id of ids){
+    if(!COASTS[id]) throw new Error("unknown coast " + id);
+  }
+  return new Set(ids);
+}
 
 function loadEnv(){
   const env = { ...process.env };
@@ -325,37 +341,78 @@ async function uploadAll(env, files){
   }
 }
 
+function coastEntry(id, coast){
+  return {
+    file: `${id}.png`,
+    label: coast.label,
+    lo: coast.lo,
+    hi: coast.hi,
+    s: coast.s, n: coast.n, w: coast.w, e: coast.e,
+    coreLat: coast.coreLat, coreLng: coast.coreLng,
+  };
+}
+
 async function main(){
+  const only = coastFilter();
   console.log("probing GIBS date");
   const date = await probeDate();
-  console.log("composite", date);
+  console.log("composite", date, only ? "only " + [...only].join(",") : "all coasts");
   const cmap = await loadColormap();
   const land = loadLandTools();
-  const keys = [...new Set(Object.values(COASTS).flatMap(tileKeysFor))];
+  const selected = Object.entries(COASTS).filter(([id]) => !only || only.has(id));
+  const keys = [...new Set(selected.flatMap(([, coast]) => tileKeysFor(coast)))];
   console.log("tiles", keys.length);
   const tiles = await loadTiles(date, keys);
-  const point = sampleTemp(tiles, cmap, 35.536, -74.845);
-  const shelf = sampleTemp(tiles, cmap, 35.65, -75.15);
-  const offshore = sampleTemp(tiles, cmap, 35.54, -74.55);
-  console.log("check The Point", point && point.f?.toFixed(1), "shelf", shelf && shelf.f?.toFixed(1), "east", offshore && offshore.f?.toFixed(1));
+  const covers = (lat, lng) => selected.some(([, coast]) =>
+    lat >= coast.s && lat <= coast.n && lng >= coast.w && lng <= coast.e);
+  if(covers(35.54, -74.85)){
+    const point = sampleTemp(tiles, cmap, 35.536, -74.845);
+    const shelf = sampleTemp(tiles, cmap, 35.65, -75.15);
+    const offshore = sampleTemp(tiles, cmap, 35.54, -74.55);
+    console.log("check The Point", point && point.f?.toFixed(1), "shelf", shelf && shelf.f?.toFixed(1), "east", offshore && offshore.f?.toFixed(1));
+  }
+  const checks = [
+    ["San Diego bight", 32.72, -117.55],
+    ["Tanner Bank", 32.72, -119.12],
+    ["Santa Barbara", 34.30, -119.85],
+    ["Port San Luis", 35.10, -121.05],
+    ["Morro Bay", 35.30, -121.20],
+    ["Monterey", 36.60, -122.20],
+  ];
+  for(const [name, lat, lng] of checks){
+    if(!covers(lat, lng)) continue;
+    const hit = sampleTemp(tiles, cmap, lat, lng);
+    console.log("  temp", name, hit && hit.f != null ? hit.f.toFixed(1) : "none");
+  }
   mkdirSync(OUT, { recursive: true });
-  const manifest = { version: 1, rev: 2, observed: date, stepDeg: STEP, coasts: {} };
+  let manifest;
+  if(only){
+    manifest = JSON.parse(readFileSync(join(root, "sst-composite.json"), "utf8"));
+    for(const id of Object.keys(manifest.coasts || {})){
+      if(!COASTS[id]) delete manifest.coasts[id];
+    }
+  }else{
+    manifest = { coasts: {} };
+  }
+  manifest.version = 1;
+  manifest.rev = MANIFEST_REV;
+  manifest.observed = date;
+  manifest.stepDeg = STEP;
+  manifest.coasts = manifest.coasts || {};
   const uploads = [];
-  for(const [id, coast] of Object.entries(COASTS)){
-    console.log("paint", id);
+  for(const [id, coast] of selected){
+    console.log("paint", id, coast.lo + "-" + coast.hi);
     const painted = paintCoast(coast, tiles, cmap, land);
     const name = `${id}.png`;
     writeFileSync(join(OUT, name), painted.png);
     console.log(" ", name, painted.w, "x", painted.h, "water", painted.water, "bytes", painted.png.length);
-    manifest.coasts[id] = {
-      file: name,
-      label: coast.label,
-      lo: coast.lo,
-      hi: coast.hi,
-      s: coast.s, n: coast.n, w: coast.w, e: coast.e,
-      coreLat: coast.coreLat, coreLng: coast.coreLng,
-    };
+    manifest.coasts[id] = coastEntry(id, coast);
     uploads.push({ name, body: painted.png, type: "image/png", cache: "86400" });
+  }
+  if(!only){
+    for(const id of Object.keys(manifest.coasts)){
+      if(!COASTS[id]) delete manifest.coasts[id];
+    }
   }
   const manifestBody = Buffer.from(JSON.stringify(manifest));
   writeFileSync(join(OUT, "manifest.json"), manifestBody);
