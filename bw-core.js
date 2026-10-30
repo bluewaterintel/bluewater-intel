@@ -10221,18 +10221,18 @@ const SST_PORT_COAST = {
   "Port Aransas, TX": "gulf",
   "Port Mansfield, TX": "gulf",
   "Port Isabel, TX": "gulf",
-  "Monterey, CA": "centralca",
-  "Moss Landing, CA": "centralca",
-  "Morro Bay, CA": "centralca",
-  "Port San Luis, CA": "centralca",
-  "Santa Barbara, CA": "socal",
-  "Ventura, CA": "socal",
-  "Marina del Rey, CA": "socal",
-  "San Pedro, CA": "socal",
-  "Newport Beach, CA": "socal",
-  "Dana Point, CA": "socal",
-  "Oceanside, CA": "socal",
-  "San Diego, CA": "socal"
+  "Monterey, CA": "california",
+  "Moss Landing, CA": "california",
+  "Morro Bay, CA": "california",
+  "Port San Luis, CA": "california",
+  "Santa Barbara, CA": "california",
+  "Ventura, CA": "california",
+  "Marina del Rey, CA": "california",
+  "San Pedro, CA": "california",
+  "Newport Beach, CA": "california",
+  "Dana Point, CA": "california",
+  "Oceanside, CA": "california",
+  "San Diego, CA": "california"
 };
 function coastForPort(name){
   return SST_PORT_COAST[name] || null;
@@ -10336,6 +10336,9 @@ function revealSstCoastPicture(id){
   if(top && top.bringToFront) top.bringToFront();
   if(typeof updateOceanLegend === "function") updateOceanLegend();
   if(typeof updateSatDateDisplay === "function") updateSatDateDisplay();
+  // The date pill's source line is separate from the legend. Refresh it after
+  // the scale mode is "picture", or it stays on the local-scale label.
+  if(typeof updateSatDateControlVisibility === "function") updateSatDateControlVisibility();
 }
 function mountSstCoastOverlay(id){
   const man = _sstCoastManifest;

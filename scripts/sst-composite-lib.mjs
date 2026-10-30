@@ -17,20 +17,17 @@ export const SST_RAMP_STOPS = [
 ];
 
 // Bump when a picture's ramp or bounds change. The phone cache-busts PNGs with it.
-export const MANIFEST_REV = 3;
+export const MANIFEST_REV = 4;
 
 // Pictures overlap, and the renderer feathers the outer half-degree, so a
 // pan across Virginia or off the Stream does not hit a hard edge. The home
 // port's picture stays on top until the view actually leaves it.
 //
-// California is two fixed ramps, not one seasonal ramp. Monterey and San Diego
-// are different temperatures on the same day, and a color has to keep meaning
-// one temperature. SoCal (Santa Barbara through the banks) is 64–82°F so an
-// 80°F bight reading stays on scale. Central California (Port San Luis through
-// Monterey) is 50–72°F. The floor stays cold enough for spring upwelling. The
-// top is 72, not the mid-60s: a 66°F ceiling clamps this coast in a warm fall,
-// when the nearshore water is already the upper 60s to about 70°F. They overlap
-// across Point Conception and share the same half-degree feather as the Atlantic.
+// California is one ramp from Monterey through San Diego. Two ramps painted
+// the same water two colors at Point Conception, so a real break disappeared
+// into the seam. 62–82°F covers this coast's fall water, including an 80°F
+// bight reading, and a few degrees still change color. Spring upwelling
+// below 62°F sits on the bottom color.
 export const COASTS = {
   newengland: {
     label: "New England", lo: 45, hi: 70,
@@ -57,20 +54,13 @@ export const COASTS = {
     s: 23.5, n: 31.2, w: -98.2, e: -80.5,
     coreLat: 28.2, coreLng: -89.5,
   },
-  // South edge stays at the old Pacific picture so the Hidden Banks and
-  // northern Baja stay in frame. North edge sits past Santa Barbara and
-  // feathers into the Central Coast picture. Cold water far offshore clips
-  // to the bottom color; that is the trade for a few degrees of bight break
-  // showing up as a different color.
-  socal: {
-    label: "SoCal", lo: 64, hi: 82,
-    s: 30.8, n: 35.2, w: -128.5, e: -116.2,
-    coreLat: 33.2, coreLng: -117.9,
-  },
-  centralca: {
-    label: "Central Coast", lo: 50, hi: 72,
-    s: 34.6, n: 38.4, w: -128.5, e: -119.2,
-    coreLat: 36.6, coreLng: -122.0,
+  // One georeferenced picture, so Point Conception is not a picture edge.
+  // South edge keeps the Hidden Banks and northern Baja. North edge keeps
+  // Monterey and the water off San Francisco in the same ramp.
+  california: {
+    label: "California", lo: 62, hi: 82,
+    s: 30.8, n: 38.4, w: -128.5, e: -116.2,
+    coreLat: 34.2, coreLng: -120.2,
   },
 };
 
@@ -161,18 +151,18 @@ export const PORT_COAST = {
   "Port Aransas, TX": "gulf",
   "Port Mansfield, TX": "gulf",
   "Port Isabel, TX": "gulf",
-  "Monterey, CA": "centralca",
-  "Moss Landing, CA": "centralca",
-  "Morro Bay, CA": "centralca",
-  "Port San Luis, CA": "centralca",
-  "Santa Barbara, CA": "socal",
-  "Ventura, CA": "socal",
-  "Marina del Rey, CA": "socal",
-  "San Pedro, CA": "socal",
-  "Newport Beach, CA": "socal",
-  "Dana Point, CA": "socal",
-  "Oceanside, CA": "socal",
-  "San Diego, CA": "socal",
+  "Monterey, CA": "california",
+  "Moss Landing, CA": "california",
+  "Morro Bay, CA": "california",
+  "Port San Luis, CA": "california",
+  "Santa Barbara, CA": "california",
+  "Ventura, CA": "california",
+  "Marina del Rey, CA": "california",
+  "San Pedro, CA": "california",
+  "Newport Beach, CA": "california",
+  "Dana Point, CA": "california",
+  "Oceanside, CA": "california",
+  "San Diego, CA": "california",
 };
 
 export function coastForPort(name){
