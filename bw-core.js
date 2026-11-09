@@ -10256,7 +10256,18 @@ let _sstCoastOverlays = {};
 let _sstCoastHooked = false;
 let _sstCoastSeq = 0;
 
+function sstPictureIsCurrent(observed, nowMs){
+  const parts = String(observed || "").split("-").map(Number);
+  if(parts.length < 3 || !parts[0] || !parts[1] || !parts[2]) return false;
+  const obs = Date.UTC(parts[0], parts[1] - 1, parts[2], 12);
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+  const days = Math.floor((now - obs) / 86400000);
+  return days >= -1 && days <= 3;
+}
 function sstPictureMode(){
+  // The regional pictures are a painted snapshot. If that snapshot is more
+  // than a few days behind, show the live composite instead of a stale date.
+  if(_sstCoastManifest && !sstPictureIsCurrent(_sstCoastManifest.observed)) return false;
   return !!(typeof layerVis !== "undefined" && layerVis.sst
     && (typeof sstProduct === "undefined" || sstProduct !== "goes")
     && (typeof oceanOverlayForecastHour !== "function" || oceanOverlayForecastHour() === 0)
@@ -10413,7 +10424,11 @@ function ensureSstCoastPictures(){
     _sstShowGibsFallback();
   }
   loadSstCoastManifest().then(man => {
-    if(seq !== _sstCoastSeq || !sstPictureMode()) return;
+    if(seq !== _sstCoastSeq) return;
+    if(!sstPictureMode()){
+      if(typeof syncSstOverlayMode === "function") syncSstOverlayMode();
+      return;
+    }
     if(!man || !man.coasts){
       _sstScaleMode = "global";
       SST_STATUS = "ready";

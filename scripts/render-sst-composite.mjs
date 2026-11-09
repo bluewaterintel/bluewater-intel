@@ -324,7 +324,10 @@ async function fetchServiceRoleKey(accessToken){
 async function uploadAll(env, files){
   const url = (env.SUPABASE_URL || `https://${PROJECT_REF}.supabase.co`).replace(/\/$/, "");
   let key = env.SUPABASE_SERVICE_ROLE_KEY;
-  if(!key?.startsWith("eyJ")) key = await fetchServiceRoleKey(env.SUPABASE_ACCESS_TOKEN);
+  // Classic JWTs start with eyJ. Newer project keys start with sb_ and are
+  // sent as the bearer token directly.
+  if(key && !key.startsWith("eyJ") && !key.startsWith("sb_")) key = "";
+  if(!key) key = await fetchServiceRoleKey(env.SUPABASE_ACCESS_TOKEN);
   for(const file of files){
     const res = await fetch(`${url}/storage/v1/object/${BUCKET}/${PREFIX}/${file.name}`, {
       method: "POST",

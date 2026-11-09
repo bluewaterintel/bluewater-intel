@@ -3,6 +3,7 @@ import vm from "node:vm";
 import assert from "node:assert/strict";
 import {
   COASTS, MANIFEST_REV, PORT_COAST, SST_RAMP_STOPS, coastForPort, sstRampRGBA, rampUnit,
+  sstPictureIsCurrent,
 } from "../scripts/sst-composite-lib.mjs";
 
 const core = readFileSync(new URL("../bw-core.js", import.meta.url), "utf8");
@@ -116,6 +117,20 @@ assert.match(core, /\/sst\/v1\//);
 assert.match(core, /sstPictureMode\(\)\)/);
 const reveal = core.slice(core.indexOf("function revealSstCoastPicture"), core.indexOf("function mountSstCoastOverlay"));
 assert.match(reveal, /updateSatDateControlVisibility/);
+
+// The map was labeling every coast with the October 28 paint date. A picture
+// from that day is not the live composite on November 9. November 7 is.
+const nov9 = Date.UTC(2026, 10, 9, 1, 30);
+assert.equal(sstPictureIsCurrent("2026-11-07", nov9), true);
+assert.equal(sstPictureIsCurrent("2026-10-28", nov9), false);
+assert.equal(sstPictureIsCurrent("", nov9), false);
+const clientFresh = vm.runInNewContext(
+  core.slice(core.indexOf("function sstPictureIsCurrent"), core.indexOf("function sstPictureMode"))
+  + "\nsstPictureIsCurrent;",
+);
+assert.equal(clientFresh("2026-11-07", nov9), sstPictureIsCurrent("2026-11-07", nov9));
+assert.equal(clientFresh("2026-10-28", nov9), false);
+assert.ok(manifest.observed >= "2026-11-07", manifest.observed);
 
 // Every home port in the picker has a picture.
 const groups = core.slice(core.indexOf("const PORT_GROUPS = "), core.indexOf("function buildPortDropdown"));

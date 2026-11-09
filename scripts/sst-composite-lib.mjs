@@ -19,6 +19,20 @@ export const SST_RAMP_STOPS = [
 // Bump when a picture's ramp or bounds change. The phone cache-busts PNGs with it.
 export const MANIFEST_REV = 4;
 
+// A painted picture older than this is not the live composite. MUR usually
+// lags a day; three days covers a missed refresh. Past that the map uses the
+// live grid so the date cannot sit on a picture from weeks ago.
+export const SST_PICTURE_MAX_AGE_DAYS = 3;
+
+export function sstPictureIsCurrent(observed, nowMs){
+  const parts = String(observed || "").split("-").map(Number);
+  if(parts.length < 3 || !parts[0] || !parts[1] || !parts[2]) return false;
+  const obs = Date.UTC(parts[0], parts[1] - 1, parts[2], 12);
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+  const days = Math.floor((now - obs) / 86400000);
+  return days >= -1 && days <= SST_PICTURE_MAX_AGE_DAYS;
+}
+
 // Pictures overlap, and the renderer feathers the outer half-degree, so a
 // pan across Virginia or off the Stream does not hit a hard edge. The home
 // port's picture stays on top until the view actually leaves it.
