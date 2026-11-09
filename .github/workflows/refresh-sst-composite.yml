@@ -1,0 +1,58 @@
+# Repaint the fixed-scale SST pictures from the latest NASA MUR composite.
+# The phone reads the observed date out of sst-composite.json, so a picture
+# that is never refreshed shows up as days old on every coast.
+#
+# Required repository secret (same one the waypoint snapshot uses):
+#   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+
+name: Refresh SST composites
+
+on:
+  schedule:
+    # 16:00 UTC. The daily MUR composite is usually published by then.
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify Supabase secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Supabase credentials present"
+          else
+            echo "::error::Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to repository secrets."
+            exit 1
+          fi
+
+      - name: Paint and upload the regional pictures
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/render-sst-composite.mjs
+
+      - name: Commit the manifest when the composite date moves
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sst-composite.json
+          if git diff --staged --quiet; then
+            echo "Composite date unchanged."
+          else
+            DATE=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("sst-composite.json","utf8")).observed)')
+            git commit -m "Refresh SST composite pictures (${DATE})"
+            git push
+          fi
