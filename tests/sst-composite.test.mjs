@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import assert from "node:assert/strict";
 import {
-  COASTS, MANIFEST_REV, PORT_COAST, SST_RAMP_STOPS, coastForPort, sstRampRGBA, rampUnit,
-  sstPictureIsCurrent,
+  COASTS, MANIFEST_REV, PORT_COAST, SST_RAMP_STOPS,   coastForPort, sstRampRGBA, rampUnit,
+  sstPictureIsCurrent, sstPictureDateOk,
 } from "../scripts/sst-composite-lib.mjs";
 
 const core = readFileSync(new URL("../bw-core.js", import.meta.url), "utf8");
@@ -118,18 +118,30 @@ assert.match(core, /sstPictureMode\(\)\)/);
 const reveal = core.slice(core.indexOf("function revealSstCoastPicture"), core.indexOf("function mountSstCoastOverlay"));
 assert.match(reveal, /updateSatDateControlVisibility/);
 
-// The map was labeling every coast with the October 28 paint date. A picture
-// from that day is not the live composite on November 9. November 7 is.
+// Without a confirmed NASA day, a picture is kept for one day of lag. A paint
+// from November 7 is still inside that window early on November 9, and it is
+// not on November 11. When NASA's latest day is known, the dates have to match.
 const nov9 = Date.UTC(2026, 10, 9, 1, 30);
+const nov11 = Date.UTC(2026, 10, 11, 16, 0);
 assert.equal(sstPictureIsCurrent("2026-11-07", nov9), true);
+assert.equal(sstPictureIsCurrent("2026-11-07", nov11), false);
+assert.equal(sstPictureIsCurrent("2026-11-10", nov11), true);
 assert.equal(sstPictureIsCurrent("2026-10-28", nov9), false);
 assert.equal(sstPictureIsCurrent("", nov9), false);
+assert.equal(sstPictureDateOk("2026-11-07", "2026-11-10", nov11), false);
+assert.equal(sstPictureDateOk("2026-11-10", "2026-11-10", nov11), true);
+assert.equal(sstPictureDateOk("2026-11-10", "", nov11), true);
+assert.equal(sstPictureDateOk("2026-11-07", "", nov11), false);
 const clientFresh = vm.runInNewContext(
   core.slice(core.indexOf("function sstPictureIsCurrent"), core.indexOf("function sstPictureMode"))
-  + "\nsstPictureIsCurrent;",
+  + "\n({ sstPictureIsCurrent, sstPictureDateOk });",
 );
-assert.equal(clientFresh("2026-11-07", nov9), sstPictureIsCurrent("2026-11-07", nov9));
-assert.equal(clientFresh("2026-10-28", nov9), false);
+assert.equal(clientFresh.sstPictureIsCurrent("2026-11-07", nov9), sstPictureIsCurrent("2026-11-07", nov9));
+assert.equal(clientFresh.sstPictureIsCurrent("2026-11-07", nov11), false);
+assert.equal(clientFresh.sstPictureDateOk("2026-11-07", "2026-11-10", nov11), false);
+assert.equal(clientFresh.sstPictureDateOk("2026-11-10", "2026-11-10", nov11), true);
+assert.match(core, /sst\/v1\/manifest\.json/);
+assert.match(core.slice(core.indexOf("function sstPictureMode"), core.indexOf("function _sstCoastContains")), /sstPictureDateOk\(/);
 assert.ok(manifest.observed >= "2026-11-07", manifest.observed);
 
 // Every home port in the picker has a picture.

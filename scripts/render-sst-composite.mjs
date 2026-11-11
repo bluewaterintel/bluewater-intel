@@ -321,13 +321,41 @@ async function fetchServiceRoleKey(accessToken){
   return sr.api_key;
 }
 
-async function uploadAll(env, files){
+async function storageAuth(env){
   const url = (env.SUPABASE_URL || `https://${PROJECT_REF}.supabase.co`).replace(/\/$/, "");
   let key = env.SUPABASE_SERVICE_ROLE_KEY;
   // Classic JWTs start with eyJ. Newer project keys start with sb_ and are
   // sent as the bearer token directly.
   if(key && !key.startsWith("eyJ") && !key.startsWith("sb_")) key = "";
   if(!key) key = await fetchServiceRoleKey(env.SUPABASE_ACCESS_TOKEN);
+  return { url, key };
+}
+
+async function allowManifestMime(url, key){
+  // The chart-tiles bucket was created for PNG tiles. The phone also reads
+  // sst/v1/manifest.json from that bucket so a daily paint updates installed
+  // apps without a new build. Widen the type list, then upload.
+  const res = await fetch(`${url}/storage/v1/bucket/${BUCKET}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      public: true,
+      file_size_limit: 5242880,
+      allowed_mime_types: ["image/png", "application/json"],
+    }),
+  });
+  if(!res.ok){
+    const detail = (await res.text()).slice(0, 180);
+    console.log("bucket mime update", res.status, detail);
+  }
+}
+
+async function uploadAll(env, files){
+  const { url, key } = await storageAuth(env);
+  if(files.some(file => file.type === "application/json")) await allowManifestMime(url, key);
   for(const file of files){
     const res = await fetch(`${url}/storage/v1/object/${BUCKET}/${PREFIX}/${file.name}`, {
       method: "POST",
@@ -419,8 +447,15 @@ async function main(){
   }
   const manifestBody = Buffer.from(JSON.stringify(manifest));
   writeFileSync(join(OUT, "manifest.json"), manifestBody);
-  // The tile bucket accepts PNG only. The manifest ships with the app.
+  // Repo copy is the website fallback. The phone reads sst/v1/manifest.json
+  // from the tile bucket, which is updated in the same upload as the pictures.
   writeFileSync(join(root, "sst-composite.json"), manifestBody);
+  uploads.push({
+    name: "manifest.json",
+    body: manifestBody,
+    type: "application/json",
+    cache: "public, max-age=60, must-revalidate",
+  });
   if(noUpload){
     console.log("skip upload");
     return;
