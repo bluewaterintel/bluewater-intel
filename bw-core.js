@@ -2223,7 +2223,17 @@ async function ensureFreshestSatDates(){
       }),
     ]);
     let sstChanged = false, chlChanged = false;
-    if(sst && sst.atMs){ sstChanged = SAT_FRESH_BACK.sst   !== sst.daysBack; SAT_FRESH_BACK.sst   = sst.daysBack; SAT_FRESH_DATE.sst   = sst.date; }
+    if(sst && sst.atMs){
+      const prevBack = SAT_FRESH_BACK.sst;
+      const observed = (typeof _sstCoastManifest !== "undefined" && _sstCoastManifest) ? _sstCoastManifest.observed : "";
+      const beforeOk = observed ? sstPictureDateOk(observed, SAT_FRESH_DATE.sst) : false;
+      SAT_FRESH_BACK.sst = sst.daysBack;
+      SAT_FRESH_DATE.sst = sst.date;
+      const afterOk = observed ? sstPictureDateOk(observed, sst.date) : false;
+      // A new NASA day has to drop a picture that was painted earlier, even
+      // when the lag in days is the same number as yesterday.
+      sstChanged = prevBack !== sst.daysBack || beforeOk !== afterOk;
+    }
     if(chl && chl.atMs){ chlChanged = SAT_FRESH_BACK.chlor !== chl.daysBack; SAT_FRESH_BACK.chlor = chl.daysBack; SAT_FRESH_DATE.chlor = chl.date; }
     // Only re-point when viewing the freshest frame (satDayOffset 0); if the user
     // has stepped back in history, leave their chosen frame alone.
@@ -10262,12 +10272,18 @@ function sstPictureIsCurrent(observed, nowMs){
   const obs = Date.UTC(parts[0], parts[1] - 1, parts[2], 12);
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   const days = Math.floor((now - obs) / 86400000);
-  return days >= -1 && days <= 3;
+  return days >= -1 && days <= 1;
+}
+function sstPictureDateOk(observed, latest, nowMs){
+  if(latest) return String(observed || "") === String(latest);
+  return sstPictureIsCurrent(observed, nowMs);
 }
 function sstPictureMode(){
-  // The regional pictures are a painted snapshot. If that snapshot is more
-  // than a few days behind, show the live composite instead of a stale date.
-  if(_sstCoastManifest && !sstPictureIsCurrent(_sstCoastManifest.observed)) return false;
+  // The picture is one painted NASA day. Show it only when that day is the
+  // latest published composite. A missed refresh then uses the live grid,
+  // which stays on the 1-day product instead of a date copied into the app.
+  const latest = (typeof SAT_FRESH_DATE !== "undefined" && SAT_FRESH_DATE) ? SAT_FRESH_DATE.sst : "";
+  if(_sstCoastManifest && !sstPictureDateOk(_sstCoastManifest.observed, latest)) return false;
   return !!(typeof layerVis !== "undefined" && layerVis.sst
     && (typeof sstProduct === "undefined" || sstProduct !== "goes")
     && (typeof oceanOverlayForecastHour !== "function" || oceanOverlayForecastHour() === 0)
@@ -10311,14 +10327,31 @@ function sstCoastUrl(base, spec, observed){
   const rev = (_sstCoastManifest && _sstCoastManifest.rev) || 1;
   return base.replace(/\/$/, "") + "/sst/v1/" + spec.file + "?d=" + encodeURIComponent(observed || "") + "&r=" + rev;
 }
+function sstCompositeManifestUrls(){
+  const urls = [];
+  const base = (typeof getContoursTilesBase === "function") ? getContoursTilesBase() : null;
+  if(base) urls.push(base.replace(/\/$/, "") + "/sst/v1/manifest.json");
+  urls.push("https://app.bluewaterintel.com/sst-composite.json");
+  urls.push("sst-composite.json");
+  return urls;
+}
+async function fetchSstCompositeManifest(){
+  const urls = sstCompositeManifestUrls();
+  for(let i = 0; i < urls.length; i++){
+    try{
+      const res = await fetch(urls[i], { cache: "no-store" });
+      if(!res.ok) continue;
+      const j = await res.json();
+      if(j && j.coasts && j.observed) return j;
+    }catch(e){ /* try the next copy */ }
+  }
+  return null;
+}
 function loadSstCoastManifest(){
   if(_sstCoastManifest) return Promise.resolve(_sstCoastManifest);
   if(_sstCoastManifestPromise) return _sstCoastManifestPromise;
-  const base = (typeof getContoursTilesBase === "function") ? getContoursTilesBase() : null;
-  if(!base) return Promise.resolve(null);
-  _sstCoastManifestPromise = fetch("sst-composite.json", { cache: "no-store" })
-    .then(r => r.ok ? r.json() : null)
-    .then(j => { _sstCoastManifest = (j && j.coasts) ? j : null; return _sstCoastManifest; })
+  _sstCoastManifestPromise = fetchSstCompositeManifest()
+    .then(j => { _sstCoastManifest = j; return j; })
     .catch(() => null);
   return _sstCoastManifestPromise;
 }

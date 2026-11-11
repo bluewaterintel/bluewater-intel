@@ -19,10 +19,10 @@ export const SST_RAMP_STOPS = [
 // Bump when a picture's ramp or bounds change. The phone cache-busts PNGs with it.
 export const MANIFEST_REV = 4;
 
-// A painted picture older than this is not the live composite. MUR usually
-// lags a day; three days covers a missed refresh. Past that the map uses the
-// live grid so the date cannot sit on a picture from weeks ago.
-export const SST_PICTURE_MAX_AGE_DAYS = 3;
+// Used only when NASA's latest day is not known yet. MUR normally lags one
+// day. A picture from the day before yesterday is already the stale case the
+// map should leave for the live grid.
+export const SST_PICTURE_MAX_AGE_DAYS = 1;
 
 export function sstPictureIsCurrent(observed, nowMs){
   const parts = String(observed || "").split("-").map(Number);
@@ -31,6 +31,14 @@ export function sstPictureIsCurrent(observed, nowMs){
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   const days = Math.floor((now - obs) / 86400000);
   return days >= -1 && days <= SST_PICTURE_MAX_AGE_DAYS;
+}
+
+// The fast picture is one painted NASA day. Show it when that day is the
+// latest published composite. With no confirmed NASA day, allow only the
+// one-day window above so a missed refresh cannot sit on the map for days.
+export function sstPictureDateOk(observed, latest, nowMs){
+  if(latest) return String(observed || "") === String(latest);
+  return sstPictureIsCurrent(observed, nowMs);
 }
 
 // Pictures overlap, and the renderer feathers the outer half-degree, so a

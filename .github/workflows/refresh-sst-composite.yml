@@ -1,16 +1,23 @@
 # Repaint the fixed-scale SST pictures from the latest NASA MUR composite.
-# The phone reads the observed date out of sst-composite.json, so a picture
-# that is never refreshed shows up as days old on every coast.
+# Each run overwrites the same six PNGs and sst/v1/manifest.json. Old days are
+# not kept. The phone reads that manifest, so this job is what keeps the date
+# on the 1-day composite.
 #
-# Required repository secret (same one the waypoint snapshot uses):
-#   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+# Credentials, in order:
+#   SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ACCESS_TOKEN, when those secrets exist
+#   otherwise SUPABASE_DB_URL (the waypoint snapshot already has this) reads the
+#   storage key from Supabase Vault under the name sst_storage_service_role.
+# SUPABASE_URL is optional; the script has the project default.
 
 name: Refresh SST composites
 
 on:
   schedule:
-    # 16:00 UTC. The daily MUR composite is usually published by then.
+    # 16:00 UTC (11:00 AM Eastern) and 22:00 UTC (5:00 PM Eastern). The morning
+    # run catches the usual MUR publish. The second run picks up a late one
+    # instead of leaving yesterday's picture up until the next morning.
     - cron: '0 16 * * *'
+    - cron: '0 22 * * *'
   workflow_dispatch:
 
 permissions:
@@ -26,23 +33,30 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Verify Supabase secrets
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "Supabase credentials present"
-          else
-            echo "::error::Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to repository secrets."
-            exit 1
-          fi
+      - name: Install the database client
+        run: npm install pg@8.22.0 --no-save --no-package-lock
 
       - name: Paint and upload the regional pictures
         env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: node scripts/render-sst-composite.mjs
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            if [ -z "$SUPABASE_DB_URL" ]; then
+              echo "::error::The SST refresh needs SUPABASE_DB_URL or a storage key."
+              exit 1
+            fi
+            KEY=$(node scripts/sst-upload-key.mjs)
+            if [ -z "$KEY" ]; then
+              echo "::error::Could not read the SST upload key from Supabase Vault."
+              exit 1
+            fi
+            echo "::add-mask::$KEY"
+            export SUPABASE_SERVICE_ROLE_KEY="$KEY"
+          fi
+          node scripts/render-sst-composite.mjs
 
       - name: Commit the manifest when the composite date moves
         run: |

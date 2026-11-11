@@ -30,6 +30,12 @@
     Cache-Control = "public, max-age=300"
 
 [[headers]]
+  for = "/sst-composite.json"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Cache-Control = "public, max-age=60, must-revalidate"
+
+[[headers]]
   for = "/icons/*"
   [headers.values]
     Cache-Control = "public, max-age=86400"
