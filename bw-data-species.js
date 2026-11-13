@@ -330,18 +330,27 @@ const REGIONAL_SEASONS = {
   ],
 
   // ── BLUEFIN TUNA ─────────────────────────────────────────────────────
-  // Two huge fisheries, completely different seasons. NC winter giants
-  // Dec-Mar (Hatteras/Diamond Shoals); New England summer Jun-Oct
-  // (Stellwagen, Cape Cod Bay, Jeffrey's Ledge).
+  // Summer fish are in New England. Summer water off Virginia and North
+  // Carolina is too warm, so those months are zero there. In the fall the
+  // fish come down the coast: Ocean City and Delaware in November, Virginia
+  // Beach in December, then the Hatteras giants mid-December through March.
+  // Delaware and New Jersey see a light summer showing, best in August.
   bluefin: [
-    {centerLat: 35.3, centerLng: -75.0, radiusNm: 180, label: "Hatteras winter giants",
-     seasons:{Jan:3,Feb:3,Mar:2,Apr:1,May:0,Jun:0,Jul:0,Aug:0,Sep:0,Oct:1,Nov:2,Dec:3}},
-    {centerLat: 38.5, centerLng: -73.8, radiusNm: 150, label: "Mid-Atlantic schoolies",
-     // Smaller fishery, transitional schoolies Jul-Sep
-     seasons:{Jan:1,Feb:1,Mar:1,Apr:1,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:2,Nov:1,Dec:1}},
     {centerLat: 42.3, centerLng: -70.0, radiusNm: 220, label: "New England summer giants",
-     // Stellwagen, Cape Cod Bay, Jeffrey's Ledge — Jun-Oct prime
-     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:3,Nov:2,Dec:0}},
+     // Stellwagen, Cape Cod Bay, Jeffrey's Ledge
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:2,Jul:3,Aug:3,Sep:3,Oct:3,Nov:1,Dec:0}},
+    {centerLat: 39.6, centerLng: -73.4, radiusNm: 75, label: "Delaware and New Jersey summer",
+     // Canyons north of Ocean City; occasional fish around the White Marlin Open
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:1,Jun:1,Jul:1,Aug:2,Sep:1,Oct:0,Nov:0,Dec:0}},
+    {centerLat: 38.3, centerLng: -74.5, radiusNm: 80, label: "Ocean City fall run",
+     // Jackspot, Washington Canyon, the 20-40 fathom lumps
+     seasons:{Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:0,Jul:0,Aug:0,Sep:0,Oct:1,Nov:3,Dec:2}},
+    {centerLat: 36.9, centerLng: -75.4, radiusNm: 70, label: "Virginia Beach winter",
+     // Chesapeake Light Tower, Triangle Wrecks, Norfolk Canyon
+     seasons:{Jan:2,Feb:1,Mar:0,Apr:0,May:0,Jun:0,Jul:0,Aug:0,Sep:0,Oct:0,Nov:2,Dec:3}},
+    {centerLat: 35.3, centerLng: -75.1, radiusNm: 100, label: "Hatteras winter giants",
+     // Diamond Shoals and Oregon Inlet, mid-December through March
+     seasons:{Jan:3,Feb:3,Mar:2,Apr:1,May:0,Jun:0,Jul:0,Aug:0,Sep:0,Oct:0,Nov:0,Dec:2}},
     {centerLat: 28.5, centerLng: -88.5, radiusNm: 200, label: "Gulf spawning",
      // Mississippi/Desoto Canyons, East Breaks — spring spawning Apr-Jun
      seasons:{Jan:1,Feb:2,Mar:3,Apr:3,May:3,Jun:2,Jul:1,Aug:0,Sep:0,Oct:0,Nov:0,Dec:1}},

@@ -2078,19 +2078,28 @@ function showDiagnostics(){
 // Returns a blended seasons curve for the given species at the given fishing
 // cell location, OR null if the species has no regional seasons defined
 // (caller should fall back to default + lat shift path).
-// Uses inverse-distance weighting so transitions between regions are smooth.
+// Species whose regional curves are written as mid-month values and blended
+// with a radius taper. Bluefin's tables follow the fish down the coast month
+// by month, so a cell between Ocean City and Virginia has to shade between
+// them. Other species' curves were tuned to first-of-month values and
+// nearest-center blending; moving them changes those fisheries by two weeks.
+const SEASON_MIDMONTH_TAPER = new Set(["bluefin"]);
+function regionalSeasonWeight(speciesId, distNm, radiusNm){
+  if(SEASON_MIDMONTH_TAPER.has(speciesId)){
+    const t = 1 - distNm / radiusNm;
+    return t * t + 0.001;
+  }
+  // Add small epsilon so a cell exactly at a region center doesn't divide by zero.
+  return 1 / (distNm + 1);
+}
 function getRegionalSeasons(speciesId, lat, lng){
   const regions = REGIONAL_SEASONS[speciesId];
   if(!regions || regions.length === 0) return null;
-  // Find regions within their influence radius, weighted by inverse distance
   const matches = [];
   for(const r of regions){
     const distNm = nmBetween(lat, lng, r.centerLat, r.centerLng);
     if(distNm <= r.radiusNm){
-      // Weight is higher for closer regions. Add small epsilon so a cell
-      // exactly at a region center doesn't divide by zero.
-      const weight = 1 / (distNm + 1);
-      matches.push({region: r, weight});
+      matches.push({region: r, weight: regionalSeasonWeight(speciesId, distNm, r.radiusNm)});
     }
   }
   if(matches.length === 0) return null;
@@ -4272,7 +4281,10 @@ function scoreCell(lat, lng, speciesId){
       const now = new Date();
       const dayOfMonth = now.getDate() - 1;
       const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-      const calMonth = now.getMonth() + dayOfMonth / daysInMonth;
+      // Mid-month species read a month's value on the 15th. Interpolating from
+      // the 1st put November 13 40% of the way into December's bluefin curve.
+      const calMonth = now.getMonth() + dayOfMonth / daysInMonth
+        - (SEASON_MIDMONTH_TAPER.has(speciesId) ? 0.5 : 0);
 
       // ── Path A: regional seasons (if defined and cell is near a region) ──
       const hasRegionalTable = (typeof REGIONAL_SEASONS !== "undefined")
