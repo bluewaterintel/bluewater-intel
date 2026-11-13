@@ -3,7 +3,7 @@ import { verifyNativeVersion } from "../scripts/verify-native-version.mjs";
 
 const result = verifyNativeVersion();
 assert.equal(result.ok, true, result.errors.join("; "));
-assert.equal(result.expected.versionName, "1.7.3");
+assert.equal(result.expected.versionName, "1.7.4");
 assert.equal(result.expected.versionCode, 1);
 assert.equal(result.expected.androidVersionCode, 89);
 
