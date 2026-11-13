@@ -80,6 +80,15 @@ const SST_HAS_ALTITUDE = (Deno.env.get("SST_HAS_ALTITUDE") ?? "false") === "true
 const CHL_DATASET = Deno.env.get("CHL_DATASET") ?? "noaacwNPPN20VIIRSDINEOFDaily";
 const CHL_VAR = Deno.env.get("CHL_VAR") ?? "chlor_a";
 const CHL_HAS_ALTITUDE = (Deno.env.get("CHL_HAS_ALTITUDE") ?? "true") === "true";
+// The gap-filled product can stall for a week or more (Nov 2026: stuck on
+// Nov 3 for ten days) while the single-satellite VIIRS dailies stay ~2 days
+// behind. Past this age, use a short composite of those dailies instead.
+// Both share one 0.0375° lattice and carry an altitude index.
+const CHL_PRIMARY_MAX_AGE_H = Number(Deno.env.get("CHL_PRIMARY_MAX_AGE_H") ?? "96");
+const CHL_FALLBACK_DATASETS = (Deno.env.get("CHL_FALLBACK_DATASETS") ?? "noaacwNPPVIIRSchlaDaily,noaacwN20VIIRSchlaDaily")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+const CHL_FALLBACK_STEP_DEG = 0.0375;
+const CHL_FALLBACK_LOOKBACK = Number(Deno.env.get("CHL_FALLBACK_LOOKBACK") ?? "3");
 const OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast";
 const OPEN_METEO_MARINE = "https://marine-api.open-meteo.com/v1/marine";
 const OPEN_METEO_ELEVATION = "https://api.open-meteo.com/v1/elevation";
@@ -1254,12 +1263,24 @@ const SST_LOOKBACK = Number(Deno.env.get("SST_LOOKBACK") ?? "3");
 // stepping back only if that slice is not posted yet. CHL_MAX_LOOKBACK caps retries.
 const CHL_MAX_LOOKBACK = Number(Deno.env.get("CHL_MAX_LOOKBACK") ?? "2");
 
+function chlorIsCurrent(observedAtMs: number | null) {
+  return observedAtMs != null && Date.now() - observedAtMs <= CHL_PRIMARY_MAX_AGE_H * 3600000;
+}
+
 async function fetchChlorPoint(lat: number, lng: number) {
+  let primary: { value: number | null; observedAtMs: number | null } = { value: null, observedAtMs: null };
   for (let lb = 0; lb <= CHL_MAX_LOOKBACK; lb++) {
     const hit = await fetchGridPoint(CHL_ERDDAP, CHL_DATASET, CHL_VAR, lat, lng, CHL_HAS_ALTITUDE, lb);
-    if (hit.value != null) return hit;
+    if (hit.value != null) { primary = hit; break; }
   }
-  return { value: null, observedAtMs: null };
+  if (chlorIsCurrent(primary.observedAtMs)) return primary;
+  const hits = await Promise.all(CHL_FALLBACK_DATASETS.map((ds) =>
+    fetchGridPoint(CHL_ERDDAP, ds, CHL_VAR, lat, lng, true, CHL_FALLBACK_LOOKBACK)));
+  let best = primary;
+  for (const h of hits) {
+    if (h.value != null && (h.observedAtMs ?? 0) > (best.observedAtMs ?? 0)) best = h;
+  }
+  return best;
 }
 
 // Assemble one point's full ocean payload from the real sources. Used by both
@@ -1793,15 +1814,17 @@ async function fetchBathyRows(latMin: number, latMax: number, lngMin: number, ln
 // Chlorophyll spatial grid for a box — freshest real value per cell.
 async function fetchChlorRowsWithLookback(
   latMin: number, latMax: number, lngMin: number, lngMax: number, lookback: number,
+  dataset = CHL_DATASET,
+  native = Number(Deno.env.get("CHL_STEP_DEG") ?? "0.0417"), // DINEOF NRT ~4km grid
+  hasAltitude = CHL_HAS_ALTITUDE,
 ) {
   const a0 = Math.min(latMin, latMax), a1 = Math.max(latMin, latMax);
   const o0 = Math.min(lngMin, lngMax), o1 = Math.max(lngMin, lngMax);
-  const native = Number(Deno.env.get("CHL_STEP_DEG") ?? "0.0417"); // DINEOF NRT ~4km grid
   const targetDeg = Number(Deno.env.get("CHLGRID_DEG") ?? "0.08");
   const strideIdx = Math.max(1, Math.round(targetDeg / native));
-  const altIdx = CHL_HAS_ALTITUDE ? "%5B(0.0)%5D" : "";
+  const altIdx = hasAltitude ? "%5B(0.0)%5D" : "";
   const timeIdx = lookback > 0 ? `%5Blast-${lookback}:last%5D` : "%5B(last)%5D";
-  const url = `${CHL_ERDDAP}/${CHL_DATASET}.json`
+  const url = `${CHL_ERDDAP}/${dataset}.json`
     + `?${CHL_VAR}${timeIdx}${altIdx}`
     + `%5B(${a1}):${strideIdx}:(${a0})%5D%5B(${o0}):${strideIdx}:(${o1})%5D`;
   try {
@@ -1837,13 +1860,49 @@ async function fetchChlorRows(latMin: number, latMax: number, lngMin: number, ln
   // misses used to stack serially (~40-60s). We still prefer the freshest slice
   // that returned data (lowest lookback index) — identical result, less waiting.
   const lbs = Array.from({ length: maxLb + 1 }, (_, i) => i);
-  const results = await Promise.all(
-    lbs.map((lb) => fetchChlorRowsWithLookback(latMin, latMax, lngMin, lngMax, lb).catch(() => null)),
-  );
+  // The single-satellite composite is requested alongside, not after, so a
+  // stalled gap-filled feed does not add another round trip.
+  const [results, recent] = await Promise.all([
+    Promise.all(lbs.map((lb) => fetchChlorRowsWithLookback(latMin, latMax, lngMin, lngMax, lb).catch(() => null))),
+    fetchRecentChlorRows(latMin, latMax, lngMin, lngMax),
+  ]);
+  let primary = null;
   for (const out of results) {
-    if (out && out.rows.length > 0) return out;
+    if (out && out.rows.length > 0) { primary = out; break; }
   }
-  return results.find((r) => r) ?? fallback;
+  if (primary && chlorIsCurrent(newestRowMs(primary.rows))) return primary;
+  if (recent.rows.length > 0) return recent;
+  return primary ?? results.find((r) => r) ?? fallback;
+}
+
+function newestRowMs(rows: unknown[][]) {
+  let newest = 0;
+  for (const r of rows) {
+    const ms = Number(r[3]);
+    if (Number.isFinite(ms) && ms > newest) newest = ms;
+  }
+  return newest || null;
+}
+
+// Several days of S-NPP and NOAA-20 dailies, merged on their shared lattice.
+// Each cell keeps its newest clear pixel; cells clouded every day stay out,
+// and the client fills them from the nearest pixel or the regional median.
+async function fetchRecentChlorRows(latMin: number, latMax: number, lngMin: number, lngMax: number) {
+  const parts = await Promise.all(CHL_FALLBACK_DATASETS.map((ds) =>
+    fetchChlorRowsWithLookback(latMin, latMax, lngMin, lngMax, CHL_FALLBACK_LOOKBACK, ds, CHL_FALLBACK_STEP_DEG, true)
+      .catch(() => null)));
+  const best = new Map<string, unknown[]>();
+  let stepDeg = 0;
+  for (const part of parts) {
+    if (!part) continue;
+    stepDeg = part.stepDeg;
+    for (const row of part.rows) {
+      const k = `${Number(row[0]).toFixed(3)},${Number(row[1]).toFixed(3)}`;
+      const cur = best.get(k);
+      if (!cur || Number(row[3]) > Number(cur[3])) best.set(k, row);
+    }
+  }
+  return { stepDeg: stepDeg || CHL_FALLBACK_STEP_DEG * 2, rows: [...best.values()] };
 }
 
 // Run an async task over items with bounded concurrency.

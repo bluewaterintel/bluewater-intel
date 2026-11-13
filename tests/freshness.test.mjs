@@ -30,6 +30,7 @@ check("Wind 2h = fresh", freshnessOf("wind", now - 2 * H, now).tier === "fresh")
 check("Wind 7h = aging", freshnessOf("wind", now - 7 * H, now).tier === "aging");
 check("Wind 12h = stale (fast variable)", freshnessOf("wind", now - 12 * H, now).tier === "stale");
 check("Chlorophyll 100h = aging (slow variable still usable)", freshnessOf("chlor", now - 100 * H, now).tier === "aging");
+check("Chlorophyll 245h = stale, dropped (a stalled feed is not scored)", freshnessOf("chlor", now - 245 * H, now).weightFactor === 0);
 check("Depth never stale", freshnessOf("depth", now - 10000 * H, now).tier === "fresh");
 check("missing observedAt = missing tier, 0 weight", freshnessOf("sst", null, now).weightFactor === 0);
 
